@@ -32,7 +32,7 @@ Follow these steps to get a local copy up and running.
 
 ### 2. Clone the Repository
 ```bash
-git clone [https://github.com/YourUsername/gmu-badminton-app.git](https://github.com/YourUsername/gmu-badminton-app.git)
+git clone [https://github.com/superhuygaming/gmu-badminton-app.git](https://github.com/superhuygaming/gmu-badminton-app.git)
 cd gmu-badminton-app
 ```
 
