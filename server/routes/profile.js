@@ -24,7 +24,14 @@ const authMiddleware = (req, res, next) => {
 		res.status(401).json({ message: "Token is not valid" });
 	}
 };
-
+const adminMiddleware = (req, res, next) => {
+	// Check the "role" we just added to the JWT
+	if (req.user && req.user.role === "admin") {
+		next(); // User is an admin, let them through!
+	} else {
+		res.status(403).json({ message: "Access denied. Admins only." });
+	}
+};
 // GET: Fetch the logged-in user's profile
 router.get("/", authMiddleware, async (req, res) => {
 	try {
@@ -71,4 +78,4 @@ router.get("/:id", async (req, res) => {
 	}
 });
 
-module.exports = router;
+module.exports = { router, authMiddleware, adminMiddleware };

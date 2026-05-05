@@ -27,11 +27,11 @@ function Dashboard() {
 	}, []);
 
 	return (
-		<Box sx={{ mt: 4, pb: 8 }}>
+		<Box sx={{ mt: { xs: 2, md: 4 }, pb: 8, px: { xs: 1, sm: 0 } }}>
 			<Paper
 				elevation={0}
 				sx={{
-					p: { xs: 4, md: 6 },
+					p: { xs: 3, md: 6 },
 					borderRadius: 4,
 					backgroundColor: "#006633",
 					color: "white",
@@ -40,7 +40,14 @@ function Dashboard() {
 						"linear-gradient(135deg, #006633 0%, #004d26 100%)",
 				}}
 			>
-				<Typography variant="h3" gutterBottom sx={{ color: "#FFCC33" }}>
+				<Typography
+					variant="h3"
+					gutterBottom
+					sx={{
+						color: "#FFCC33",
+						fontSize: { xs: "2rem", md: "3rem" },
+					}}
+				>
 					Live RAC Status
 				</Typography>
 				{!apiMessage ? (
@@ -49,7 +56,13 @@ function Dashboard() {
 					<Fade in={true} timeout={1000}>
 						<Typography
 							variant="h5"
-							sx={{ mt: 2, mb: 4, fontWeight: 400, opacity: 0.9 }}
+							sx={{
+								mt: 2,
+								mb: 4,
+								fontWeight: 400,
+								opacity: 0.9,
+								fontSize: { xs: "1.2rem", md: "1.5rem" },
+							}}
 						>
 							{apiMessage}
 						</Typography>
@@ -68,8 +81,8 @@ function Dashboard() {
 
 			<Box
 				sx={{
-					my: 6,
-					p: 5,
+					my: { xs: 4, md: 6 },
+					p: { xs: 3, md: 5 },
 					border: "2px dashed #d9d9d9",
 					borderRadius: 4,
 					textAlign: "center",
@@ -99,7 +112,11 @@ function Dashboard() {
 			<Typography
 				variant="h4"
 				color="primary"
-				sx={{ mb: 4, fontWeight: "bold" }}
+				sx={{
+					mb: { xs: 2, md: 4 },
+					fontWeight: "bold",
+					fontSize: { xs: "1.8rem", md: "2.125rem" },
+				}}
 			>
 				Weekly Schedule
 			</Typography>
@@ -116,7 +133,7 @@ function Dashboard() {
 							sx={{
 								display: "flex",
 								alignItems: "center",
-								p: 2,
+								p: { xs: 1.5, sm: 2 },
 								borderRadius: 3,
 								border: "1px solid #e0e0e0",
 								textDecoration: "none",
@@ -126,13 +143,13 @@ function Dashboard() {
 						>
 							<Box
 								sx={{
-									minWidth: 70,
-									height: 70,
+									minWidth: { xs: 55, sm: 70 },
+									height: { xs: 55, sm: 70 },
 									borderRadius: 2,
 									overflow: "hidden",
 									display: "flex",
 									flexDirection: "column",
-									mr: 3,
+									mr: { xs: 1.5, sm: 3 },
 								}}
 							>
 								<Box
@@ -141,7 +158,10 @@ function Dashboard() {
 										color: "white",
 										textAlign: "center",
 										py: 0.5,
-										fontSize: "0.75rem",
+										fontSize: {
+											xs: "0.65rem",
+											sm: "0.75rem",
+										},
 										fontWeight: "bold",
 									}}
 								>
@@ -155,7 +175,10 @@ function Dashboard() {
 										display: "flex",
 										alignItems: "center",
 										justifyContent: "center",
-										fontSize: "1.5rem",
+										fontSize: {
+											xs: "1.2rem",
+											sm: "1.5rem",
+										},
 										fontWeight: "bold",
 									}}
 								>
@@ -167,21 +190,42 @@ function Dashboard() {
 									variant="h6"
 									fontWeight="bold"
 									color="text.primary"
+									sx={{
+										fontSize: {
+											xs: "1.1rem",
+											sm: "1.25rem",
+										},
+										lineHeight: 1.2,
+									}}
 								>
 									{index === 0 ? "Today" : item.day}
 								</Typography>
 								<Typography
 									variant="body2"
 									color="text.secondary"
+									sx={{
+										fontSize: {
+											xs: "0.8rem",
+											sm: "0.875rem",
+										},
+									}}
 								>
 									📍 {item.location}
 								</Typography>
 							</Box>
-							<Box sx={{ textAlign: "right", pr: 2 }}>
+							<Box
+								sx={{
+									textAlign: "right",
+									pr: { xs: 0, sm: 2 },
+								}}
+							>
 								<Typography
 									variant="body1"
 									fontWeight="600"
 									color="text.primary"
+									sx={{
+										fontSize: { xs: "0.9rem", sm: "1rem" },
+									}}
 								>
 									{isDedicated
 										? "Dedicated Play"
