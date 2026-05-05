@@ -37,7 +37,12 @@ router.post("/register", async (req, res) => {
 
 		// 4. Create the "Digital Wristband" (JWT Token)
 		const token = jwt.sign(
-			{ userId: user._id, name: user.name, skillLevel: user.skillLevel },
+			{
+				userId: user._id,
+				name: user.name,
+				skillLevel: user.skillLevel,
+				role: user.role,
+			},
 			JWT_SECRET,
 			{ expiresIn: "7d" }, // Token expires in 7 days
 		);
@@ -50,6 +55,7 @@ router.post("/register", async (req, res) => {
 				name: user.name,
 				email: user.email,
 				skillLevel: user.skillLevel,
+				role: user.role,
 			},
 		});
 	} catch (error) {
@@ -81,7 +87,12 @@ router.post("/login", async (req, res) => {
 
 		// 3. Issue the Token
 		const token = jwt.sign(
-			{ userId: user._id, name: user.name, skillLevel: user.skillLevel },
+			{
+				userId: user._id,
+				name: user.name,
+				skillLevel: user.skillLevel,
+				role: user.role,
+			},
 			JWT_SECRET,
 			{ expiresIn: "7d" },
 		);
@@ -93,6 +104,7 @@ router.post("/login", async (req, res) => {
 				name: user.name,
 				email: user.email,
 				skillLevel: user.skillLevel,
+				role: user.role,
 			},
 		});
 	} catch (error) {

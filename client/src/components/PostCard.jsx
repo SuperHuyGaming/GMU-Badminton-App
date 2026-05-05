@@ -1,5 +1,5 @@
 // client/src/components/PostCard.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	Typography,
@@ -13,10 +13,18 @@ import {
 	TextField,
 	CardActions,
 	Avatar,
+	useTheme,
+	useMediaQuery,
 } from "@mui/material";
 
 export default function PostCard({ post }) {
 	const navigate = useNavigate();
+
+	// NEW: Mobile Sensors
+	const theme = useTheme();
+	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
+	const isMobile = useMediaQuery(theme.breakpoints.down("sm")); // Extra check for very small screens
+
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [newReplyText, setNewReplyText] = useState("");
 	const [localPost, setLocalPost] = useState(post);
@@ -32,7 +40,10 @@ export default function PostCard({ post }) {
 			return acc + 1 + (comment.replies?.length || 0);
 		}, 0) || 0;
 
-	// --- The Tag Parser ---
+	useEffect(() => {
+		setLocalPost(post);
+	}, [post]);
+
 	const renderContentWithTags = (content, fontSize = "0.875rem") => {
 		if (!content) return null;
 
@@ -110,7 +121,7 @@ export default function PostCard({ post }) {
 		if (!newReplyText.trim() || !currentUser) return;
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments`,
 				{
 					method: "POST",
 					headers: {
@@ -141,7 +152,7 @@ export default function PostCard({ post }) {
 		if (!currentUser) return alert("You must be logged in!");
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments/${commentId}/like`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments/${commentId}/like`,
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
@@ -160,7 +171,7 @@ export default function PostCard({ post }) {
 		if (!currentUser) return alert("You must be logged in!");
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments/${commentId}/replies/${replyId}/like`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments/${commentId}/replies/${replyId}/like`,
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
@@ -179,7 +190,7 @@ export default function PostCard({ post }) {
 		if (!nestedReplyText.trim() || !currentUser) return;
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments/${commentId}/replies`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments/${commentId}/replies`,
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -209,7 +220,7 @@ export default function PostCard({ post }) {
 		if (!currentUser) return alert("You must be logged in to like posts!");
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/like`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/like`,
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
@@ -244,7 +255,7 @@ export default function PostCard({ post }) {
 			<Paper
 				elevation={0}
 				sx={{
-					p: 3,
+					p: { xs: 2, sm: 3 }, // Smaller padding on mobile main card
 					border: "1px solid #e0e0e0",
 					borderRadius: 3,
 					transition: "all 0.2s",
@@ -305,6 +316,7 @@ export default function PostCard({ post }) {
 				</Typography>
 				<Divider sx={{ mb: 1 }} />
 
+				{/* NEW: Hide the text labels on very small screens, show icons only to save space */}
 				<CardActions
 					sx={{
 						p: 0,
@@ -315,26 +327,39 @@ export default function PostCard({ post }) {
 					<Button
 						onClick={handleLike}
 						color={hasLiked ? "primary" : "inherit"}
-						sx={{ textTransform: "none", fontWeight: 600, flex: 1 }}
+						sx={{
+							textTransform: "none",
+							fontWeight: 600,
+							flex: 1,
+							minWidth: 0,
+						}}
 					>
-						<Typography sx={{ mr: 1, fontSize: "1.2rem" }}>
+						<Typography
+							sx={{ mr: { xs: 0.5, sm: 1 }, fontSize: "1.2rem" }}
+						>
 							👍
-						</Typography>{" "}
-						{localPost.likedBy?.length > 0
-							? localPost.likedBy.length
-							: "Like"}
+						</Typography>
+						{!isMobile && "Like "}{" "}
+						{localPost.likedBy?.length > 0 &&
+							`(${localPost.likedBy.length})`}
 					</Button>
 					<Button
 						onClick={() => setIsCommentModalOpen(true)}
 						color="inherit"
-						sx={{ textTransform: "none", fontWeight: 600, flex: 1 }}
+						sx={{
+							textTransform: "none",
+							fontWeight: 600,
+							flex: 1,
+							minWidth: 0,
+						}}
 					>
-						<Typography sx={{ mr: 1, fontSize: "1.2rem" }}>
+						<Typography
+							sx={{ mr: { xs: 0.5, sm: 1 }, fontSize: "1.2rem" }}
+						>
 							💬
-						</Typography>{" "}
-						{totalCommentsCount > 0
-							? totalCommentsCount
-							: "Comment"}
+						</Typography>
+						{!isMobile && "Comment "}{" "}
+						{totalCommentsCount > 0 && `(${totalCommentsCount})`}
 					</Button>
 					<Button
 						onClick={() => {
@@ -344,12 +369,19 @@ export default function PostCard({ post }) {
 							alert("Copied!");
 						}}
 						color="inherit"
-						sx={{ textTransform: "none", fontWeight: 600, flex: 1 }}
+						sx={{
+							textTransform: "none",
+							fontWeight: 600,
+							flex: 1,
+							minWidth: 0,
+						}}
 					>
-						<Typography sx={{ mr: 1, fontSize: "1.2rem" }}>
+						<Typography
+							sx={{ mr: { xs: 0.5, sm: 1 }, fontSize: "1.2rem" }}
+						>
 							➦
-						</Typography>{" "}
-						Share
+						</Typography>
+						{!isMobile && "Share"}
 					</Button>
 				</CardActions>
 			</Paper>
@@ -359,7 +391,13 @@ export default function PostCard({ post }) {
 				onClose={() => setIsCommentModalOpen(false)}
 				fullWidth
 				maxWidth="sm"
-				PaperProps={{ sx: { borderRadius: 3, maxHeight: "80vh" } }}
+				fullScreen={fullScreen} // NEW: Makes it full screen on mobile!
+				PaperProps={{
+					sx: {
+						borderRadius: fullScreen ? 0 : 3,
+						maxHeight: fullScreen ? "100vh" : "80vh",
+					},
+				}}
 			>
 				<DialogTitle
 					sx={{
@@ -388,12 +426,18 @@ export default function PostCard({ post }) {
 				</DialogTitle>
 
 				<DialogContent sx={{ p: 0, backgroundColor: "#f4f6f8" }}>
-					<Box sx={{ p: 3, backgroundColor: "white", mb: 1 }}>
+					<Box
+						sx={{
+							p: { xs: 2, sm: 3 },
+							backgroundColor: "white",
+							mb: 1,
+						}}
+					>
 						<Typography variant="body1">
 							{localPost.content}
 						</Typography>
 					</Box>
-					<Box sx={{ p: 2 }}>
+					<Box sx={{ p: { xs: 1, sm: 2 } }}>
 						{!localPost.comments ||
 						localPost.comments.length === 0 ? (
 							<Typography
@@ -435,7 +479,7 @@ export default function PostCard({ post }) {
 											>
 												{comment.authorName.charAt(0)}
 											</Avatar>
-											<Box>
+											<Box sx={{ flexGrow: 1 }}>
 												<Box
 													sx={{
 														backgroundColor:
@@ -536,7 +580,7 @@ export default function PostCard({ post }) {
 
 										{comment.replies &&
 											comment.replies.length > 0 && (
-												<Box sx={{ ml: 6, mt: 0.5 }}>
+												<Box sx={{ ml: 5, mt: 0.5 }}>
 													<Typography
 														variant="caption"
 														onClick={() =>
@@ -579,7 +623,7 @@ export default function PostCard({ post }) {
 														display: "flex",
 														flexDirection: "column",
 														mt: 1,
-														ml: 6,
+														ml: { xs: 4, sm: 6 },
 														borderLeft:
 															"2px solid #ccc",
 														pl: 1.5,
@@ -708,14 +752,6 @@ export default function PostCard({ post }) {
 																>
 																	Reply
 																</Typography>
-																<Typography
-																	variant="caption"
-																	color="text.disabled"
-																>
-																	{formatTime(
-																		reply.timestamp,
-																	)}
-																</Typography>
 															</Box>
 														</Box>
 													</Box>
@@ -729,19 +765,9 @@ export default function PostCard({ post }) {
 													gap: 1,
 													alignItems: "center",
 													mt: 1,
-													ml: 6,
+													ml: { xs: 4, sm: 6 },
 												}}
 											>
-												<Avatar
-													sx={{
-														width: 24,
-														height: 24,
-													}}
-												>
-													{currentUser?.name.charAt(
-														0,
-													)}
-												</Avatar>
 												<TextField
 													fullWidth
 													size="small"
@@ -797,7 +823,7 @@ export default function PostCard({ post }) {
 				</DialogContent>
 				<Box
 					sx={{
-						p: 2,
+						p: 1.5,
 						backgroundColor: "white",
 						borderTop: "1px solid #e0e0e0",
 						display: "flex",
@@ -805,20 +831,13 @@ export default function PostCard({ post }) {
 						alignItems: "center",
 					}}
 				>
-					<Avatar
-						sx={{ width: 32, height: 32, bgcolor: "primary.main" }}
-					>
-						{currentUser
-							? currentUser.name.charAt(0).toUpperCase()
-							: "?"}
-					</Avatar>
 					<TextField
 						fullWidth
 						size="small"
 						placeholder={
 							currentUser
-								? `Comment as ${currentUser.name}...`
-								: "Write a comment..."
+								? "Write a comment..."
+								: "Login to comment"
 						}
 						variant="outlined"
 						value={newReplyText}
@@ -826,6 +845,7 @@ export default function PostCard({ post }) {
 						onKeyDown={(e) =>
 							e.key === "Enter" && handlePostMainComment()
 						}
+						disabled={!currentUser}
 						sx={{
 							"& .MuiOutlinedInput-root": {
 								borderRadius: 5,
@@ -837,7 +857,7 @@ export default function PostCard({ post }) {
 						variant="contained"
 						color="primary"
 						onClick={handlePostMainComment}
-						disabled={!newReplyText.trim()}
+						disabled={!newReplyText.trim() || !currentUser}
 						sx={{
 							borderRadius: 5,
 							fontWeight: "bold",

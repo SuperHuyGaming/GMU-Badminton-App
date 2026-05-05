@@ -14,8 +14,13 @@ import {
 	DialogContent,
 	DialogActions,
 	TextField,
+	useTheme,
+	useMediaQuery,
 } from "@mui/material";
-import PostCard from "../components/PostCard"; // NEW: Importing the component we just separated!
+import PostCard from "../components/PostCard";
+import { io } from "socket.io-client";
+
+const socket = io(`${import.meta.env.VITE_API_URL}`);
 
 const generateDateWindow = () => {
 	const dates = [];
@@ -39,6 +44,10 @@ export default function Forum() {
 	const location = useLocation();
 	const queryParams = new URLSearchParams(location.search);
 
+	// NEW: Mobile Screen Sensors
+	const theme = useTheme();
+	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
+
 	const rawToday = new Date().toLocaleDateString("en-US", {
 		month: "short",
 		day: "numeric",
@@ -54,6 +63,13 @@ export default function Forum() {
 	const [viewDay, setViewDay] = useState(
 		queryParams.get("day") || todayDayStr,
 	);
+
+	const currentUser = JSON.parse(localStorage.getItem("user"));
+	const [posts, setPosts] = useState([]);
+	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [newPost, setNewPost] = useState({ title: "", content: "" });
+	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
+	const dateWindow = generateDateWindow();
 
 	useEffect(() => {
 		setViewDate(queryParams.get("date") || todayDateStr);
@@ -71,24 +87,34 @@ export default function Forum() {
 			});
 	}, [viewDate]);
 
-	const currentUser = JSON.parse(localStorage.getItem("user"));
-	const [posts, setPosts] = useState([]);
-	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [newPost, setNewPost] = useState({ title: "", content: "" });
-	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
-	const dateWindow = generateDateWindow();
-
 	useEffect(() => {
-		fetch("http://localhost:5001/api/forum")
+		fetch(`${import.meta.env.VITE_API_URL}/api/forum`)
 			.then((res) => res.json())
 			.then(setPosts)
 			.catch(console.error);
+
+		socket.on("postCreated", (newPost) => {
+			setPosts((prevPosts) => [newPost, ...prevPosts]);
+		});
+
+		socket.on("postUpdated", (updatedPost) => {
+			setPosts((prevPosts) =>
+				prevPosts.map((p) =>
+					p._id === updatedPost._id ? updatedPost : p,
+				),
+			);
+		});
+
+		return () => {
+			socket.off("postCreated");
+			socket.off("postUpdated");
+		};
 	}, []);
 
 	const handleSubmit = async () => {
 		if (!currentUser) return alert("You must be logged in to post!");
 		try {
-			const response = await fetch("http://localhost:5001/api/forum", {
+			await fetch(`${import.meta.env.VITE_API_URL}/api/forum`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -102,8 +128,6 @@ export default function Forum() {
 					targetDate: viewDate,
 				}),
 			});
-			const savedPost = await response.json();
-			setPosts([savedPost, ...posts]);
 			setIsModalOpen(false);
 			setNewPost({ title: "", content: "" });
 		} catch (error) {
@@ -120,13 +144,16 @@ export default function Forum() {
 	});
 
 	return (
-		<Box sx={{ mt: 4, pb: 10 }}>
+		<Box sx={{ mt: { xs: 2, md: 4 }, pb: 10 }}>
 			<Box sx={{ mb: 4, textAlign: "center" }}>
 				<Typography
 					variant="h3"
 					color="primary"
 					gutterBottom
-					sx={{ fontWeight: "900" }}
+					sx={{
+						fontWeight: "900",
+						fontSize: { xs: "2rem", md: "3rem" },
+					}}
 				>
 					GMU Badminton Forum
 				</Typography>
@@ -208,8 +235,8 @@ export default function Forum() {
 				onClick={() => setIsModalOpen(true)}
 				sx={{
 					position: "fixed",
-					bottom: 32,
-					right: 32,
+					bottom: { xs: 16, md: 32 },
+					right: { xs: 16, md: 32 },
 					fontWeight: "bold",
 				}}
 			>
@@ -221,11 +248,28 @@ export default function Forum() {
 				onClose={() => setIsModalOpen(false)}
 				fullWidth
 				maxWidth="sm"
+				fullScreen={fullScreen} // NEW: Makes it full screen on mobile!
 			>
 				<DialogTitle
-					sx={{ fontWeight: "bold", color: "primary.main", pb: 1 }}
+					sx={{
+						fontWeight: "bold",
+						color: "primary.main",
+						pb: 1,
+						display: "flex",
+						justifyContent: "space-between",
+						alignItems: "center",
+					}}
 				>
 					Organizing for {viewDate}
+					{fullScreen && (
+						<Button
+							onClick={() => setIsModalOpen(false)}
+							color="inherit"
+							sx={{ minWidth: 0 }}
+						>
+							✕
+						</Button>
+					)}
 				</DialogTitle>
 				<DialogContent sx={{ pt: 2 }}>
 					<TextField
@@ -244,7 +288,7 @@ export default function Forum() {
 						variant="outlined"
 						margin="normal"
 						multiline
-						rows={4}
+						rows={8} // Made rows slightly bigger for full screen
 						value={newPost.content}
 						onChange={(e) =>
 							setNewPost({ ...newPost, content: e.target.value })
@@ -252,19 +296,25 @@ export default function Forum() {
 					/>
 				</DialogContent>
 				<DialogActions sx={{ p: 3, justifyContent: "space-between" }}>
-					<Button
-						onClick={() => setIsModalOpen(false)}
-						color="inherit"
-						sx={{ fontWeight: "bold" }}
-					>
-						Cancel
-					</Button>
+					{!fullScreen && (
+						<Button
+							onClick={() => setIsModalOpen(false)}
+							color="inherit"
+							sx={{ fontWeight: "bold" }}
+						>
+							Cancel
+						</Button>
+					)}
 					<Button
 						onClick={handleSubmit}
 						variant="contained"
 						color="primary"
 						disabled={!isFormValid}
-						sx={{ fontWeight: "bold" }}
+						fullWidth={fullScreen} // Spreads the post button on mobile
+						sx={{
+							fontWeight: "bold",
+							py: fullScreen ? 1.5 : undefined,
+						}}
 					>
 						Post to Forum
 					</Button>

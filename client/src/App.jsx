@@ -2,13 +2,15 @@
 import { useState, useEffect } from "react";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
-import Dashboard from "./pages/Dashboard"; // NEW Import
-import Forum from "./pages/Forum"; // NEW Import
+import Dashboard from "./pages/Dashboard";
+import Forum from "./pages/Forum";
+import Admin from "./pages/Admin";
 import {
 	BrowserRouter,
 	Routes,
 	Route,
 	Link as RouterLink,
+	Navigate,
 } from "react-router-dom";
 import {
 	ThemeProvider,
@@ -26,7 +28,31 @@ import {
 	Alert,
 	Menu,
 	MenuItem,
+	// NEW IMPORTS FOR MOBILE DRAWER:
+	IconButton,
+	Drawer,
+	List,
+	ListItemButton,
+	ListItemText,
 } from "@mui/material";
+
+// A crash-proof SVG Hamburger Icon (No extra npm packages needed!)
+const HamburgerIcon = () => (
+	<svg
+		width="24"
+		height="24"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<line x1="3" y1="12" x2="21" y2="12"></line>
+		<line x1="3" y1="6" x2="21" y2="6"></line>
+		<line x1="3" y1="18" x2="21" y2="18"></line>
+	</svg>
+);
 
 const gmuTheme = createTheme({
 	palette: {
@@ -41,12 +67,23 @@ const gmuTheme = createTheme({
 	},
 });
 
+const AdminRoute = ({ children, user }) => {
+	if (!user || user.role !== "admin") {
+		return <Navigate to="/" replace />;
+	}
+	return children;
+};
+
 function App() {
 	const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")));
 	const [toastMessage, setToastMessage] = useState("");
 
+	// Avatar Menu State
 	const [anchorEl, setAnchorEl] = useState(null);
 	const open = Boolean(anchorEl);
+
+	// NEW: Mobile Drawer State
+	const [mobileOpen, setMobileOpen] = useState(false);
 
 	useEffect(() => {
 		if (localStorage.getItem("justLoggedOut")) {
@@ -57,6 +94,9 @@ function App() {
 
 	const handleAvatarClick = (event) => setAnchorEl(event.currentTarget);
 	const handleMenuClose = () => setAnchorEl(null);
+
+	// NEW: Toggle the mobile drawer
+	const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
 	const handleLogout = () => {
 		handleMenuClose();
@@ -82,9 +122,19 @@ function App() {
 							sx={{
 								display: "flex",
 								alignItems: "center",
-								gap: { xs: 2, md: 4 },
+								gap: { xs: 1, md: 4 }, // Smaller gap on mobile
 							}}
 						>
+							{/* NEW: Mobile Hamburger Button (Hidden on Desktop) */}
+							<IconButton
+								color="inherit"
+								edge="start"
+								onClick={handleDrawerToggle}
+								sx={{ display: { md: "none" } }}
+							>
+								<HamburgerIcon />
+							</IconButton>
+
 							<Typography
 								variant="h6"
 								component={RouterLink}
@@ -99,7 +149,14 @@ function App() {
 							>
 								GMU Badminton
 							</Typography>
-							<Box sx={{ display: "flex", gap: 1 }}>
+
+							{/* DESKTOP LINKS: Hidden on Mobile (xs: "none"), Visible on Desktop (md: "flex") */}
+							<Box
+								sx={{
+									display: { xs: "none", md: "flex" },
+									gap: 1,
+								}}
+							>
 								<Button
 									color="inherit"
 									component={RouterLink}
@@ -122,9 +179,26 @@ function App() {
 								>
 									Forum
 								</Button>
+								{user && user.role === "admin" && (
+									<Button
+										color="warning"
+										variant="contained"
+										component={RouterLink}
+										to="/admin"
+										sx={{
+											textTransform: "none",
+											fontWeight: "bold",
+											ml: 2,
+											boxShadow: "none",
+										}}
+									>
+										Admin Panel
+									</Button>
+								)}
 							</Box>
 						</Box>
 
+						{/* RIGHT SIDE: Avatar and Login button stay the same */}
 						<Box>
 							{user ? (
 								<>
@@ -203,6 +277,81 @@ function App() {
 					</Toolbar>
 				</AppBar>
 
+				{/* NEW: The Mobile Slide-out Drawer */}
+				<Drawer
+					anchor="left"
+					open={mobileOpen}
+					onClose={handleDrawerToggle}
+					sx={{
+						display: { xs: "block", md: "none" },
+						"& .MuiDrawer-paper": {
+							boxSizing: "border-box",
+							width: 250,
+							backgroundColor: "#006633",
+							color: "white",
+						},
+					}}
+				>
+					<Box
+						onClick={handleDrawerToggle}
+						sx={{ textAlign: "center", py: 3 }}
+					>
+						<Typography
+							variant="h6"
+							sx={{ fontWeight: 900, color: "#FFCC33" }}
+						>
+							GMU Badminton
+						</Typography>
+						<Divider
+							sx={{ my: 2, borderColor: "rgba(255,255,255,0.2)" }}
+						/>
+						<List>
+							<ListItemButton
+								component={RouterLink}
+								to="/"
+								sx={{ textAlign: "center" }}
+							>
+								<ListItemText
+									primaryTypographyProps={{
+										fontWeight: "bold",
+									}}
+									primary="Dashboard"
+								/>
+							</ListItemButton>
+							<ListItemButton
+								component={RouterLink}
+								to="/forum"
+								sx={{ textAlign: "center" }}
+							>
+								<ListItemText
+									primaryTypographyProps={{
+										fontWeight: "bold",
+									}}
+									primary="Forum"
+								/>
+							</ListItemButton>
+							{user && user.role === "admin" && (
+								<ListItemButton
+									component={RouterLink}
+									to="/admin"
+									sx={{
+										textAlign: "center",
+										backgroundColor: "rgba(255,204,51,0.1)",
+									}}
+								>
+									<ListItemText
+										primaryTypographyProps={{
+											fontWeight: "bold",
+											color: "#FFCC33",
+										}}
+										primary="Admin Panel"
+									/>
+								</ListItemButton>
+							)}
+						</List>
+					</Box>
+				</Drawer>
+
 				<Snackbar
 					open={!!toastMessage}
 					autoHideDuration={4000}
@@ -219,7 +368,7 @@ function App() {
 					</Alert>
 				</Snackbar>
 
-				<Container maxWidth="lg" sx={{ mt: 4 }}>
+				<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 } }}>
 					<Routes>
 						<Route path="/" element={<Dashboard />} />
 						<Route path="/forum" element={<Forum />} />
@@ -240,6 +389,14 @@ function App() {
 									setUser={setUser}
 									setToastMessage={setToastMessage}
 								/>
+							}
+						/>
+						<Route
+							path="/admin"
+							element={
+								<AdminRoute user={user}>
+									<Admin />
+								</AdminRoute>
 							}
 						/>
 					</Routes>

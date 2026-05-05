@@ -37,11 +37,14 @@ function Auth({ setUser, setToastMessage }) {
 		const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
 
 		try {
-			const response = await fetch(`http://localhost:5001${endpoint}`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(formData),
-			});
+			const response = await fetch(
+				`${import.meta.env.VITE_API_URL}${endpoint}`,
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(formData),
+				},
+			);
 
 			const data = await response.json();
 			if (!response.ok)
@@ -62,15 +65,28 @@ function Auth({ setUser, setToastMessage }) {
 	};
 
 	return (
-		<Container maxWidth="sm" sx={{ mt: 8 }}>
+		// NEW: mt: 8 becomes mt: { xs: 4, md: 8 }
+		<Container
+			maxWidth="sm"
+			sx={{ mt: { xs: 4, md: 8 }, px: { xs: 2, sm: 3 } }}
+		>
+			{/* NEW: p: 5 becomes p: { xs: 3, md: 5 } */}
 			<Paper
 				elevation={3}
-				sx={{ p: 5, borderRadius: 4, textAlign: "center" }}
+				sx={{
+					p: { xs: 3, md: 5 },
+					borderRadius: 4,
+					textAlign: "center",
+				}}
 			>
 				<Typography
 					variant="h4"
 					color="primary"
-					sx={{ fontWeight: "bold", mb: 1 }}
+					sx={{
+						fontWeight: "bold",
+						mb: 1,
+						fontSize: { xs: "1.75rem", sm: "2.125rem" },
+					}}
 				>
 					{isLogin ? "Welcome Back" : "Join the Community"}
 				</Typography>

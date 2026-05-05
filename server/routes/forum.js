@@ -28,6 +28,12 @@ router.post("/", async (req, res) => {
 		});
 
 		await newPost.save();
+
+		// NEW: Broadcast to everyone that a brand new thread was created!
+		if (req.io) {
+			req.io.emit("postCreated", newPost);
+		}
+
 		res.status(201).json(newPost);
 	} catch (error) {
 		console.error("Error creating post:", error);
@@ -50,6 +56,12 @@ router.post("/:postId/comments", async (req, res) => {
 
 		if (!updatedPost)
 			return res.status(404).json({ message: "Post not found" });
+
+		// NEW: Broadcast the updated post with the new comment
+		if (req.io) {
+			req.io.emit("postUpdated", updatedPost);
+		}
+
 		res.json(updatedPost);
 	} catch (error) {
 		res.status(500).json({ message: "Server error adding comment" });
@@ -71,6 +83,12 @@ router.put("/:postId/like", async (req, res) => {
 		}
 
 		await post.save();
+
+		// NEW: Broadcast the new like count
+		if (req.io) {
+			req.io.emit("postUpdated", post);
+		}
+
 		res.json(post);
 	} catch (error) {
 		res.status(500).json({ message: "Server error toggling like" });
@@ -98,6 +116,12 @@ router.put("/:postId/comments/:commentId/like", async (req, res) => {
 		}
 
 		await post.save();
+
+		// NEW: Broadcast the new comment like count
+		if (req.io) {
+			req.io.emit("postUpdated", post);
+		}
+
 		res.json(post);
 	} catch (error) {
 		res.status(500).json({ message: "Server error toggling comment like" });
@@ -118,11 +142,17 @@ router.post("/:postId/comments/:commentId/replies", async (req, res) => {
 		comment.replies.push({ authorId, authorName, content });
 		await post.save();
 
+		// NEW: Broadcast the newly added reply
+		if (req.io) {
+			req.io.emit("postUpdated", post);
+		}
+
 		res.json(post);
 	} catch (error) {
 		res.status(500).json({ message: "Server error adding reply" });
 	}
 });
+
 router.put(
 	"/:postId/comments/:commentId/replies/:replyId/like",
 	async (req, res) => {
@@ -136,12 +166,10 @@ router.put(
 			if (!comment)
 				return res.status(404).json({ message: "Comment not found" });
 
-			// Find the specific reply
 			const reply = comment.replies.id(req.params.replyId);
 			if (!reply)
 				return res.status(404).json({ message: "Reply not found" });
 
-			// Toggle the like inside the reply's array
 			const hasLiked = reply.likedBy.includes(userId);
 			if (hasLiked) {
 				reply.likedBy = reply.likedBy.filter((id) => id !== userId);
@@ -150,6 +178,12 @@ router.put(
 			}
 
 			await post.save();
+
+			// NEW: Broadcast the new reply like count
+			if (req.io) {
+				req.io.emit("postUpdated", post);
+			}
+
 			res.json(post);
 		} catch (error) {
 			res.status(500).json({
@@ -158,4 +192,5 @@ router.put(
 		}
 	},
 );
+
 module.exports = router;

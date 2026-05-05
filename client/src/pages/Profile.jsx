@@ -1,6 +1,6 @@
 // client/src/pages/Profile.jsx
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom"; // NEW: Reads the URL!
+import { useParams } from "react-router-dom";
 import {
 	Container,
 	Grid,
@@ -16,16 +16,14 @@ import {
 } from "@mui/material";
 
 function Profile({ user, setUser, setToastMessage }) {
-	const { id } = useParams(); // Grabs the ID from the /profile/:id URL
+	const { id } = useParams();
 	const [profileData, setProfileData] = useState(null);
 	const [error, setError] = useState(null);
 	const [isSaving, setIsSaving] = useState(false);
 	const [notFound, setNotFound] = useState(false);
 
-	// THE SMART CHECK: Does this profile belong to the person looking at the screen?
 	const isOwnProfile = user && user.id === id;
 
-	// Form state
 	const [formData, setFormData] = useState({
 		name: "",
 		skillLevel: "",
@@ -37,24 +35,21 @@ function Profile({ user, setUser, setToastMessage }) {
 	useEffect(() => {
 		const fetchProfile = async () => {
 			try {
-				// If it's your profile, use the secure private route.
-				// If it's someone else, use the public read-only route!
 				const endpoint = isOwnProfile
-					? "http://localhost:5001/api/profile"
-					: `http://localhost:5001/api/profile/${id}`;
+					? `${import.meta.env.VITE_API_URL}/api/profile`
+					: `${import.meta.env.VITE_API_URL}/api/profile/${id}`;
 
 				const headers = isOwnProfile
 					? {
 							Authorization: `Bearer ${localStorage.getItem("token")}`,
 						}
-					: {}; // Public route doesn't need a token
+					: {};
 
 				const res = await fetch(endpoint, { headers });
 				const data = await res.json();
 
 				if (res.ok) {
 					setProfileData(data);
-					// Only pre-fill the edit form if it's actually their own profile
 					if (isOwnProfile) {
 						setFormData({
 							name: data.name || "",
@@ -81,18 +76,21 @@ function Profile({ user, setUser, setToastMessage }) {
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		if (!isOwnProfile) return; // Double security check
+		if (!isOwnProfile) return;
 
 		setIsSaving(true);
 		try {
-			const res = await fetch("http://localhost:5001/api/profile", {
-				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${localStorage.getItem("token")}`,
+			const res = await fetch(
+				`${import.meta.env.VITE_API_URL}/api/profile`,
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+					body: JSON.stringify(formData),
 				},
-				body: JSON.stringify(formData),
-			});
+			);
 			const updatedUser = await res.json();
 
 			if (res.ok) {
@@ -128,27 +126,32 @@ function Profile({ user, setUser, setToastMessage }) {
 		);
 
 	return (
-		// If it's someone else's profile, we shrink the container to "sm" so the Player Card looks nice and centered
-		<Container maxWidth={isOwnProfile ? "md" : "sm"} sx={{ mt: 5, pb: 10 }}>
+		<Container
+			maxWidth={isOwnProfile ? "md" : "sm"}
+			sx={{ mt: { xs: 2, md: 5 }, pb: { xs: 5, md: 10 } }}
+		>
 			<Typography
 				variant="h4"
 				color="primary"
 				fontWeight="bold"
 				gutterBottom
 				textAlign={isOwnProfile ? "left" : "center"}
+				sx={{
+					fontSize: { xs: "1.8rem", md: "2.125rem" },
+					mb: { xs: 3, md: 2 },
+				}}
 			>
 				{isOwnProfile
 					? "Your Profile"
 					: `${profileData.name}'s Profile`}
 			</Typography>
 
-			<Grid container spacing={4} justifyContent="center">
-				{/* LEFT SIDE: The Read-Only Player Card */}
+			<Grid container spacing={{ xs: 2, md: 4 }} justifyContent="center">
 				<Grid item xs={12} md={isOwnProfile ? 4 : 12}>
 					<Paper
 						elevation={0}
 						sx={{
-							p: 4,
+							p: { xs: 3, md: 4 },
 							borderRadius: 3,
 							border: "1px solid #e0e0e0",
 							textAlign: "center",
@@ -225,13 +228,12 @@ function Profile({ user, setUser, setToastMessage }) {
 					</Paper>
 				</Grid>
 
-				{/* RIGHT SIDE: The Edit Form (ONLY RENDERS IF IT IS YOUR OWN PROFILE) */}
 				{isOwnProfile && (
 					<Grid item xs={12} md={8}>
 						<Paper
 							elevation={0}
 							sx={{
-								p: 4,
+								p: { xs: 3, md: 4 },
 								borderRadius: 3,
 								border: "1px solid #e0e0e0",
 							}}
