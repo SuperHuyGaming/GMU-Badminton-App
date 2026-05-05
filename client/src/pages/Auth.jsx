@@ -37,11 +37,14 @@ function Auth({ setUser, setToastMessage }) {
 		const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
 
 		try {
-			const response = await fetch(`http://localhost:5001${endpoint}`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(formData),
-			});
+			const response = await fetch(
+				`${import.meta.env.VITE_API_URL}${endpoint}`,
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(formData),
+				},
+			);
 
 			const data = await response.json();
 			if (!response.ok)

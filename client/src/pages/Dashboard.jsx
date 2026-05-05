@@ -15,12 +15,12 @@ function Dashboard() {
 	const [weeklySchedule, setWeeklySchedule] = useState([]);
 
 	useEffect(() => {
-		fetch("http://localhost:5001/api/status")
+		fetch(`{import.meta.env.VITE_API_URL}/api/status`)
 			.then((res) => res.json())
 			.then((data) => setApiMessage(data.message))
 			.catch(() => setApiMessage("Unable to reach the server."));
 
-		fetch("http://localhost:5001/api/schedule/weekly")
+		fetch(`${import.meta.env.VITE_API_URL}/api/schedule/weekly`)
 			.then((res) => res.json())
 			.then((data) => setWeeklySchedule(data))
 			.catch((err) => console.error(err));

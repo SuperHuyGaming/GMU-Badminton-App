@@ -36,8 +36,8 @@ function Profile({ user, setUser, setToastMessage }) {
 		const fetchProfile = async () => {
 			try {
 				const endpoint = isOwnProfile
-					? "http://localhost:5001/api/profile"
-					: `http://localhost:5001/api/profile/${id}`;
+					? `${import.meta.env.VITE_API_URL}/api/profile`
+					: `${import.meta.env.VITE_API_URL}/api/profile/${id}`;
 
 				const headers = isOwnProfile
 					? {
@@ -80,14 +80,17 @@ function Profile({ user, setUser, setToastMessage }) {
 
 		setIsSaving(true);
 		try {
-			const res = await fetch("http://localhost:5001/api/profile", {
-				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${localStorage.getItem("token")}`,
+			const res = await fetch(
+				`${import.meta.env.VITE_API_URL}/api/profile`,
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+					body: JSON.stringify(formData),
 				},
-				body: JSON.stringify(formData),
-			});
+			);
 			const updatedUser = await res.json();
 
 			if (res.ok) {

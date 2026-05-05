@@ -20,7 +20,7 @@ import {
 import PostCard from "../components/PostCard";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5001");
+const socket = io(`${import.meta.env.VITE_API_URL}`);
 
 const generateDateWindow = () => {
 	const dates = [];
@@ -88,7 +88,7 @@ export default function Forum() {
 	}, [viewDate]);
 
 	useEffect(() => {
-		fetch("http://localhost:5001/api/forum")
+		fetch(`${import.meta.env.VITE_API_URL}/api/forum`)
 			.then((res) => res.json())
 			.then(setPosts)
 			.catch(console.error);
@@ -114,7 +114,7 @@ export default function Forum() {
 	const handleSubmit = async () => {
 		if (!currentUser) return alert("You must be logged in to post!");
 		try {
-			await fetch("http://localhost:5001/api/forum", {
+			await fetch(`${import.meta.env.VITE_API_URL}/api/forum`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",

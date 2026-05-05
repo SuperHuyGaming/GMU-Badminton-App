@@ -121,7 +121,7 @@ export default function PostCard({ post }) {
 		if (!newReplyText.trim() || !currentUser) return;
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments`,
 				{
 					method: "POST",
 					headers: {
@@ -152,7 +152,7 @@ export default function PostCard({ post }) {
 		if (!currentUser) return alert("You must be logged in!");
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments/${commentId}/like`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments/${commentId}/like`,
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
@@ -171,7 +171,7 @@ export default function PostCard({ post }) {
 		if (!currentUser) return alert("You must be logged in!");
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments/${commentId}/replies/${replyId}/like`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments/${commentId}/replies/${replyId}/like`,
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
@@ -190,7 +190,7 @@ export default function PostCard({ post }) {
 		if (!nestedReplyText.trim() || !currentUser) return;
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/comments/${commentId}/replies`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/comments/${commentId}/replies`,
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -220,7 +220,7 @@ export default function PostCard({ post }) {
 		if (!currentUser) return alert("You must be logged in to like posts!");
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/forum/${localPost._id}/like`,
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/like`,
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },

@@ -25,13 +25,13 @@ export default function Admin() {
 			const headers = { Authorization: `Bearer ${token}` };
 
 			const userRes = await fetch(
-				"http://localhost:5001/api/admin/users",
+				`${import.meta.env.VITE_API_URL}/api/admin/users`,
 				{ headers },
 			);
 			if (userRes.ok) setUsers(await userRes.json());
 
 			const postRes = await fetch(
-				"http://localhost:5001/api/admin/posts",
+				"${import.meta.env.VITE_API_URL}/api/admin/posts",
 				{ headers },
 			);
 			if (postRes.ok) setPosts(await postRes.json());
@@ -53,7 +53,7 @@ export default function Admin() {
 			return;
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/admin/users/${id}`,
+				`${import.meta.env.VITE_API_URL}/api/admin/users/${id}`,
 				{
 					method: "DELETE",
 					headers: {
@@ -76,7 +76,7 @@ export default function Admin() {
 			return;
 		try {
 			const res = await fetch(
-				`http://localhost:5001/api/admin/posts/${id}`,
+				`${import.meta.env.VITE_API_URL}/api/admin/posts/${id}`,
 				{
 					method: "DELETE",
 					headers: {
