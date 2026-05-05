@@ -31,7 +31,7 @@ export default function Admin() {
 			if (userRes.ok) setUsers(await userRes.json());
 
 			const postRes = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/posts`,,
+				`${import.meta.env.VITE_API_URL}/api/admin/posts`,
 				{ headers },
 			);
 			if (postRes.ok) setPosts(await postRes.json());
