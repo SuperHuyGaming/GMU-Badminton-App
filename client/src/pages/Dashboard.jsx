@@ -8,14 +8,16 @@ import {
 	Button,
 	CircularProgress,
 	Fade,
+	Skeleton, // NEW
 } from "@mui/material";
 
 function Dashboard() {
 	const [apiMessage, setApiMessage] = useState(null);
 	const [weeklySchedule, setWeeklySchedule] = useState([]);
+	const [isLoadingSchedule, setIsLoadingSchedule] = useState(true); // NEW
 
 	useEffect(() => {
-		fetch(`{import.meta.env.VITE_API_URL}/api/status`)
+		fetch(`${import.meta.env.VITE_API_URL}/api/status`)
 			.then((res) => res.json())
 			.then((data) => setApiMessage(data.message))
 			.catch(() => setApiMessage("Unable to reach the server."));
@@ -23,7 +25,8 @@ function Dashboard() {
 		fetch(`${import.meta.env.VITE_API_URL}/api/schedule/weekly`)
 			.then((res) => res.json())
 			.then((data) => setWeeklySchedule(data))
-			.catch((err) => console.error(err));
+			.catch((err) => console.error(err))
+			.finally(() => setIsLoadingSchedule(false)); // NEW: Stop loading
 	}, []);
 
 	return (
@@ -121,120 +124,137 @@ function Dashboard() {
 				Weekly Schedule
 			</Typography>
 			<Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-				{weeklySchedule.map((item, index) => {
-					const dateParts = item.date.split(" ");
-					const isDedicated = item.status.includes("Dedicated");
-					return (
-						<Paper
-							key={index}
-							component={RouterLink}
-							to={`/forum?date=${encodeURIComponent(item.date)}&day=${item.day}`}
-							elevation={0}
-							sx={{
-								display: "flex",
-								alignItems: "center",
-								p: { xs: 1.5, sm: 2 },
-								borderRadius: 3,
-								border: "1px solid #e0e0e0",
-								textDecoration: "none",
-								cursor: "pointer",
-								"&:hover": { borderColor: "primary.main" },
-							}}
-						>
-							<Box
-								sx={{
-									minWidth: { xs: 55, sm: 70 },
-									height: { xs: 55, sm: 70 },
-									borderRadius: 2,
-									overflow: "hidden",
-									display: "flex",
-									flexDirection: "column",
-									mr: { xs: 1.5, sm: 3 },
-								}}
-							>
-								<Box
+				{isLoadingSchedule
+					? // NEW: Display 3 shimmering skeletons while loading
+						[1, 2, 3].map((n) => (
+							<Skeleton
+								key={n}
+								variant="rounded"
+								width="100%"
+								height={80}
+								sx={{ borderRadius: 3 }}
+							/>
+						))
+					: weeklySchedule.map((item, index) => {
+							const dateParts = item.date.split(" ");
+							const isDedicated =
+								item.status.includes("Dedicated");
+							return (
+								<Paper
+									key={index}
+									component={RouterLink}
+									to={`/forum?date=${encodeURIComponent(item.date)}&day=${item.day}`}
+									elevation={0}
 									sx={{
-										backgroundColor: "primary.main",
-										color: "white",
-										textAlign: "center",
-										py: 0.5,
-										fontSize: {
-											xs: "0.65rem",
-											sm: "0.75rem",
-										},
-										fontWeight: "bold",
-									}}
-								>
-									{dateParts[0]}
-								</Box>
-								<Box
-									sx={{
-										flex: 1,
-										backgroundColor: "#f9f9f9",
-										color: "text.primary",
 										display: "flex",
 										alignItems: "center",
-										justifyContent: "center",
-										fontSize: {
-											xs: "1.2rem",
-											sm: "1.5rem",
-										},
-										fontWeight: "bold",
-									}}
-								>
-									{dateParts[1]}
-								</Box>
-							</Box>
-							<Box sx={{ flex: 1 }}>
-								<Typography
-									variant="h6"
-									fontWeight="bold"
-									color="text.primary"
-									sx={{
-										fontSize: {
-											xs: "1.1rem",
-											sm: "1.25rem",
-										},
-										lineHeight: 1.2,
-									}}
-								>
-									{index === 0 ? "Today" : item.day}
-								</Typography>
-								<Typography
-									variant="body2"
-									color="text.secondary"
-									sx={{
-										fontSize: {
-											xs: "0.8rem",
-											sm: "0.875rem",
+										p: { xs: 1.5, sm: 2 },
+										borderRadius: 3,
+										border: "1px solid #e0e0e0",
+										textDecoration: "none",
+										cursor: "pointer",
+										"&:hover": {
+											borderColor: "primary.main",
 										},
 									}}
 								>
-									📍 {item.location}
-								</Typography>
-							</Box>
-							<Box
-								sx={{
-									textAlign: "right",
-									pr: { xs: 0, sm: 2 },
-								}}
-							>
-								<Typography
-									variant="body1"
-									fontWeight="600"
-									color="text.primary"
-									sx={{
-										fontSize: { xs: "0.9rem", sm: "1rem" },
-									}}
-								>
-									{isDedicated
-										? "Dedicated Play"
-										: "Open Play"}
-								</Typography>
-							</Box>
-						</Paper>
-					);
-				})}
+									<Box
+										sx={{
+											minWidth: { xs: 55, sm: 70 },
+											height: { xs: 55, sm: 70 },
+											borderRadius: 2,
+											overflow: "hidden",
+											display: "flex",
+											flexDirection: "column",
+											mr: { xs: 1.5, sm: 3 },
+										}}
+									>
+										<Box
+											sx={{
+												backgroundColor: "primary.main",
+												color: "white",
+												textAlign: "center",
+												py: 0.5,
+												fontSize: {
+													xs: "0.65rem",
+													sm: "0.75rem",
+												},
+												fontWeight: "bold",
+											}}
+										>
+											{dateParts[0]}
+										</Box>
+										<Box
+											sx={{
+												flex: 1,
+												backgroundColor: "#f9f9f9",
+												color: "text.primary",
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												fontSize: {
+													xs: "1.2rem",
+													sm: "1.5rem",
+												},
+												fontWeight: "bold",
+											}}
+										>
+											{dateParts[1]}
+										</Box>
+									</Box>
+									<Box sx={{ flex: 1 }}>
+										<Typography
+											variant="h6"
+											fontWeight="bold"
+											color="text.primary"
+											sx={{
+												fontSize: {
+													xs: "1.1rem",
+													sm: "1.25rem",
+												},
+												lineHeight: 1.2,
+											}}
+										>
+											{index === 0 ? "Today" : item.day}
+										</Typography>
+										<Typography
+											variant="body2"
+											color="text.secondary"
+											sx={{
+												fontSize: {
+													xs: "0.8rem",
+													sm: "0.875rem",
+												},
+											}}
+										>
+											📍 {item.location}
+										</Typography>
+									</Box>
+									<Box
+										sx={{
+											textAlign: "right",
+											pr: { xs: 0, sm: 2 },
+										}}
+									>
+										<Typography
+											variant="body1"
+											fontWeight="600"
+											color="text.primary"
+											sx={{
+												fontSize: {
+													xs: "0.9rem",
+													sm: "1rem",
+												},
+											}}
+										>
+											{isDedicated
+												? "Dedicated Play"
+												: "Open Play"}
+										</Typography>
+									</Box>
+								</Paper>
+							);
+						})}
 			</Box>
 		</Box>
 	);

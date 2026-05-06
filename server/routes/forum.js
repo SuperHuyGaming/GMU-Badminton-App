@@ -1,24 +1,121 @@
 // server/routes/forum.js
 const express = require("express");
 const Post = require("../models/Post");
+const User = require("../models/User");
+const Notification = require("../models/Notification"); // NEW: Import the model!
 
 const router = express.Router();
 
-// GET: Fetch all posts
-router.get("/", async (req, res) => {
+const hydrateWithPictures = async (data) => {
+	const users = await User.find().select("_id name profilePic").lean();
+	const userMap = {};
+	users.forEach(
+		(u) =>
+			(userMap[u._id.toString()] = {
+				name: u.name,
+				profilePic: u.profilePic,
+			}),
+	);
+
+	const attach = (post) => {
+		post.authorPic = userMap[post.authorId?.toString()]?.profilePic || "";
+		post.likedByDetails = Array.isArray(post.likedBy)
+			? post.likedBy.map((id) => ({
+					id,
+					name: userMap[id.toString()]?.name || "Unknown",
+					profilePic: userMap[id.toString()]?.profilePic || "",
+				}))
+			: [];
+
+		post.comments?.forEach((comment) => {
+			comment.authorPic =
+				userMap[comment.authorId?.toString()]?.profilePic || "";
+			comment.likedByDetails = Array.isArray(comment.likedBy)
+				? comment.likedBy.map((id) => ({
+						id,
+						name: userMap[id.toString()]?.name || "Unknown",
+						profilePic: userMap[id.toString()]?.profilePic || "",
+					}))
+				: [];
+
+			comment.replies?.forEach((reply) => {
+				reply.authorPic =
+					userMap[reply.authorId?.toString()]?.profilePic || "";
+				reply.likedByDetails = Array.isArray(reply.likedBy)
+					? reply.likedBy.map((id) => ({
+							id,
+							name: userMap[id.toString()]?.name || "Unknown",
+							profilePic:
+								userMap[id.toString()]?.profilePic || "",
+						}))
+					: [];
+			});
+		});
+		return post;
+	};
+
+	if (Array.isArray(data)) return data.map(attach);
+	return attach(data);
+};
+
+// --- NEW: NOTIFICATION ROUTES ---
+router.get("/notifications/:userId", async (req, res) => {
 	try {
-		const posts = await Post.find().sort({ timestamp: -1 });
-		res.json(posts);
+		const notifs = await Notification.find({
+			targetUserId: req.params.userId,
+		})
+			.sort({ time: -1 })
+			.limit(30);
+		res.json(notifs);
 	} catch (error) {
-		res.status(500).json({ message: "Server error fetching posts" });
+		res.status(500).json({ message: "Error fetching notifications" });
 	}
 });
 
-// POST: Create a new main post
+router.put("/notifications/:userId/read", async (req, res) => {
+	try {
+		await Notification.updateMany(
+			{ targetUserId: req.params.userId, read: false },
+			{ read: true },
+		);
+		res.json({ success: true });
+	} catch (error) {
+		res.status(500).json({ message: "Error updating notifications" });
+	}
+});
+
+// Helper to create and emit notifications
+const sendNotification = async (io, targetUserId, message, link) => {
+	if (!targetUserId || targetUserId === "000000000000000000000000") return;
+	const notif = new Notification({ targetUserId, message, link });
+	await notif.save();
+	if (io) io.emit("newNotification", notif);
+};
+// ---------------------------------
+
+router.get("/", async (req, res) => {
+	try {
+		const rawPosts = await Post.find().sort({ timestamp: -1 }).lean();
+		res.json(await hydrateWithPictures(rawPosts));
+	} catch (error) {
+		res.status(500).json({ message: "Error fetching posts" });
+	}
+});
+
+router.get("/user/:userId", async (req, res) => {
+	try {
+		const rawPosts = await Post.find({ authorId: req.params.userId })
+			.sort({ timestamp: -1 })
+			.lean();
+		res.json(await hydrateWithPictures(rawPosts));
+	} catch (error) {
+		res.status(500).json({ message: "Error fetching user posts" });
+	}
+});
+
 router.post("/", async (req, res) => {
 	try {
 		const { title, content, authorName, targetDate, authorId } = req.body;
-
 		const newPost = new Post({
 			title,
 			content,
@@ -26,130 +123,152 @@ router.post("/", async (req, res) => {
 			targetDate: targetDate || "General",
 			authorId: authorId || "000000000000000000000000",
 		});
-
 		await newPost.save();
-
-		// NEW: Broadcast to everyone that a brand new thread was created!
-		if (req.io) {
-			req.io.emit("postCreated", newPost);
-		}
-
-		res.status(201).json(newPost);
+		const hydratedPost = await hydrateWithPictures(newPost.toObject());
+		if (req.io) req.io.emit("postCreated", hydratedPost);
+		res.status(201).json(hydratedPost);
 	} catch (error) {
-		console.error("Error creating post:", error);
-		res.status(500).json({ message: "Server error creating post" });
+		res.status(500).json({ message: "Error creating post" });
 	}
 });
 
-// --- LEVEL 1: MAIN POST INTERACTIONS ---
-
-// POST: Add a main comment to a specific post
 router.post("/:postId/comments", async (req, res) => {
 	try {
 		const { authorId, authorName, content } = req.body;
+		const post = await Post.findById(req.params.postId);
+		post.comments.push({ authorId, authorName, content });
+		await post.save();
 
-		const updatedPost = await Post.findByIdAndUpdate(
-			req.params.postId,
-			{ $push: { comments: { authorId, authorName, content } } },
-			{ new: true },
-		);
+		const updatedPost = await Post.findById(req.params.postId).lean();
+		const hydratedPost = await hydrateWithPictures(updatedPost);
 
-		if (!updatedPost)
-			return res.status(404).json({ message: "Post not found" });
-
-		// NEW: Broadcast the updated post with the new comment
 		if (req.io) {
-			req.io.emit("postUpdated", updatedPost);
+			req.io.emit("postUpdated", hydratedPost);
+			if (post.authorId?.toString() !== authorId.toString()) {
+				const newComment =
+					updatedPost.comments[updatedPost.comments.length - 1];
+				await sendNotification(
+					req.io,
+					post.authorId.toString(),
+					`${authorName} commented on your post: "${post.title}"`,
+					`/forum?postId=${post._id}&highlight=${newComment._id}`,
+				);
+			}
 		}
-
-		res.json(updatedPost);
+		res.json(hydratedPost);
 	} catch (error) {
-		res.status(500).json({ message: "Server error adding comment" });
+		res.status(500).json({ message: "Error adding comment" });
 	}
 });
 
-// PUT: Toggle Like on the Main Post
 router.put("/:postId/like", async (req, res) => {
 	try {
-		const { userId } = req.body;
+		const { userId, userName } = req.body;
 		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
 
-		const hasLiked = post.likedBy.includes(userId);
+		const hasLiked = post.likedBy.some(
+			(id) => id.toString() === userId.toString(),
+		);
 		if (hasLiked) {
-			post.likedBy = post.likedBy.filter((id) => id !== userId);
+			post.likedBy = post.likedBy.filter(
+				(id) => id.toString() !== userId.toString(),
+			);
 		} else {
 			post.likedBy.push(userId);
 		}
-
 		await post.save();
 
-		// NEW: Broadcast the new like count
+		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
-			req.io.emit("postUpdated", post);
+			req.io.emit("postUpdated", hydratedPost);
+			if (!hasLiked && post.authorId?.toString() !== userId.toString()) {
+				await sendNotification(
+					req.io,
+					post.authorId.toString(),
+					`${userName} liked your post: "${post.title}"`,
+					`/forum?postId=${post._id}`,
+				);
+			}
 		}
-
-		res.json(post);
+		res.json(hydratedPost);
 	} catch (error) {
-		res.status(500).json({ message: "Server error toggling like" });
+		res.status(500).json({ message: "Error toggling like" });
 	}
 });
 
-// --- LEVEL 2 & 3: COMMENT INTERACTIONS ---
-
-// PUT: Toggle Like on a specific Comment
 router.put("/:postId/comments/:commentId/like", async (req, res) => {
 	try {
-		const { userId } = req.body;
+		const { userId, userName } = req.body;
 		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-
 		const comment = post.comments.id(req.params.commentId);
-		if (!comment)
-			return res.status(404).json({ message: "Comment not found" });
 
-		const hasLiked = comment.likedBy.includes(userId);
+		const hasLiked = comment.likedBy.some(
+			(id) => id.toString() === userId.toString(),
+		);
 		if (hasLiked) {
-			comment.likedBy = comment.likedBy.filter((id) => id !== userId);
+			comment.likedBy = comment.likedBy.filter(
+				(id) => id.toString() !== userId.toString(),
+			);
 		} else {
 			comment.likedBy.push(userId);
 		}
-
 		await post.save();
 
-		// NEW: Broadcast the new comment like count
+		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
-			req.io.emit("postUpdated", post);
+			req.io.emit("postUpdated", hydratedPost);
+			if (
+				!hasLiked &&
+				comment.authorId?.toString() !== userId.toString()
+			) {
+				await sendNotification(
+					req.io,
+					comment.authorId.toString(),
+					`${userName} liked your comment.`,
+					`/forum?postId=${post._id}&highlight=${comment._id}`,
+				);
+			}
 		}
-
-		res.json(post);
+		res.json(hydratedPost);
 	} catch (error) {
-		res.status(500).json({ message: "Server error toggling comment like" });
+		res.status(500).json({ message: "Error toggling comment like" });
 	}
 });
 
-// POST: Add a Reply to a specific Comment
 router.post("/:postId/comments/:commentId/replies", async (req, res) => {
 	try {
 		const { authorId, authorName, content } = req.body;
 		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-
 		const comment = post.comments.id(req.params.commentId);
-		if (!comment)
-			return res.status(404).json({ message: "Comment not found" });
 
 		comment.replies.push({ authorId, authorName, content });
 		await post.save();
 
-		// NEW: Broadcast the newly added reply
-		if (req.io) {
-			req.io.emit("postUpdated", post);
-		}
+		const updatedPost = await Post.findById(req.params.postId).lean();
+		const hydratedPost = await hydrateWithPictures(updatedPost);
 
-		res.json(post);
+		if (req.io) {
+			req.io.emit("postUpdated", hydratedPost);
+			const commentToReply = updatedPost.comments.find(
+				(c) => c._id.toString() === req.params.commentId,
+			);
+			if (
+				commentToReply &&
+				commentToReply.authorId?.toString() !== authorId.toString()
+			) {
+				const newReply =
+					commentToReply.replies[commentToReply.replies.length - 1];
+				await sendNotification(
+					req.io,
+					commentToReply.authorId.toString(),
+					`${authorName} replied to your comment.`,
+					`/forum?postId=${post._id}&highlight=${newReply._id}`,
+				);
+			}
+		}
+		res.json(hydratedPost);
 	} catch (error) {
-		res.status(500).json({ message: "Server error adding reply" });
+		res.status(500).json({ message: "Error adding reply" });
 	}
 });
 
@@ -157,38 +276,41 @@ router.put(
 	"/:postId/comments/:commentId/replies/:replyId/like",
 	async (req, res) => {
 		try {
-			const { userId } = req.body;
+			const { userId, userName } = req.body;
 			const post = await Post.findById(req.params.postId);
-			if (!post)
-				return res.status(404).json({ message: "Post not found" });
-
 			const comment = post.comments.id(req.params.commentId);
-			if (!comment)
-				return res.status(404).json({ message: "Comment not found" });
-
 			const reply = comment.replies.id(req.params.replyId);
-			if (!reply)
-				return res.status(404).json({ message: "Reply not found" });
 
-			const hasLiked = reply.likedBy.includes(userId);
+			const hasLiked = reply.likedBy.some(
+				(id) => id.toString() === userId.toString(),
+			);
 			if (hasLiked) {
-				reply.likedBy = reply.likedBy.filter((id) => id !== userId);
+				reply.likedBy = reply.likedBy.filter(
+					(id) => id.toString() !== userId.toString(),
+				);
 			} else {
 				reply.likedBy.push(userId);
 			}
-
 			await post.save();
 
-			// NEW: Broadcast the new reply like count
+			const hydratedPost = await hydrateWithPictures(post.toObject());
 			if (req.io) {
-				req.io.emit("postUpdated", post);
+				req.io.emit("postUpdated", hydratedPost);
+				if (
+					!hasLiked &&
+					reply.authorId?.toString() !== userId.toString()
+				) {
+					await sendNotification(
+						req.io,
+						reply.authorId.toString(),
+						`${userName} liked your reply.`,
+						`/forum?postId=${post._id}&highlight=${reply._id}`,
+					);
+				}
 			}
-
-			res.json(post);
+			res.json(hydratedPost);
 		} catch (error) {
-			res.status(500).json({
-				message: "Server error toggling reply like",
-			});
+			res.status(500).json({ message: "Error toggling reply like" });
 		}
 	},
 );

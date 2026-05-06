@@ -146,6 +146,7 @@ function Auth({ setUser, setToastMessage }) {
 						fullWidth
 						label="Email Address"
 						type="email"
+						autoComplete="username"
 						name="email"
 						value={formData.email}
 						onChange={handleChange}
@@ -157,6 +158,7 @@ function Auth({ setUser, setToastMessage }) {
 						fullWidth
 						label="Password"
 						type="password"
+						autoComplete="current-password"
 						name="password"
 						value={formData.password}
 						onChange={handleChange}

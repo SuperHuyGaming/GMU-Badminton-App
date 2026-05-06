@@ -16,6 +16,7 @@ import {
 	TextField,
 	useTheme,
 	useMediaQuery,
+	Skeleton,
 } from "@mui/material";
 import PostCard from "../components/PostCard";
 import { io } from "socket.io-client";
@@ -44,7 +45,6 @@ export default function Forum() {
 	const location = useLocation();
 	const queryParams = new URLSearchParams(location.search);
 
-	// NEW: Mobile Screen Sensors
 	const theme = useTheme();
 	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 
@@ -57,25 +57,38 @@ export default function Forum() {
 		weekday: "long",
 	});
 
-	const [viewDate, setViewDate] = useState(
-		queryParams.get("date") || todayDateStr,
-	);
-	const [viewDay, setViewDay] = useState(
-		queryParams.get("day") || todayDayStr,
-	);
+	const [viewDate, setViewDate] = useState(todayDateStr);
+	const [viewDay, setViewDay] = useState(todayDayStr);
 
 	const currentUser = JSON.parse(localStorage.getItem("user"));
 	const [posts, setPosts] = useState([]);
+	const [isLoading, setIsLoading] = useState(true);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [newPost, setNewPost] = useState({ title: "", content: "" });
+
+	// PHASE 2: Search State
+	const [searchQuery, setSearchQuery] = useState("");
+
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
 	const dateWindow = generateDateWindow();
 
+	// FIX: Smart Tab Routing!
 	useEffect(() => {
-		setViewDate(queryParams.get("date") || todayDateStr);
-		setViewDay(queryParams.get("day") || todayDayStr);
-	}, [queryParams.get("date"), queryParams.get("day")]);
+		const urlDate = queryParams.get("date");
+		const urlDay = queryParams.get("day");
+		const urlPostId = queryParams.get("postId");
 
+		if (urlDate) {
+			setViewDate(urlDate);
+			if (urlDay) setViewDay(urlDay);
+		} else if (!urlPostId) {
+			// Only force the tab to "Today" if we AREN'T trying to view a specific post!
+			setViewDate(todayDateStr);
+			setViewDay(todayDayStr);
+		}
+	}, [location.search]);
+
+	// Auto-scroll the date tabs so the selected day is visible
 	useEffect(() => {
 		const safeId = `date-tab-${viewDate.replace(/[\u00A0\u202F\s]+/g, "-")}`;
 		const activeTab = document.getElementById(safeId);
@@ -87,11 +100,13 @@ export default function Forum() {
 			});
 	}, [viewDate]);
 
+	// Fetch posts and setup WebSockets
 	useEffect(() => {
 		fetch(`${import.meta.env.VITE_API_URL}/api/forum`)
 			.then((res) => res.json())
 			.then(setPosts)
-			.catch(console.error);
+			.catch(console.error)
+			.finally(() => setIsLoading(false));
 
 		socket.on("postCreated", (newPost) => {
 			setPosts((prevPosts) => [newPost, ...prevPosts]);
@@ -111,6 +126,27 @@ export default function Forum() {
 		};
 	}, []);
 
+	// FIX: Auto-Switch Tabs based on Notification Post ID
+	const urlPostId = queryParams.get("postId");
+	useEffect(() => {
+		if (urlPostId && posts.length > 0) {
+			const targetPost = posts.find((p) => p._id === urlPostId);
+			if (targetPost && targetPost.targetDate) {
+				const postDate = targetPost.targetDate
+					.replace(/[\u00A0\u202F\s]+/g, " ")
+					.trim();
+				// Automatically flip the view to the correct date tab!
+				setViewDate(postDate);
+
+				// Match the exact day name (e.g. "Wednesday") for the UI
+				const matchedDay = dateWindow.find(
+					(d) => d.date === postDate,
+				)?.day;
+				if (matchedDay) setViewDay(matchedDay);
+			}
+		}
+	}, [urlPostId, posts]);
+
 	const handleSubmit = async () => {
 		if (!currentUser) return alert("You must be logged in to post!");
 		try {
@@ -128,19 +164,31 @@ export default function Forum() {
 					targetDate: viewDate,
 				}),
 			});
-			setIsModalOpen(false);
+			if (document.activeElement) {
+				document.activeElement.blur();
+			}
+			setTimeout(() => setIsModalOpen(false), 10);
 			setNewPost({ title: "", content: "" });
 		} catch (error) {
 			console.error("Failed to post", error);
 		}
 	};
 
+	// PHASE 2: Integrated Real-Time Search Filtering
 	const postsForThisDate = posts.filter((post) => {
 		if (!post.targetDate) return false;
-		return (
+
+		const matchesDate =
 			post.targetDate.replace(/[\u00A0\u202F\s]+/g, " ").trim() ===
-			viewDate.replace(/[\u00A0\u202F\s]+/g, " ").trim()
-		);
+			viewDate.replace(/[\u00A0\u202F\s]+/g, " ").trim();
+
+		const searchLower = searchQuery.toLowerCase();
+		const matchesSearch =
+			post.title.toLowerCase().includes(searchLower) ||
+			post.content.toLowerCase().includes(searchLower) ||
+			post.authorName.toLowerCase().includes(searchLower);
+
+		return matchesDate && matchesSearch;
 	});
 
 	return (
@@ -166,6 +214,32 @@ export default function Forum() {
 			</Box>
 
 			<Container maxWidth="md">
+				{/* PHASE 2: SEARCH BAR COMPONENT */}
+				<TextField
+					fullWidth
+					variant="outlined"
+					placeholder="Search posts by title, content, or player name..."
+					value={searchQuery}
+					onChange={(e) => setSearchQuery(e.target.value)}
+					sx={{
+						mb: 3,
+						"& .MuiOutlinedInput-root": {
+							borderRadius: 3,
+							backgroundColor: "white",
+							boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+						},
+					}}
+					InputProps={{
+						startAdornment: (
+							<span
+								style={{ marginRight: 12, fontSize: "1.2rem" }}
+							>
+								🔍
+							</span>
+						),
+					}}
+				/>
+
 				<Typography
 					variant="subtitle2"
 					color="text.secondary"
@@ -195,6 +269,7 @@ export default function Forum() {
 								onClick={() => {
 									setViewDate(d.date);
 									setViewDay(d.day);
+									setSearchQuery(""); // Clear search when changing days
 								}}
 								color={
 									viewDate === d.date ? "primary" : "default"
@@ -212,10 +287,46 @@ export default function Forum() {
 				</Paper>
 
 				<Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-					{postsForThisDate.length === 0 ? (
-						<Box textAlign="center" sx={{ my: 4 }}>
+					{isLoading ? (
+						[1, 2].map((n) => (
+							<Paper
+								key={n}
+								elevation={0}
+								sx={{
+									p: 3,
+									borderRadius: 3,
+									border: "1px solid #e0e0e0",
+								}}
+							>
+								<Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+									<Skeleton
+										variant="circular"
+										width={40}
+										height={40}
+									/>
+									<Box sx={{ width: "100%" }}>
+										<Skeleton
+											variant="text"
+											width="60%"
+											height={30}
+										/>
+										<Skeleton variant="text" width="40%" />
+									</Box>
+								</Box>
+								<Skeleton
+									variant="rectangular"
+									width="100%"
+									height={100}
+									sx={{ borderRadius: 2 }}
+								/>
+							</Paper>
+						))
+					) : postsForThisDate.length === 0 ? (
+						<Box sx={{ textAlign: "center", my: 4 }}>
 							<Typography color="text.secondary">
-								No posts found for {viewDate}.
+								{searchQuery
+									? `No results found for "${searchQuery}".`
+									: `No posts found for ${viewDate}.`}
 							</Typography>
 							<Typography color="text.secondary">
 								Be the first to start a thread!
@@ -232,7 +343,11 @@ export default function Forum() {
 			<Fab
 				color="secondary"
 				variant="extended"
-				onClick={() => setIsModalOpen(true)}
+				onClick={(e) => {
+					// THE FIX: Force the yellow button to un-focus itself the millisecond you click it!
+					if (e.currentTarget) e.currentTarget.blur();
+					setIsModalOpen(true);
+				}}
 				sx={{
 					position: "fixed",
 					bottom: { xs: 16, md: 32 },
@@ -248,7 +363,7 @@ export default function Forum() {
 				onClose={() => setIsModalOpen(false)}
 				fullWidth
 				maxWidth="sm"
-				fullScreen={fullScreen} // NEW: Makes it full screen on mobile!
+				fullScreen={fullScreen}
 			>
 				<DialogTitle
 					sx={{
@@ -288,7 +403,7 @@ export default function Forum() {
 						variant="outlined"
 						margin="normal"
 						multiline
-						rows={8} // Made rows slightly bigger for full screen
+						rows={8}
 						value={newPost.content}
 						onChange={(e) =>
 							setNewPost({ ...newPost, content: e.target.value })
@@ -310,7 +425,7 @@ export default function Forum() {
 						variant="contained"
 						color="primary"
 						disabled={!isFormValid}
-						fullWidth={fullScreen} // Spreads the post button on mobile
+						fullWidth={fullScreen}
 						sx={{
 							fontWeight: "bold",
 							py: fullScreen ? 1.5 : undefined,
