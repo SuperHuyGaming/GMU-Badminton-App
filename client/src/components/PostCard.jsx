@@ -13,6 +13,73 @@ import {
 import LikesModal from "./LikesModal";
 import PostCommentsModal from "./PostCommentsModal";
 
+// --- NEW SLEEK SVG ICONS ---
+const ThumbUpOutline = () => (
+	<svg
+		width="20"
+		height="20"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+	</svg>
+);
+
+const ThumbUpFilled = ({ style }) => (
+	<svg
+		style={style}
+		width="20"
+		height="20"
+		viewBox="0 0 24 24"
+		fill="currentColor"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+	</svg>
+);
+
+const MessageCircleIcon = () => (
+	<svg
+		width="20"
+		height="20"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+	</svg>
+);
+
+const ShareIcon = () => (
+	<svg
+		width="20"
+		height="20"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<circle cx="18" cy="5" r="3"></circle>
+		<circle cx="6" cy="12" r="3"></circle>
+		<circle cx="18" cy="19" r="3"></circle>
+		<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+		<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+	</svg>
+);
+// -----------------------------
+
 export default function PostCard({ post }) {
 	const navigate = useNavigate();
 	const currentUser = JSON.parse(localStorage.getItem("user"));
@@ -37,14 +104,19 @@ export default function PostCard({ post }) {
 
 	useEffect(() => {
 		if (urlPostId === localPost._id) {
-			setIsCommentModalOpen(true);
+			// Only auto-open the comments if a specific comment is targeted in the URL
+			if (highlightId) {
+				setIsCommentModalOpen(true);
+			}
+
+			// Always scroll the main post into view!
 			setTimeout(() => {
 				document
 					.getElementById(`post-${localPost._id}`)
 					?.scrollIntoView({ behavior: "smooth", block: "center" });
 			}, 300);
 		}
-	}, [urlPostId, localPost._id]);
+	}, [urlPostId, highlightId, localPost._id]);
 
 	const totalCommentsCount =
 		localPost.comments?.reduce(
@@ -59,40 +131,13 @@ export default function PostCard({ post }) {
 	};
 
 	const handleLike = async () => {
-		if (!currentUser) return alert("You must be logged in!");
-		if (isLiking) return; // Anti-spam lock
+		// AUTH GUARD: Explicitly stops non-logged in users from interacting!
+		if (!currentUser) return alert("You must be logged in to like posts!");
+		if (isLiking) return;
 
 		setIsLiking(true);
-		const originallyLiked = localPost.likedBy?.includes(currentUser.id);
-
-		// OPTIMISTIC UI: Instant visual feedback! No delay!
-		setLocalPost((prev) => {
-			const updated = { ...prev };
-			if (originallyLiked) {
-				updated.likedBy = updated.likedBy.filter(
-					(id) => id !== currentUser.id,
-				);
-				updated.likedByDetails =
-					updated.likedByDetails?.filter(
-						(u) => u.id !== currentUser.id,
-					) || [];
-			} else {
-				updated.likedBy = [...(updated.likedBy || []), currentUser.id];
-				updated.likedByDetails = [
-					...(updated.likedByDetails || []),
-					{
-						id: currentUser.id,
-						name: currentUser.name,
-						profilePic: currentUser.profilePic,
-					},
-				];
-			}
-			return updated;
-		});
-
 		try {
-			// Sync with the backend silently
-			await fetch(
+			const res = await fetch(
 				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/like`,
 				{
 					method: "PUT",
@@ -103,11 +148,11 @@ export default function PostCard({ post }) {
 					}),
 				},
 			);
+			if (res.ok) setLocalPost(await res.json());
 		} catch (err) {
 			console.error(err);
-			setLocalPost(post); // Revert back if the server fails
 		} finally {
-			setIsLiking(false); // Unlock
+			setIsLiking(false);
 		}
 	};
 
@@ -136,17 +181,31 @@ export default function PostCard({ post }) {
 		<>
 			<style>
 				{`
+					/* Blinks comments */
 					@keyframes highlightFlash {
 						0% { background-color: rgba(0, 204, 102, 0.4); transform: scale(1.02); }
 						100% { background-color: transparent; transform: scale(1); }
 					}
 					.highlight-active { animation: highlightFlash 3s ease-out; border-radius: 8px; }
+
+					/* Blinks the entire Post Card when shared */
+					@keyframes highlightPostFlash {
+						0% { border-color: #006633; box-shadow: 0 0 20px rgba(0, 102, 51, 0.4); transform: scale(1.02); }
+						100% { border-color: #e0e0e0; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transform: scale(1); }
+					}
+					.highlight-post-active { animation: highlightPostFlash 3s ease-out; }
 				`}
 			</style>
 
 			<Paper
 				id={`post-${localPost._id}`}
 				elevation={0}
+				// Adds the blink class if the URL points to this specific post!
+				className={
+					urlPostId === localPost._id && !highlightId
+						? "highlight-post-active"
+						: ""
+				}
 				sx={{
 					width: "100%",
 					display: "block",
@@ -218,71 +277,70 @@ export default function PostCard({ post }) {
 					<Box
 						sx={{
 							display: "flex",
-							justifyContent: "space-between",
+							justifyContent: "flex-end", // Aligns to the right
 							alignItems: "center",
+							gap: 2,
 							px: 1,
 							mb: 1,
 						}}
 					>
-						<Box>
-							{totalCommentsCount > 0 && (
+						{totalCommentsCount > 0 && (
+							<Typography
+								variant="body2"
+								color="text.secondary"
+								sx={{
+									cursor: "pointer",
+									"&:hover": {
+										textDecoration: "underline",
+									},
+								}}
+								onClick={() => setIsCommentModalOpen(true)}
+							>
+								{totalCommentsCount}{" "}
+								{totalCommentsCount === 1
+									? "comment"
+									: "comments"}
+							</Typography>
+						)}
+						{localPost.likedBy?.length > 0 && (
+							<Box
+								onClick={(e) =>
+									openLikes(
+										e,
+										"Post Likes",
+										localPost.likedByDetails,
+									)
+								}
+								sx={{
+									display: "flex",
+									alignItems: "center",
+									gap: 0.5,
+									cursor: "pointer",
+									"&:hover": {
+										textDecoration: "underline",
+									},
+								}}
+							>
 								<Typography
 									variant="body2"
 									color="text.secondary"
-									sx={{
-										cursor: "pointer",
-										"&:hover": {
-											textDecoration: "underline",
-										},
-									}}
-									onClick={() => setIsCommentModalOpen(true)}
 								>
-									{totalCommentsCount}{" "}
-									{totalCommentsCount === 1
-										? "comment"
-										: "comments"}
+									{localPost.likedBy.length}
 								</Typography>
-							)}
-						</Box>
-						<Box>
-							{localPost.likedBy?.length > 0 && (
-								<Box
-									onClick={(e) =>
-										openLikes(
-											e,
-											"Post Likes",
-											localPost.likedByDetails,
-										)
-									}
+								<Avatar
 									sx={{
-										display: "flex",
-										alignItems: "center",
-										gap: 0.5,
-										cursor: "pointer",
-										"&:hover": {
-											textDecoration: "underline",
-										},
+										width: 20,
+										height: 20,
+										bgcolor: "primary.main",
+										color: "white",
 									}}
 								>
-									<Typography
-										variant="body2"
-										color="text.secondary"
-									>
-										{localPost.likedBy.length}
-									</Typography>
-									<Avatar
-										sx={{
-											width: 20,
-											height: 20,
-											bgcolor: "primary.main",
-											fontSize: "0.7rem",
-										}}
-									>
-										👍
-									</Avatar>
-								</Box>
-							)}
-						</Box>
+									<ThumbUpFilled
+										style={{ width: 12, height: 12 }}
+									/>
+								</Avatar>
+							</Box>
+						)}
 					</Box>
 				)}
 
@@ -301,43 +359,46 @@ export default function PostCard({ post }) {
 						color={hasLiked ? "primary" : "inherit"}
 						sx={actionBtnStyle}
 					>
-						<Typography
-							sx={{ mr: { xs: 0.5, sm: 1 }, fontSize: "1.2rem" }}
+						<Box
+							sx={{
+								mr: { xs: 0.5, sm: 1 },
+								display: "flex",
+								alignItems: "center",
+							}}
 						>
-							👍
-						</Typography>
+							{hasLiked ? <ThumbUpFilled /> : <ThumbUpOutline />}
+						</Box>
 						<Box
 							sx={{ display: { xs: "none", sm: "inline-block" } }}
 						>
 							Like
 						</Box>
 					</Button>
+
 					<Button
 						onClick={() => setIsCommentModalOpen(true)}
 						color="inherit"
 						sx={actionBtnStyle}
 					>
-						<Typography
-							sx={{ mr: { xs: 0.5, sm: 1 }, fontSize: "1.2rem" }}
+						<Box
+							sx={{
+								mr: { xs: 0.5, sm: 1 },
+								display: "flex",
+								alignItems: "center",
+							}}
 						>
-							💬
-						</Typography>
+							<MessageCircleIcon />
+						</Box>
 						<Box
 							sx={{ display: { xs: "none", sm: "inline-block" } }}
 						>
 							Comment
 						</Box>
-						{totalCommentsCount > 0 && (
-							<Typography
-								component="span"
-								sx={{ ml: 0.5, fontWeight: "bold" }}
-							>
-								({totalCommentsCount})
-							</Typography>
-						)}
 					</Button>
+
 					<Button
 						onClick={() => {
+							// window.location.origin dynamically captures localhost or your Render URL correctly!
 							navigator.clipboard.writeText(
 								`${window.location.origin}/forum?postId=${localPost._id}`,
 							);
@@ -346,11 +407,15 @@ export default function PostCard({ post }) {
 						color="inherit"
 						sx={actionBtnStyle}
 					>
-						<Typography
-							sx={{ mr: { xs: 0.5, sm: 1 }, fontSize: "1.2rem" }}
+						<Box
+							sx={{
+								mr: { xs: 0.5, sm: 1 },
+								display: "flex",
+								alignItems: "center",
+							}}
 						>
-							➦
-						</Typography>
+							<ShareIcon />
+						</Box>
 						<Box
 							sx={{ display: { xs: "none", sm: "inline-block" } }}
 						>

@@ -2,9 +2,17 @@
 const express = require("express");
 const Post = require("../models/Post");
 const User = require("../models/User");
-const Notification = require("../models/Notification"); // NEW: Import the model!
+const Notification = require("../models/Notification");
 
 const router = express.Router();
+
+// Helper to shorten long comments in notifications
+const truncateText = (text, maxLength = 40) => {
+	if (!text) return "";
+	return text.length > maxLength
+		? text.substring(0, maxLength - 3) + "..."
+		: text;
+};
 
 const hydrateWithPictures = async (data) => {
 	const users = await User.find().select("_id name profilePic").lean();
@@ -58,7 +66,6 @@ const hydrateWithPictures = async (data) => {
 	return attach(data);
 };
 
-// --- NEW: NOTIFICATION ROUTES ---
 router.get("/notifications/:userId", async (req, res) => {
 	try {
 		const notifs = await Notification.find({
@@ -84,18 +91,40 @@ router.put("/notifications/:userId/read", async (req, res) => {
 	}
 });
 
-// Helper to create and emit notifications
 const sendNotification = async (io, targetUserId, message, link) => {
 	if (!targetUserId || targetUserId === "000000000000000000000000") return;
 	const notif = new Notification({ targetUserId, message, link });
 	await notif.save();
 	if (io) io.emit("newNotification", notif);
 };
-// ---------------------------------
 
 router.get("/", async (req, res) => {
 	try {
-		const rawPosts = await Post.find().sort({ timestamp: -1 }).lean();
+		const page = parseInt(req.query.page) || 1;
+		const limit = parseInt(req.query.limit) || 10;
+		const skip = (page - 1) * limit;
+
+		const query = {};
+
+		if (req.query.date) {
+			query.targetDate = req.query.date;
+		}
+
+		if (req.query.search) {
+			const searchRegex = new RegExp(req.query.search, "i");
+			query.$or = [
+				{ title: searchRegex },
+				{ content: searchRegex },
+				{ authorName: searchRegex },
+			];
+		}
+
+		const rawPosts = await Post.find(query)
+			.sort({ timestamp: -1 })
+			.skip(skip)
+			.limit(limit)
+			.lean();
+
 		res.json(await hydrateWithPictures(rawPosts));
 	} catch (error) {
 		res.status(500).json({ message: "Error fetching posts" });
@@ -104,9 +133,16 @@ router.get("/", async (req, res) => {
 
 router.get("/user/:userId", async (req, res) => {
 	try {
+		const page = parseInt(req.query.page) || 1;
+		const limit = parseInt(req.query.limit) || 10;
+		const skip = (page - 1) * limit;
+
 		const rawPosts = await Post.find({ authorId: req.params.userId })
 			.sort({ timestamp: -1 })
+			.skip(skip)
+			.limit(limit)
 			.lean();
+
 		res.json(await hydrateWithPictures(rawPosts));
 	} catch (error) {
 		res.status(500).json({ message: "Error fetching user posts" });
@@ -147,10 +183,11 @@ router.post("/:postId/comments", async (req, res) => {
 			if (post.authorId?.toString() !== authorId.toString()) {
 				const newComment =
 					updatedPost.comments[updatedPost.comments.length - 1];
+				// FIX: Display truncated comment content instead of post title!
 				await sendNotification(
 					req.io,
 					post.authorId.toString(),
-					`${authorName} commented on your post: "${post.title}"`,
+					`${authorName} commented: "${truncateText(content)}"`,
 					`/forum?postId=${post._id}&highlight=${newComment._id}`,
 				);
 			}
@@ -182,10 +219,11 @@ router.put("/:postId/like", async (req, res) => {
 		if (req.io) {
 			req.io.emit("postUpdated", hydratedPost);
 			if (!hasLiked && post.authorId?.toString() !== userId.toString()) {
+				// FIX: Don't show the title, just say they liked the post!
 				await sendNotification(
 					req.io,
 					post.authorId.toString(),
-					`${userName} liked your post: "${post.title}"`,
+					`${userName} liked your post.`,
 					`/forum?postId=${post._id}`,
 				);
 			}
@@ -258,10 +296,11 @@ router.post("/:postId/comments/:commentId/replies", async (req, res) => {
 			) {
 				const newReply =
 					commentToReply.replies[commentToReply.replies.length - 1];
+				// FIX: Display truncated reply content!
 				await sendNotification(
 					req.io,
 					commentToReply.authorId.toString(),
-					`${authorName} replied to your comment.`,
+					`${authorName} replied: "${truncateText(content)}"`,
 					`/forum?postId=${post._id}&highlight=${newReply._id}`,
 				);
 			}
