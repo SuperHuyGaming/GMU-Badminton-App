@@ -100,9 +100,7 @@ function App() {
 	const [notifAnchorEl, setNotifAnchorEl] = useState(null);
 	const notifOpen = Boolean(notifAnchorEl);
 
-	// FIX: Start with empty array, do NOT rely on local storage
 	const [notifications, setNotifications] = useState([]);
-
 	const [mobileOpen, setMobileOpen] = useState(false);
 
 	useEffect(() => {
@@ -112,7 +110,6 @@ function App() {
 		}
 	}, []);
 
-	// FIX: Fetch persistent history from Database on login
 	useEffect(() => {
 		if (!user) return;
 
@@ -141,10 +138,8 @@ function App() {
 
 	const handleNotifClick = (event) => {
 		setNotifAnchorEl(event.currentTarget);
-		// Mark as read in UI instantly
 		setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
 
-		// FIX: Tell the Database to mark them as read permanently!
 		fetch(
 			`${import.meta.env.VITE_API_URL}/api/forum/notifications/${user.id}/read`,
 			{
@@ -587,7 +582,13 @@ function App() {
 				<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 } }}>
 					<Routes>
 						<Route path="/" element={<Dashboard />} />
-						<Route path="/forum" element={<Forum />} />
+						{/* FIXED: The duplicate Forum route is removed! */}
+						<Route
+							path="/forum"
+							element={
+								<Forum setToastMessage={setToastMessage} />
+							}
+						/>
 						<Route
 							path="/auth"
 							element={

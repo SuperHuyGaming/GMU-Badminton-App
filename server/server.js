@@ -43,6 +43,8 @@ const { router: profileRoutes } = require("./routes/profile");
 app.use("/api/profile", profileRoutes);
 const adminRoutes = require("./routes/admin");
 app.use("/api/admin", adminRoutes);
+const announcementRoutes = require("./routes/announcements");
+app.use("/api/announcements", announcementRoutes);
 
 app.get("/api/status", async (req, res) => {
 	try {

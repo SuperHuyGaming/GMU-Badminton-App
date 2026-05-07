@@ -6,7 +6,6 @@ const { authMiddleware, adminMiddleware } = require("./profile");
 
 const router = express.Router();
 
-// 🛡️ THE VAULT DOOR: Apply security bouncers to EVERY route in this file
 router.use(authMiddleware);
 router.use(adminMiddleware);
 
@@ -14,10 +13,8 @@ router.use(adminMiddleware);
 // USER MANAGEMENT ROUTES
 // ==========================================
 
-// GET: Fetch all users in the database
 router.get("/users", async (req, res) => {
 	try {
-		// We use .select("-password") so we never accidentally leak hashed passwords to the frontend
 		const users = await User.find()
 			.select("-password")
 			.sort({ createdAt: -1 });
@@ -27,7 +24,6 @@ router.get("/users", async (req, res) => {
 	}
 });
 
-// DELETE: Obliterate a user from the database
 router.delete("/users/:id", async (req, res) => {
 	try {
 		const deletedUser = await User.findByIdAndDelete(req.params.id);
@@ -41,10 +37,43 @@ router.delete("/users/:id", async (req, res) => {
 });
 
 // ==========================================
+// SPAM & MODERATION ROUTES
+// ==========================================
+
+router.get("/flagged", async (req, res) => {
+	try {
+		const flaggedPosts = await Post.find({ isFlagged: true }).sort({
+			timestamp: -1,
+		});
+		res.json(flaggedPosts);
+	} catch (err) {
+		res.status(500).json({
+			message: "Server error fetching flagged posts",
+		});
+	}
+});
+
+router.put("/flagged/:id/approve", async (req, res) => {
+	try {
+		const post = await Post.findByIdAndUpdate(
+			req.params.id,
+			{ isFlagged: false },
+			{ new: true },
+		);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		if (req.io) req.io.emit("postCreated", post);
+
+		res.json({ message: "Post approved", post });
+	} catch (err) {
+		res.status(500).json({ message: "Server error approving post" });
+	}
+});
+
+// ==========================================
 // FORUM MANAGEMENT ROUTES
 // ==========================================
 
-// GET: Fetch all posts (Admin View)
 router.get("/posts", async (req, res) => {
 	try {
 		const posts = await Post.find().sort({ timestamp: -1 });
@@ -54,12 +83,16 @@ router.get("/posts", async (req, res) => {
 	}
 });
 
-// DELETE: Obliterate a forum post
 router.delete("/posts/:id", async (req, res) => {
 	try {
 		const deletedPost = await Post.findByIdAndDelete(req.params.id);
 		if (!deletedPost)
 			return res.status(404).json({ message: "Post not found" });
+
+		// NEW: Broadcast to everyone's browser to rip this post off the screen instantly!
+		if (req.io) {
+			req.io.emit("postDeleted", req.params.id);
+		}
 
 		res.json({ message: "Post permanently deleted." });
 	} catch (err) {

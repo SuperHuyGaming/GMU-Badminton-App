@@ -42,7 +42,7 @@ const generateDateWindow = () => {
 	return dates;
 };
 
-export default function Forum() {
+export default function Forum({ setToastMessage }) {
 	const location = useLocation();
 	const queryParams = new URLSearchParams(location.search);
 	const theme = useTheme();
@@ -64,6 +64,10 @@ export default function Forum() {
 	const [viewDay, setViewDay] = useState(todayDayStr);
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
+
+	// NEW: State for the big Spam Warning popup
+	const [spamModalOpen, setSpamModalOpen] = useState(false);
+
 	const [newPost, setNewPost] = useState({ title: "", content: "" });
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
 
@@ -74,7 +78,6 @@ export default function Forum() {
 	const [isFetchingMore, setIsFetchingMore] = useState(false);
 	const observerTarget = useRef(null);
 
-	// 1. URL Parameter Routing
 	useEffect(() => {
 		const urlDate = queryParams.get("date");
 		const urlDay = queryParams.get("day");
@@ -89,16 +92,12 @@ export default function Forum() {
 		}
 	}, [location.search]);
 
-	// 2. Reset Pagination when Filters Change
 	useEffect(() => {
 		setPage(1);
 	}, [viewDate]);
 
-	// 3. Fetch Posts from Backend (THE RACE CONDITION FIX)
 	useEffect(() => {
 		const fetchPosts = async () => {
-			// FIX: Only block fetching if we are on page 2+ and there are no more posts.
-			// If we are on page 1, ALWAYS fetch, because we just switched tabs!
 			if (page > 1 && !hasMore) return;
 
 			if (page === 1) setIsLoading(true);
@@ -110,7 +109,6 @@ export default function Forum() {
 				);
 				const data = await res.json();
 
-				// Automatically determine if we have more based on return length
 				setHasMore(data.length === 10);
 
 				if (page === 1) {
@@ -133,9 +131,8 @@ export default function Forum() {
 		};
 
 		fetchPosts();
-	}, [viewDate, page]); // REMOVED hasMore from dependency array to prevent double-firing!
+	}, [viewDate, page]);
 
-	// 4. The Infinite Scroll Intersection Observer
 	useEffect(() => {
 		const observer = new IntersectionObserver(
 			(entries) => {
@@ -155,7 +152,7 @@ export default function Forum() {
 		return () => observer.disconnect();
 	}, [hasMore, isLoading, isFetchingMore]);
 
-	// 5. WebSockets (Live Updates)
+	// WebSockets
 	useEffect(() => {
 		const handleNewPost = (newPost) => {
 			const postDate = newPost.targetDate
@@ -182,32 +179,53 @@ export default function Forum() {
 			);
 		};
 
+		const handleDeletedPost = (deletedPostId) => {
+			setPosts((prevPosts) =>
+				prevPosts.filter((p) => p._id !== deletedPostId),
+			);
+		};
+
 		socket.on("postCreated", handleNewPost);
 		socket.on("postUpdated", handlePostUpdated);
+		socket.on("postDeleted", handleDeletedPost);
 
 		return () => {
 			socket.off("postCreated", handleNewPost);
 			socket.off("postUpdated", handlePostUpdated);
+			socket.off("postDeleted", handleDeletedPost);
 		};
 	}, [viewDate]);
 
 	const handleSubmit = async () => {
 		if (!currentUser) return alert("You must be logged in to post!");
 		try {
-			await fetch(`${import.meta.env.VITE_API_URL}/api/forum`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${localStorage.getItem("token")}`,
+			const res = await fetch(
+				`${import.meta.env.VITE_API_URL}/api/forum`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+					body: JSON.stringify({
+						title: newPost.title,
+						content: newPost.content,
+						authorName: currentUser.name,
+						authorId: currentUser.id,
+						targetDate: viewDate,
+					}),
 				},
-				body: JSON.stringify({
-					title: newPost.title,
-					content: newPost.content,
-					authorName: currentUser.name,
-					authorId: currentUser.id,
-					targetDate: viewDate,
-				}),
-			});
+			);
+
+			const data = await res.json();
+
+			// UPDATED: Check for the exact spam message and open the big modal
+			if (data.message === "Post submitted for review.") {
+				setSpamModalOpen(true);
+			} else if (setToastMessage) {
+				setToastMessage("Post created successfully!");
+			}
+
 			if (document.activeElement) document.activeElement.blur();
 			setTimeout(() => setIsModalOpen(false), 10);
 			setNewPost({ title: "", content: "" });
@@ -268,7 +286,6 @@ export default function Forum() {
 								onClick={() => {
 									setViewDate(d.date);
 									setViewDay(d.day);
-									// FIX: Clear state immediately on click so UI feels snappy
 									setPage(1);
 									setPosts([]);
 								}}
@@ -380,6 +397,9 @@ export default function Forum() {
 				+ New Post
 			</Fab>
 
+			{/* ========================================== */}
+			{/* NEW POST MODAL */}
+			{/* ========================================== */}
 			<Dialog
 				open={isModalOpen}
 				onClose={() => setIsModalOpen(false)}
@@ -454,6 +474,63 @@ export default function Forum() {
 						}}
 					>
 						Post to Forum
+					</Button>
+				</DialogActions>
+			</Dialog>
+
+			{/* ========================================== */}
+			{/* NEW: BIG SPAM WARNING MODAL */}
+			{/* ========================================== */}
+			<Dialog
+				open={spamModalOpen}
+				onClose={() => setSpamModalOpen(false)}
+				maxWidth="sm"
+				fullWidth
+				PaperProps={{ sx: { borderRadius: 3 } }}
+			>
+				<DialogTitle
+					sx={{
+						fontWeight: "bold",
+						color: "#d32f2f",
+						display: "flex",
+						alignItems: "center",
+						gap: 1.5,
+						borderBottom: "1px solid #eee",
+						pb: 2,
+					}}
+				>
+					<Typography sx={{ fontSize: "1.5rem" }}>🚨</Typography> Post
+					Under Review
+				</DialogTitle>
+				<DialogContent sx={{ pt: 3 }}>
+					<Typography
+						variant="body1"
+						sx={{ mb: 2, fontWeight: "bold" }}
+					>
+						Our automated system has flagged your post for
+						moderation.
+					</Typography>
+					<Typography
+						variant="body2"
+						color="text.secondary"
+						sx={{ lineHeight: 1.6 }}
+					>
+						This usually happens if a post contains excessive links,
+						repetitive characters, or triggers our automated spam
+						filters. Your post has been successfully sent to the
+						admin team for manual review. It will become visible on
+						the forum once it is approved.
+					</Typography>
+				</DialogContent>
+				<DialogActions sx={{ p: 3 }}>
+					<Button
+						onClick={() => setSpamModalOpen(false)}
+						variant="contained"
+						color="error"
+						fullWidth
+						sx={{ fontWeight: "bold", py: 1.2, borderRadius: 2 }}
+					>
+						I Understand
 					</Button>
 				</DialogActions>
 			</Dialog>
