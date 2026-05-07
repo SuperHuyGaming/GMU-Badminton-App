@@ -6,7 +6,6 @@ const User = require("../models/User");
 
 const router = express.Router();
 
-// A secure secret key for signing tokens (Fallbacks to a string if not in .env)
 const JWT_SECRET =
 	process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
 
@@ -15,7 +14,6 @@ router.post("/register", async (req, res) => {
 	try {
 		const { name, email, password } = req.body;
 
-		// 1. Check if a user with this email already exists
 		let user = await User.findOne({ email });
 		if (user) {
 			return res.status(400).json({
@@ -23,11 +21,9 @@ router.post("/register", async (req, res) => {
 			});
 		}
 
-		// 2. Security: Scramble (hash) the password
 		const salt = await bcrypt.genSalt(10);
 		const hashedPassword = await bcrypt.hash(password, salt);
 
-		// 3. Save the new user to MongoDB
 		user = new User({
 			name,
 			email,
@@ -35,19 +31,16 @@ router.post("/register", async (req, res) => {
 		});
 		await user.save();
 
-		// 4. Create the "Digital Wristband" (JWT Token)
+		// THE FIX: We keep the token ultra-lightweight!
 		const token = jwt.sign(
 			{
 				userId: user._id,
-				name: user.name,
-				skillLevel: user.skillLevel,
 				role: user.role,
 			},
 			JWT_SECRET,
-			{ expiresIn: "7d" }, // Token expires in 7 days
+			{ expiresIn: "7d" },
 		);
 
-		// 5. Send the token and user data back to React
 		res.status(201).json({
 			token,
 			user: {
@@ -56,6 +49,7 @@ router.post("/register", async (req, res) => {
 				email: user.email,
 				skillLevel: user.skillLevel,
 				role: user.role,
+				profilePic: user.profilePic, // This is completely safe in the response body!
 			},
 		});
 	} catch (error) {
@@ -69,7 +63,6 @@ router.post("/login", async (req, res) => {
 	try {
 		const { email, password } = req.body;
 
-		// 1. Find the user by email
 		const user = await User.findOne({ email });
 		if (!user) {
 			return res
@@ -77,7 +70,6 @@ router.post("/login", async (req, res) => {
 				.json({ message: "Invalid email or password." });
 		}
 
-		// 2. Check if the typed password matches the scrambled password in the database
 		const isMatch = await bcrypt.compare(password, user.password);
 		if (!isMatch) {
 			return res
@@ -85,12 +77,10 @@ router.post("/login", async (req, res) => {
 				.json({ message: "Invalid email or password." });
 		}
 
-		// 3. Issue the Token
+		// THE FIX: We keep the token ultra-lightweight!
 		const token = jwt.sign(
 			{
 				userId: user._id,
-				name: user.name,
-				skillLevel: user.skillLevel,
 				role: user.role,
 			},
 			JWT_SECRET,
@@ -105,6 +95,7 @@ router.post("/login", async (req, res) => {
 				email: user.email,
 				skillLevel: user.skillLevel,
 				role: user.role,
+				profilePic: user.profilePic, // Safe in the body!
 			},
 		});
 	} catch (error) {

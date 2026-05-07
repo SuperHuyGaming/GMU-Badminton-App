@@ -46,16 +46,39 @@ router.get("/", authMiddleware, async (req, res) => {
 // PUT: Update the user's profile
 router.put("/", authMiddleware, async (req, res) => {
 	try {
-		const { name, skillLevel, bio, preferredPlay, racket } = req.body;
+		// NEW: Destructure profilePic and coverPic from the incoming request
+		const {
+			name,
+			skillLevel,
+			bio,
+			preferredPlay,
+			racket,
+			profilePic,
+			coverPic,
+		} = req.body;
 
 		const updatedUser = await User.findByIdAndUpdate(
 			req.user.userId,
-			{ name, skillLevel, bio, preferredPlay, racket },
+			// NEW: Tell MongoDB to update the image fields
+			{
+				name,
+				skillLevel,
+				bio,
+				preferredPlay,
+				racket,
+				profilePic,
+				coverPic,
+			},
 			{ new: true, runValidators: true },
 		).select("-password");
 
+		if (req.io) {
+			req.io.emit("profileUpdated", updatedUser);
+		}
+
 		res.json(updatedUser);
 	} catch (err) {
+		console.error("Error saving profile:", err);
 		res.status(500).json({ message: "Server error updating profile" });
 	}
 });

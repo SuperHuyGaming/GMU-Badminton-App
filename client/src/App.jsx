@@ -28,15 +28,17 @@ import {
 	Alert,
 	Menu,
 	MenuItem,
-	// NEW IMPORTS FOR MOBILE DRAWER:
 	IconButton,
 	Drawer,
 	List,
 	ListItemButton,
 	ListItemText,
+	Badge,
 } from "@mui/material";
+import { io } from "socket.io-client";
 
-// A crash-proof SVG Hamburger Icon (No extra npm packages needed!)
+const socket = io(`${import.meta.env.VITE_API_URL}`);
+
 const HamburgerIcon = () => (
 	<svg
 		width="24"
@@ -54,6 +56,22 @@ const HamburgerIcon = () => (
 	</svg>
 );
 
+const BellIcon = () => (
+	<svg
+		width="24"
+		height="24"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+		<path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+	</svg>
+);
+
 const gmuTheme = createTheme({
 	palette: {
 		primary: { main: "#006633" },
@@ -68,9 +86,7 @@ const gmuTheme = createTheme({
 });
 
 const AdminRoute = ({ children, user }) => {
-	if (!user || user.role !== "admin") {
-		return <Navigate to="/" replace />;
-	}
+	if (!user || user.role !== "admin") return <Navigate to="/" replace />;
 	return children;
 };
 
@@ -78,11 +94,13 @@ function App() {
 	const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")));
 	const [toastMessage, setToastMessage] = useState("");
 
-	// Avatar Menu State
 	const [anchorEl, setAnchorEl] = useState(null);
 	const open = Boolean(anchorEl);
 
-	// NEW: Mobile Drawer State
+	const [notifAnchorEl, setNotifAnchorEl] = useState(null);
+	const notifOpen = Boolean(notifAnchorEl);
+
+	const [notifications, setNotifications] = useState([]);
 	const [mobileOpen, setMobileOpen] = useState(false);
 
 	useEffect(() => {
@@ -92,10 +110,51 @@ function App() {
 		}
 	}, []);
 
+	useEffect(() => {
+		if (!user) return;
+
+		fetch(
+			`${import.meta.env.VITE_API_URL}/api/forum/notifications/${user.id}`,
+		)
+			.then((res) => res.json())
+			.then((data) => setNotifications(data))
+			.catch(console.error);
+
+		const handleNewNotification = (notification) => {
+			if (notification.targetUserId === user.id) {
+				setNotifications((prev) => [notification, ...prev]);
+				setToastMessage(notification.message);
+			}
+		};
+
+		socket.on("newNotification", handleNewNotification);
+		return () => socket.off("newNotification", handleNewNotification);
+	}, [user]);
+
+	const unreadCount = notifications.filter((n) => !n.read).length;
+
 	const handleAvatarClick = (event) => setAnchorEl(event.currentTarget);
 	const handleMenuClose = () => setAnchorEl(null);
 
-	// NEW: Toggle the mobile drawer
+	const handleNotifClick = (event) => {
+		setNotifAnchorEl(event.currentTarget);
+		setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+		fetch(
+			`${import.meta.env.VITE_API_URL}/api/forum/notifications/${user.id}/read`,
+			{
+				method: "PUT",
+			},
+		).catch(console.error);
+	};
+
+	const handleNotifClose = () => setNotifAnchorEl(null);
+
+	const clearNotifications = () => {
+		setNotifications([]);
+		handleNotifClose();
+	};
+
 	const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
 	const handleLogout = () => {
@@ -112,7 +171,7 @@ function App() {
 			<CssBaseline />
 			<BrowserRouter>
 				<AppBar
-					position="static"
+					position="sticky"
 					color="primary"
 					elevation={0}
 					sx={{ borderBottom: "1px solid rgba(0,0,0,0.1)" }}
@@ -122,10 +181,9 @@ function App() {
 							sx={{
 								display: "flex",
 								alignItems: "center",
-								gap: { xs: 1, md: 4 }, // Smaller gap on mobile
+								gap: { xs: 1, md: 4 },
 							}}
 						>
-							{/* NEW: Mobile Hamburger Button (Hidden on Desktop) */}
 							<IconButton
 								color="inherit"
 								edge="start"
@@ -150,7 +208,6 @@ function App() {
 								GMU Badminton
 							</Typography>
 
-							{/* DESKTOP LINKS: Hidden on Mobile (xs: "none"), Visible on Desktop (md: "flex") */}
 							<Box
 								sx={{
 									display: { xs: "none", md: "flex" },
@@ -198,11 +255,154 @@ function App() {
 							</Box>
 						</Box>
 
-						{/* RIGHT SIDE: Avatar and Login button stay the same */}
-						<Box>
+						<Box
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								gap: 2,
+							}}
+						>
 							{user ? (
 								<>
+									<IconButton
+										color="inherit"
+										onClick={handleNotifClick}
+										sx={{
+											transition: "all 0.2s",
+											"&:hover": {
+												color: "secondary.main",
+											},
+										}}
+									>
+										<Badge
+											badgeContent={unreadCount}
+											color="error"
+										>
+											<BellIcon />
+										</Badge>
+									</IconButton>
+
+									<Menu
+										anchorEl={notifAnchorEl}
+										open={notifOpen}
+										onClose={handleNotifClose}
+										transformOrigin={{
+											horizontal: "right",
+											vertical: "top",
+										}}
+										anchorOrigin={{
+											horizontal: "right",
+											vertical: "bottom",
+										}}
+										slotProps={{
+											paper: {
+												elevation: 3,
+												sx: {
+													mt: 1.5,
+													width: 320,
+													borderRadius: 3,
+													maxHeight: 400,
+												},
+											},
+										}}
+									>
+										<Box
+											sx={{
+												px: 2,
+												py: 1.5,
+												display: "flex",
+												justifyContent: "space-between",
+												alignItems: "center",
+												borderBottom: "1px solid #eee",
+											}}
+										>
+											<Typography fontWeight="bold">
+												Notifications
+											</Typography>
+											{notifications.length > 0 && (
+												<Typography
+													variant="caption"
+													color="primary"
+													sx={{
+														cursor: "pointer",
+														fontWeight: "bold",
+														"&:hover": {
+															textDecoration:
+																"underline",
+														},
+													}}
+													onClick={clearNotifications}
+												>
+													Clear All
+												</Typography>
+											)}
+										</Box>
+
+										{notifications.length === 0 ? (
+											<MenuItem
+												sx={{
+													py: 3,
+													justifyContent: "center",
+													color: "text.secondary",
+												}}
+												disableRipple
+											>
+												No new notifications
+											</MenuItem>
+										) : (
+											notifications.map((notif) => (
+												<MenuItem
+													key={notif._id || notif.id}
+													component={RouterLink}
+													to={notif.link}
+													onClick={handleNotifClose}
+													sx={{
+														whiteSpace: "normal",
+														py: 1.5,
+														borderBottom:
+															"1px solid #f5f5f5",
+														"&:active": {
+															transform:
+																"scale(0.98)",
+														},
+													}}
+												>
+													<Box>
+														<Typography
+															variant="body2"
+															sx={{
+																lineHeight: 1.3,
+															}}
+														>
+															{notif.message}
+														</Typography>
+														<Typography
+															variant="caption"
+															color="text.secondary"
+															sx={{
+																mt: 0.5,
+																display:
+																	"block",
+															}}
+														>
+															{new Date(
+																notif.time,
+															).toLocaleTimeString(
+																[],
+																{
+																	hour: "2-digit",
+																	minute: "2-digit",
+																},
+															)}
+														</Typography>
+													</Box>
+												</MenuItem>
+											))
+										)}
+									</Menu>
+
 									<Avatar
+										src={user.profilePic}
 										onClick={handleAvatarClick}
 										sx={{
 											width: 38,
@@ -215,8 +415,10 @@ function App() {
 											"&:hover": { opacity: 0.8 },
 										}}
 									>
-										{user.name.charAt(0).toUpperCase()}
+										{!user.profilePic &&
+											user.name.charAt(0).toUpperCase()}
 									</Avatar>
+
 									<Menu
 										anchorEl={anchorEl}
 										open={open}
@@ -229,26 +431,36 @@ function App() {
 											horizontal: "right",
 											vertical: "bottom",
 										}}
-										PaperProps={{
-											elevation: 3,
-											sx: {
-												mt: 1.5,
-												minWidth: 150,
-												borderRadius: 2,
+										slotProps={{
+											paper: {
+												elevation: 3,
+												sx: {
+													mt: 1.5,
+													minWidth: 150,
+													borderRadius: 2,
+												},
 											},
 										}}
 									>
 										<MenuItem
 											component={RouterLink}
 											to={`/profile/${user.id}`}
-											onClick={handleMenuClose}
+											onClick={(e) => {
+												if (e.currentTarget)
+													e.currentTarget.blur();
+												handleMenuClose();
+											}}
 											sx={{ fontWeight: "bold" }}
 										>
 											View Profile
 										</MenuItem>
 										<Divider />
 										<MenuItem
-											onClick={handleLogout}
+											onClick={(e) => {
+												if (e.currentTarget)
+													e.currentTarget.blur();
+												handleLogout();
+											}}
 											sx={{
 												color: "error.main",
 												fontWeight: "bold",
@@ -277,7 +489,6 @@ function App() {
 					</Toolbar>
 				</AppBar>
 
-				{/* NEW: The Mobile Slide-out Drawer */}
 				<Drawer
 					anchor="left"
 					open={mobileOpen}
@@ -371,7 +582,13 @@ function App() {
 				<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 } }}>
 					<Routes>
 						<Route path="/" element={<Dashboard />} />
-						<Route path="/forum" element={<Forum />} />
+						{/* FIXED: The duplicate Forum route is removed! */}
+						<Route
+							path="/forum"
+							element={
+								<Forum setToastMessage={setToastMessage} />
+							}
+						/>
 						<Route
 							path="/auth"
 							element={

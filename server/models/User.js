@@ -21,6 +21,8 @@ const userSchema = new mongoose.Schema({
 	bio: { type: String, default: "I'm ready to play!" },
 	preferredPlay: { type: String, default: "Any" }, // Singles, Doubles, Mixed
 	racket: { type: String, default: "N/A" },
+	profilePic: { type: String, default: "" },
+	coverPic: { type: String, default: "" },
 
 	createdAt: { type: Date, default: Date.now },
 });
