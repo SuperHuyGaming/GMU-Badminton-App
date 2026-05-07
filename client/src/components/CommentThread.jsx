@@ -1,7 +1,11 @@
 // client/src/components/CommentThread.jsx
 import { useState, useEffect } from "react";
-import { Box, Typography, Button, TextField, Avatar } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Box, Typography, Button, TextField } from "@mui/material";
+
+// Sub-components
+import CommentBubble from "./comments/CommentBubble";
+import ReplyBubble from "./comments/ReplyBubble";
+import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 
 export default function CommentThread({
 	comment,
@@ -15,21 +19,16 @@ export default function CommentThread({
 	renderContentWithTags,
 	clickableStyle,
 }) {
-	const navigate = useNavigate();
-
-	// FIX: Each comment thread manages its own localized state now!
 	const [isReplying, setIsReplying] = useState(false);
 	const [nestedReplyText, setNestedReplyText] = useState("");
 	const [isExpanded, setIsExpanded] = useState(false);
 
-	// Auto-expand this specific thread if a reply is highlighted
+	// Single dialog state handles both comments and replies
+	const [deleteTarget, setDeleteTarget] = useState(null); // { isReply: boolean, replyId: string|null }
+
 	useEffect(() => {
-		if (
-			highlightId &&
-			comment.replies?.some((r) => r._id === highlightId)
-		) {
+		if (highlightId && comment.replies?.some((r) => r._id === highlightId))
 			setIsExpanded(true);
-		}
 	}, [highlightId, comment.replies]);
 
 	const handleSubmitNestedReply = () => {
@@ -45,7 +44,16 @@ export default function CommentThread({
 		);
 		setNestedReplyText("");
 		setIsReplying(false);
-		setIsExpanded(true); // Auto-open replies after posting
+		setIsExpanded(true);
+	};
+
+	const confirmDelete = async () => {
+		if (!deleteTarget) return;
+		let endpoint = `/api/forum/${localPost._id}/comments/${comment._id}`;
+		if (deleteTarget.isReply)
+			endpoint += `/replies/${deleteTarget.replyId}`;
+		await apiCall(endpoint, "DELETE", { userId: currentUser.id });
+		setDeleteTarget(null);
 	};
 
 	return (
@@ -54,136 +62,25 @@ export default function CommentThread({
 			className={highlightId === comment._id ? "highlight-active" : ""}
 			sx={{ display: "flex", flexDirection: "column", p: 0.5 }}
 		>
-			{/* THE MAIN COMMENT BUBBLE */}
-			<Box sx={{ display: "flex", gap: 1 }}>
-				<Avatar
-					src={comment.authorPic}
-					onClick={() => navigate(`/profile/${comment.authorId}`)}
-					sx={{
-						width: 32,
-						height: 32,
-						fontSize: "0.9rem",
-						...clickableStyle,
-					}}
-				>
-					{!comment.authorPic && comment.authorName.charAt(0)}
-				</Avatar>
-				<Box sx={{ flexGrow: 1, minWidth: 0 }}>
-					<Box
-						sx={{
-							position: "relative",
-							backgroundColor: "#e4e6eb",
-							p: 1.5,
-							borderRadius: 3,
-							display: "inline-block",
-							maxWidth: "100%",
-						}}
-					>
-						<Typography
-							onClick={() =>
-								navigate(`/profile/${comment.authorId}`)
-							}
-							variant="subtitle2"
-							fontWeight="bold"
-							sx={{ lineHeight: 1, ...clickableStyle }}
-						>
-							{comment.authorName}
-						</Typography>
-
-						{renderContentWithTags(comment.content)}
-
-						{comment.likedBy?.length > 0 && (
-							<Box
-								onClick={(e) =>
-									openLikes(
-										e,
-										"Comment Likes",
-										comment.likedByDetails,
-									)
-								}
-								sx={{
-									position: "absolute",
-									bottom: -8,
-									right: -8,
-									bgcolor: "white",
-									borderRadius: 10,
-									px: 0.6,
-									py: 0.2,
-									display: "flex",
-									alignItems: "center",
-									gap: 0.5,
-									boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
-									cursor: "pointer",
-									"&:active": { transform: "scale(0.95)" },
-								}}
-							>
-								<Avatar
-									sx={{
-										width: 14,
-										height: 14,
-										bgcolor: "primary.main",
-										fontSize: "0.5rem",
-									}}
-								>
-									👍
-								</Avatar>
-								<Typography
-									variant="caption"
-									sx={{
-										fontSize: "0.7rem",
-										color: "text.secondary",
-										fontWeight: "bold",
-									}}
-								>
-									{comment.likedBy.length}
-								</Typography>
-							</Box>
-						)}
-					</Box>
-
-					<Box sx={{ display: "flex", gap: 2, ml: 1, mt: 0.5 }}>
-						<Typography
-							variant="caption"
-							onClick={() =>
-								handleToggleLike(
-									`/api/forum/${localPost._id}/comments/${comment._id}/like`,
-									comment._id,
-								)
-							}
-							sx={{
-								cursor: "pointer",
-								fontWeight: "bold",
-								color: comment.likedBy?.includes(
-									currentUser?.id,
-								)
-									? "primary.main"
-									: "text.secondary",
-								"&:active": { transform: "scale(0.9)" },
-							}}
-						>
-							Like
-						</Typography>
-						<Typography
-							variant="caption"
-							onClick={() => {
-								setIsReplying(true);
-								setNestedReplyText(`@${comment.authorName} `);
-							}}
-							sx={{
-								cursor: "pointer",
-								fontWeight: "bold",
-								color: "text.secondary",
-								"&:active": { transform: "scale(0.9)" },
-							}}
-						>
-							Reply
-						</Typography>
-						<Typography variant="caption" color="text.disabled">
-							{formatTime(comment.timestamp)}
-						</Typography>
-					</Box>
-				</Box>
-			</Box>
+			{/* MAIN COMMENT */}
+			<CommentBubble
+				comment={comment}
+				localPostId={localPost._id}
+				currentUser={currentUser}
+				highlightId={highlightId}
+				openLikes={openLikes}
+				handleToggleLike={handleToggleLike}
+				formatTime={formatTime}
+				renderContentWithTags={renderContentWithTags}
+				clickableStyle={clickableStyle}
+				promptDelete={() =>
+					setDeleteTarget({ isReply: false, replyId: null })
+				}
+				onReply={() => {
+					setIsReplying(true);
+					setNestedReplyText(`@${comment.authorName} `);
+				}}
+			/>
 
 			{/* REPLIES TOGGLE */}
 			{comment.replies?.length > 0 && (
@@ -204,165 +101,35 @@ export default function CommentThread({
 				</Typography>
 			)}
 
-			{/* NESTED REPLIES BUBBLES */}
+			{/* NESTED REPLIES LOOP */}
 			{isExpanded &&
 				comment.replies?.map((reply) => (
-					<Box
+					<ReplyBubble
 						key={reply._id}
-						id={`comment-${reply._id}`}
-						className={
-							highlightId === reply._id ? "highlight-active" : ""
+						reply={reply}
+						commentId={comment._id}
+						localPostId={localPost._id}
+						currentUser={currentUser}
+						highlightId={highlightId}
+						openLikes={openLikes}
+						handleToggleLike={handleToggleLike}
+						formatTime={formatTime}
+						renderContentWithTags={renderContentWithTags}
+						clickableStyle={clickableStyle}
+						promptDelete={() =>
+							setDeleteTarget({
+								isReply: true,
+								replyId: reply._id,
+							})
 						}
-						sx={{
-							display: "flex",
-							mt: 1,
-							ml: { xs: 4, sm: 6 },
-							borderLeft: "2px solid #ccc",
-							pl: 1.5,
-							p: 0.5,
+						onReply={() => {
+							setIsReplying(true);
+							setNestedReplyText(`@${reply.authorName} `);
 						}}
-					>
-						<Avatar
-							src={reply.authorPic}
-							onClick={() =>
-								navigate(`/profile/${reply.authorId}`)
-							}
-							sx={{
-								width: 24,
-								height: 24,
-								fontSize: "0.7rem",
-								mr: 1,
-								...clickableStyle,
-							}}
-						>
-							{!reply.authorPic && reply.authorName.charAt(0)}
-						</Avatar>
-						<Box sx={{ flexGrow: 1, minWidth: 0 }}>
-							<Box
-								sx={{
-									position: "relative",
-									backgroundColor: "#e4e6eb",
-									p: 1,
-									borderRadius: 3,
-									display: "inline-block",
-									maxWidth: "100%",
-								}}
-							>
-								<Typography
-									onClick={() =>
-										navigate(`/profile/${reply.authorId}`)
-									}
-									variant="subtitle2"
-									fontWeight="bold"
-									sx={{
-										fontSize: "0.8rem",
-										...clickableStyle,
-									}}
-								>
-									{reply.authorName}
-								</Typography>
-
-								{renderContentWithTags(reply.content)}
-
-								{reply.likedBy?.length > 0 && (
-									<Box
-										onClick={(e) =>
-											openLikes(
-												e,
-												"Reply Likes",
-												reply.likedByDetails,
-											)
-										}
-										sx={{
-											position: "absolute",
-											bottom: -8,
-											right: -8,
-											bgcolor: "white",
-											borderRadius: 10,
-											px: 0.6,
-											py: 0.2,
-											display: "flex",
-											alignItems: "center",
-											gap: 0.5,
-											boxShadow:
-												"0 1px 4px rgba(0,0,0,0.15)",
-											cursor: "pointer",
-											"&:active": {
-												transform: "scale(0.95)",
-											},
-										}}
-									>
-										<Avatar
-											sx={{
-												width: 14,
-												height: 14,
-												bgcolor: "primary.main",
-												fontSize: "0.5rem",
-											}}
-										>
-											👍
-										</Avatar>
-										<Typography
-											variant="caption"
-											sx={{
-												fontSize: "0.7rem",
-												color: "text.secondary",
-												fontWeight: "bold",
-											}}
-										>
-											{reply.likedBy.length}
-										</Typography>
-									</Box>
-								)}
-							</Box>
-
-							<Box
-								sx={{ display: "flex", gap: 2, ml: 1, mt: 0.5 }}
-							>
-								<Typography
-									variant="caption"
-									onClick={() =>
-										handleToggleLike(
-											`/api/forum/${localPost._id}/comments/${comment._id}/replies/${reply._id}/like`,
-											reply._id,
-										)
-									}
-									sx={{
-										cursor: "pointer",
-										fontWeight: "bold",
-										color: reply.likedBy?.includes(
-											currentUser?.id,
-										)
-											? "primary.main"
-											: "text.secondary",
-										"&:active": { transform: "scale(0.9)" },
-									}}
-								>
-									Like
-								</Typography>
-								<Typography
-									variant="caption"
-									onClick={() => {
-										setIsReplying(true);
-										setNestedReplyText(
-											`@${reply.authorName} `,
-										);
-									}}
-									sx={{
-										cursor: "pointer",
-										fontWeight: "bold",
-										color: "text.secondary",
-										"&:active": { transform: "scale(0.9)" },
-									}}
-								>
-									Reply
-								</Typography>
-							</Box>
-						</Box>
-					</Box>
+					/>
 				))}
 
-			{/* NESTED REPLY INPUT (Specific to this thread!) */}
+			{/* NESTED REPLY INPUT */}
 			{isReplying && (
 				<Box
 					sx={{
@@ -412,6 +179,14 @@ export default function CommentThread({
 					</Button>
 				</Box>
 			)}
+
+			{/* SHARED DELETE DIALOG */}
+			<ConfirmDeleteDialog
+				open={!!deleteTarget}
+				onClose={() => setDeleteTarget(null)}
+				onConfirm={confirmDelete}
+				itemName={deleteTarget?.isReply ? "reply" : "comment"}
+			/>
 		</Box>
 	);
 }

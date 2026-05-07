@@ -18,11 +18,44 @@ import {
 	useMediaQuery,
 	Skeleton,
 	CircularProgress,
+	IconButton,
 } from "@mui/material";
 import PostCard from "../components/PostCard";
 import { io } from "socket.io-client";
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
+
+// Sleek Icons for the Modal
+const EditPenIcon = () => (
+	<svg
+		width="22"
+		height="22"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<path d="M12 20h9"></path>
+		<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+	</svg>
+);
+const CloseIcon = () => (
+	<svg
+		width="24"
+		height="24"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<line x1="18" y1="6" x2="6" y2="18"></line>
+		<line x1="6" y1="6" x2="18" y2="18"></line>
+	</svg>
+);
 
 const generateDateWindow = () => {
 	const dates = [];
@@ -64,8 +97,6 @@ export default function Forum({ setToastMessage }) {
 	const [viewDay, setViewDay] = useState(todayDayStr);
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
-
-	// NEW: State for the big Spam Warning popup
 	const [spamModalOpen, setSpamModalOpen] = useState(false);
 
 	const [newPost, setNewPost] = useState({ title: "", content: "" });
@@ -99,7 +130,6 @@ export default function Forum({ setToastMessage }) {
 	useEffect(() => {
 		const fetchPosts = async () => {
 			if (page > 1 && !hasMore) return;
-
 			if (page === 1) setIsLoading(true);
 			else setIsFetchingMore(true);
 
@@ -108,7 +138,6 @@ export default function Forum({ setToastMessage }) {
 					`${import.meta.env.VITE_API_URL}/api/forum?date=${encodeURIComponent(viewDate)}&page=${page}&limit=10`,
 				);
 				const data = await res.json();
-
 				setHasMore(data.length === 10);
 
 				if (page === 1) {
@@ -141,18 +170,15 @@ export default function Forum({ setToastMessage }) {
 					hasMore &&
 					!isLoading &&
 					!isFetchingMore
-				) {
+				)
 					setPage((prev) => prev + 1);
-				}
 			},
 			{ threshold: 1.0 },
 		);
-
 		if (observerTarget.current) observer.observe(observerTarget.current);
 		return () => observer.disconnect();
 	}, [hasMore, isLoading, isFetchingMore]);
 
-	// WebSockets
 	useEffect(() => {
 		const handleNewPost = (newPost) => {
 			const postDate = newPost.targetDate
@@ -161,29 +187,19 @@ export default function Forum({ setToastMessage }) {
 			const currentView = viewDate
 				.replace(/[\u00A0\u202F\s]+/g, " ")
 				.trim();
-
-			if (postDate === currentView) {
-				setPosts((prevPosts) => {
-					if (prevPosts.some((p) => p._id === newPost._id))
-						return prevPosts;
-					return [newPost, ...prevPosts];
-				});
-			}
+			if (postDate === currentView)
+				setPosts((prev) =>
+					prev.some((p) => p._id === newPost._id)
+						? prev
+						: [newPost, ...prev],
+				);
 		};
-
-		const handlePostUpdated = (updatedPost) => {
-			setPosts((prevPosts) =>
-				prevPosts.map((p) =>
-					p._id === updatedPost._id ? updatedPost : p,
-				),
+		const handlePostUpdated = (updatedPost) =>
+			setPosts((prev) =>
+				prev.map((p) => (p._id === updatedPost._id ? updatedPost : p)),
 			);
-		};
-
-		const handleDeletedPost = (deletedPostId) => {
-			setPosts((prevPosts) =>
-				prevPosts.filter((p) => p._id !== deletedPostId),
-			);
-		};
+		const handleDeletedPost = (deletedPostId) =>
+			setPosts((prev) => prev.filter((p) => p._id !== deletedPostId));
 
 		socket.on("postCreated", handleNewPost);
 		socket.on("postUpdated", handlePostUpdated);
@@ -218,13 +234,15 @@ export default function Forum({ setToastMessage }) {
 			);
 
 			const data = await res.json();
+			if (!res.ok)
+				return alert(
+					data.message || "Failed to post. Please try again.",
+				);
 
-			// UPDATED: Check for the exact spam message and open the big modal
-			if (data.message === "Post submitted for review.") {
+			if (data.message === "Post submitted for review.")
 				setSpamModalOpen(true);
-			} else if (setToastMessage) {
+			else if (setToastMessage)
 				setToastMessage("Post created successfully!");
-			}
 
 			if (document.activeElement) document.activeElement.blur();
 			setTimeout(() => setIsModalOpen(false), 10);
@@ -365,7 +383,6 @@ export default function Forum({ setToastMessage }) {
 							<CircularProgress size={30} />
 						</Box>
 					)}
-
 					{!isLoading && posts.length > 0 && !hasMore && (
 						<Typography
 							textAlign="center"
@@ -375,7 +392,6 @@ export default function Forum({ setToastMessage }) {
 							You've reached the end of the line! 🏸
 						</Typography>
 					)}
-
 					<div ref={observerTarget} style={{ height: "10px" }}></div>
 				</Box>
 			</Container>
@@ -398,7 +414,7 @@ export default function Forum({ setToastMessage }) {
 			</Fab>
 
 			{/* ========================================== */}
-			{/* NEW POST MODAL */}
+			{/* UPGRADED: LUXURY NEW POST MODAL */}
 			{/* ========================================== */}
 			<Dialog
 				open={isModalOpen}
@@ -406,58 +422,151 @@ export default function Forum({ setToastMessage }) {
 				fullWidth
 				maxWidth="sm"
 				fullScreen={fullScreen}
+				PaperProps={{
+					sx: {
+						borderRadius: fullScreen ? 0 : 4,
+						overflow: "hidden",
+						backgroundColor: "#fdfdfd",
+						boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+					},
+				}}
 			>
+				{/* Header */}
 				<DialogTitle
 					sx={{
-						fontWeight: "bold",
+						fontWeight: "900",
 						color: "primary.main",
-						pb: 1,
+						p: 4,
+						pb: 3,
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "center",
+						bgcolor: "white",
+						borderBottom: "1px solid #f0f0f0",
 					}}
 				>
-					Organizing for {viewDate}
+					<Box
+						sx={{
+							display: "flex",
+							alignItems: "center",
+							gap: 1.5,
+							fontSize: "1.4rem",
+						}}
+					>
+						<EditPenIcon /> Create New Post
+					</Box>
 					{fullScreen && (
-						<Button
+						<IconButton
 							onClick={() => setIsModalOpen(false)}
-							color="inherit"
-							sx={{ minWidth: 0 }}
+							size="small"
+							sx={{ color: "text.secondary" }}
 						>
-							✕
-						</Button>
+							<CloseIcon />
+						</IconButton>
 					)}
 				</DialogTitle>
-				<DialogContent sx={{ pt: 2 }}>
-					<TextField
-						fullWidth
-						label="Thread Title"
-						variant="outlined"
-						margin="normal"
-						value={newPost.title}
-						onChange={(e) =>
-							setNewPost({ ...newPost, title: e.target.value })
-						}
-					/>
-					<TextField
-						fullWidth
-						label="Details"
-						variant="outlined"
-						margin="normal"
-						multiline
-						rows={8}
-						value={newPost.content}
-						onChange={(e) =>
-							setNewPost({ ...newPost, content: e.target.value })
-						}
-					/>
+
+				{/* Content */}
+				<DialogContent
+					sx={{
+						p: 4,
+						pt: 3,
+						display: "flex",
+						flexDirection: "column",
+						gap: 3.5,
+					}}
+				>
+					{/* Information Banner */}
+					<Box
+						sx={{
+							bgcolor: "rgba(0, 102, 51, 0.05)",
+							p: 2.5,
+							borderRadius: 2,
+							borderLeft: "4px solid #006633",
+						}}
+					>
+						<Typography
+							variant="body1"
+							color="text.secondary"
+							sx={{ fontWeight: "500" }}
+						>
+							Organizing matches for{" "}
+							<strong style={{ color: "#006633" }}>
+								{viewDay}, {viewDate}
+							</strong>
+						</Typography>
+					</Box>
+
+					{/* Inputs */}
+					<Box
+						sx={{
+							display: "flex",
+							flexDirection: "column",
+							gap: 3,
+						}}
+					>
+						<TextField
+							fullWidth
+							label="Thread Title"
+							variant="outlined"
+							placeholder="e.g., Looking for doubles partners at 8 PM"
+							value={newPost.title}
+							onChange={(e) =>
+								setNewPost({
+									...newPost,
+									title: e.target.value,
+								})
+							}
+							sx={{
+								"& .MuiOutlinedInput-root": {
+									borderRadius: 2,
+									bgcolor: "white",
+								},
+							}}
+						/>
+						<TextField
+							fullWidth
+							label="Details"
+							variant="outlined"
+							multiline
+							rows={6}
+							placeholder="Who wants to play? What's your skill level? Are you bringing birdies?"
+							value={newPost.content}
+							onChange={(e) =>
+								setNewPost({
+									...newPost,
+									content: e.target.value,
+								})
+							}
+							sx={{
+								"& .MuiOutlinedInput-root": {
+									borderRadius: 2,
+									bgcolor: "white",
+								},
+							}}
+						/>
+					</Box>
 				</DialogContent>
-				<DialogActions sx={{ p: 3, justifyContent: "space-between" }}>
+
+				{/* Actions */}
+				<DialogActions
+					sx={{
+						px: 4,
+						pb: 4,
+						pt: 1,
+						justifyContent: "space-between",
+						bgcolor: "#fdfdfd",
+					}}
+				>
 					{!fullScreen && (
 						<Button
 							onClick={() => setIsModalOpen(false)}
 							color="inherit"
-							sx={{ fontWeight: "bold" }}
+							sx={{
+								fontWeight: "bold",
+								textTransform: "none",
+								px: 3,
+							}}
 						>
 							Cancel
 						</Button>
@@ -470,7 +579,14 @@ export default function Forum({ setToastMessage }) {
 						fullWidth={fullScreen}
 						sx={{
 							fontWeight: "bold",
-							py: fullScreen ? 1.5 : undefined,
+							py: 1.5,
+							px: 4,
+							borderRadius: 3,
+							textTransform: "none",
+							fontSize: "1rem",
+							boxShadow: isFormValid
+								? "0 4px 14px rgba(0, 102, 51, 0.3)"
+								: "none",
 						}}
 					>
 						Post to Forum
@@ -479,7 +595,7 @@ export default function Forum({ setToastMessage }) {
 			</Dialog>
 
 			{/* ========================================== */}
-			{/* NEW: BIG SPAM WARNING MODAL */}
+			{/* SPAM WARNING MODAL */}
 			{/* ========================================== */}
 			<Dialog
 				open={spamModalOpen}
@@ -497,12 +613,14 @@ export default function Forum({ setToastMessage }) {
 						gap: 1.5,
 						borderBottom: "1px solid #eee",
 						pb: 2,
+						pt: 3,
+						px: 4,
 					}}
 				>
 					<Typography sx={{ fontSize: "1.5rem" }}>🚨</Typography> Post
 					Under Review
 				</DialogTitle>
-				<DialogContent sx={{ pt: 3 }}>
+				<DialogContent sx={{ p: 4 }}>
 					<Typography
 						variant="body1"
 						sx={{ mb: 2, fontWeight: "bold" }}
@@ -522,13 +640,18 @@ export default function Forum({ setToastMessage }) {
 						the forum once it is approved.
 					</Typography>
 				</DialogContent>
-				<DialogActions sx={{ p: 3 }}>
+				<DialogActions sx={{ p: 4, pt: 1 }}>
 					<Button
 						onClick={() => setSpamModalOpen(false)}
 						variant="contained"
 						color="error"
 						fullWidth
-						sx={{ fontWeight: "bold", py: 1.2, borderRadius: 2 }}
+						sx={{
+							fontWeight: "bold",
+							py: 1.5,
+							borderRadius: 3,
+							textTransform: "none",
+						}}
 					>
 						I Understand
 					</Button>

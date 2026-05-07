@@ -9,7 +9,8 @@ const PostSchema = new mongoose.Schema({
 	targetDate: { type: String, required: true },
 	timestamp: { type: Date, default: Date.now },
 	likedBy: { type: [String], default: [] },
-	isFlagged: { type: Boolean, default: false }, // NEW: Spam detection flag
+	isFlagged: { type: Boolean, default: false },
+	isEdited: { type: Boolean, default: false }, // NEW: Track post edits
 	comments: [
 		{
 			authorId: String,
@@ -17,6 +18,7 @@ const PostSchema = new mongoose.Schema({
 			content: String,
 			timestamp: { type: Date, default: Date.now },
 			likedBy: { type: [String], default: [] },
+			isEdited: { type: Boolean, default: false }, // NEW: Track comment edits
 			replies: [
 				{
 					authorId: String,
@@ -24,6 +26,7 @@ const PostSchema = new mongoose.Schema({
 					content: String,
 					timestamp: { type: Date, default: Date.now },
 					likedBy: { type: [String], default: [] },
+					isEdited: { type: Boolean, default: false }, // NEW: Track reply edits
 				},
 			],
 		},

@@ -9,76 +9,23 @@ import {
 	Divider,
 	CardActions,
 	Avatar,
+	IconButton,
+	Menu,
+	MenuItem,
+	TextField,
 } from "@mui/material";
+
+// Separated Sub-Components
 import LikesModal from "./LikesModal";
 import PostCommentsModal from "./PostCommentsModal";
-
-// --- NEW SLEEK SVG ICONS ---
-const ThumbUpOutline = () => (
-	<svg
-		width="20"
-		height="20"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-	</svg>
-);
-
-const ThumbUpFilled = ({ style }) => (
-	<svg
-		style={style}
-		width="20"
-		height="20"
-		viewBox="0 0 24 24"
-		fill="currentColor"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-	</svg>
-);
-
-const MessageCircleIcon = () => (
-	<svg
-		width="20"
-		height="20"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-	</svg>
-);
-
-const ShareIcon = () => (
-	<svg
-		width="20"
-		height="20"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<circle cx="18" cy="5" r="3"></circle>
-		<circle cx="6" cy="12" r="3"></circle>
-		<circle cx="18" cy="19" r="3"></circle>
-		<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-		<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-	</svg>
-);
-// -----------------------------
+import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
+import {
+	ThumbUpOutline,
+	ThumbUpFilled,
+	MessageCircleIcon,
+	ShareIcon,
+	MoreVertIcon,
+} from "./Icons";
 
 export default function PostCard({ post }) {
 	const navigate = useNavigate();
@@ -86,13 +33,21 @@ export default function PostCard({ post }) {
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
+
 	const [likesModal, setLikesModal] = useState({
 		open: false,
 		title: "",
 		list: [],
 	});
-
 	const [isLiking, setIsLiking] = useState(false);
+
+	const [anchorEl, setAnchorEl] = useState(null);
+	const [isEditing, setIsEditing] = useState(false);
+	const [editTitle, setEditTitle] = useState(post.title);
+	const [editContent, setEditContent] = useState(post.content);
+
+	// Toggles the imported dialog component
+	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
 	const urlParams = new URLSearchParams(window.location.search);
 	const highlightId = urlParams.get("highlight");
@@ -100,16 +55,13 @@ export default function PostCard({ post }) {
 
 	useEffect(() => {
 		setLocalPost(post);
+		setEditTitle(post.title);
+		setEditContent(post.content);
 	}, [post]);
 
 	useEffect(() => {
 		if (urlPostId === localPost._id) {
-			// Only auto-open the comments if a specific comment is targeted in the URL
-			if (highlightId) {
-				setIsCommentModalOpen(true);
-			}
-
-			// Always scroll the main post into view!
+			if (highlightId) setIsCommentModalOpen(true);
 			setTimeout(() => {
 				document
 					.getElementById(`post-${localPost._id}`)
@@ -131,7 +83,6 @@ export default function PostCard({ post }) {
 	};
 
 	const handleLike = async () => {
-		// AUTH GUARD: Explicitly stops non-logged in users from interacting!
 		if (!currentUser) return alert("You must be logged in to like posts!");
 		if (isLiking) return;
 
@@ -153,6 +104,58 @@ export default function PostCard({ post }) {
 			console.error(err);
 		} finally {
 			setIsLiking(false);
+		}
+	};
+
+	const handleSaveEdit = async () => {
+		if (!editTitle.trim() || !editContent.trim()) return;
+		try {
+			const res = await fetch(
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}`,
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+					body: JSON.stringify({
+						userId: currentUser.id,
+						title: editTitle,
+						content: editContent,
+					}),
+				},
+			);
+			const data = await res.json();
+
+			if (!res.ok) return alert(data.message || "Failed to update.");
+			if (data.message === "Post submitted for review.")
+				alert(
+					"Your edit has been sent for admin review due to our spam filters.",
+				);
+			else setLocalPost(data);
+
+			setIsEditing(false);
+		} catch (err) {
+			console.error(err);
+		}
+	};
+
+	const confirmDeletePost = async () => {
+		try {
+			await fetch(
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}`,
+				{
+					method: "DELETE",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+					body: JSON.stringify({ userId: currentUser.id }),
+				},
+			);
+			setIsCommentModalOpen(false);
+		} catch (err) {
+			console.error(err);
 		}
 	};
 
@@ -181,18 +184,9 @@ export default function PostCard({ post }) {
 		<>
 			<style>
 				{`
-					/* Blinks comments */
-					@keyframes highlightFlash {
-						0% { background-color: rgba(0, 204, 102, 0.4); transform: scale(1.02); }
-						100% { background-color: transparent; transform: scale(1); }
-					}
+					@keyframes highlightFlash { 0% { background-color: rgba(0, 204, 102, 0.4); transform: scale(1.02); } 100% { background-color: transparent; transform: scale(1); } }
 					.highlight-active { animation: highlightFlash 3s ease-out; border-radius: 8px; }
-
-					/* Blinks the entire Post Card when shared */
-					@keyframes highlightPostFlash {
-						0% { border-color: #006633; box-shadow: 0 0 20px rgba(0, 102, 51, 0.4); transform: scale(1.02); }
-						100% { border-color: #e0e0e0; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transform: scale(1); }
-					}
+					@keyframes highlightPostFlash { 0% { border-color: #006633; box-shadow: 0 0 20px rgba(0, 102, 51, 0.4); transform: scale(1.02); } 100% { border-color: #e0e0e0; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transform: scale(1); } }
 					.highlight-post-active { animation: highlightPostFlash 3s ease-out; }
 				`}
 			</style>
@@ -200,7 +194,6 @@ export default function PostCard({ post }) {
 			<Paper
 				id={`post-${localPost._id}`}
 				elevation={0}
-				// Adds the blink class if the URL points to this specific post!
 				className={
 					urlPostId === localPost._id && !highlightId
 						? "highlight-post-active"
@@ -220,10 +213,11 @@ export default function PostCard({ post }) {
 					},
 				}}
 			>
+				{/* POST HEADER */}
 				<Box
 					sx={{
 						display: "flex",
-						alignItems: "center",
+						alignItems: "flex-start",
 						gap: 1.5,
 						mb: 2,
 					}}
@@ -246,7 +240,7 @@ export default function PostCard({ post }) {
 								? localPost.authorName.charAt(0).toUpperCase()
 								: "?")}
 					</Avatar>
-					<Box>
+					<Box sx={{ flexGrow: 1 }}>
 						<Typography
 							variant="h6"
 							fontWeight="bold"
@@ -265,19 +259,149 @@ export default function PostCard({ post }) {
 								{localPost.authorName || "Unknown"}
 							</strong>{" "}
 							• {formatTime(localPost.timestamp)}
+							{localPost.isEdited && (
+								<span
+									style={{
+										fontStyle: "italic",
+										marginLeft: "6px",
+										opacity: 0.7,
+									}}
+								>
+									(edited)
+								</span>
+							)}
 						</Typography>
 					</Box>
+
+					{/* 3 DOTS MENU */}
+					{(currentUser?.id === localPost.authorId ||
+						currentUser?.role === "admin") && (
+						<Box>
+							<IconButton
+								onClick={(e) => setAnchorEl(e.currentTarget)}
+								size="small"
+								sx={{ color: "text.secondary" }}
+							>
+								<MoreVertIcon />
+							</IconButton>
+							<Menu
+								anchorEl={anchorEl}
+								open={Boolean(anchorEl)}
+								onClose={() => setAnchorEl(null)}
+								slotProps={{
+									paper: {
+										elevation: 2,
+										sx: { borderRadius: 2 },
+									},
+								}}
+							>
+								{currentUser?.id === localPost.authorId && (
+									<MenuItem
+										onClick={() => {
+											setIsEditing(true);
+											setAnchorEl(null);
+										}}
+										sx={{
+											fontWeight: "bold",
+											fontSize: "0.9rem",
+										}}
+									>
+										✎ Edit Post
+									</MenuItem>
+								)}
+								<MenuItem
+									onClick={() => {
+										setDeleteConfirmOpen(true);
+										setAnchorEl(null);
+									}}
+									sx={{
+										color: "error.main",
+										fontWeight: "bold",
+										fontSize: "0.9rem",
+									}}
+								>
+									🗑 Delete Post
+								</MenuItem>
+							</Menu>
+						</Box>
+					)}
 				</Box>
 
-				<Typography variant="body1" color="text.primary" sx={{ mb: 3 }}>
-					{localPost.content}
-				</Typography>
+				{/* POST CONTENT / EDIT MODE */}
+				{isEditing ? (
+					<Box
+						sx={{
+							mb: 3,
+							p: 2,
+							bgcolor: "#f9fafb",
+							borderRadius: 3,
+							border: "1px dashed #ccc",
+						}}
+					>
+						<TextField
+							fullWidth
+							size="small"
+							label="Edit Title"
+							value={editTitle}
+							onChange={(e) => setEditTitle(e.target.value)}
+							sx={{ mb: 2, bgcolor: "white" }}
+						/>
+						<TextField
+							fullWidth
+							multiline
+							minRows={3}
+							label="Edit Details"
+							value={editContent}
+							onChange={(e) => setEditContent(e.target.value)}
+							sx={{ mb: 2, bgcolor: "white" }}
+						/>
+						<Box sx={{ display: "flex", gap: 1 }}>
+							<Button
+								variant="contained"
+								color="primary"
+								onClick={handleSaveEdit}
+								sx={{
+									fontWeight: "bold",
+									borderRadius: 2,
+									textTransform: "none",
+								}}
+							>
+								Save Changes
+							</Button>
+							<Button
+								variant="outlined"
+								color="inherit"
+								onClick={() => {
+									setIsEditing(false);
+									setEditTitle(localPost.title);
+									setEditContent(localPost.content);
+								}}
+								sx={{
+									fontWeight: "bold",
+									borderRadius: 2,
+									textTransform: "none",
+								}}
+							>
+								Cancel
+							</Button>
+						</Box>
+					</Box>
+				) : (
+					<Typography
+						variant="body1"
+						color="text.primary"
+						sx={{ mb: 3, whiteSpace: "pre-wrap" }}
+					>
+						{localPost.content}
+					</Typography>
+				)}
 
+				{/* STATS (Likes & Comments counts) */}
 				{(localPost.likedBy?.length > 0 || totalCommentsCount > 0) && (
 					<Box
 						sx={{
 							display: "flex",
-							justifyContent: "flex-end", // Aligns to the right
+							justifyContent: "flex-end",
 							alignItems: "center",
 							gap: 2,
 							px: 1,
@@ -290,9 +414,7 @@ export default function PostCard({ post }) {
 								color="text.secondary"
 								sx={{
 									cursor: "pointer",
-									"&:hover": {
-										textDecoration: "underline",
-									},
+									"&:hover": { textDecoration: "underline" },
 								}}
 								onClick={() => setIsCommentModalOpen(true)}
 							>
@@ -316,9 +438,7 @@ export default function PostCard({ post }) {
 									alignItems: "center",
 									gap: 0.5,
 									cursor: "pointer",
-									"&:hover": {
-										textDecoration: "underline",
-									},
+									"&:hover": { textDecoration: "underline" },
 								}}
 							>
 								<Typography
@@ -346,6 +466,7 @@ export default function PostCard({ post }) {
 
 				<Divider sx={{ mb: 1 }} />
 
+				{/* ACTION BAR */}
 				<CardActions
 					sx={{
 						p: 0,
@@ -374,7 +495,6 @@ export default function PostCard({ post }) {
 							Like
 						</Box>
 					</Button>
-
 					<Button
 						onClick={() => setIsCommentModalOpen(true)}
 						color="inherit"
@@ -395,10 +515,8 @@ export default function PostCard({ post }) {
 							Comment
 						</Box>
 					</Button>
-
 					<Button
 						onClick={() => {
-							// window.location.origin dynamically captures localhost or your Render URL correctly!
 							navigator.clipboard.writeText(
 								`${window.location.origin}/forum?postId=${localPost._id}`,
 							);
@@ -425,6 +543,7 @@ export default function PostCard({ post }) {
 				</CardActions>
 			</Paper>
 
+			{/* MODALS */}
 			<LikesModal
 				open={likesModal.open}
 				title={likesModal.title}
@@ -433,7 +552,6 @@ export default function PostCard({ post }) {
 					setLikesModal({ open: false, title: "", list: [] })
 				}
 			/>
-
 			<PostCommentsModal
 				open={isCommentModalOpen}
 				onClose={() => {
@@ -450,6 +568,14 @@ export default function PostCard({ post }) {
 				currentUser={currentUser}
 				highlightId={highlightId}
 				openLikes={openLikes}
+			/>
+
+			{/* IMPORTED DELETE CONFIRMATION */}
+			<ConfirmDeleteDialog
+				open={deleteConfirmOpen}
+				onClose={() => setDeleteConfirmOpen(false)}
+				onConfirm={confirmDeletePost}
+				itemName="post"
 			/>
 		</>
 	);

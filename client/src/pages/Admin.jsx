@@ -13,14 +13,40 @@ import {
 	TableRow,
 	Button,
 	Chip,
+	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions as MuiDialogActions,
 } from "@mui/material";
+
+// Sleek Trash Icon
+const TrashIcon = () => (
+	<svg
+		width="20"
+		height="20"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<polyline points="3 6 5 6 21 6"></polyline>
+		<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+	</svg>
+);
 
 export default function Admin() {
 	const [users, setUsers] = useState([]);
 	const [posts, setPosts] = useState([]);
-
-	// NEW: State for the Moderation Queue
 	const [flaggedPosts, setFlaggedPosts] = useState([]);
+
+	// NEW: Centralized Sleek Delete Confirmation State
+	const [deleteConfirm, setDeleteConfirm] = useState({
+		open: false,
+		type: "",
+		id: null,
+	});
 
 	const fetchAdminData = async () => {
 		try {
@@ -39,7 +65,6 @@ export default function Admin() {
 			);
 			if (postRes.ok) setPosts(await postRes.json());
 
-			// NEW: Fetch the flagged posts
 			const flaggedRes = await fetch(
 				`${import.meta.env.VITE_API_URL}/api/admin/flagged`,
 				{ headers },
@@ -54,7 +79,6 @@ export default function Admin() {
 		fetchAdminData();
 	}, []);
 
-	// --- NEW: SPAM MODERATION ACTIONS ---
 	const handleApprovePost = async (id) => {
 		try {
 			const res = await fetch(
@@ -69,78 +93,63 @@ export default function Admin() {
 			if (res.ok) {
 				const { post } = await res.json();
 				setFlaggedPosts(flaggedPosts.filter((p) => p._id !== id));
-				setPosts([post, ...posts]); // Add it to the regular posts table
+				setPosts([post, ...posts]);
 			}
 		} catch (err) {
 			console.error(err);
 		}
 	};
 
-	const handleDeleteFlagged = async (id) => {
-		if (!window.confirm("Permanently delete this spam post?")) return;
-		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/posts/${id}`,
-				{
-					method: "DELETE",
-					headers: {
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-				},
-			);
-			if (res.ok)
-				setFlaggedPosts(flaggedPosts.filter((p) => p._id !== id));
-		} catch (err) {
-			console.error(err);
-		}
-	};
-	// ------------------------------------
+	// NEW: Execution function that runs from the Modal
+	const executeDelete = async () => {
+		const { type, id } = deleteConfirm;
+		if (!id) return;
 
-	const handleDeleteUser = async (id) => {
-		if (
-			!window.confirm(
-				"Are you sure you want to permanently delete this user?",
-			)
-		)
-			return;
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/users/${id}`,
-				{
-					method: "DELETE",
-					headers: {
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
+			if (type === "user") {
+				const res = await fetch(
+					`${import.meta.env.VITE_API_URL}/api/admin/users/${id}`,
+					{
+						method: "DELETE",
+						headers: {
+							Authorization: `Bearer ${localStorage.getItem("token")}`,
+						},
 					},
-				},
-			);
-			if (res.ok) setUsers(users.filter((u) => u._id !== id));
+				);
+				if (res.ok) setUsers(users.filter((u) => u._id !== id));
+			} else if (type === "post") {
+				const res = await fetch(
+					`${import.meta.env.VITE_API_URL}/api/admin/posts/${id}`,
+					{
+						method: "DELETE",
+						headers: {
+							Authorization: `Bearer ${localStorage.getItem("token")}`,
+						},
+					},
+				);
+				if (res.ok) setPosts(posts.filter((p) => p._id !== id));
+			} else if (type === "spam") {
+				const res = await fetch(
+					`${import.meta.env.VITE_API_URL}/api/admin/posts/${id}`,
+					{
+						method: "DELETE",
+						headers: {
+							Authorization: `Bearer ${localStorage.getItem("token")}`,
+						},
+					},
+				);
+				if (res.ok)
+					setFlaggedPosts(flaggedPosts.filter((p) => p._id !== id));
+			}
 		} catch (err) {
 			console.error(err);
 		}
+
+		setDeleteConfirm({ open: false, type: "", id: null }); // Close modal
 	};
 
-	const handleDeletePost = async (id) => {
-		if (
-			!window.confirm(
-				"Are you sure you want to permanently delete this post?",
-			)
-		)
-			return;
-		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/posts/${id}`,
-				{
-					method: "DELETE",
-					headers: {
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-				},
-			);
-			if (res.ok) setPosts(posts.filter((p) => p._id !== id));
-		} catch (err) {
-			console.error(err);
-		}
-	};
+	const promptDelete = (type, id) =>
+		setDeleteConfirm({ open: true, type, id });
 
 	return (
 		<Container
@@ -162,9 +171,7 @@ export default function Admin() {
 				</Typography>
 			</Box>
 
-			{/* ========================================== */}
-			{/* NEW: MODERATION QUEUE */}
-			{/* ========================================== */}
+			{/* MODERATION QUEUE */}
 			<Typography
 				variant="h5"
 				color="error.main"
@@ -250,9 +257,12 @@ export default function Admin() {
 									variant="contained"
 									color="error"
 									onClick={() =>
-										handleDeleteFlagged(post._id)
+										promptDelete("spam", post._id)
 									}
-									sx={{ fontWeight: "bold" }}
+									sx={{
+										fontWeight: "bold",
+										textTransform: "none",
+									}}
 								>
 									Delete Spam
 								</Button>
@@ -263,6 +273,7 @@ export default function Admin() {
 									sx={{
 										fontWeight: "bold",
 										bgcolor: "white",
+										textTransform: "none",
 									}}
 								>
 									Approve (Not Spam)
@@ -273,9 +284,7 @@ export default function Admin() {
 				</Box>
 			)}
 
-			{/* ========================================== */}
 			{/* USERS TABLE */}
-			{/* ========================================== */}
 			<Typography
 				variant="h5"
 				color="primary"
@@ -284,7 +293,6 @@ export default function Admin() {
 			>
 				Manage Users ({users.length})
 			</Typography>
-
 			<TableContainer
 				component={Paper}
 				elevation={0}
@@ -363,8 +371,14 @@ export default function Admin() {
 										variant="outlined"
 										color="error"
 										size="small"
-										onClick={() => handleDeleteUser(u._id)}
+										onClick={() =>
+											promptDelete("user", u._id)
+										}
 										disabled={u.role === "admin"}
+										sx={{
+											textTransform: "none",
+											fontWeight: "bold",
+										}}
 									>
 										Delete
 									</Button>
@@ -375,9 +389,7 @@ export default function Admin() {
 				</Table>
 			</TableContainer>
 
-			{/* ========================================== */}
 			{/* POSTS TABLE */}
-			{/* ========================================== */}
 			<Typography
 				variant="h5"
 				color="primary"
@@ -386,7 +398,6 @@ export default function Admin() {
 			>
 				Manage Posts ({posts.length})
 			</Typography>
-
 			<TableContainer
 				component={Paper}
 				elevation={0}
@@ -462,7 +473,13 @@ export default function Admin() {
 										variant="outlined"
 										color="error"
 										size="small"
-										onClick={() => handleDeletePost(p._id)}
+										onClick={() =>
+											promptDelete("post", p._id)
+										}
+										sx={{
+											textTransform: "none",
+											fontWeight: "bold",
+										}}
 									>
 										Delete
 									</Button>
@@ -472,6 +489,65 @@ export default function Admin() {
 					</TableBody>
 				</Table>
 			</TableContainer>
+
+			{/* SLEEK DELETE CONFIRMATION DIALOG */}
+			<Dialog
+				open={deleteConfirm.open}
+				onClose={() =>
+					setDeleteConfirm({ open: false, type: "", id: null })
+				}
+				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+			>
+				<DialogTitle
+					sx={{
+						fontWeight: "bold",
+						display: "flex",
+						alignItems: "center",
+						gap: 1,
+						color: "error.main",
+					}}
+				>
+					<TrashIcon /> Confirm Deletion
+				</DialogTitle>
+				<DialogContent>
+					<Typography>
+						Are you sure you want to permanently delete this{" "}
+						{deleteConfirm.type === "user"
+							? "user"
+							: deleteConfirm.type === "spam"
+								? "spam post"
+								: "post"}
+						? This action cannot be undone.
+					</Typography>
+				</DialogContent>
+				<MuiDialogActions sx={{ px: 3, pb: 2 }}>
+					<Button
+						onClick={() =>
+							setDeleteConfirm({
+								open: false,
+								type: "",
+								id: null,
+							})
+						}
+						color="inherit"
+						sx={{ fontWeight: "bold", textTransform: "none" }}
+					>
+						Cancel
+					</Button>
+					<Button
+						onClick={executeDelete}
+						variant="contained"
+						color="error"
+						sx={{
+							fontWeight: "bold",
+							textTransform: "none",
+							borderRadius: 2,
+						}}
+					>
+						Delete
+					</Button>
+				</MuiDialogActions>
+			</Dialog>
 		</Container>
 	);
 }

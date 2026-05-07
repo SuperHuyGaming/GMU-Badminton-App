@@ -14,21 +14,20 @@ const truncateText = (text, maxLength = 40) => {
 		: text;
 };
 
-// 1. RATE LIMITER: Prevent bot spam (Max 5 posts per 15 minutes per IP)
+// 1. RATE LIMITER
 const postLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
-	max: 5,
+	max: 10,
 	message: {
 		message: "You are posting too fast. Please wait a few minutes.",
 	},
 });
 
-// 2. THE UPGRADED SPAM ENGINE: Regex and keyword detection
+// 2. THE UPGRADED SPAM ENGINE
 const checkSpam = (text) => {
 	if (!text) return false;
 	const lowerText = text.toLowerCase();
 
-	// A. Block Exact Spam Phrases (URLs and scam sentences)
 	const spamPhrases = [
 		"buy cheap",
 		"free money",
@@ -44,8 +43,6 @@ const checkSpam = (text) => {
 		lowerText.includes(phrase),
 	);
 
-	// B. Block Toxic & Scam Words using Word Boundaries (\b)
-	// This ensures we catch "crypto" but don't accidentally block a word that just contains those letters.
 	const toxicWords = [
 		"crypto",
 		"bitcoin",
@@ -64,14 +61,10 @@ const checkSpam = (text) => {
 		"porn",
 		"onlyfans",
 	];
-	// Creates a regex pattern like: \b(crypto|bitcoin|dick|fuck)\b
 	const toxicRegex = new RegExp(`\\b(${toxicWords.join("|")})\\b`, "i");
 	const hasToxicWord = toxicRegex.test(lowerText);
 
-	// C. Block excessive repetitive characters (e.g., "111111111111")
 	const hasRepeatingChars = /(.)\1{10,}/.test(lowerText);
-
-	// D. Block all-caps screaming (if the text is long enough)
 	const isAllCaps = text.length > 20 && text === text.toUpperCase();
 
 	return hasSpamPhrase || hasToxicWord || hasRepeatingChars || isAllCaps;
@@ -165,7 +158,7 @@ const sendNotification = async (io, targetUserId, message, link) => {
 };
 
 // ==========================================
-// POSTS
+// POSTS (FETCH & CREATE)
 // ==========================================
 router.get("/", async (req, res) => {
 	try {
@@ -174,7 +167,6 @@ router.get("/", async (req, res) => {
 		const skip = (page - 1) * limit;
 
 		const query = { isFlagged: { $ne: true } };
-
 		if (req.query.date) query.targetDate = req.query.date;
 
 		const rawPosts = await Post.find(query)
@@ -182,7 +174,6 @@ router.get("/", async (req, res) => {
 			.skip(skip)
 			.limit(limit)
 			.lean();
-
 		res.json(await hydrateWithPictures(rawPosts));
 	} catch (error) {
 		res.status(500).json({ message: "Error fetching posts" });
@@ -205,11 +196,10 @@ router.post("/", postLimiter, async (req, res) => {
 
 		await newPost.save();
 
-		if (isSpam) {
+		if (isSpam)
 			return res
 				.status(201)
 				.json({ message: "Post submitted for review." });
-		}
 
 		const hydratedPost = await hydrateWithPictures(newPost.toObject());
 		if (req.io) req.io.emit("postCreated", hydratedPost);
@@ -233,7 +223,6 @@ router.get("/user/:userId", async (req, res) => {
 			.skip(skip)
 			.limit(limit)
 			.lean();
-
 		res.json(await hydrateWithPictures(rawPosts));
 	} catch (error) {
 		res.status(500).json({ message: "Error fetching user posts" });
@@ -241,18 +230,70 @@ router.get("/user/:userId", async (req, res) => {
 });
 
 // ==========================================
-// COMMENTS & REPLIES
+// EDIT & DELETE POSTS (WITH ADMIN GOD MODE)
+// ==========================================
+router.put("/:postId", async (req, res) => {
+	try {
+		const { userId, title, content } = req.body;
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		if (post.authorId.toString() !== userId.toString())
+			return res.status(403).json({ message: "Unauthorized" });
+
+		if (checkSpam(title) || checkSpam(content)) {
+			post.isFlagged = true;
+			await post.save();
+			if (req.io) req.io.emit("postDeleted", post._id);
+			return res
+				.status(200)
+				.json({ message: "Post submitted for review." });
+		}
+
+		post.title = title;
+		post.content = content;
+		post.isEdited = true; // NEW: Set edited flag
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error updating post" });
+	}
+});
+
+router.delete("/:postId", async (req, res) => {
+	try {
+		const { userId } = req.body;
+		const post = await Post.findById(req.params.postId);
+		const user = await User.findById(userId);
+		const isAdmin = user && user.role === "admin";
+
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		// Only Author OR Admin can delete
+		if (post.authorId.toString() !== userId.toString() && !isAdmin)
+			return res.status(403).json({ message: "Unauthorized" });
+
+		await Post.findByIdAndDelete(req.params.postId);
+		if (req.io) req.io.emit("postDeleted", req.params.postId);
+		res.json({ success: true });
+	} catch (error) {
+		res.status(500).json({ message: "Error deleting post" });
+	}
+});
+
+// ==========================================
+// COMMENTS & REPLIES (CREATE, EDIT, DELETE)
 // ==========================================
 router.post("/:postId/comments", postLimiter, async (req, res) => {
 	try {
 		const { authorId, authorName, content } = req.body;
 		const post = await Post.findById(req.params.postId);
 
-		if (checkSpam(content)) {
+		if (checkSpam(content))
 			return res
 				.status(201)
 				.json(await hydrateWithPictures(post.toObject()));
-		}
 
 		post.comments.push({ authorId, authorName, content });
 		await post.save();
@@ -279,6 +320,50 @@ router.post("/:postId/comments", postLimiter, async (req, res) => {
 	}
 });
 
+router.put("/:postId/comments/:commentId", async (req, res) => {
+	try {
+		const { userId, content } = req.body;
+		const post = await Post.findById(req.params.postId);
+		const comment = post.comments.id(req.params.commentId);
+
+		if (comment.authorId.toString() !== userId.toString())
+			return res.status(403).json({ message: "Unauthorized" });
+		if (checkSpam(content))
+			return res.json(await hydrateWithPictures(post.toObject()));
+
+		comment.content = content;
+		comment.isEdited = true; // NEW: Set edited flag
+		await post.save();
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error updating comment" });
+	}
+});
+
+router.delete("/:postId/comments/:commentId", async (req, res) => {
+	try {
+		const { userId } = req.body;
+		const post = await Post.findById(req.params.postId);
+		const comment = post.comments.id(req.params.commentId);
+		const user = await User.findById(userId);
+		const isAdmin = user && user.role === "admin";
+
+		// Author OR Admin
+		if (comment.authorId.toString() !== userId.toString() && !isAdmin)
+			return res.status(403).json({ message: "Unauthorized" });
+
+		comment.deleteOne();
+		await post.save();
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error deleting comment" });
+	}
+});
+
 router.post(
 	"/:postId/comments/:commentId/replies",
 	postLimiter,
@@ -288,11 +373,10 @@ router.post(
 			const post = await Post.findById(req.params.postId);
 			const comment = post.comments.id(req.params.commentId);
 
-			if (checkSpam(content)) {
+			if (checkSpam(content))
 				return res
 					.status(201)
 					.json(await hydrateWithPictures(post.toObject()));
-			}
 
 			comment.replies.push({ authorId, authorName, content });
 			await post.save();
@@ -324,6 +408,60 @@ router.post(
 			res.json(hydratedPost);
 		} catch (error) {
 			res.status(500).json({ message: "Error adding reply" });
+		}
+	},
+);
+
+router.put(
+	"/:postId/comments/:commentId/replies/:replyId",
+	async (req, res) => {
+		try {
+			const { userId, content } = req.body;
+			const post = await Post.findById(req.params.postId);
+			const reply = post.comments
+				.id(req.params.commentId)
+				.replies.id(req.params.replyId);
+
+			if (reply.authorId.toString() !== userId.toString())
+				return res.status(403).json({ message: "Unauthorized" });
+			if (checkSpam(content))
+				return res.json(await hydrateWithPictures(post.toObject()));
+
+			reply.content = content;
+			reply.isEdited = true; // NEW: Set edited flag
+			await post.save();
+			const hydratedPost = await hydrateWithPictures(post.toObject());
+			if (req.io) req.io.emit("postUpdated", hydratedPost);
+			res.json(hydratedPost);
+		} catch (error) {
+			res.status(500).json({ message: "Error updating reply" });
+		}
+	},
+);
+
+router.delete(
+	"/:postId/comments/:commentId/replies/:replyId",
+	async (req, res) => {
+		try {
+			const { userId } = req.body;
+			const post = await Post.findById(req.params.postId);
+			const reply = post.comments
+				.id(req.params.commentId)
+				.replies.id(req.params.replyId);
+			const user = await User.findById(userId);
+			const isAdmin = user && user.role === "admin";
+
+			// Author OR Admin
+			if (reply.authorId.toString() !== userId.toString() && !isAdmin)
+				return res.status(403).json({ message: "Unauthorized" });
+
+			reply.deleteOne();
+			await post.save();
+			const hydratedPost = await hydrateWithPictures(post.toObject());
+			if (req.io) req.io.emit("postUpdated", hydratedPost);
+			res.json(hydratedPost);
+		} catch (error) {
+			res.status(500).json({ message: "Error deleting reply" });
 		}
 	},
 );

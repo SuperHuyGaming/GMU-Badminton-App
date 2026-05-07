@@ -12,6 +12,10 @@ import {
 	Divider,
 	TextField,
 	IconButton,
+	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions as MuiDialogActions,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
@@ -33,7 +37,6 @@ const ActivityIcon = () => (
 		<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
 	</svg>
 );
-
 const MegaphoneIcon = () => (
 	<svg
 		width="20"
@@ -49,7 +52,6 @@ const MegaphoneIcon = () => (
 		<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
 	</svg>
 );
-
 const ClockIcon = () => (
 	<svg
 		width="16"
@@ -65,7 +67,6 @@ const ClockIcon = () => (
 		<polyline points="12 6 12 12 16 14"></polyline>
 	</svg>
 );
-
 const PinIcon = () => (
 	<svg
 		width="16"
@@ -81,11 +82,25 @@ const PinIcon = () => (
 		<circle cx="12" cy="10" r="3"></circle>
 	</svg>
 );
-
 const TrashIcon = () => (
 	<svg
 		width="16"
 		height="16"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<polyline points="3 6 5 6 21 6"></polyline>
+		<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+	</svg>
+);
+const TrashIconLarge = () => (
+	<svg
+		width="20"
+		height="20"
 		viewBox="0 0 24 24"
 		fill="none"
 		stroke="currentColor"
@@ -107,9 +122,11 @@ export default function Dashboard() {
 	const [announcements, setAnnouncements] = useState([]);
 	const [loading, setLoading] = useState(true);
 
-	// Admin state
 	const [newUpdateText, setNewUpdateText] = useState("");
 	const [isPosting, setIsPosting] = useState(false);
+
+	// NEW: State for sleek delete dialog
+	const [deleteUpdateId, setDeleteUpdateId] = useState(null);
 
 	useEffect(() => {
 		const fetchDashboardData = async () => {
@@ -138,12 +155,10 @@ export default function Dashboard() {
 
 		fetchDashboardData();
 
-		const handleNewAnnouncement = (newAnn) => {
+		const handleNewAnnouncement = (newAnn) =>
 			setAnnouncements((prev) => [newAnn, ...prev]);
-		};
-		const handleDeletedAnnouncement = (deletedId) => {
+		const handleDeletedAnnouncement = (deletedId) =>
 			setAnnouncements((prev) => prev.filter((a) => a._id !== deletedId));
-		};
 
 		socket.on("announcementCreated", handleNewAnnouncement);
 		socket.on("announcementDeleted", handleDeletedAnnouncement);
@@ -154,7 +169,6 @@ export default function Dashboard() {
 		};
 	}, []);
 
-	// Admin Actions
 	const handlePostUpdate = async () => {
 		if (!newUpdateText.trim() || currentUser?.role !== "admin") return;
 		setIsPosting(true);
@@ -177,15 +191,12 @@ export default function Dashboard() {
 		}
 	};
 
-	const handleDeleteUpdate = async (id) => {
-		if (
-			currentUser?.role !== "admin" ||
-			!window.confirm("Delete this official update?")
-		)
-			return;
+	// NEW: Execution function tied to the Dialog
+	const confirmDeleteUpdate = async () => {
+		if (!deleteUpdateId) return;
 		try {
 			await fetch(
-				`${import.meta.env.VITE_API_URL}/api/announcements/${id}?role=${currentUser.role}`,
+				`${import.meta.env.VITE_API_URL}/api/announcements/${deleteUpdateId}?role=${currentUser.role}`,
 				{
 					method: "DELETE",
 				},
@@ -193,6 +204,7 @@ export default function Dashboard() {
 		} catch (err) {
 			console.error("Failed to delete update", err);
 		}
+		setDeleteUpdateId(null); // Close modal
 	};
 
 	const formatTime = (dateString) => {
@@ -209,26 +221,14 @@ export default function Dashboard() {
 		<Box sx={{ pb: 10 }}>
 			<style>
 				{`
-					@keyframes pulse {
-						0% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0.7); }
-						70% { box-shadow: 0 0 0 10px rgba(255, 204, 51, 0); }
-						100% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0); }
-					}
-					.live-indicator {
-						width: 12px;
-						height: 12px;
-						background-color: #FFCC33;
-						border-radius: 50%;
-						display: inline-block;
-						animation: pulse 2s infinite;
-					}
+					@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 204, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0); } }
+					.live-indicator { width: 12px; height: 12px; background-color: #FFCC33; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
 					.custom-scrollbar::-webkit-scrollbar { width: 6px; }
 					.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 					.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 10px; }
 				`}
 			</style>
 
-			{/* 1. THE UNIFIED HERO BAR */}
 			<Paper
 				elevation={0}
 				sx={{
@@ -334,7 +334,6 @@ export default function Dashboard() {
 							status || "Status currently unavailable."
 						)}
 					</Typography>
-					{/* LINK UPDATED HERE */}
 					<Button
 						size="small"
 						variant="contained"
@@ -355,7 +354,6 @@ export default function Dashboard() {
 			</Paper>
 
 			<Grid container spacing={4}>
-				{/* LEFT COLUMN: OFFICIAL UPDATES (40% width) */}
 				<Grid item xs={12} md={4}>
 					<Box
 						sx={{
@@ -383,7 +381,6 @@ export default function Dashboard() {
 						</Typography>
 					</Box>
 
-					{/* ADMIN POST BOX */}
 					{currentUser?.role === "admin" && (
 						<Paper
 							elevation={0}
@@ -427,7 +424,11 @@ export default function Dashboard() {
 								fullWidth
 								disabled={!newUpdateText.trim() || isPosting}
 								onClick={handlePostUpdate}
-								sx={{ fontWeight: "bold", borderRadius: 2 }}
+								sx={{
+									fontWeight: "bold",
+									borderRadius: 2,
+									textTransform: "none",
+								}}
 							>
 								{isPosting
 									? "Broadcasting..."
@@ -574,14 +575,14 @@ export default function Dashboard() {
 															announcement.timestamp,
 														)}
 													</Typography>
-													{/* ADMIN DELETE BUTTON */}
+													{/* TRIGGER SLEEK DIALOG */}
 													{currentUser?.role ===
 														"admin" && (
 														<IconButton
 															size="small"
 															color="error"
 															onClick={() =>
-																handleDeleteUpdate(
+																setDeleteUpdateId(
 																	announcement._id,
 																)
 															}
@@ -619,7 +620,6 @@ export default function Dashboard() {
 					</Paper>
 				</Grid>
 
-				{/* RIGHT COLUMN: WEEKLY SCHEDULE (66% width) */}
 				<Grid item xs={12} md={8}>
 					<Typography
 						variant="h5"
@@ -629,7 +629,6 @@ export default function Dashboard() {
 					>
 						Weekly Schedule
 					</Typography>
-
 					<Box
 						sx={{
 							display: "flex",
@@ -646,7 +645,6 @@ export default function Dashboard() {
 										p: 3,
 										borderRadius: 3,
 										border: "1px solid #e0e0e0",
-										
 									}}
 								>
 									<CircularProgress size={20} />
@@ -717,7 +715,6 @@ export default function Dashboard() {
 													"-"}
 											</Typography>
 										</Box>
-
 										<Box
 											sx={{
 												p: { xs: 2, sm: 3 },
@@ -764,7 +761,6 @@ export default function Dashboard() {
 													}}
 												/>
 											</Box>
-
 											<Box
 												sx={{
 													display: "flex",
@@ -823,6 +819,52 @@ export default function Dashboard() {
 					</Box>
 				</Grid>
 			</Grid>
+
+			{/* SLEEK DELETE CONFIRMATION DIALOG */}
+			<Dialog
+				open={!!deleteUpdateId}
+				onClose={() => setDeleteUpdateId(null)}
+				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+			>
+				<DialogTitle
+					sx={{
+						fontWeight: "bold",
+						display: "flex",
+						alignItems: "center",
+						gap: 1,
+						color: "error.main",
+					}}
+				>
+					<TrashIconLarge /> Confirm Deletion
+				</DialogTitle>
+				<DialogContent>
+					<Typography>
+						Are you sure you want to permanently delete this
+						official announcement? This action cannot be undone.
+					</Typography>
+				</DialogContent>
+				<MuiDialogActions sx={{ px: 3, pb: 2 }}>
+					<Button
+						onClick={() => setDeleteUpdateId(null)}
+						color="inherit"
+						sx={{ fontWeight: "bold", textTransform: "none" }}
+					>
+						Cancel
+					</Button>
+					<Button
+						onClick={confirmDeleteUpdate}
+						variant="contained"
+						color="error"
+						sx={{
+							fontWeight: "bold",
+							textTransform: "none",
+							borderRadius: 2,
+						}}
+					>
+						Delete
+					</Button>
+				</MuiDialogActions>
+			</Dialog>
 		</Box>
 	);
 }
