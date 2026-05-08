@@ -45,6 +45,7 @@ const adminRoutes = require("./routes/admin");
 app.use("/api/admin", adminRoutes);
 const announcementRoutes = require("./routes/announcements");
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/upload", require("./routes/upload"));
 
 app.get("/api/status", async (req, res) => {
 	try {

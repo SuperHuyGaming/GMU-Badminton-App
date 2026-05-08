@@ -1,3 +1,4 @@
+// client/src/components/profile/ProfileHeader.jsx
 import { useState, useRef } from "react";
 import {
 	Box,
@@ -10,7 +11,40 @@ import {
 	MenuItem,
 	Dialog,
 	DialogContent,
+	IconButton,
 } from "@mui/material";
+
+// Clean Icons
+const CameraIcon = () => (
+	<svg
+		width="18"
+		height="18"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+		<circle cx="12" cy="13" r="4"></circle>
+	</svg>
+);
+const CloseIcon = () => (
+	<svg
+		width="24"
+		height="24"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<line x1="18" y1="6" x2="6" y2="18"></line>
+		<line x1="6" y1="6" x2="18" y2="18"></line>
+	</svg>
+);
 
 export default function ProfileHeader({
 	profileData,
@@ -22,20 +56,28 @@ export default function ProfileHeader({
 	setActiveTab,
 }) {
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
-	const isAvatarMenuOpen = Boolean(avatarMenuAnchor);
-	const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+	const [viewerImage, setViewerImage] = useState(null); // Stores URL of image to view
 	const fileInputRef = useRef(null);
 
 	const handleAvatarClick = (e) => {
-		if (isOwnProfile) setAvatarMenuAnchor(e.currentTarget);
-		else if (displayProfilePic) setIsImageViewerOpen(true);
+		if (isOwnProfile) {
+			setAvatarMenuAnchor(e.currentTarget);
+		} else if (displayProfilePic) {
+			setViewerImage(displayProfilePic);
+		}
+	};
+
+	const handleCoverClick = () => {
+		if (displayCoverPic) setViewerImage(displayCoverPic);
 	};
 
 	const handleCloseAvatarMenu = () => setAvatarMenuAnchor(null);
+
 	const handleViewPicture = () => {
-		setIsImageViewerOpen(true);
+		setViewerImage(displayProfilePic);
 		handleCloseAvatarMenu();
 	};
+
 	const handleChoosePicture = () => {
 		if (fileInputRef.current) fileInputRef.current.click();
 		handleCloseAvatarMenu();
@@ -46,7 +88,9 @@ export default function ProfileHeader({
 			elevation={2}
 			sx={{ borderRadius: { xs: 0, md: 3 }, overflow: "hidden", mb: 3 }}
 		>
+			{/* --- COVER PHOTO --- */}
 			<Box
+				onClick={handleCoverClick}
 				sx={{
 					height: { xs: 200, sm: 300, md: 350 },
 					backgroundColor: displayCoverPic
@@ -58,10 +102,12 @@ export default function ProfileHeader({
 					backgroundSize: "cover",
 					backgroundPosition: "center",
 					position: "relative",
+					cursor: displayCoverPic ? "pointer" : "default",
+					"&:hover": { opacity: displayCoverPic ? 0.9 : 1 },
 				}}
 			>
 				{isOwnProfile && (
-					<>
+					<Box sx={{ position: "absolute", bottom: 16, right: 16 }}>
 						<input
 							accept="image/*"
 							id="cover-upload"
@@ -73,34 +119,25 @@ export default function ProfileHeader({
 							<Button
 								variant="contained"
 								component="span"
+								startIcon={<CameraIcon />}
 								sx={{
-									position: "absolute",
-									bottom: 16,
-									right: 16,
 									backgroundColor: "white",
 									color: "black",
 									fontWeight: "bold",
 									textTransform: "none",
 									borderRadius: 2,
 									boxShadow: "0 2px 5px rgba(0,0,0,0.15)",
-									transition: "all 0.15s ease", // Smooth hover
 									"&:hover": { backgroundColor: "#f0f2f5" },
-									"&:active": { transform: "scale(0.96)" }, // TACTILE CLICK FEEDBACK!
 								}}
 							>
-								<Box
-									component="span"
-									sx={{ mr: 1, fontSize: "1.1rem" }}
-								>
-									📷
-								</Box>{" "}
 								Edit cover photo
 							</Button>
 						</label>
-					</>
+					</Box>
 				)}
 			</Box>
 
+			{/* --- PROFILE BAR --- */}
 			<Box
 				sx={{
 					px: { xs: 2, md: 5 },
@@ -124,7 +161,7 @@ export default function ProfileHeader({
 				>
 					<Avatar
 						src={displayProfilePic}
-						onClick={!isOwnProfile ? handleAvatarClick : undefined}
+						onClick={handleAvatarClick}
 						sx={{
 							width: "100%",
 							height: "100%",
@@ -135,7 +172,7 @@ export default function ProfileHeader({
 							fontWeight: "bold",
 							boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
 							cursor:
-								!isOwnProfile && displayProfilePic
+								displayProfilePic || isOwnProfile
 									? "pointer"
 									: "default",
 						}}
@@ -143,6 +180,7 @@ export default function ProfileHeader({
 						{!displayProfilePic &&
 							profileData.name.charAt(0).toUpperCase()}
 					</Avatar>
+
 					{isOwnProfile && (
 						<>
 							<input
@@ -154,42 +192,17 @@ export default function ProfileHeader({
 									handleImageUpload(e, "profilePic")
 								}
 							/>
-							<Box
-								onClick={handleAvatarClick}
-								sx={{
-									position: "absolute",
-									top: 4,
-									left: 4,
-									right: 4,
-									bottom: 4,
-									borderRadius: "50%",
-									backgroundColor: "rgba(0,0,0,0.4)",
-									display: "flex",
-									justifyContent: "center",
-									alignItems: "center",
-									opacity: 0,
-									transition: "opacity 0.2s ease-in-out",
-									cursor: "pointer",
-									"&:hover": { opacity: 1 },
-								}}
-							>
-								<Typography
-									color="white"
-									sx={{ fontSize: "2rem" }}
-								>
-									📷
-								</Typography>
-							</Box>
 							<Menu
 								anchorEl={avatarMenuAnchor}
-								open={isAvatarMenuOpen}
+								open={Boolean(avatarMenuAnchor)}
 								onClose={handleCloseAvatarMenu}
-								PaperProps={{
-									sx: {
-										borderRadius: 2,
-										mt: 1,
-										minWidth: 200,
-										boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+								slotProps={{
+									paper: {
+										sx: {
+											borderRadius: 2,
+											mt: 1,
+											minWidth: 200,
+										},
 									},
 								}}
 							>
@@ -197,13 +210,13 @@ export default function ProfileHeader({
 									onClick={handleViewPicture}
 									sx={{ py: 1.5, fontWeight: "bold" }}
 								>
-									👤 See profile picture
+									See profile picture
 								</MenuItem>
 								<MenuItem
 									onClick={handleChoosePicture}
 									sx={{ py: 1.5, fontWeight: "bold" }}
 								>
-									🖼️ Choose profile picture
+									Choose profile picture
 								</MenuItem>
 							</Menu>
 						</>
@@ -254,7 +267,6 @@ export default function ProfileHeader({
 						<Button
 							variant="contained"
 							onClick={() => setActiveTab("about")}
-							disableElevation
 							sx={{
 								backgroundColor: "#e4e6eb",
 								color: "#050505",
@@ -263,14 +275,9 @@ export default function ProfileHeader({
 								borderRadius: 2,
 								px: 2,
 								py: 1,
-								transition: "all 0.15s ease",
 								"&:hover": { backgroundColor: "#d8dadf" },
-								"&:active": { transform: "scale(0.96)" }, // TACTILE CLICK FEEDBACK!
 							}}
 						>
-							<Box component="span" sx={{ mr: 1 }}>
-								✏️
-							</Box>{" "}
 							Edit profile
 						</Button>
 					</Box>
@@ -279,97 +286,72 @@ export default function ProfileHeader({
 
 			<Divider sx={{ mx: 2 }} />
 
-			<Box
-				sx={{
-					px: { xs: 2, md: 4 },
-					py: 1,
-					display: "flex",
-					gap: 3,
-					overflowX: "auto",
-				}}
-			>
-				<Typography
-					onClick={() => setActiveTab("posts")}
-					fontWeight="bold"
-					color={activeTab === "posts" ? "primary" : "text.secondary"}
-					sx={{
-						borderBottom:
-							activeTab === "posts"
-								? "3px solid"
-								: "3px solid transparent",
-						pb: 1,
-						px: 1,
-						cursor: "pointer",
-						borderRadius: "4px 4px 0 0",
-						transition: "all 0.2s",
-						"&:hover": {
-							backgroundColor:
-								activeTab === "posts"
-									? "transparent"
-									: "#f0f2f5",
-						},
-					}}
-				>
-					Posts
-				</Typography>
-				<Typography
-					onClick={() => setActiveTab("about")}
-					fontWeight="bold"
-					color={activeTab === "about" ? "primary" : "text.secondary"}
-					sx={{
-						borderBottom:
-							activeTab === "about"
-								? "3px solid"
-								: "3px solid transparent",
-						pb: 1,
-						px: 1,
-						cursor: "pointer",
-						borderRadius: "4px 4px 0 0",
-						transition: "all 0.2s",
-						"&:hover": {
-							backgroundColor:
-								activeTab === "about"
-									? "transparent"
-									: "#f0f2f5",
-						},
-					}}
-				>
-					About
-				</Typography>
+			<Box sx={{ px: { xs: 2, md: 4 }, py: 1, display: "flex", gap: 3 }}>
+				{["posts", "about"].map((tab) => (
+					<Typography
+						key={tab}
+						onClick={() => setActiveTab(tab)}
+						fontWeight="bold"
+						color={activeTab === tab ? "primary" : "text.secondary"}
+						sx={{
+							borderBottom:
+								activeTab === tab
+									? "3px solid"
+									: "3px solid transparent",
+							pb: 1,
+							px: 1,
+							cursor: "pointer",
+							transition: "all 0.2s",
+							textTransform: "capitalize",
+							"&:hover": {
+								backgroundColor:
+									activeTab === tab
+										? "transparent"
+										: "#f0f2f5",
+							},
+						}}
+					>
+						{tab}
+					</Typography>
+				))}
 			</Box>
 
+			{/* --- FULL SCREEN IMAGE VIEWER --- */}
 			<Dialog
-				open={isImageViewerOpen}
-				onClose={() => setIsImageViewerOpen(false)}
-				maxWidth="md"
-				fullWidth
+				open={!!viewerImage}
+				onClose={() => setViewerImage(null)}
+				maxWidth="lg"
+				PaperProps={{
+					sx: {
+						bgcolor: "transparent",
+						boxShadow: "none",
+						overflow: "visible",
+					},
+				}}
 			>
-				<DialogContent
-					sx={{
-						p: 0,
-						backgroundColor: "black",
-						display: "flex",
-						justifyContent: "center",
-						alignItems: "center",
-						minHeight: "50vh",
-					}}
-				>
-					{displayProfilePic ? (
-						<img
-							src={displayProfilePic}
-							alt="Profile"
-							style={{
-								maxWidth: "100%",
-								maxHeight: "85vh",
-								objectFit: "contain",
-							}}
-						/>
-					) : (
-						<Typography color="white" p={5}>
-							No profile picture uploaded.
-						</Typography>
-					)}
-				</DialogContent>
+				<Box sx={{ position: "relative" }}>
+					<IconButton
+						onClick={() => setViewerImage(null)}
+						sx={{
+							position: "absolute",
+							top: -40,
+							right: -40,
+							color: "white",
+						}}
+					>
+						<CloseIcon />
+					</IconButton>
+					<img
+						src={viewerImage}
+						alt="Full View"
+						style={{
+							maxWidth: "100%",
+							maxHeight: "85vh",
+							borderRadius: "8px",
+							objectFit: "contain",
+						}}
+					/>
+				</Box>
 			</Dialog>
 		</Paper>
 	);
