@@ -8,7 +8,6 @@ import {
 	Paper,
 	Skeleton,
 } from "@mui/material";
-import { compressImage } from "../utils/imageUtils";
 import { io } from "socket.io-client";
 
 import ProfileHeader from "../components/profile/ProfileHeader";
@@ -93,15 +92,13 @@ export default function Profile({ user, setUser, setToastMessage }) {
 			if (updatedUser._id === id) setProfileData(updatedUser);
 		});
 		socket.on("postUpdated", (updatedPost) => {
-			setUserPosts((prevPosts) =>
-				prevPosts.map((p) =>
-					p._id === updatedPost._id ? updatedPost : p,
-				),
+			setUserPosts((prev) =>
+				prev.map((p) => (p._id === updatedPost._id ? updatedPost : p)),
 			);
 		});
 		socket.on("postCreated", (newPost) => {
 			if (newPost.authorId === id)
-				setUserPosts((prevPosts) => [newPost, ...prevPosts]);
+				setUserPosts((prev) => [newPost, ...prev]);
 		});
 
 		return () => {
@@ -117,40 +114,51 @@ export default function Profile({ user, setUser, setToastMessage }) {
 	const handleImageUpload = async (e, type) => {
 		const file = e.target.files[0];
 		if (!file) return;
+		if (!file.type.startsWith("image/"))
+			return alert("Please select a valid image file.");
+
+		setIsSaving(true);
+
+		const uploadData = new FormData();
+		uploadData.append("image", file);
+		uploadData.append("type", type);
+		// NEW: Explicitly send the User ID so the backend never guesses!
+		uploadData.append("userId", user.id);
 
 		try {
-			const maxWidth = type === "coverPic" ? 1200 : 400;
-			const compressedBase64 = await compressImage(file, maxWidth, 0.8);
-			const updatedFormData = { ...formData, [type]: compressedBase64 };
-			setFormData(updatedFormData);
-
-			setIsSaving(true);
 			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/profile`,
+				`${import.meta.env.VITE_API_URL}/api/upload/image`,
 				{
-					method: "PUT",
+					method: "POST",
 					headers: {
-						"Content-Type": "application/json",
 						Authorization: `Bearer ${localStorage.getItem("token")}`,
 					},
-					body: JSON.stringify(updatedFormData),
+					body: uploadData,
 				},
 			);
 
-			const updatedUser = await res.json();
-			if (res.ok) {
+			const data = await res.json();
+
+			// NEW: Added `&& data.user` safety check to prevent React from crashing!
+			if (res.ok && data.user) {
+				const updatedUser = data.user;
 				setProfileData(updatedUser);
-				const newLocalUser = {
-					...user,
-					name: updatedUser.name,
-					skillLevel: updatedUser.skillLevel,
-					profilePic: updatedUser.profilePic,
-				};
-				localStorage.setItem("user", JSON.stringify(newLocalUser));
-				setUser(newLocalUser);
+
+				setFormData((prev) => ({ ...prev, [type]: updatedUser[type] }));
+
+				if (type === "profilePic") {
+					const newLocalUser = {
+						...user,
+						name: updatedUser.name,
+						skillLevel: updatedUser.skillLevel,
+						profilePic: updatedUser.profilePic,
+					};
+					localStorage.setItem("user", JSON.stringify(newLocalUser));
+					setUser(newLocalUser);
+				}
 				setToastMessage("Picture updated successfully!");
 			} else {
-				setToastMessage("Failed to save picture to server.");
+				setToastMessage(data.message || "Failed to save picture.");
 			}
 		} catch (err) {
 			setToastMessage("Failed to process image.");
@@ -253,7 +261,6 @@ export default function Profile({ user, setUser, setToastMessage }) {
 			/>
 
 			{activeTab === "posts" ? (
-				/* THE ULTIMATE FIX: Raw CSS Flexbox instead of MUI Grid! */
 				<Box
 					sx={{
 						display: "flex",
@@ -262,7 +269,6 @@ export default function Profile({ user, setUser, setToastMessage }) {
 						alignItems: "flex-start",
 					}}
 				>
-					{/* LEFT COLUMN: Hardcoded to exactly 350px wide */}
 					<Box
 						sx={{
 							width: { xs: "100%", md: "350px" },
@@ -278,7 +284,6 @@ export default function Profile({ user, setUser, setToastMessage }) {
 						</Box>
 					</Box>
 
-					{/* RIGHT COLUMN: flexGrow: 1 forces it to stretch across ALL remaining space horizontally */}
 					<Box
 						sx={{
 							flexGrow: 1,
@@ -361,7 +366,6 @@ export default function Profile({ user, setUser, setToastMessage }) {
 					</Box>
 				</Box>
 			) : (
-				// ABOUT TAB
 				<Box sx={{ display: "flex", justifyContent: "center" }}>
 					<Box sx={{ width: "100%", maxWidth: "800px" }}>
 						{isOwnProfile ? (
