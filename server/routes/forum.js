@@ -71,7 +71,25 @@ const checkSpam = (text) => {
 };
 
 const hydrateWithPictures = async (data) => {
-	const users = await User.find().select("_id name profilePic").lean();
+	const posts = Array.isArray(data) ? data : [data];
+	const userIds = new Set();
+	
+	posts.forEach(post => {
+		if (post.authorId) userIds.add(post.authorId.toString());
+		if (Array.isArray(post.likedBy)) post.likedBy.forEach(id => userIds.add(id.toString()));
+		
+		post.comments?.forEach(comment => {
+			if (comment.authorId) userIds.add(comment.authorId.toString());
+			if (Array.isArray(comment.likedBy)) comment.likedBy.forEach(id => userIds.add(id.toString()));
+			
+			comment.replies?.forEach(reply => {
+				if (reply.authorId) userIds.add(reply.authorId.toString());
+				if (Array.isArray(reply.likedBy)) reply.likedBy.forEach(id => userIds.add(id.toString()));
+			});
+		});
+	});
+
+	const users = await User.find({ _id: { $in: Array.from(userIds) } }).select("_id name profilePic").lean();
 	const userMap = {};
 	users.forEach(
 		(u) =>

@@ -74,8 +74,10 @@ const generateDateWindow = () => {
 	}
 	return dates;
 };
+import { useAuth } from "../context/AuthContext";
 
-export default function Forum({ setToastMessage }) {
+export default function Forum() {
+	const { setToastMessage } = useAuth();
 	const location = useLocation();
 	const queryParams = new URLSearchParams(location.search);
 	const theme = useTheme();

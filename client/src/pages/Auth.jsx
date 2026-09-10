@@ -14,7 +14,10 @@ import {
 	Tab,
 } from "@mui/material";
 
-function Auth({ setUser, setToastMessage }) {
+import { useAuth } from "../context/AuthContext";
+
+function Auth() {
+	const { setUser, setToastMessage } = useAuth();
 	const navigate = useNavigate();
 	const [isLogin, setIsLogin] = useState(true);
 	const [error, setError] = useState(null);
@@ -51,7 +54,8 @@ function Auth({ setUser, setToastMessage }) {
 				throw new Error(data.message || "Something went wrong.");
 
 			// Save to browser
-			localStorage.setItem("token", data.token);
+			localStorage.setItem("accessToken", data.accessToken);
+			localStorage.setItem("refreshToken", data.refreshToken);
 			localStorage.setItem("user", JSON.stringify(data.user));
 
 			// INSTANT UI UPDATES

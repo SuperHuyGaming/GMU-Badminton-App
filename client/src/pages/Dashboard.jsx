@@ -124,8 +124,6 @@ export default function Dashboard() {
 
 	const [newUpdateText, setNewUpdateText] = useState("");
 	const [isPosting, setIsPosting] = useState(false);
-
-	// NEW: State for sleek delete dialog
 	const [deleteUpdateId, setDeleteUpdateId] = useState(null);
 
 	useEffect(() => {
@@ -191,7 +189,6 @@ export default function Dashboard() {
 		}
 	};
 
-	// NEW: Execution function tied to the Dialog
 	const confirmDeleteUpdate = async () => {
 		if (!deleteUpdateId) return;
 		try {
@@ -204,7 +201,7 @@ export default function Dashboard() {
 		} catch (err) {
 			console.error("Failed to delete update", err);
 		}
-		setDeleteUpdateId(null); // Close modal
+		setDeleteUpdateId(null);
 	};
 
 	const formatTime = (dateString) => {
@@ -443,21 +440,21 @@ export default function Dashboard() {
 						sx={{
 							border: "1px solid #e0e0e0",
 							borderRadius: 4,
-							height: "600px",
+							maxHeight: { xs: "350px", md: "600px" },
 							overflowY: "auto",
+							overflowX: "hidden",
 							backgroundColor: "white",
 							display: "flex",
 							flexDirection: "column",
+							width: "100%", // Force 100% width on the container
 						}}
 					>
 						{loading ? (
 							<Box
 								sx={{
-									m: "auto",
 									display: "flex",
-									flexDirection: "column",
-									alignItems: "center",
-									gap: 2,
+									justifyContent: "center",
+									p: 4,
 								}}
 							>
 								<CircularProgress />
@@ -465,13 +462,13 @@ export default function Dashboard() {
 						) : announcements.length === 0 ? (
 							<Box
 								sx={{
-									m: "auto",
 									display: "flex",
 									flexDirection: "column",
 									alignItems: "center",
 									p: 4,
 									textAlign: "center",
 									opacity: 0.5,
+									width: "100%",
 								}}
 							>
 								<MegaphoneIcon
@@ -494,117 +491,145 @@ export default function Dashboard() {
 								sx={{
 									display: "flex",
 									flexDirection: "column",
+									width: "100%",
 								}}
 							>
 								{announcements.map((announcement, index) => (
 									<Box
 										key={announcement._id}
 										sx={{
+											width: "100%", // Guarantee children fill the space
 											transition: "all 0.2s",
 											"&:hover": {
 												backgroundColor: "#f9fafb",
 											},
 										}}
 									>
-										<Box sx={{ p: 3 }}>
+										<Box
+											sx={{
+												p: 3,
+												width: "100%",
+												boxSizing: "border-box",
+											}}
+										>
 											<Box
 												sx={{
 													display: "flex",
 													justifyContent:
 														"space-between",
 													alignItems: "flex-start",
-													mb: 1.5,
+													mb: 2,
+													width: "100%", // Force header flexbox to take full width
 												}}
 											>
 												<Box
 													sx={{
 														display: "flex",
-														alignItems: "center",
-														gap: 1,
+														gap: 1.5,
+														flexGrow: 1,
 													}}
 												>
+													{" "}
+													{/* flexGrow: 1 pushes right side out */}
 													<Avatar
 														sx={{
-															width: 24,
-															height: 24,
+															width: 38,
+															height: 38,
 															bgcolor:
 																"primary.main",
-															fontSize: "0.7rem",
 															fontWeight: "bold",
 														}}
 													>
-														{announcement.authorName.charAt(
-															0,
-														)}
+														{announcement.authorName
+															.charAt(0)
+															.toUpperCase()}
 													</Avatar>
-													<Typography
-														variant="subtitle2"
-														fontWeight="bold"
-														color="primary"
-													>
-														{
-															announcement.authorName
-														}{" "}
-														<span
-															style={{
-																color: "#888",
-																fontWeight:
-																	"normal",
+													<Box>
+														<Box
+															sx={{
+																display: "flex",
+																alignItems:
+																	"center",
+																gap: 1,
+																flexWrap:
+																	"wrap",
 															}}
 														>
-															• Admin
-														</span>
-													</Typography>
+															<Typography
+																variant="subtitle2"
+																fontWeight="bold"
+																color="text.primary"
+															>
+																{
+																	announcement.authorName
+																}
+															</Typography>
+															<Chip
+																label="Admin"
+																size="small"
+																color="error"
+																variant="outlined"
+																sx={{
+																	height: 20,
+																	fontSize:
+																		"0.7rem",
+																	fontWeight:
+																		"bold",
+																}}
+															/>
+														</Box>
+														<Typography
+															variant="caption"
+															color="text.secondary"
+															sx={{
+																display:
+																	"block",
+																mt: 0.2,
+															}}
+														>
+															{formatTime(
+																announcement.timestamp,
+															)}
+														</Typography>
+													</Box>
 												</Box>
 
-												<Box
-													sx={{
-														display: "flex",
-														alignItems: "center",
-														gap: 1,
-													}}
-												>
-													<Typography
-														variant="caption"
-														color="text.disabled"
+												{/* Delete Button (Only for Admins) */}
+												{currentUser?.role ===
+													"admin" && (
+													<IconButton
+														size="small"
+														color="error"
+														onClick={() =>
+															setDeleteUpdateId(
+																announcement._id,
+															)
+														}
 														sx={{
-															fontWeight: "bold",
+															mt: -0.5,
+															mr: -0.5,
+															flexShrink: 0,
+															"&:hover": {
+																backgroundColor:
+																	"rgba(211, 47, 47, 0.1)",
+															},
 														}}
 													>
-														{formatTime(
-															announcement.timestamp,
-														)}
-													</Typography>
-													{/* TRIGGER SLEEK DIALOG */}
-													{currentUser?.role ===
-														"admin" && (
-														<IconButton
-															size="small"
-															color="error"
-															onClick={() =>
-																setDeleteUpdateId(
-																	announcement._id,
-																)
-															}
-															sx={{
-																p: 0.5,
-																"&:hover": {
-																	backgroundColor:
-																		"rgba(211, 47, 47, 0.1)",
-																},
-															}}
-														>
-															<TrashIcon />
-														</IconButton>
-													)}
-												</Box>
+														<TrashIcon />
+													</IconButton>
+												)}
 											</Box>
+
 											<Typography
-												variant="body2"
+												variant="body1"
 												sx={{
 													whiteSpace: "pre-wrap",
+													wordBreak: "break-word",
+													overflowWrap: "anywhere",
 													lineHeight: 1.6,
 													color: "text.primary",
+													width: "100%",
+													display: "block",
 												}}
 											>
 												{announcement.content}
@@ -659,6 +684,16 @@ export default function Dashboard() {
 									(isDedicated
 										? "8:00 PM - 10:45 PM"
 										: "6:00 AM - 11:00 PM");
+
+								const rawLocation =
+									item.location || "Linn Gym Court A/B";
+								const displayLocation =
+									rawLocation.includes("RAC") ||
+									rawLocation.includes(
+										"Recreation Athletic Complex",
+									)
+										? rawLocation
+										: `Recreation Athletic Complex (RAC) • ${rawLocation}`;
 
 								return (
 									<Paper
@@ -784,17 +819,32 @@ export default function Dashboard() {
 												>
 													<ClockIcon /> {displayTime}
 												</Typography>
+
 												<Typography
 													variant="body2"
+													component="a"
+													href="https://maps.google.com/?q=Recreation+Athletic+Complex+GMU"
+													target="_blank"
+													onClick={(e) =>
+														e.stopPropagation()
+													}
 													sx={{
 														display: "flex",
 														alignItems: "center",
 														gap: 0.5,
+														color: "text.secondary",
+														textDecoration: "none",
+														transition:
+															"color 0.2s",
+														"&:hover": {
+															color: "primary.main",
+															textDecoration:
+																"underline",
+														},
 													}}
 												>
 													<PinIcon />{" "}
-													{item.location ||
-														"Linn Gym Court A/B"}
+													{displayLocation}
 												</Typography>
 											</Box>
 										</Box>
@@ -820,7 +870,6 @@ export default function Dashboard() {
 				</Grid>
 			</Grid>
 
-			{/* SLEEK DELETE CONFIRMATION DIALOG */}
 			<Dialog
 				open={!!deleteUpdateId}
 				onClose={() => setDeleteUpdateId(null)}

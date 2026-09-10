@@ -47,24 +47,28 @@ const announcementRoutes = require("./routes/announcements");
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/upload", require("./routes/upload"));
 
-app.get("/api/status", async (req, res) => {
+const errorHandler = require("./middleware/errorHandler");
+
+app.get("/api/status", async (req, res, next) => {
 	try {
 		const statusMessage = await getRacStatus();
 		res.json({ message: statusMessage });
 	} catch (error) {
-		console.error("Route error:", error);
-		res.status(500).json({ message: "Server error fetching status." });
+		next(error);
 	}
 });
 
-app.get("/api/schedule/weekly", (req, res) => {
+app.get("/api/schedule/weekly", (req, res, next) => {
 	try {
 		const weeklyData = getWeeklySchedule();
 		res.json(weeklyData);
 	} catch (error) {
-		res.status(500).json({ message: "Server error generating schedule." });
+		next(error);
 	}
 });
+
+// Global error handler must be defined after all other routes and middleware
+app.use(errorHandler);
 
 server.listen(PORT, () => {
 	console.log(`Server is running on port: ${PORT}`);

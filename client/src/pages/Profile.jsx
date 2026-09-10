@@ -16,8 +16,10 @@ import ProfileEditForm from "../components/profile/ProfileEditForm";
 import PostCard from "../components/PostCard";
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
+import { useAuth } from "../context/AuthContext";
 
-export default function Profile({ user, setUser, setToastMessage }) {
+export default function Profile() {
+	const { user, setUser, setToastMessage } = useAuth();
 	const { id } = useParams();
 	const [profileData, setProfileData] = useState(null);
 	const [error, setError] = useState(null);

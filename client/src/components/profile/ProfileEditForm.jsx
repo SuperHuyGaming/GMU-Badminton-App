@@ -21,7 +21,6 @@ export default function ProfileEditForm({
 	isSaving,
 	error,
 }) {
-	// NEW: State to track which menu item is clicked in the sidebar
 	const [activeSection, setActiveSection] = useState("general");
 
 	return (
@@ -31,50 +30,60 @@ export default function ProfileEditForm({
 				borderRadius: 3,
 				display: "flex",
 				flexDirection: { xs: "column", md: "row" },
-				overflow: "hidden", // Keeps the sidebar flush with the rounded corners
+				overflow: "hidden",
 				border: "1px solid #e0e0e0",
 				width: "100%",
-				minHeight: "450px", // Gives the dashboard a solid, substantial height
+				minHeight: "450px",
 			}}
 		>
-			{/* --- LEFT SIDEBAR NAVIGATION --- */}
+			{/* --- LEFT SIDEBAR NAVIGATION (Horizontal on Mobile!) --- */}
 			<Box
 				sx={{
 					width: { xs: "100%", md: "280px" },
 					borderRight: { xs: "none", md: "1px solid #e0e0e0" },
 					borderBottom: { xs: "1px solid #e0e0e0", md: "none" },
-					backgroundColor: "#fff",
-					p: 2,
+					backgroundColor: "#f8fafc",
+					p: { xs: 0, md: 2 },
 				}}
 			>
 				<Typography
 					variant="h6"
 					fontWeight="bold"
-					sx={{ mb: 1, px: 2 }}
+					sx={{
+						mb: 1,
+						px: 2,
+						pt: 2,
+						display: { xs: "none", md: "block" },
+					}}
 				>
-					About
+					Settings
 				</Typography>
-				<List disablePadding>
-					{/* GENERAL INFO TAB */}
+
+				<List
+					disablePadding
+					sx={{
+						display: "flex",
+						flexDirection: { xs: "row", md: "column" },
+						overflowX: "auto",
+						"&::-webkit-scrollbar": { display: "none" }, // Hides ugly scrollbar on phones
+						p: { xs: 1, md: 0 },
+					}}
+				>
 					<ListItemButton
 						onClick={() => setActiveSection("general")}
 						sx={{
 							borderRadius: 2,
-							mb: 0.5,
+							mb: { xs: 0, md: 0.5 },
+							mr: { xs: 1, md: 0 },
+							flexShrink: 0,
 							backgroundColor:
 								activeSection === "general"
-									? "rgba(0, 102, 51, 0.1)" // GMU Green with transparency
+									? "rgba(0, 102, 51, 0.1)"
 									: "transparent",
 							color:
 								activeSection === "general"
 									? "primary.main"
 									: "text.primary",
-							"&:hover": {
-								backgroundColor:
-									activeSection === "general"
-										? "rgba(0, 102, 51, 0.15)"
-										: "#f0f2f5",
-							},
 						}}
 					>
 						<ListItemText
@@ -84,15 +93,16 @@ export default function ProfileEditForm({
 									activeSection === "general"
 										? "bold"
 										: "medium",
+								whiteSpace: "nowrap",
 							}}
 						/>
 					</ListItemButton>
 
-					{/* BADMINTON PROFILE TAB */}
 					<ListItemButton
 						onClick={() => setActiveSection("badminton")}
 						sx={{
 							borderRadius: 2,
+							flexShrink: 0,
 							backgroundColor:
 								activeSection === "badminton"
 									? "rgba(0, 102, 51, 0.1)"
@@ -101,12 +111,6 @@ export default function ProfileEditForm({
 								activeSection === "badminton"
 									? "primary.main"
 									: "text.primary",
-							"&:hover": {
-								backgroundColor:
-									activeSection === "badminton"
-										? "rgba(0, 102, 51, 0.15)"
-										: "#f0f2f5",
-							},
 						}}
 					>
 						<ListItemText
@@ -116,6 +120,7 @@ export default function ProfileEditForm({
 									activeSection === "badminton"
 										? "bold"
 										: "medium",
+								whiteSpace: "nowrap",
 							}}
 						/>
 					</ListItemButton>
@@ -136,7 +141,6 @@ export default function ProfileEditForm({
 					</Alert>
 				)}
 
-				{/* The form wraps both sections so the Save button always works */}
 				<form
 					onSubmit={handleSubmit}
 					style={{
@@ -268,8 +272,6 @@ export default function ProfileEditForm({
 								px: 4,
 								py: 1.2,
 								borderRadius: 2,
-								transition: "all 0.15s ease",
-								"&:active": { transform: "scale(0.96)" }, // Tactile feedback on save!
 							}}
 							disabled={isSaving}
 						>

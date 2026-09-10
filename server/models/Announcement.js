@@ -1,4 +1,4 @@
-// server/models/Announcement.js
+	// server/models/Announcement.js
 const mongoose = require("mongoose");
 
 const announcementSchema = new mongoose.Schema({

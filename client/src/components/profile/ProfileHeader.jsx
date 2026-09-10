@@ -10,7 +10,6 @@ import {
 	Menu,
 	MenuItem,
 	Dialog,
-	DialogContent,
 	IconButton,
 } from "@mui/material";
 
@@ -56,8 +55,11 @@ export default function ProfileHeader({
 	setActiveTab,
 }) {
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
-	const [viewerImage, setViewerImage] = useState(null); // Stores URL of image to view
-	const fileInputRef = useRef(null);
+	const [viewerImage, setViewerImage] = useState(null);
+
+	// Two separate refs for our hidden file inputs
+	const profileInputRef = useRef(null);
+	const coverInputRef = useRef(null);
 
 	const handleAvatarClick = (e) => {
 		if (isOwnProfile) {
@@ -67,8 +69,13 @@ export default function ProfileHeader({
 		}
 	};
 
+	// NEW: Dynamic Cover Click Logic
 	const handleCoverClick = () => {
-		if (displayCoverPic) setViewerImage(displayCoverPic);
+		if (isOwnProfile) {
+			if (coverInputRef.current) coverInputRef.current.click();
+		} else if (displayCoverPic) {
+			setViewerImage(displayCoverPic);
+		}
 	};
 
 	const handleCloseAvatarMenu = () => setAvatarMenuAnchor(null);
@@ -79,7 +86,7 @@ export default function ProfileHeader({
 	};
 
 	const handleChoosePicture = () => {
-		if (fileInputRef.current) fileInputRef.current.click();
+		if (profileInputRef.current) profileInputRef.current.click();
 		handleCloseAvatarMenu();
 	};
 
@@ -102,38 +109,23 @@ export default function ProfileHeader({
 					backgroundSize: "cover",
 					backgroundPosition: "center",
 					position: "relative",
-					cursor: displayCoverPic ? "pointer" : "default",
-					"&:hover": { opacity: displayCoverPic ? 0.9 : 1 },
+					cursor:
+						displayCoverPic || isOwnProfile ? "pointer" : "default",
+					transition: "opacity 0.2s ease-in-out",
+					"&:hover": {
+						opacity: displayCoverPic || isOwnProfile ? 0.9 : 1,
+					},
 				}}
 			>
+				{/* HIDDEN INPUT - NO BUTTON REQUIRED */}
 				{isOwnProfile && (
-					<Box sx={{ position: "absolute", bottom: 16, right: 16 }}>
-						<input
-							accept="image/*"
-							id="cover-upload"
-							type="file"
-							style={{ display: "none" }}
-							onChange={(e) => handleImageUpload(e, "coverPic")}
-						/>
-						<label htmlFor="cover-upload">
-							<Button
-								variant="contained"
-								component="span"
-								startIcon={<CameraIcon />}
-								sx={{
-									backgroundColor: "white",
-									color: "black",
-									fontWeight: "bold",
-									textTransform: "none",
-									borderRadius: 2,
-									boxShadow: "0 2px 5px rgba(0,0,0,0.15)",
-									"&:hover": { backgroundColor: "#f0f2f5" },
-								}}
-							>
-								Edit cover photo
-							</Button>
-						</label>
-					</Box>
+					<input
+						accept="image/*"
+						type="file"
+						ref={coverInputRef}
+						style={{ display: "none" }}
+						onChange={(e) => handleImageUpload(e, "coverPic")}
+					/>
 				)}
 			</Box>
 
@@ -187,7 +179,7 @@ export default function ProfileHeader({
 								type="file"
 								accept="image/*"
 								style={{ display: "none" }}
-								ref={fileInputRef}
+								ref={profileInputRef}
 								onChange={(e) =>
 									handleImageUpload(e, "profilePic")
 								}
