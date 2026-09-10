@@ -53,6 +53,8 @@ export default function ProfileHeader({
 	handleImageUpload,
 	activeTab,
 	setActiveTab,
+	friendStatus,
+	handleFriendAction,
 }) {
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
 	const [viewerImage, setViewerImage] = useState(null);
@@ -254,8 +256,8 @@ export default function ProfileHeader({
 					</Typography>
 				</Box>
 
-				{isOwnProfile && (
-					<Box sx={{ pb: { sm: 2 }, pt: { xs: 2, sm: 0 } }}>
+				<Box sx={{ pb: { sm: 2 }, pt: { xs: 2, sm: 0 }, display: 'flex', gap: 1 }}>
+					{isOwnProfile ? (
 						<Button
 							variant="contained"
 							onClick={() => setActiveTab("about")}
@@ -272,8 +274,31 @@ export default function ProfileHeader({
 						>
 							Edit profile
 						</Button>
-					</Box>
-				)}
+					) : (
+						<>
+							<Button
+								variant="contained"
+								color={friendStatus === "friends" ? "error" : "primary"}
+								onClick={handleFriendAction}
+								sx={{ fontWeight: "bold", borderRadius: 2, textTransform: "none" }}
+							>
+								{friendStatus === "friends" ? "Remove Friend" :
+								 friendStatus === "request_sent" ? "Cancel Request" :
+								 friendStatus === "request_received" ? "Accept Request" :
+								 "Add Friend"}
+							</Button>
+							{friendStatus === "friends" && (
+								<Button
+									variant="contained"
+									sx={{ bgcolor: '#e4e6eb', color: 'black', fontWeight: "bold", borderRadius: 2, textTransform: "none", "&:hover": { bgcolor: '#d8dadf' } }}
+									onClick={() => window.location.href = '/messages'}
+								>
+									Message
+								</Button>
+							)}
+						</>
+					)}
+				</Box>
 			</Box>
 
 			<Divider sx={{ mx: 2 }} />

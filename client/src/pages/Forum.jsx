@@ -125,9 +125,19 @@ export default function Forum() {
 		}
 	}, [location.search]);
 
+	const [showScrollTop, setShowScrollTop] = useState(false);
+
 	useEffect(() => {
 		setPage(1);
 	}, [viewDate]);
+
+	useEffect(() => {
+		const handleScroll = () => {
+			setShowScrollTop(window.scrollY > 300);
+		};
+		window.addEventListener("scroll", handleScroll);
+		return () => window.removeEventListener("scroll", handleScroll);
+	}, []);
 
 	useEffect(() => {
 		const fetchPosts = async () => {
@@ -277,13 +287,24 @@ export default function Forum() {
 			</Box>
 
 			<Container maxWidth="md">
-				<Typography
-					variant="subtitle2"
-					color="text.secondary"
-					sx={{ mb: 1, ml: 1, fontWeight: "bold" }}
-				>
-					📅 Select a Day:
-				</Typography>
+				<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, px: 1 }}>
+					<Typography
+						variant="subtitle2"
+						color="text.secondary"
+						sx={{ fontWeight: "bold" }}
+					>
+						📅 Select a Day:
+					</Typography>
+					<Button 
+						size="small" 
+						variant="outlined" 
+						startIcon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>}
+						onClick={() => { setPage(1); setPosts([]); }}
+						sx={{ borderRadius: 2, textTransform: 'none' }}
+					>
+						Refresh
+					</Button>
+				</Box>
 				<Paper
 					elevation={0}
 					sx={{
@@ -537,9 +558,11 @@ export default function Forum() {
 							onChange={(e) =>
 								setNewPost({
 									...newPost,
-									content: e.target.value,
+									content: e.target.value.slice(0, 1000), // Max 1000 chars
 								})
 							}
+							helperText={`${newPost.content?.length || 0} / 1000`}
+							FormHelperTextProps={{ sx: { textAlign: 'right' } }}
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
@@ -659,6 +682,17 @@ export default function Forum() {
 					</Button>
 				</DialogActions>
 			</Dialog>
+
+			{showScrollTop && (
+				<Fab 
+					color="primary" 
+					size="small" 
+					onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+					sx={{ position: 'fixed', bottom: 32, right: 32, zIndex: 1000 }}
+				>
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+				</Fab>
+			)}
 		</Box>
 	);
 }

@@ -7,6 +7,7 @@ import Profile from "./pages/Profile";
 import Dashboard from "./pages/Dashboard";
 import Forum from "./pages/Forum";
 import Admin from "./pages/Admin";
+import Messages from "./pages/Messages";
 import {
 	BrowserRouter,
 	Routes,
@@ -18,24 +19,9 @@ import {
 	ThemeProvider,
 	createTheme,
 	CssBaseline,
-	AppBar,
-	Toolbar,
-	Typography,
-	Button,
 	Container,
-	Box,
-	Divider,
-	Avatar,
 	Snackbar,
 	Alert,
-	Menu,
-	MenuItem,
-	IconButton,
-	Drawer,
-	List,
-	ListItemButton,
-	ListItemText,
-	Badge,
 } from "@mui/material";
 
 const gmuTheme = createTheme({
@@ -60,48 +46,11 @@ const AdminRoute = ({ children }) => {
 function App() {
 	const { toastMessage, setToastMessage } = useAuth();
 
-	return () => socket.off("newNotification", handleNewNotification);
-	}, [user]);
-
-	const unreadCount = notifications.filter((n) => !n.read).length;
-
-	const handleAvatarClick = (event) => setAnchorEl(event.currentTarget);
-	const handleMenuClose = () => setAnchorEl(null);
-
-	const handleNotifClick = (event) => {
-		setNotifAnchorEl(event.currentTarget);
-		setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-
-		apiFetch(`/api/forum/notifications/${user.id}/read`, {
-			method: "PUT",
-		}).catch(console.error);
-	};
-
-	const handleNotifClose = () => setNotifAnchorEl(null);
-
-	const clearNotifications = () => {
-		setNotifications([]);
-		handleNotifClose();
-	};
-
-	const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
-
-	const handleLogout = async () => {
-		handleMenuClose();
-		const refreshToken = localStorage.getItem("refreshToken");
-		if (refreshToken) {
-			await apiFetch("/api/auth/logout", {
-				method: "POST",
-				body: JSON.stringify({ refreshToken }),
-			}).catch(console.error);
-		}
-		localStorage.removeItem("accessToken");
-		localStorage.removeItem("refreshToken");
-		localStorage.removeItem("user");
-		setUser(null);
-		localStorage.setItem("justLoggedOut", "true");
-		window.location.href = "/";
-	};
+	useEffect(() => {
+		const handleOffline = () => setToastMessage("You are offline. Check your network.");
+		window.addEventListener("offline", handleOffline);
+		return () => window.removeEventListener("offline", handleOffline);
+	}, [setToastMessage]);
 
 	return (
 		<ThemeProvider theme={gmuTheme}>
@@ -155,6 +104,7 @@ function App() {
 								</AdminRoute>
 							}
 						/>
+						<Route path="/messages" element={user ? <Messages /> : <Navigate to="/auth" />} />
 					</Routes>
 				</Container>
 			</BrowserRouter>

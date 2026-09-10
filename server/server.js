@@ -46,6 +46,33 @@ app.use("/api/admin", adminRoutes);
 const announcementRoutes = require("./routes/announcements");
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/upload", require("./routes/upload"));
+app.use("/api/friends", require("./routes/friends"));
+app.use("/api/messages", require("./routes/messages"));
+
+// Make io accessible globally
+app.set("io", io);
+
+const onlineUsers = new Set();
+
+io.on("connection", (socket) => {
+	console.log("New socket connection:", socket.id);
+	
+	socket.on("joinUserRoom", (userId) => {
+		socket.userId = userId;
+		socket.join(userId);
+		onlineUsers.add(userId);
+		io.emit("onlineUsersUpdate", Array.from(onlineUsers));
+		console.log(`User ${userId} joined their personal room`);
+	});
+
+	socket.on("disconnect", () => {
+		if (socket.userId) {
+			onlineUsers.delete(socket.userId);
+			io.emit("onlineUsersUpdate", Array.from(onlineUsers));
+		}
+		console.log("Socket disconnected:", socket.id);
+	});
+});
 
 const errorHandler = require("./middleware/errorHandler");
 

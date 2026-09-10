@@ -7,6 +7,7 @@ import apiFetch from "../utils/api";
 export const useNotifications = () => {
 	const { user, setToastMessage } = useAuth();
 	const [notifications, setNotifications] = useState([]);
+	const [unreadMessages, setUnreadMessages] = useState(0);
 
 	useEffect(() => {
 		if (!user) {
@@ -14,11 +15,19 @@ export const useNotifications = () => {
 			return;
 		}
 
-		// Fetch initial notifications
-		apiFetch(`/api/forum/notifications/${user.id}`)
-			.then((res) => res.json())
-			.then((data) => setNotifications(data))
-			.catch(console.error);
+		socket.emit("joinUserRoom", user.id);
+
+		// Fetch initial notifications and unread messages
+		Promise.all([
+			apiFetch(`/api/forum/notifications/${user.id}`).then(res => res.json()),
+			apiFetch(`/api/messages/recent/${user.id}`).then(res => res.json())
+		])
+		.then(([notifData, chatsData]) => {
+			setNotifications(notifData);
+			const unread = chatsData.reduce((acc, chat) => acc + chat.unreadCount, 0);
+			setUnreadMessages(unread);
+		})
+		.catch(console.error);
 
 		// Handle live notifications
 		const handleNewNotification = (notification) => {
@@ -28,9 +37,19 @@ export const useNotifications = () => {
 			}
 		};
 
+		const handlePrivateMessage = (msg) => {
+			if (msg.receiver._id === user.id || msg.receiver === user.id) {
+				setUnreadMessages(prev => prev + 1);
+				setToastMessage(`New message from ${msg.sender.name || 'someone'}`);
+			}
+		};
+
 		socket.on("newNotification", handleNewNotification);
+		socket.on("privateMessage", handlePrivateMessage);
+		
 		return () => {
 			socket.off("newNotification", handleNewNotification);
+			socket.off("privateMessage", handlePrivateMessage);
 		};
 	}, [user, setToastMessage]);
 
@@ -52,6 +71,8 @@ export const useNotifications = () => {
 	return {
 		notifications,
 		unreadCount,
+		unreadMessages,
+		setUnreadMessages,
 		markAsRead,
 		clearNotifications,
 	};

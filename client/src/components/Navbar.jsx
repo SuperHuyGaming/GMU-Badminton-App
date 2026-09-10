@@ -21,7 +21,7 @@ const BellIcon = () => (
 
 export default function Navbar() {
     const { user, logout } = useAuth();
-    const { notifications, unreadCount, markAsRead, clearNotifications } = useNotifications();
+    const { notifications, unreadCount, unreadMessages, markAsRead, clearNotifications } = useNotifications();
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState(null);
     const open = Boolean(anchorEl);
@@ -49,9 +49,12 @@ export default function Navbar() {
         <>
 <AppBar
 					position="sticky"
-					color="primary"
 					elevation={0}
-					sx={{ borderBottom: "1px solid rgba(0,0,0,0.1)" }}
+					sx={{ 
+						borderBottom: "1px solid rgba(0,0,0,0.1)",
+						backgroundColor: "rgba(0, 102, 51, 0.85)", 
+						backdropFilter: "blur(12px)" 
+					}}
 				>
 					<Toolbar sx={{ justifyContent: "space-between" }}>
 						<Box
@@ -141,6 +144,20 @@ export default function Navbar() {
 						>
 							{user ? (
 								<>
+									<IconButton
+										color="inherit"
+										component={RouterLink}
+										to="/messages"
+										sx={{
+											transition: "all 0.2s",
+											"&:hover": { color: "secondary.main" },
+										}}
+									>
+										<Badge badgeContent={unreadMessages} color="error">
+											<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+										</Badge>
+									</IconButton>
+
 									<IconButton
 										color="inherit"
 										onClick={handleNotifClick}
@@ -289,7 +306,8 @@ export default function Navbar() {
 											fontWeight: "bold",
 											border: "2px solid #FFCC33",
 											cursor: "pointer",
-											"&:hover": { opacity: 0.8 },
+											transition: "transform 0.2s ease-in-out",
+											"&:hover": { transform: "scale(1.08)" },
 										}}
 									>
 										{!user.profilePic &&

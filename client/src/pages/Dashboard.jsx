@@ -16,6 +16,7 @@ import {
 	DialogTitle,
 	DialogContent,
 	DialogActions as MuiDialogActions,
+	Skeleton,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
@@ -323,10 +324,7 @@ export default function Dashboard() {
 						sx={{ mb: 2, lineHeight: 1.2 }}
 					>
 						{loading ? (
-							<CircularProgress
-								size={20}
-								sx={{ color: "#FFCC33" }}
-							/>
+							<Skeleton variant="text" width="60%" sx={{ bgcolor: 'rgba(255, 204, 51, 0.2)' }} />
 						) : (
 							status || "Status currently unavailable."
 						)}
@@ -471,17 +469,26 @@ export default function Dashboard() {
 									width: "100%",
 								}}
 							>
-								<MegaphoneIcon
-									style={{
-										width: 40,
-										height: 40,
-										marginBottom: 8,
-									}}
-								/>
-								<Typography variant="h6" fontWeight="bold">
+								<style>
+									{`
+										@keyframes floatMsg { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+										.floating-msg { animation: floatMsg 3s ease-in-out infinite; color: #006633; }
+									`}
+								</style>
+								<div className="floating-msg">
+									<MegaphoneIcon
+										style={{
+											width: 60,
+											height: 60,
+											marginBottom: 16,
+											opacity: 0.7,
+										}}
+									/>
+								</div>
+								<Typography variant="h6" fontWeight="bold" sx={{ color: 'text.primary' }}>
 									No New Updates
 								</Typography>
-								<Typography variant="body2">
+								<Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 250, mx: 'auto' }}>
 									The court is clear. Check back later for
 									official club announcements!
 								</Typography>
@@ -670,9 +677,15 @@ export default function Dashboard() {
 										p: 3,
 										borderRadius: 3,
 										border: "1px solid #e0e0e0",
+										display: 'flex',
+										gap: 2
 									}}
 								>
-									<CircularProgress size={20} />
+									<Skeleton variant="rounded" width={80} height={80} />
+									<Box sx={{ flexGrow: 1 }}>
+										<Skeleton variant="text" sx={{ fontSize: '1.5rem' }} width="40%" />
+										<Skeleton variant="text" sx={{ fontSize: '1rem' }} width="20%" />
+									</Box>
 								</Paper>
 							))
 						) : schedule.length > 0 ? (

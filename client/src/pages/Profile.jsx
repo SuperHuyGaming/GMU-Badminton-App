@@ -27,6 +27,7 @@ export default function Profile() {
 	const [notFound, setNotFound] = useState(false);
 
 	const [activeTab, setActiveTab] = useState("posts");
+	const [friendStatus, setFriendStatus] = useState("none");
 
 	const [userPosts, setUserPosts] = useState([]);
 	const [isLoadingPosts, setIsLoadingPosts] = useState(true);
@@ -109,6 +110,55 @@ export default function Profile() {
 			socket.off("postCreated");
 		};
 	}, [id]);
+
+	useEffect(() => {
+		if (profileData && user && !isOwnProfile) {
+			if (profileData.friends?.includes(user.id)) {
+				setFriendStatus("friends");
+			} else if (profileData.friendRequests?.includes(user.id)) {
+				setFriendStatus("request_sent");
+			} else if (profileData.sentFriendRequests?.includes(user.id)) {
+				setFriendStatus("request_received");
+			} else {
+				setFriendStatus("none");
+			}
+		}
+	}, [profileData, user, isOwnProfile]);
+
+	const handleFriendAction = async () => {
+		try {
+			if (friendStatus === "none") {
+				await fetch(`${import.meta.env.VITE_API_URL}/api/friends/request`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+					body: JSON.stringify({ requesterId: user.id, recipientId: id })
+				});
+				setFriendStatus("request_sent");
+				setToastMessage("Friend request sent!");
+			} else if (friendStatus === "request_received") {
+				await fetch(`${import.meta.env.VITE_API_URL}/api/friends/accept`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+					body: JSON.stringify({ userId: user.id, requesterId: id })
+				});
+				setFriendStatus("friends");
+				setToastMessage("Friend request accepted!");
+			} else if (friendStatus === "request_sent" || friendStatus === "friends") {
+				const endpoint = friendStatus === "friends" ? "/api/friends/remove" : "/api/friends/reject";
+				const payload = friendStatus === "friends" ? { userId: user.id, friendId: id } : { userId: user.id, targetId: id };
+				await fetch(`${import.meta.env.VITE_API_URL}${endpoint}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+					body: JSON.stringify(payload)
+				});
+				setFriendStatus("none");
+				setToastMessage(friendStatus === "friends" ? "Friend removed" : "Request cancelled");
+			}
+		} catch (error) {
+			console.error(error);
+			setToastMessage("Failed to process action");
+		}
+	};
 
 	const handleChange = (e) =>
 		setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -260,6 +310,8 @@ export default function Profile() {
 				handleImageUpload={handleImageUpload}
 				activeTab={activeTab}
 				setActiveTab={setActiveTab}
+				friendStatus={friendStatus}
+				handleFriendAction={handleFriendAction}
 			/>
 
 			{activeTab === "posts" ? (

@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
 	profilePic: { type: String, default: "" },
 	coverPic: { type: String, default: "" },
 
+	// Friends System
+	friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+	friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+	sentFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
 	createdAt: { type: Date, default: Date.now },
 });
 
