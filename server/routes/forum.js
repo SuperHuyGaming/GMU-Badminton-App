@@ -23,51 +23,12 @@ const postLimiter = rateLimit({
 	},
 });
 
-// 2. THE UPGRADED SPAM ENGINE
+const { analyzeContent } = require("../utils/aiModeration");
+
+// 2. THE UPGRADED AI SPAM ENGINE
 const checkSpam = (text) => {
-	if (!text) return false;
-	const lowerText = text.toLowerCase();
-
-	const spamPhrases = [
-		"buy cheap",
-		"free money",
-		"click here",
-		"earn cash",
-		"http://",
-		"https://",
-		"sugar daddy",
-		"cashapp",
-		"venmo me",
-	];
-	const hasSpamPhrase = spamPhrases.some((phrase) =>
-		lowerText.includes(phrase),
-	);
-
-	const toxicWords = [
-		"crypto",
-		"bitcoin",
-		"eth",
-		"nft",
-		"dick",
-		"fuck",
-		"shit",
-		"bitch",
-		"asshole",
-		"cunt",
-		"slut",
-		"whore",
-		"pussy",
-		"cock",
-		"porn",
-		"onlyfans",
-	];
-	const toxicRegex = new RegExp(`\\b(${toxicWords.join("|")})\\b`, "i");
-	const hasToxicWord = toxicRegex.test(lowerText);
-
-	const hasRepeatingChars = /(.)\1{10,}/.test(lowerText);
-	const isAllCaps = text.length > 20 && text === text.toUpperCase();
-
-	return hasSpamPhrase || hasToxicWord || hasRepeatingChars || isAllCaps;
+	const result = analyzeContent(text);
+	return result.isFlagged;
 };
 
 const hydrateWithPictures = async (data) => {

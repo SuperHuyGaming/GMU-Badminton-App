@@ -4,7 +4,7 @@ const Message = require("../models/Message");
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
 const Notification = require("../models/Notification");
-const { containsProfanity } = require("../utils/profanityFilter");
+const { analyzeContent } = require("../utils/aiModeration");
 
 // GET: all recent conversations (latest message per friend)
 router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
@@ -75,14 +75,14 @@ router.post("/", authMiddleware, async (req, res, next) => {
 	try {
 		const { senderId, receiverId, content } = req.body;
 		
-		const isFlagged = containsProfanity(content);
+		const mlResult = analyzeContent(content);
 		
 		const msg = new Message({
 			sender: senderId,
 			receiver: receiverId,
 			content,
-			isFlagged,
-			flagReason: isFlagged ? "Auto-moderation: Profanity detected" : ""
+			isFlagged: mlResult.isFlagged,
+			flagReason: mlResult.reason
 		});
 		await msg.save();
 		
