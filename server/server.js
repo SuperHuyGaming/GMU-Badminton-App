@@ -78,6 +78,7 @@ app.use("/api/upload", require("./routes/upload"));
 app.use("/api/friends", require("./routes/friends"));
 app.use("/api/messages", require("./routes/messages"));
 app.use("/api/matches", require("./routes/matches"));
+app.use("/api/push", require("./routes/push"));
 
 // Make io accessible globally
 app.set("io", io);

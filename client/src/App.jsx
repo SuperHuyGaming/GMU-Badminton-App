@@ -9,6 +9,7 @@ import Forum from "./pages/Forum";
 import Admin from "./pages/Admin";
 import Messages from "./pages/Messages";
 import Leaderboard from "./pages/Leaderboard";
+import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import {
 	BrowserRouter,
 	Routes,
@@ -181,6 +182,7 @@ function App() {
 
 					<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 } }}>
 						<AnimatedRoutes />
+						{user && <PushNotificationPrompt />}
 					</Container>
 				</BrowserRouter>
 			</ThemeProvider>

@@ -93,6 +93,41 @@ router.post("/", authMiddleware, async (req, res, next) => {
 		io.to(receiverId).emit("privateMessage", populatedMsg);
 		io.to(senderId).emit("privateMessage", populatedMsg);
 
+		// Web Push Notification
+		if (!msg.isFlagged) {
+			const webpush = require("web-push");
+			const receiverUser = await User.findById(receiverId);
+			if (receiverUser && receiverUser.pushSubscriptions && receiverUser.pushSubscriptions.length > 0) {
+				const payload = JSON.stringify({
+					title: `New message from ${populatedMsg.sender.name}`,
+					body: content.length > 50 ? content.substring(0, 50) + "..." : content,
+					url: `/messages`
+				});
+
+				const invalidSubs = [];
+				for (let i = 0; i < receiverUser.pushSubscriptions.length; i++) {
+					const sub = receiverUser.pushSubscriptions[i];
+					try {
+						await webpush.sendNotification(sub, payload);
+					} catch (err) {
+						if (err.statusCode === 404 || err.statusCode === 410) {
+							invalidSubs.push(sub.endpoint);
+						} else {
+							console.error("Push Notification Error:", err);
+						}
+					}
+				}
+
+				// Clean up invalid subscriptions
+				if (invalidSubs.length > 0) {
+					receiverUser.pushSubscriptions = receiverUser.pushSubscriptions.filter(
+						s => !invalidSubs.includes(s.endpoint)
+					);
+					await receiverUser.save();
+				}
+			}
+		}
+
 		res.json(populatedMsg);
 	} catch (error) {
 		next(error);

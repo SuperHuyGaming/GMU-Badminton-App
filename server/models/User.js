@@ -33,6 +33,9 @@ const userSchema = new mongoose.Schema({
 	singlesElo: { type: Number, default: 1200 },
 	doublesElo: { type: Number, default: 1200 },
 
+	// Web Push Subscriptions for Notifications
+	pushSubscriptions: { type: Array, default: [] },
+
 	createdAt: { type: Date, default: Date.now },
 });
 
