@@ -84,10 +84,6 @@ export default function Navbar() {
 								<HamburgerIcon />
 							</IconButton>
 
-							<IconButton onClick={colorMode.toggleColorMode} color="inherit">
-								{theme.palette.mode === 'dark' ? <SunIcon /> : <MoonIcon />}
-							</IconButton>
-
 							<Typography
 								variant="h6"
 								component={RouterLink}
@@ -372,6 +368,14 @@ export default function Navbar() {
 											sx={{ fontWeight: "bold" }}
 										>
 											View Profile
+										</MenuItem>
+										<MenuItem onClick={(e) => {
+											if (e.currentTarget) e.currentTarget.blur();
+											colorMode.toggleColorMode();
+											handleMenuClose();
+										}} sx={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 1 }}>
+											{theme.palette.mode === 'dark' ? <SunIcon /> : <MoonIcon />}
+											Toggle Theme
 										</MenuItem>
 										<Divider />
 										<MenuItem
