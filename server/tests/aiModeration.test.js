@@ -1,5 +1,20 @@
 const { analyzeContent } = require('../utils/aiModeration');
 
+jest.mock('natural', () => {
+    return {
+        BayesClassifier: jest.fn().mockImplementation(() => {
+            return {
+                addDocument: jest.fn(),
+                train: jest.fn(),
+                classify: jest.fn((text) => {
+                    if (text.includes('free money')) return 'spam';
+                    return 'ham';
+                })
+            };
+        })
+    };
+});
+
 describe('AI Moderation Engine', () => {
     
     test('should allow normal sentences', () => {
