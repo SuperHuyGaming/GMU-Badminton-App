@@ -14,6 +14,7 @@ import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileIntro from "../components/profile/ProfileIntro";
 import ProfileEditForm from "../components/profile/ProfileEditForm";
 import PostCard from "../components/PostCard";
+import apiFetch from "../utils/api";
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
 import { useAuth } from "../context/AuthContext";
@@ -48,15 +49,10 @@ export default function Profile() {
 		const fetchProfileData = async () => {
 			try {
 				const profileEndpoint = isOwnProfile
-					? `${import.meta.env.VITE_API_URL}/api/profile`
-					: `${import.meta.env.VITE_API_URL}/api/profile/${id}`;
-				const headers = isOwnProfile
-					? {
-							Authorization: `Bearer ${localStorage.getItem("token")}`,
-						}
-					: {};
-
-				const profileRes = await fetch(profileEndpoint, { headers });
+					? `/api/profile`
+					: `/api/profile/${id}`;
+				
+				const profileRes = isOwnProfile ? await apiFetch(profileEndpoint) : await fetch(`${import.meta.env.VITE_API_URL}${profileEndpoint}`);
 				const data = await profileRes.json();
 
 				if (profileRes.ok) {
@@ -128,17 +124,15 @@ export default function Profile() {
 	const handleFriendAction = async () => {
 		try {
 			if (friendStatus === "none") {
-				await fetch(`${import.meta.env.VITE_API_URL}/api/friends/request`, {
+				await apiFetch(`/api/friends/request`, {
 					method: "POST",
-					headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
 					body: JSON.stringify({ requesterId: user.id, recipientId: id })
 				});
 				setFriendStatus("request_sent");
 				setToastMessage("Friend request sent!");
 			} else if (friendStatus === "request_received") {
-				await fetch(`${import.meta.env.VITE_API_URL}/api/friends/accept`, {
+				await apiFetch(`/api/friends/accept`, {
 					method: "POST",
-					headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
 					body: JSON.stringify({ userId: user.id, requesterId: id })
 				});
 				setFriendStatus("friends");
@@ -146,9 +140,8 @@ export default function Profile() {
 			} else if (friendStatus === "request_sent" || friendStatus === "friends") {
 				const endpoint = friendStatus === "friends" ? "/api/friends/remove" : "/api/friends/reject";
 				const payload = friendStatus === "friends" ? { userId: user.id, friendId: id } : { userId: user.id, targetId: id };
-				await fetch(`${import.meta.env.VITE_API_URL}${endpoint}`, {
+				await apiFetch(endpoint, {
 					method: "POST",
-					headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
 					body: JSON.stringify(payload)
 				});
 				setFriendStatus("none");

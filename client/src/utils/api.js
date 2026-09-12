@@ -76,12 +76,22 @@ const apiFetch = async (endpoint, options = {}) => {
 				localStorage.removeItem("accessToken");
 				localStorage.removeItem("refreshToken");
 				localStorage.removeItem("user");
+				localStorage.removeItem("token");
 				
 				isRefreshing = false;
 				processQueue(new Error("Failed to refresh token"));
 				
 				window.location.href = "/auth";
+				throw new Error("Session expired, please log in again.");
 			}
+		} else {
+			// If we got 401 and there's no refreshToken at all (e.g., legacy token user), log them out immediately
+			localStorage.removeItem("accessToken");
+			localStorage.removeItem("refreshToken");
+			localStorage.removeItem("user");
+			localStorage.removeItem("token"); // clear legacy token too
+			window.location.href = "/auth";
+			throw new Error("Session expired, please log in again.");
 		}
 	}
 
