@@ -36,35 +36,53 @@ classifier.train();
  * Uses Sentiment Analysis for Toxicity and Naive Bayes for Spam
  */
 const analyzeContent = (text) => {
-    if (!text) return { isFlagged: false, reason: "" };
+    if (!text || typeof text !== 'string') return { isFlagged: false, reason: "" };
 
-    // 1. Toxicity / Sentiment Analysis
-    const sentimentResult = sentimentAnalyzer.analyze(text);
-    // Score < -3 usually indicates heavy toxicity or aggression
-    if (sentimentResult.score < -4) {
-        return {
-            isFlagged: true,
-            reason: `AI Moderation: Highly negative sentiment detected (Score: ${sentimentResult.score}).`
-        };
-    }
+    // Prevent DOS attacks by limiting analysis to the first 1000 characters
+    const safeText = text.substring(0, 1000);
 
-    // 2. ML Spam Classification
-    const classification = classifier.classify(text);
-    if (classification === 'spam') {
-        // Double check with a confidence threshold if needed, but for now we trust the model
-        return {
-            isFlagged: true,
-            reason: "AI Moderation: Classified as SPAM by ML algorithm."
-        };
+    try {
+        // 1. Toxicity / Sentiment Analysis
+        const sentimentResult = sentimentAnalyzer.analyze(safeText);
+        // Score < -4 usually indicates heavy toxicity or aggression
+        if (sentimentResult.score < -4) {
+            return {
+                isFlagged: true,
+                reason: `AI Moderation: Highly negative sentiment detected (Score: ${sentimentResult.score}).`
+            };
+        }
+
+        // 2. ML Spam Classification
+        // If the text is extremely short (under 3 words), the classifier often false-flags it as spam
+        if (safeText.split(' ').length > 2) {
+            const classification = classifier.classify(safeText);
+            if (classification === 'spam') {
+                return {
+                    isFlagged: true,
+                    reason: "AI Moderation: Classified as SPAM by ML algorithm."
+                };
+            }
+        }
+    } catch (error) {
+        console.error("AI Moderation Error:", error);
+        // Fail open if the ML model crashes
     }
 
     // 3. Fallback Hardcoded Filter for severe slurs (which bypass sentiment sometimes)
     const slurs = ["nigger", "faggot", "retard", "cunt", "whore"];
-    const lowerText = text.toLowerCase();
+    const lowerText = safeText.toLowerCase();
     if (slurs.some(slur => lowerText.includes(slur))) {
         return {
             isFlagged: true,
             reason: "AI Moderation: Restricted language detected."
+        };
+    }
+
+    // 4. Repeated character DOS protection
+    if (/(.)\1{20,}/.test(lowerText)) {
+        return {
+            isFlagged: true,
+            reason: "AI Moderation: Spam pattern (repeated characters) detected."
         };
     }
 
