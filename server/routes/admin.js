@@ -2,6 +2,7 @@
 const express = require("express");
 const User = require("../models/User");
 const Post = require("../models/Post");
+const Message = require("../models/Message");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
@@ -97,6 +98,57 @@ router.delete("/posts/:id", async (req, res) => {
 		res.json({ message: "Post permanently deleted." });
 	} catch (err) {
 		res.status(500).json({ message: "Server error deleting post" });
+	}
+});
+
+// ==========================================
+// MESSAGE MODERATION ROUTES
+// ==========================================
+
+router.get("/flagged-messages", async (req, res) => {
+	try {
+		const messages = await Message.find({ isFlagged: true })
+			.populate("sender", "name profilePic")
+			.populate("receiver", "name profilePic")
+			.sort({ timestamp: -1 });
+		res.json(messages);
+	} catch (err) {
+		res.status(500).json({ message: "Server error fetching flagged messages" });
+	}
+});
+
+router.put("/messages/:id/dismiss", async (req, res) => {
+	try {
+		const msg = await Message.findByIdAndUpdate(
+			req.params.id,
+			{ isFlagged: false, flagReason: "" },
+			{ new: true }
+		);
+		res.json(msg);
+	} catch (err) {
+		res.status(500).json({ message: "Server error dismissing flag" });
+	}
+});
+
+router.delete("/messages/:id", async (req, res) => {
+	try {
+		const msg = await Message.findById(req.params.id);
+		if (!msg) return res.status(404).json({ message: "Message not found" });
+
+		msg.isDeletedByAdmin = true;
+		msg.isFlagged = false;
+		await msg.save();
+		
+		// If we want to notify clients of deleted message
+		const populatedMsg = await Message.findById(msg._id).populate("sender", "_id name").populate("receiver", "_id name");
+		if (req.io) {
+			req.io.to(msg.receiver.toString()).emit("privateMessage", populatedMsg);
+			req.io.to(msg.sender.toString()).emit("privateMessage", populatedMsg);
+		}
+
+		res.json({ message: "Message censored by admin" });
+	} catch (err) {
+		res.status(500).json({ message: "Server error censoring message" });
 	}
 });
 

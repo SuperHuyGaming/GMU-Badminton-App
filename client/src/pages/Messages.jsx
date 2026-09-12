@@ -125,6 +125,18 @@ const Messages = () => {
 		}
 	};
 
+	const handleReport = async (msgId) => {
+		if (window.confirm("Are you sure you want to report this message to admins?")) {
+			try {
+				await apiFetch(`/api/messages/report/${msgId}`, { method: "POST" });
+				alert("Message reported successfully.");
+			} catch (error) {
+				console.error(error);
+				alert("Failed to report message.");
+			}
+		}
+	};
+
 	const startNewChat = (friend) => {
 		setActiveChat(friend);
 		setSearchQuery("");
@@ -267,7 +279,12 @@ const Messages = () => {
 									{messages.map((msg, idx) => {
 										const isMe = msg.sender === user.id || msg.sender._id === user.id;
 										return (
-											<Box key={idx} sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: 2 }}>
+											<Box key={idx} sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
+												{!isMe && !msg.isDeletedByAdmin && (
+													<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message">
+														<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+													</IconButton>
+												)}
 												<Box sx={{
 													maxWidth: "70%",
 													p: 2,
@@ -275,11 +292,17 @@ const Messages = () => {
 													bgcolor: isMe ? "primary.main" : "white",
 													color: isMe ? "white" : "text.primary",
 													boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-													border: isMe ? "none" : "1px solid #eaeaea",
+													border: isMe ? "none" : (msg.isDeletedByAdmin ? "1px dashed #ffcccc" : "1px solid #eaeaea"),
 													borderBottomRightRadius: isMe ? 4 : 24,
 													borderBottomLeftRadius: isMe ? 24 : 4
 												}}>
-													<Typography variant="body1">{msg.content}</Typography>
+													{msg.isDeletedByAdmin ? (
+														<Typography variant="body2" sx={{ fontStyle: 'italic', color: isMe ? 'rgba(255,255,255,0.7)' : 'error.main' }}>
+															[This message was removed by an Admin]
+														</Typography>
+													) : (
+														<Typography variant="body1">{msg.content}</Typography>
+													)}
 													<Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.7, textAlign: isMe ? "right" : "left" }}>
 														{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
 													</Typography>

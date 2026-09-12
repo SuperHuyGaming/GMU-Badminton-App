@@ -19,6 +19,8 @@ import {
 	DialogActions as MuiDialogActions,
 } from "@mui/material";
 
+import apiFetch from "../utils/api";
+
 // Sleek Trash Icon
 const TrashIcon = () => (
 	<svg
@@ -40,6 +42,7 @@ export default function Admin() {
 	const [users, setUsers] = useState([]);
 	const [posts, setPosts] = useState([]);
 	const [flaggedPosts, setFlaggedPosts] = useState([]);
+	const [flaggedMessages, setFlaggedMessages] = useState([]);
 
 	// NEW: Centralized Sleek Delete Confirmation State
 	const [deleteConfirm, setDeleteConfirm] = useState({
@@ -50,26 +53,16 @@ export default function Admin() {
 
 	const fetchAdminData = async () => {
 		try {
-			const token = localStorage.getItem("token");
-			const headers = { Authorization: `Bearer ${token}` };
-
-			const userRes = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/users`,
-				{ headers },
-			);
-			if (userRes.ok) setUsers(await userRes.json());
-
-			const postRes = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/posts`,
-				{ headers },
-			);
-			if (postRes.ok) setPosts(await postRes.json());
-
-			const flaggedRes = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/flagged`,
-				{ headers },
-			);
-			if (flaggedRes.ok) setFlaggedPosts(await flaggedRes.json());
+			const [userRes, postRes, flaggedRes, flaggedMsgsRes] = await Promise.all([
+				apiFetch(`/api/admin/users`),
+				apiFetch(`/api/admin/posts`),
+				apiFetch(`/api/admin/flagged`),
+				apiFetch(`/api/admin/flagged-messages`),
+			]);
+			setUsers(await userRes.json());
+			setPosts(await postRes.json());
+			setFlaggedPosts(await flaggedRes.json());
+			setFlaggedMessages(await flaggedMsgsRes.json());
 		} catch (err) {
 			console.error("Failed to fetch admin data", err);
 		}
@@ -81,20 +74,19 @@ export default function Admin() {
 
 	const handleApprovePost = async (id) => {
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/admin/flagged/${id}/approve`,
-				{
-					method: "PUT",
-					headers: {
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-				},
-			);
-			if (res.ok) {
-				const { post } = await res.json();
-				setFlaggedPosts(flaggedPosts.filter((p) => p._id !== id));
-				setPosts([post, ...posts]);
-			}
+			const res = await apiFetch(`/api/admin/flagged/${id}/approve`, { method: "PUT" });
+			const { post } = await res.json();
+			setFlaggedPosts(flaggedPosts.filter((p) => p._id !== id));
+			setPosts([post, ...posts]);
+		} catch (err) {
+			console.error(err);
+		}
+	};
+
+	const handleApproveMessage = async (id) => {
+		try {
+			await apiFetch(`/api/admin/messages/${id}/dismiss`, { method: "PUT" });
+			setFlaggedMessages(flaggedMessages.filter((m) => m._id !== id));
 		} catch (err) {
 			console.error(err);
 		}
@@ -107,39 +99,17 @@ export default function Admin() {
 
 		try {
 			if (type === "user") {
-				const res = await fetch(
-					`${import.meta.env.VITE_API_URL}/api/admin/users/${id}`,
-					{
-						method: "DELETE",
-						headers: {
-							Authorization: `Bearer ${localStorage.getItem("token")}`,
-						},
-					},
-				);
-				if (res.ok) setUsers(users.filter((u) => u._id !== id));
+				await apiFetch(`/api/admin/users/${id}`, { method: "DELETE" });
+				setUsers(users.filter((u) => u._id !== id));
 			} else if (type === "post") {
-				const res = await fetch(
-					`${import.meta.env.VITE_API_URL}/api/admin/posts/${id}`,
-					{
-						method: "DELETE",
-						headers: {
-							Authorization: `Bearer ${localStorage.getItem("token")}`,
-						},
-					},
-				);
-				if (res.ok) setPosts(posts.filter((p) => p._id !== id));
+				await apiFetch(`/api/admin/posts/${id}`, { method: "DELETE" });
+				setPosts(posts.filter((p) => p._id !== id));
 			} else if (type === "spam") {
-				const res = await fetch(
-					`${import.meta.env.VITE_API_URL}/api/admin/posts/${id}`,
-					{
-						method: "DELETE",
-						headers: {
-							Authorization: `Bearer ${localStorage.getItem("token")}`,
-						},
-					},
-				);
-				if (res.ok)
-					setFlaggedPosts(flaggedPosts.filter((p) => p._id !== id));
+				await apiFetch(`/api/admin/posts/${id}`, { method: "DELETE" });
+				setFlaggedPosts(flaggedPosts.filter((p) => p._id !== id));
+			} else if (type === "message") {
+				await apiFetch(`/api/admin/messages/${id}`, { method: "DELETE" });
+				setFlaggedMessages(flaggedMessages.filter((m) => m._id !== id));
 			}
 		} catch (err) {
 			console.error(err);
@@ -277,6 +247,95 @@ export default function Admin() {
 									}}
 								>
 									Approve (Not Spam)
+								</Button>
+							</Box>
+						</Paper>
+					))}
+				</Box>
+			)}
+
+			{/* FLAGGED MESSAGES QUEUE */}
+			<Typography
+				variant="h5"
+				color="error.main"
+				fontWeight="900"
+				sx={{ mb: 2, ml: 1 }}
+			>
+				🕵️ Reported Private Messages
+			</Typography>
+
+			{flaggedMessages.length === 0 ? (
+				<Paper
+					elevation={0}
+					sx={{
+						p: 4,
+						mb: 6,
+						textAlign: "center",
+						borderRadius: 3,
+						border: "1px solid #e0e0e0",
+					}}
+				>
+					<Typography variant="h6" color="text.secondary">
+						No reported messages! Chats are safe.
+					</Typography>
+				</Paper>
+			) : (
+				<Box sx={{ mb: 6 }}>
+					{flaggedMessages.map((msg) => (
+						<Paper
+							key={msg._id}
+							elevation={0}
+							sx={{
+								p: 3,
+								mb: 2,
+								borderRadius: 3,
+								border: "2px solid #ff9999",
+								backgroundColor: "#fff0f0",
+							}}
+						>
+							<Box
+								sx={{
+									display: "flex",
+									justifyContent: "space-between",
+									mb: 1,
+								}}
+							>
+								<Typography variant="subtitle1" fontWeight="bold">
+									{msg.sender?.name} → {msg.receiver?.name}
+								</Typography>
+								<Typography variant="caption" color="error.main" fontWeight="bold">
+									{msg.flagReason}
+								</Typography>
+							</Box>
+							<Typography
+								variant="body2"
+								sx={{
+									mb: 3,
+									whiteSpace: "pre-wrap",
+									p: 2,
+									backgroundColor: "white",
+									borderRadius: 2,
+									border: "1px dashed #ff9999",
+								}}
+							>
+								{msg.content}
+							</Typography>
+							<Box sx={{ display: "flex", gap: 2 }}>
+								<Button
+									variant="contained"
+									color="error"
+									onClick={() => promptDelete("message", msg._id)}
+									sx={{ fontWeight: "bold", textTransform: "none" }}
+								>
+									Censor Message
+								</Button>
+								<Button
+									variant="outlined"
+									color="success"
+									onClick={() => handleApproveMessage(msg._id)}
+									sx={{ fontWeight: "bold", bgcolor: "white", textTransform: "none" }}
+								>
+									Dismiss Flag
 								</Button>
 							</Box>
 						</Paper>
@@ -516,7 +575,9 @@ export default function Admin() {
 							? "user"
 							: deleteConfirm.type === "spam"
 								? "spam post"
-								: "post"}
+								: deleteConfirm.type === "message"
+									? "private message"
+									: "post"}
 						? This action cannot be undone.
 					</Typography>
 				</DialogContent>

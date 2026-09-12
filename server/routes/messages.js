@@ -4,6 +4,7 @@ const Message = require("../models/Message");
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
 const Notification = require("../models/Notification");
+const { containsProfanity } = require("../utils/profanityFilter");
 
 // GET: conversation history between two users
 router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
@@ -69,10 +70,14 @@ router.post("/", authMiddleware, async (req, res, next) => {
 	try {
 		const { senderId, receiverId, content } = req.body;
 		
+		const isFlagged = containsProfanity(content);
+		
 		const msg = new Message({
 			sender: senderId,
 			receiver: receiverId,
-			content
+			content,
+			isFlagged,
+			flagReason: isFlagged ? "Auto-moderation: Profanity detected" : ""
 		});
 		await msg.save();
 		
@@ -84,6 +89,22 @@ router.post("/", authMiddleware, async (req, res, next) => {
 		io.to(senderId).emit("privateMessage", populatedMsg);
 
 		res.json(populatedMsg);
+	} catch (error) {
+		next(error);
+	}
+});
+
+// POST: report message
+router.post("/report/:msgId", authMiddleware, async (req, res, next) => {
+	try {
+		const msg = await Message.findById(req.params.msgId);
+		if (!msg) return res.status(404).json({ message: "Message not found" });
+		
+		msg.isFlagged = true;
+		msg.flagReason = "Reported by user";
+		await msg.save();
+		
+		res.json({ message: "Message reported successfully" });
 	} catch (error) {
 		next(error);
 	}
