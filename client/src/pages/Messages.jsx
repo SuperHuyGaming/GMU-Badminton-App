@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { 
 	Container, Box, Typography, Paper, List, ListItemButton, 
 	ListItemAvatar, ListItemText, Avatar, TextField, IconButton,
-	Divider, Badge
+	Divider, Badge, CircularProgress
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
@@ -18,7 +18,13 @@ const Messages = () => {
 	const [onlineUsers, setOnlineUsers] = useState([]);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchResults, setSearchResults] = useState([]);
+	const [isLoadingChat, setIsLoadingChat] = useState(false);
 	const messagesEndRef = useRef(null);
+	const activeChatRef = useRef(null);
+
+	useEffect(() => {
+		activeChatRef.current = activeChat;
+	}, [activeChat]);
 
 	useEffect(() => {
 		if (!user) return;
@@ -56,7 +62,7 @@ const Messages = () => {
 				const newChatObj = {
 					friend: otherUser,
 					lastMessage: msg,
-					unreadCount: (msg.receiver._id === user.id && (!activeChat || activeChat._id !== msg.sender._id)) ? 1 : 0
+					unreadCount: (msg.receiver._id === user.id && (!activeChatRef.current || activeChatRef.current._id !== msg.sender._id)) ? 1 : 0
 				};
 
 				if (existingIndex >= 0) {
@@ -81,6 +87,7 @@ const Messages = () => {
 
 	useEffect(() => {
 		if (activeChat && user) {
+			setIsLoadingChat(true);
 			apiFetch(`/api/messages/${user.id}/${activeChat._id}`)
 				.then(res => res.json())
 				.then(data => {
@@ -90,7 +97,8 @@ const Messages = () => {
 						c.friend._id === activeChat._id ? { ...c, unreadCount: 0 } : c
 					));
 				})
-				.catch(console.error);
+				.catch(console.error)
+				.finally(() => setIsLoadingChat(false));
 		}
 	}, [activeChat, user]);
 
@@ -245,29 +253,43 @@ const Messages = () => {
 						</Box>
 						
 						<Box sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2, bgcolor: "#f9f9f9" }}>
-							{messages.map((msg, index) => {
-								const isMe = msg.sender === user.id || msg.sender?._id === user.id;
-								return (
-									<Box key={index} sx={{ alignSelf: isMe ? "flex-end" : "flex-start", maxWidth: "70%" }}>
-										<Paper 
-											elevation={0}
-											sx={{ 
-												p: 2, 
-												bgcolor: isMe ? "primary.main" : "white", 
-												color: isMe ? "white" : "text.primary",
-												borderRadius: isMe ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
-												border: isMe ? "none" : "1px solid #eaeaea"
-											}}
-										>
-											<Typography variant="body1">{msg.content}</Typography>
-										</Paper>
-										<Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block", textAlign: isMe ? "right" : "left" }}>
-											{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-										</Typography>
-									</Box>
-								);
-							})}
-							<div ref={messagesEndRef} />
+							{isLoadingChat ? (
+								<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+									<CircularProgress color="primary" />
+								</Box>
+							) : messages.length === 0 ? (
+								<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary', gap: 2 }}>
+									<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+									<Typography>Say hi to {activeChat.name}!</Typography>
+								</Box>
+							) : (
+								<>
+									{messages.map((msg, idx) => {
+										const isMe = msg.sender === user.id || msg.sender._id === user.id;
+										return (
+											<Box key={idx} sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: 2 }}>
+												<Box sx={{
+													maxWidth: "70%",
+													p: 2,
+													borderRadius: 3,
+													bgcolor: isMe ? "primary.main" : "white",
+													color: isMe ? "white" : "text.primary",
+													boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+													border: isMe ? "none" : "1px solid #eaeaea",
+													borderBottomRightRadius: isMe ? 4 : 24,
+													borderBottomLeftRadius: isMe ? 24 : 4
+												}}>
+													<Typography variant="body1">{msg.content}</Typography>
+													<Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.7, textAlign: isMe ? "right" : "left" }}>
+														{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+													</Typography>
+												</Box>
+											</Box>
+										);
+									})}
+									<div ref={messagesEndRef} />
+								</>
+							)}
 						</Box>
 
 						<Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, borderTop: "1px solid #eaeaea", display: "flex", gap: 1, bgcolor: "white", borderRadius: "0 0 12px 12px" }}>
