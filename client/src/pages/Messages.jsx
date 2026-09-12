@@ -32,7 +32,10 @@ const formatShortTime = (dateString) => {
 const Messages = () => {
 	const { user } = useAuth();
 	const [recentChats, setRecentChats] = useState([]);
-	const [activeChat, setActiveChat] = useState(null);
+	const [activeChat, setActiveChat] = useState(() => {
+		const saved = localStorage.getItem("activeChat");
+		return saved ? JSON.parse(saved) : null;
+	});
 	const [messages, setMessages] = useState([]);
 	const [newMessage, setNewMessage] = useState("");
 	const [friends, setFriends] = useState([]);
@@ -47,6 +50,11 @@ const Messages = () => {
 
 	useEffect(() => {
 		activeChatRef.current = activeChat;
+		if (activeChat) {
+			localStorage.setItem("activeChat", JSON.stringify(activeChat));
+		} else {
+			localStorage.removeItem("activeChat");
+		}
 	}, [activeChat]);
 
 	useEffect(() => {
