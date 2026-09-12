@@ -45,7 +45,10 @@ router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 
 		const recentChats = {};
 		messages.forEach(msg => {
+			if (!msg.sender || !msg.receiver) return; // Skip if a user was deleted
 			const otherUser = msg.sender._id.toString() === userId ? msg.receiver : msg.sender;
+			if (!otherUser) return;
+			
 			if (!recentChats[otherUser._id.toString()]) {
 				recentChats[otherUser._id.toString()] = {
 					friend: otherUser,

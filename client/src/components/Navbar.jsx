@@ -47,13 +47,12 @@ export default function Navbar() {
 
     return (
         <>
-<AppBar
+				<AppBar
 					position="sticky"
 					elevation={0}
 					sx={{ 
 						borderBottom: "1px solid rgba(0,0,0,0.1)",
-						backgroundColor: "rgba(0, 102, 51, 0.85)", 
-						backdropFilter: "blur(12px)" 
+						backgroundColor: "primary.main",
 					}}
 				>
 					<Toolbar sx={{ justifyContent: "space-between" }}>
