@@ -105,6 +105,19 @@ router.delete("/posts/:id", async (req, res) => {
 // MESSAGE MODERATION ROUTES
 // ==========================================
 
+router.get("/all-messages", async (req, res) => {
+	try {
+		const messages = await Message.find()
+			.populate("sender", "name profilePic")
+			.populate("receiver", "name profilePic")
+			.sort({ timestamp: -1 })
+			.limit(500); // Limit to last 500 for performance
+		res.json(messages);
+	} catch (err) {
+		res.status(500).json({ message: "Server error fetching all messages" });
+	}
+});
+
 router.get("/flagged-messages", async (req, res) => {
 	try {
 		const messages = await Message.find({ isFlagged: true })

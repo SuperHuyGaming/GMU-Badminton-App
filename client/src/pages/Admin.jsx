@@ -43,6 +43,7 @@ export default function Admin() {
 	const [posts, setPosts] = useState([]);
 	const [flaggedPosts, setFlaggedPosts] = useState([]);
 	const [flaggedMessages, setFlaggedMessages] = useState([]);
+	const [allMessages, setAllMessages] = useState([]);
 
 	// NEW: Centralized Sleek Delete Confirmation State
 	const [deleteConfirm, setDeleteConfirm] = useState({
@@ -53,16 +54,18 @@ export default function Admin() {
 
 	const fetchAdminData = async () => {
 		try {
-			const [userRes, postRes, flaggedRes, flaggedMsgsRes] = await Promise.all([
+			const [userRes, postRes, flaggedRes, flaggedMsgsRes, allMsgsRes] = await Promise.all([
 				apiFetch(`/api/admin/users`),
 				apiFetch(`/api/admin/posts`),
 				apiFetch(`/api/admin/flagged`),
 				apiFetch(`/api/admin/flagged-messages`),
+				apiFetch(`/api/admin/all-messages`),
 			]);
 			setUsers(await userRes.json());
 			setPosts(await postRes.json());
 			setFlaggedPosts(await flaggedRes.json());
 			setFlaggedMessages(await flaggedMsgsRes.json());
+			setAllMessages(await allMsgsRes.json());
 		} catch (err) {
 			console.error("Failed to fetch admin data", err);
 		}
@@ -110,6 +113,7 @@ export default function Admin() {
 			} else if (type === "message") {
 				await apiFetch(`/api/admin/messages/${id}`, { method: "DELETE" });
 				setFlaggedMessages(flaggedMessages.filter((m) => m._id !== id));
+				setAllMessages(allMessages.filter((m) => m._id !== id));
 			}
 		} catch (err) {
 			console.error(err);
@@ -342,6 +346,70 @@ export default function Admin() {
 					))}
 				</Box>
 			)}
+
+			{/* GLOBAL CHAT LOGS */}
+			<Typography
+				variant="h5"
+				color="primary"
+				fontWeight="bold"
+				sx={{ mb: 2, ml: 1 }}
+			>
+				🌐 Global Chat Logs ({allMessages.length})
+			</Typography>
+			<TableContainer
+				component={Paper}
+				elevation={0}
+				sx={{
+					mb: 6,
+					border: "1px solid #e0e0e0",
+					borderRadius: 3,
+					width: "100%",
+					overflowX: "auto",
+					maxHeight: 400,
+				}}
+			>
+				<Table stickyHeader sx={{ minWidth: 600 }}>
+					<TableHead>
+						<TableRow>
+							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Date</TableCell>
+							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Sender</TableCell>
+							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Receiver</TableCell>
+							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Message</TableCell>
+							<TableCell align="right" sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Actions</TableCell>
+						</TableRow>
+					</TableHead>
+					<TableBody>
+						{allMessages.map((msg) => (
+							<TableRow key={msg._id} hover>
+								<TableCell sx={{ whiteSpace: "nowrap" }}>
+									{new Date(msg.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+								</TableCell>
+								<TableCell sx={{ whiteSpace: "nowrap" }}>{msg.sender?.name}</TableCell>
+								<TableCell sx={{ whiteSpace: "nowrap" }}>{msg.receiver?.name}</TableCell>
+								<TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+									{msg.isDeletedByAdmin ? (
+										<Typography variant="body2" sx={{ fontStyle: 'italic', color: 'error.main' }}>[Censored]</Typography>
+									) : (
+										msg.content
+									)}
+								</TableCell>
+								<TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+									<Button
+										variant="outlined"
+										color="error"
+										size="small"
+										onClick={() => promptDelete("message", msg._id)}
+										disabled={msg.isDeletedByAdmin}
+										sx={{ textTransform: "none", fontWeight: "bold" }}
+									>
+										Censor
+									</Button>
+								</TableCell>
+							</TableRow>
+						))}
+					</TableBody>
+				</Table>
+			</TableContainer>
 
 			{/* USERS TABLE */}
 			<Typography

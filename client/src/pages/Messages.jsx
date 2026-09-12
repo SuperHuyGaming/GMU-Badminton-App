@@ -8,6 +8,27 @@ import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
 
+const formatTime = (dateString) => {
+	if (!dateString) return "";
+	const date = new Date(dateString);
+	const now = new Date();
+	const isToday = now.toDateString() === date.toDateString();
+	if (isToday) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	const isThisYear = now.getFullYear() === date.getFullYear();
+	if (isThisYear) return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+	return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+const formatShortTime = (dateString) => {
+	if (!dateString) return "";
+	const date = new Date(dateString);
+	const now = new Date();
+	if (now.toDateString() === date.toDateString()) {
+		return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	}
+	return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
+
 const Messages = () => {
 	const { user } = useAuth();
 	const [recentChats, setRecentChats] = useState([]);
@@ -288,21 +309,32 @@ const Messages = () => {
 								</Badge>
 							</ListItemAvatar>
 							<ListItemText 
-								primary={chat.friend.name}
+								primary={
+									<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+										<Typography variant="body1" sx={{ fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal' }}>
+											{chat.friend.name}
+										</Typography>
+										{chat.lastMessage?.timestamp && (
+											<Typography variant="caption" color="text.secondary">
+												{formatShortTime(chat.lastMessage.timestamp)}
+											</Typography>
+										)}
+									</Box>
+								}
 								secondary={
 									typingUserIds.has(chat.friend._id) 
 										? <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>typing...</Typography> 
 										: chat.lastMessage?.content
 								}
-								primaryTypographyProps={{ fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal' }}
 								secondaryTypographyProps={{ 
 									noWrap: true, 
 									color: chat.unreadCount > 0 ? 'text.primary' : 'text.secondary',
-									fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal'
+									fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal',
+									sx: { pr: 2 } // padding right to avoid unread badge overlap
 								}}
 							/>
 							{chat.unreadCount > 0 && (
-								<Badge badgeContent={chat.unreadCount} color="error" sx={{ ml: 2 }} />
+								<Badge badgeContent={chat.unreadCount} color="error" sx={{ position: 'absolute', right: 24, top: '50%' }} />
 							)}
 						</ListItemButton>
 					))}
@@ -397,7 +429,7 @@ const Messages = () => {
 														<Typography variant="body1">{msg.content}</Typography>
 													)}
 													<Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.7, textAlign: isMe ? "right" : "left" }}>
-														{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+														{formatTime(msg.timestamp)}
 													</Typography>
 												</Box>
 											</Box>
