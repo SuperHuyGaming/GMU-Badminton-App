@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Forum from "./pages/Forum";
 import Admin from "./pages/Admin";
 import Messages from "./pages/Messages";
+import Leaderboard from "./pages/Leaderboard";
 import {
 	BrowserRouter,
 	Routes,
@@ -42,6 +43,18 @@ const AnimatedRoutes = () => {
 		<AnimatePresence mode="wait">
 			<Routes key={location.pathname}>
 				<Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
+				<Route
+					path="/leaderboard"
+					element={
+						user ? (
+							<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+								<Leaderboard />
+							</motion.div>
+						) : (
+							<Navigate to="/auth" />
+						)
+					}
+				/>
 				<Route
 					path="/"
 					element={

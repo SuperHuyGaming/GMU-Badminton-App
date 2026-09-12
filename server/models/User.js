@@ -29,6 +29,10 @@ const userSchema = new mongoose.Schema({
 	friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 	sentFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
+	// Elo Ranking System
+	singlesElo: { type: Number, default: 1200 },
+	doublesElo: { type: Number, default: 1200 },
+
 	createdAt: { type: Date, default: Date.now },
 });
 

@@ -127,6 +127,17 @@ export default function Navbar() {
 								>
 									Forum
 								</Button>
+								<Button
+									color="inherit"
+									component={RouterLink}
+									to="/leaderboard"
+									sx={{
+										textTransform: "none",
+										fontWeight: 600,
+									}}
+								>
+									Leaderboard
+								</Button>
 								{user && user.role === "admin" && (
 									<Button
 										color="warning"
@@ -462,6 +473,18 @@ export default function Navbar() {
 										fontWeight: "bold",
 									}}
 									primary="Forum"
+								/>
+							</ListItemButton>
+							<ListItemButton
+								component={RouterLink}
+								to="/leaderboard"
+								sx={{ textAlign: "center" }}
+							>
+								<ListItemText
+									primaryTypographyProps={{
+										fontWeight: "bold",
+									}}
+									primary="Leaderboard"
 								/>
 							</ListItemButton>
 							{user && user.role === "admin" && (
