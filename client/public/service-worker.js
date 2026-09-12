@@ -3,8 +3,8 @@ self.addEventListener('push', function(event) {
         const data = event.data.json();
         const options = {
             body: data.body,
-            icon: '/vite.svg',
-            badge: '/vite.svg',
+            icon: '/favicon.svg',
+            badge: '/favicon.svg',
             data: {
                 url: data.url
             }
