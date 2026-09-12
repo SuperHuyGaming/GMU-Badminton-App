@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import { ColorModeContext } from '../App';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const HamburgerIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -19,7 +21,17 @@ const BellIcon = () => (
     </svg>
 );
 
+const MoonIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+);
+
+const SunIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+);
+
 export default function Navbar() {
+    const theme = useTheme();
+    const colorMode = useContext(ColorModeContext);
     const { user, logout } = useAuth();
     const { notifications, unreadCount, unreadMessages, markAsRead, clearNotifications } = useNotifications();
     const navigate = useNavigate();
@@ -70,6 +82,10 @@ export default function Navbar() {
 								sx={{ display: { md: "none" } }}
 							>
 								<HamburgerIcon />
+							</IconButton>
+
+							<IconButton onClick={colorMode.toggleColorMode} color="inherit">
+								{theme.palette.mode === 'dark' ? <SunIcon /> : <MoonIcon />}
 							</IconButton>
 
 							<Typography
@@ -243,24 +259,32 @@ export default function Navbar() {
 												No new notifications
 											</MenuItem>
 										) : (
-											notifications.map((notif) => (
-												<MenuItem
+											notifications.map((notif, index) => (
+												<motion.div
 													key={notif._id || notif.id}
-													component={RouterLink}
-													to={notif.link}
-													onClick={handleNotifClose}
-													sx={{
-														whiteSpace: "normal",
-														py: 1.5,
-														borderBottom:
-															"1px solid #f5f5f5",
-														"&:active": {
-															transform:
-																"scale(0.98)",
-														},
-													}}
+													initial={{ opacity: 0, x: 20 }}
+													animate={{ opacity: 1, x: 0 }}
+													transition={{ delay: index * 0.05 }}
 												>
-													<Box>
+													<MenuItem
+														component={RouterLink}
+														to={notif.link}
+														onClick={handleNotifClose}
+														sx={{
+															whiteSpace: "normal",
+															py: 1.5,
+															borderBottom:
+																"1px solid #f5f5f5",
+															"&:active": {
+																transform:
+																	"scale(0.98)",
+															},
+															"&:hover": {
+																backgroundColor: "rgba(0, 102, 51, 0.05)",
+															}
+														}}
+													>
+														<Box>
 														<Typography
 															variant="body2"
 															sx={{
@@ -290,6 +314,7 @@ export default function Navbar() {
 														</Typography>
 													</Box>
 												</MenuItem>
+												</motion.div>
 											))
 										)}
 									</Menu>

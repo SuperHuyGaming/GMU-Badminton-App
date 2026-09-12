@@ -30,6 +30,17 @@ export default function ProfileIntro({
 				Intro
 			</Typography>
 
+			<Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+				<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
+					<Typography variant="h4" fontWeight="bold" color="primary">{profileData.friends?.length || 0}</Typography>
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>Friends</Typography>
+				</Box>
+				<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
+					<Typography variant="h6" fontWeight="bold" color="primary" sx={{ mt: 1 }}>{profileData.skillLevel || 'New'}</Typography>
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>Level</Typography>
+				</Box>
+			</Box>
+
 			<Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
 				{/* Plays Row - Pencil hides until hover! */}
 				<Box

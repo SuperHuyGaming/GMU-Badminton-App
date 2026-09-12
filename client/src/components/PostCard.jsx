@@ -207,13 +207,17 @@ export default function PostCard({ post }) {
 					display: "block",
 					boxSizing: "border-box",
 					p: { xs: 2, sm: 3 },
-					border: "1px solid #e0e0e0",
-					borderRadius: 3,
-					transition: "all 0.2s",
+					border: "1px solid",
+					borderColor: "divider",
+					borderRadius: 4,
+					bgcolor: 'background.paper',
+					backgroundImage: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
+					backdropFilter: 'blur(10px)',
+					transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
 					"&:hover": {
-						borderColor: "primary.main",
-						boxShadow: "0 8px 25px rgba(0, 102, 51, 0.15)",
-						transform: "translateY(-2px)",
+						borderColor: "primary.light",
+						boxShadow: "0 12px 30px rgba(0, 102, 51, 0.12)",
+						transform: "translateY(-4px)",
 					},
 				}}
 			>
