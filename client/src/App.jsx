@@ -44,7 +44,7 @@ const AdminRoute = ({ children }) => {
 };
 
 function App() {
-	const { toastMessage, setToastMessage } = useAuth();
+	const { user, toastMessage, setToastMessage } = useAuth();
 
 	useEffect(() => {
 		const handleOffline = () => setToastMessage("You are offline. Check your network.");
