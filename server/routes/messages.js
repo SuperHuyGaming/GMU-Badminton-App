@@ -2,11 +2,11 @@ const express = require("express");
 const router = express.Router();
 const Message = require("../models/Message");
 const User = require("../models/User");
-const { authenticateToken } = require("../middleware/auth");
+const { authMiddleware } = require("../middleware/auth");
 const Notification = require("../models/Notification");
 
 // GET: conversation history between two users
-router.get("/:userId/:friendId", authenticateToken, async (req, res, next) => {
+router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, friendId } = req.params;
 		
@@ -30,7 +30,7 @@ router.get("/:userId/:friendId", authenticateToken, async (req, res, next) => {
 });
 
 // GET: all recent conversations (latest message per friend)
-router.get("/recent/:userId", authenticateToken, async (req, res, next) => {
+router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId } = req.params;
 
@@ -65,7 +65,7 @@ router.get("/recent/:userId", authenticateToken, async (req, res, next) => {
 });
 
 // POST: send message
-router.post("/", authenticateToken, async (req, res, next) => {
+router.post("/", authMiddleware, async (req, res, next) => {
 	try {
 		const { senderId, receiverId, content } = req.body;
 		
@@ -90,7 +90,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
 });
 
 // PUT: mark all messages from a friend as read
-router.put("/read/:userId/:friendId", authenticateToken, async (req, res, next) => {
+router.put("/read/:userId/:friendId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, friendId } = req.params;
 		await Message.updateMany(

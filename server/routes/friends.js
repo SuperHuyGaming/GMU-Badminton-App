@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
-const { authenticateToken } = require("../middleware/auth");
+const { authMiddleware } = require("../middleware/auth");
 const Notification = require("../models/Notification");
 
 // Setup Socket io mapping later in server.js but for API:
 
 // GET: friends and friend requests
-router.get("/:userId", authenticateToken, async (req, res, next) => {
+router.get("/:userId", authMiddleware, async (req, res, next) => {
 	try {
 		const user = await User.findById(req.params.userId)
 			.populate("friends", "_id name profilePic skillLevel")
@@ -27,7 +27,7 @@ router.get("/:userId", authenticateToken, async (req, res, next) => {
 });
 
 // POST: send friend request
-router.post("/request", authenticateToken, async (req, res, next) => {
+router.post("/request", authMiddleware, async (req, res, next) => {
 	try {
 		const { requesterId, recipientId } = req.body;
 		
@@ -83,7 +83,7 @@ router.post("/request", authenticateToken, async (req, res, next) => {
 });
 
 // POST: accept friend request
-router.post("/accept", authenticateToken, async (req, res, next) => {
+router.post("/accept", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, requesterId } = req.body;
 
@@ -120,7 +120,7 @@ router.post("/accept", authenticateToken, async (req, res, next) => {
 });
 
 // POST: reject/cancel friend request
-router.post("/reject", authenticateToken, async (req, res, next) => {
+router.post("/reject", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, targetId } = req.body;
 
@@ -145,7 +145,7 @@ router.post("/reject", authenticateToken, async (req, res, next) => {
 });
 
 // POST: remove friend
-router.post("/remove", authenticateToken, async (req, res, next) => {
+router.post("/remove", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, friendId } = req.body;
 
@@ -170,7 +170,7 @@ router.post("/remove", authenticateToken, async (req, res, next) => {
 });
 
 // GET: search users
-router.get("/search/:query", authenticateToken, async (req, res, next) => {
+router.get("/search/:query", authMiddleware, async (req, res, next) => {
 	try {
 		const users = await User.find({
 			name: { $regex: req.params.query, $options: "i" }
