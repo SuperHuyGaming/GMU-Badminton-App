@@ -283,7 +283,17 @@ const Messages = () => {
 								</Box>
 							) : (
 								searchResults.map(resultUser => (
-									<ListItemButton key={resultUser._id} onClick={() => startNewChat(resultUser)}>
+									<ListItemButton 
+										key={resultUser._id} 
+										onClick={() => startNewChat(resultUser)}
+										sx={{ 
+											mx: 1, 
+											mb: 0.5, 
+											borderRadius: 3, 
+											transition: "all 0.2s ease-in-out",
+											"&:hover": { bgcolor: 'rgba(0, 102, 51, 0.05)', transform: 'translateX(4px)' }
+										}}
+									>
 										<ListItemAvatar>
 											<Avatar src={resultUser.profilePic || ""} />
 										</ListItemAvatar>
@@ -304,7 +314,18 @@ const Messages = () => {
 							key={chat.friend._id} 
 							selected={activeChat?._id === chat.friend._id}
 							onClick={() => startNewChat(chat.friend)}
-							sx={{ borderBottom: "1px solid #f0f0f0" }}
+							sx={{ 
+								mx: 1, 
+								mb: 0.5, 
+								borderRadius: 3, 
+								transition: "all 0.2s ease-in-out",
+								bgcolor: activeChat?._id === chat.friend._id ? 'rgba(0, 102, 51, 0.08)' : 'transparent',
+								"&.Mui-selected": {
+									bgcolor: 'rgba(0, 102, 51, 0.12)',
+									"&:hover": { bgcolor: 'rgba(0, 102, 51, 0.15)' }
+								},
+								"&:hover": { bgcolor: 'rgba(0, 102, 51, 0.05)', transform: 'translateX(4px)' }
+							}}
 						>
 							<ListItemAvatar>
 								<Badge 
@@ -360,7 +381,17 @@ const Messages = () => {
 								</Box>
 							)}
 							{friends.filter(f => !recentChats.some(c => c.friend._id === f._id)).map(friend => (
-								<ListItemButton key={friend._id} onClick={() => startNewChat(friend)}>
+								<ListItemButton 
+									key={friend._id} 
+									onClick={() => startNewChat(friend)}
+									sx={{ 
+										mx: 1, 
+										mb: 0.5, 
+										borderRadius: 3, 
+										transition: "all 0.2s ease-in-out",
+										"&:hover": { bgcolor: 'rgba(0, 102, 51, 0.05)', transform: 'translateX(4px)' }
+									}}
+								>
 									<ListItemAvatar>
 										<Badge 
 											color="success" 

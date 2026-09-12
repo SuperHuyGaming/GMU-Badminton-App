@@ -6,30 +6,6 @@ const { authMiddleware } = require("../middleware/auth");
 const Notification = require("../models/Notification");
 const { containsProfanity } = require("../utils/profanityFilter");
 
-// GET: conversation history between two users
-router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
-	try {
-		const { userId, friendId } = req.params;
-		
-		const messages = await Message.find({
-			$or: [
-				{ sender: userId, receiver: friendId },
-				{ sender: friendId, receiver: userId },
-			],
-		}).sort({ timestamp: 1 });
-
-		// Mark messages from friend as read
-		await Message.updateMany(
-			{ sender: friendId, receiver: userId, read: false },
-			{ $set: { read: true } }
-		);
-
-		res.json(messages);
-	} catch (error) {
-		next(error);
-	}
-});
-
 // GET: all recent conversations (latest message per friend)
 router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 	try {
@@ -67,6 +43,32 @@ router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 		next(error);
 	}
 });
+
+// GET: conversation history between two users
+router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
+	try {
+		const { userId, friendId } = req.params;
+		
+		const messages = await Message.find({
+			$or: [
+				{ sender: userId, receiver: friendId },
+				{ sender: friendId, receiver: userId },
+			],
+		}).sort({ timestamp: 1 });
+
+		// Mark messages from friend as read
+		await Message.updateMany(
+			{ sender: friendId, receiver: userId, read: false },
+			{ $set: { read: true } }
+		);
+
+		res.json(messages);
+	} catch (error) {
+		next(error);
+	}
+});
+
+
 
 // POST: send message
 router.post("/", authMiddleware, async (req, res, next) => {
