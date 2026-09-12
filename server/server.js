@@ -11,16 +11,42 @@ mongoose
 	.then(() => console.log("Successfully connected to MongoDB!"))
 	.catch((error) => console.error("MongoDB connection failed:", error));
 
+const helmet = require("helmet");
+const mongoSanitize = require("express-mongo-sanitize");
+const rateLimit = require("express-rate-limit");
+
 const app = express();
+app.disable('x-powered-by'); // Hide tech stack
+
+// 1. HTTP Security Headers
+app.use(helmet());
+
+// 2. Prevent NoSQL Injection
+app.use(mongoSanitize());
+
+// 3. Global API Rate Limiting
+const apiLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 500, // Limit each IP to 500 requests per `window`
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: "Too many requests from this IP, please try again after 15 minutes."
+});
+app.use("/api/", apiLimiter);
 
 // FIX 1: Sidestep the stuck port by using 5005 locally!
 const PORT = process.env.PORT || 5005;
 const server = http.createServer(app);
 
+const allowedOrigins = [
+	"http://localhost:5173", 
+	"http://localhost:3000",
+	process.env.FRONTEND_URL
+].filter(Boolean);
+
 const io = new Server(server, {
 	cors: {
-		// FIX 2: Allow WebSockets to connect from your live Render frontend!
-		origin: "*",
+		origin: process.env.NODE_ENV === "production" ? allowedOrigins : "*",
 		methods: ["GET", "POST", "PUT", "DELETE"],
 	},
 });
@@ -31,9 +57,12 @@ app.use((req, res, next) => {
 });
 
 // Explicitly trust the Vite frontend
-app.use(cors({ origin: "*" }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ limit: "10mb", extended: true }));
+app.use(cors({ 
+	origin: process.env.NODE_ENV === "production" ? allowedOrigins : "*",
+	credentials: true 
+}));
+app.use(express.json({ limit: "1mb" })); // Reduced to 1mb for security
+app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);

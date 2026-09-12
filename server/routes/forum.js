@@ -1,9 +1,9 @@
-// server/routes/forum.js
 const express = require("express");
 const Post = require("../models/Post");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const rateLimit = require("express-rate-limit");
+const xss = require("xss");
 const router = express.Router();
 
 // Helper to shorten long comments in notifications
@@ -201,11 +201,15 @@ router.get("/", async (req, res) => {
 router.post("/", postLimiter, async (req, res) => {
 	try {
 		const { title, content, authorName, targetDate, authorId } = req.body;
-		const isSpam = checkSpam(title) || checkSpam(content);
+		
+		const cleanTitle = xss(title);
+		const cleanContent = xss(content);
+		
+		const isSpam = checkSpam(cleanTitle) || checkSpam(cleanContent);
 
 		const newPost = new Post({
-			title,
-			content,
+			title: cleanTitle,
+			content: cleanContent,
 			authorName,
 			targetDate: targetDate || "General",
 			authorId: authorId || "000000000000000000000000",
