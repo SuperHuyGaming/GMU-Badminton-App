@@ -19,6 +19,8 @@ const Messages = () => {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchResults, setSearchResults] = useState([]);
 	const [isLoadingChat, setIsLoadingChat] = useState(false);
+	const [typingUserIds, setTypingUserIds] = useState(new Set());
+	const typingTimeoutRef = useRef(null);
 	const messagesEndRef = useRef(null);
 	const activeChatRef = useRef(null);
 
@@ -44,7 +46,16 @@ const Messages = () => {
 			
 			setActiveChat(currentActive => {
 				if (currentActive && currentActive._id === otherUser._id) {
-					setMessages(prev => [...prev, msg]);
+					setMessages(prev => {
+						// Filter out optimistic UI temp messages if this is the real one
+						if (msg.sender._id === user.id && prev.length > 0) {
+							const lastMsg = prev[prev.length - 1];
+							if (lastMsg._id.startsWith("temp-") && lastMsg.content === msg.content) {
+								return [...prev.slice(0, -1), msg];
+							}
+						}
+						return [...prev, msg];
+					});
 					
 					// Mark as read immediately if it's from them
 					if (msg.sender._id !== user.id) {
@@ -77,11 +88,28 @@ const Messages = () => {
 
 		const handleOnlineUsers = (users) => setOnlineUsers(users);
 
+		const handleTyping = ({ senderId }) => {
+			setTypingUserIds(prev => new Set(prev).add(senderId));
+		};
+
+		const handleStopTyping = ({ senderId }) => {
+			setTypingUserIds(prev => {
+				const next = new Set(prev);
+				next.delete(senderId);
+				return next;
+			});
+		};
+
 		socket.on("privateMessage", handlePrivateMessage);
 		socket.on("onlineUsersUpdate", handleOnlineUsers);
+		socket.on("typing", handleTyping);
+		socket.on("stopTyping", handleStopTyping);
+		
 		return () => {
 			socket.off("privateMessage", handlePrivateMessage);
 			socket.off("onlineUsersUpdate", handleOnlineUsers);
+			socket.off("typing", handleTyping);
+			socket.off("stopTyping", handleStopTyping);
 		};
 	}, [user]);
 
@@ -104,11 +132,26 @@ const Messages = () => {
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [messages]);
+	}, [messages, typingUserIds]);
 
 	const handleSendMessage = async (e) => {
 		e.preventDefault();
 		if (!newMessage.trim() || !activeChat) return;
+
+		const msgText = newMessage.trim();
+		setNewMessage(""); // Clear immediately
+		socket.emit("stopTyping", activeChat._id); // Stop typing when sent
+		
+		// Optimistic UI update
+		const tempMsg = {
+			sender: { ...user, _id: user.id },
+			receiver: activeChat,
+			content: msgText,
+			timestamp: new Date().toISOString(),
+			_id: "temp-" + Date.now(),
+			read: false,
+		};
+		setMessages(prev => [...prev, tempMsg]);
 
 		try {
 			await apiFetch("/api/messages", {
@@ -116,12 +159,27 @@ const Messages = () => {
 				body: JSON.stringify({
 					senderId: user.id,
 					receiverId: activeChat._id,
-					content: newMessage.trim()
+					content: msgText
 				})
 			});
-			setNewMessage("");
+			// We do not setMessages again here because the socket will emit the real message back to us, 
+			// and handlePrivateMessage will swap it or append it. Wait, handlePrivateMessage currently 
+			// appends it, so we'll get a duplicate! 
+			// So handlePrivateMessage should filter out duplicates.
 		} catch (error) {
 			console.error(error);
+			setMessages(prev => prev.filter(m => m._id !== tempMsg._id)); // Revert on failure
+		}
+	};
+
+	const handleTypingChange = (e) => {
+		setNewMessage(e.target.value);
+		if (activeChat) {
+			socket.emit("typing", activeChat._id);
+			if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+			typingTimeoutRef.current = setTimeout(() => {
+				socket.emit("stopTyping", activeChat._id);
+			}, 2000);
 		}
 	};
 
@@ -162,9 +220,15 @@ const Messages = () => {
 	};
 
 	return (
-		<Container maxWidth="lg" sx={{ mt: 4, height: "80vh", display: "flex", gap: 2 }}>
+		<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 }, height: { xs: "85vh", md: "80vh" }, display: "flex", gap: 2 }}>
 			{/* Sidebar */}
-			<Paper elevation={0} sx={{ width: 300, display: "flex", flexDirection: "column", border: "1px solid #eaeaea", borderRadius: 3 }}>
+			<Paper elevation={0} sx={{ 
+				width: { xs: "100%", md: 300 }, 
+				display: { xs: activeChat ? "none" : "flex", md: "flex" }, 
+				flexDirection: "column", 
+				border: "1px solid #eaeaea", 
+				borderRadius: 3 
+			}}>
 				<Box sx={{ p: 2, bgcolor: "primary.main", color: "white", borderRadius: "12px 12px 0 0" }}>
 					<Typography variant="h6" fontWeight="bold">Messages</Typography>
 				</Box>
@@ -179,21 +243,32 @@ const Messages = () => {
 					/>
 				</Box>
 				<List sx={{ flex: 1, overflowY: "auto", p: 0 }}>
-					{searchQuery && searchResults.length > 0 && (
+					{searchQuery && (
 						<>
 							<Box sx={{ p: 2, pb: 0 }}>
 								<Typography variant="caption" color="text.secondary" fontWeight="bold">SEARCH RESULTS</Typography>
 							</Box>
-							{searchResults.map(resultUser => (
-								<ListItemButton key={resultUser._id} onClick={() => startNewChat(resultUser)}>
-									<ListItemAvatar>
-										<Avatar src={resultUser.profilePic || ""} />
-									</ListItemAvatar>
-									<ListItemText primary={resultUser.name} secondary={resultUser.skillLevel} />
-								</ListItemButton>
-							))}
+							{searchResults.length === 0 ? (
+								<Box sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
+									<Typography variant="body2">No users found.</Typography>
+								</Box>
+							) : (
+								searchResults.map(resultUser => (
+									<ListItemButton key={resultUser._id} onClick={() => startNewChat(resultUser)}>
+										<ListItemAvatar>
+											<Avatar src={resultUser.profilePic || ""} />
+										</ListItemAvatar>
+										<ListItemText primary={resultUser.name} secondary={resultUser.skillLevel} />
+									</ListItemButton>
+								))
+							)}
 							<Divider sx={{ my: 1 }} />
 						</>
+					)}
+					{!searchQuery && recentChats.length === 0 && (
+						<Box sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
+							<Typography variant="body2">No recent chats.</Typography>
+						</Box>
 					)}
 					{!searchQuery && recentChats.map((chat) => (
 						<ListItemButton 
@@ -214,7 +289,11 @@ const Messages = () => {
 							</ListItemAvatar>
 							<ListItemText 
 								primary={chat.friend.name}
-								secondary={chat.lastMessage?.content}
+								secondary={
+									typingUserIds.has(chat.friend._id) 
+										? <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>typing...</Typography> 
+										: chat.lastMessage?.content
+								}
 								primaryTypographyProps={{ fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal' }}
 								secondaryTypographyProps={{ 
 									noWrap: true, 
@@ -235,6 +314,11 @@ const Messages = () => {
 								<Typography variant="caption" color="text.secondary" fontWeight="bold">ALL FRIENDS</Typography>
 							</Box>
 							
+							{friends.length === 0 && (
+								<Box sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
+									<Typography variant="body2">You have no friends yet.</Typography>
+								</Box>
+							)}
 							{friends.filter(f => !recentChats.some(c => c.friend._id === f._id)).map(friend => (
 								<ListItemButton key={friend._id} onClick={() => startNewChat(friend)}>
 									<ListItemAvatar>
@@ -256,10 +340,19 @@ const Messages = () => {
 			</Paper>
 
 			{/* Chat Window */}
-			<Paper elevation={0} sx={{ flex: 1, display: "flex", flexDirection: "column", border: "1px solid #eaeaea", borderRadius: 3 }}>
+			<Paper elevation={0} sx={{ 
+				flex: 1, 
+				display: { xs: activeChat ? "flex" : "none", md: "flex" }, 
+				flexDirection: "column", 
+				border: "1px solid #eaeaea", 
+				borderRadius: 3 
+			}}>
 				{activeChat ? (
 					<>
 						<Box sx={{ p: 2, borderBottom: "1px solid #eaeaea", display: "flex", alignItems: "center", gap: 2 }}>
+							<IconButton sx={{ display: { md: "none" } }} onClick={() => setActiveChat(null)}>
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+							</IconButton>
 							<Avatar src={activeChat.profilePic || ""} />
 							<Typography variant="h6" fontWeight="bold">{activeChat.name}</Typography>
 						</Box>
@@ -310,6 +403,30 @@ const Messages = () => {
 											</Box>
 										);
 									})}
+									{typingUserIds.has(activeChat._id) && (
+										<Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2, alignItems: 'center' }}>
+											<Box sx={{
+												p: 2,
+												borderRadius: 3,
+												bgcolor: "white",
+												color: "text.primary",
+												boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+												border: "1px solid #eaeaea",
+												borderBottomLeftRadius: 4,
+												display: "flex",
+												gap: 0.5,
+												alignItems: "center",
+												height: 40
+											}}>
+												<Box sx={{ width: 6, height: 6, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.32s' }} />
+												<Box sx={{ width: 6, height: 6, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.16s' }} />
+												<Box sx={{ width: 6, height: 6, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' }} />
+												<style>
+													{`@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }`}
+												</style>
+											</Box>
+										</Box>
+									)}
 									<div ref={messagesEndRef} />
 								</>
 							)}
@@ -322,7 +439,7 @@ const Messages = () => {
 								placeholder="Type a message..." 
 								variant="outlined" 
 								value={newMessage}
-								onChange={(e) => setNewMessage(e.target.value)}
+								onChange={handleTypingChange}
 								sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5 } }}
 							/>
 							<IconButton type="submit" color="primary" sx={{ bgcolor: "primary.main", color: "white", "&:hover": { bgcolor: "primary.dark" } }}>

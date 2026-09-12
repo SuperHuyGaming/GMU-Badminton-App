@@ -65,6 +65,18 @@ io.on("connection", (socket) => {
 		console.log(`User ${userId} joined their personal room`);
 	});
 
+	socket.on("typing", (receiverId) => {
+		if (socket.userId) {
+			socket.to(receiverId).emit("typing", { senderId: socket.userId });
+		}
+	});
+
+	socket.on("stopTyping", (receiverId) => {
+		if (socket.userId) {
+			socket.to(receiverId).emit("stopTyping", { senderId: socket.userId });
+		}
+	});
+
 	socket.on("disconnect", () => {
 		if (socket.userId) {
 			onlineUsers.delete(socket.userId);
