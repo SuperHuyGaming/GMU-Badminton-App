@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { 
 	Container, Box, Typography, Paper, List, ListItemButton, 
 	ListItemAvatar, ListItemText, Avatar, TextField, IconButton,
-	Divider, Badge, CircularProgress
+	Divider, Badge, CircularProgress, Dialog, DialogTitle, DialogContent,
+	DialogActions, Button, Chip
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
@@ -44,6 +45,8 @@ const Messages = () => {
 	const [searchResults, setSearchResults] = useState([]);
 	const [isLoadingChat, setIsLoadingChat] = useState(false);
 	const [typingUserIds, setTypingUserIds] = useState(new Set());
+	const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+	const [profileData, setProfileData] = useState(null);
 	const typingTimeoutRef = useRef(null);
 	const messagesEndRef = useRef(null);
 	const activeChatRef = useRef(null);
@@ -248,6 +251,18 @@ const Messages = () => {
 		}
 	};
 
+	const handleProfileClick = async () => {
+		if (!activeChat) return;
+		try {
+			const res = await apiFetch(`/api/profile/${activeChat._id}`);
+			const data = await res.json();
+			setProfileData(data);
+			setProfileDialogOpen(true);
+		} catch (error) {
+			console.error("Error fetching profile", error);
+		}
+	};
+
 	return (
 		<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 }, height: { xs: "85vh", md: "80vh" }, display: "flex", gap: 2 }}>
 			{/* Sidebar */}
@@ -420,12 +435,32 @@ const Messages = () => {
 			}}>
 				{activeChat ? (
 					<>
-						<Box sx={{ p: 2, borderBottom: "1px solid #eaeaea", display: "flex", alignItems: "center", gap: 2 }}>
-							<IconButton sx={{ display: { md: "none" } }} onClick={() => setActiveChat(null)}>
+						<Box 
+							onClick={handleProfileClick}
+							sx={{ 
+								p: 2, 
+								borderBottom: "1px solid #eaeaea", 
+								display: "flex", 
+								alignItems: "center", 
+								gap: 2,
+								cursor: "pointer",
+								transition: "background-color 0.2s",
+								"&:hover": { bgcolor: "rgba(0, 0, 0, 0.02)" }
+							}}
+						>
+							<IconButton 
+								sx={{ display: { md: "none" } }} 
+								onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}
+							>
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
 							</IconButton>
 							<Avatar src={activeChat.profilePic || ""} />
-							<Typography variant="h6" fontWeight="bold">{activeChat.name}</Typography>
+							<Box>
+								<Typography variant="h6" fontWeight="bold">{activeChat.name}</Typography>
+								<Typography variant="caption" color="text.secondary">
+									{onlineUsers.includes(activeChat._id) ? "Online" : "Offline"}
+								</Typography>
+							</Box>
 						</Box>
 						
 						<Box sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2, bgcolor: "#f9f9f9" }}>
@@ -525,6 +560,49 @@ const Messages = () => {
 					</Box>
 				)}
 			</Paper>
+			
+			{/* Profile Dialog */}
+			<Dialog open={profileDialogOpen} onClose={() => setProfileDialogOpen(false)} maxWidth="xs" fullWidth>
+				<DialogTitle sx={{ textAlign: "center", fontWeight: "bold" }}>
+					Player Profile
+				</DialogTitle>
+				<DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+					{profileData ? (
+						<>
+							<Avatar src={profileData.profilePic || ""} sx={{ width: 100, height: 100, mt: 2 }} />
+							<Typography variant="h5" fontWeight="bold">{profileData.name}</Typography>
+							<Chip label={profileData.skillLevel || "N/A"} color="primary" variant="outlined" />
+							
+							<Box sx={{ width: "100%", mt: 2 }}>
+								<Typography variant="subtitle2" color="text.secondary">Bio</Typography>
+								<Typography variant="body1" paragraph>{profileData.bio || "No bio available."}</Typography>
+								
+								<Typography variant="subtitle2" color="text.secondary">Preferred Play</Typography>
+								<Typography variant="body1" paragraph>{profileData.preferredPlay || "Any"}</Typography>
+								
+								<Typography variant="subtitle2" color="text.secondary">Racket</Typography>
+								<Typography variant="body1" paragraph>{profileData.racket || "N/A"}</Typography>
+
+								<Box sx={{ display: "flex", justifyContent: "space-around", mt: 2, p: 2, bgcolor: "#f5f5f5", borderRadius: 2 }}>
+									<Box sx={{ textAlign: "center" }}>
+										<Typography variant="h6" color="primary">{profileData.singlesElo}</Typography>
+										<Typography variant="caption" color="text.secondary">Singles Elo</Typography>
+									</Box>
+									<Box sx={{ textAlign: "center" }}>
+										<Typography variant="h6" color="secondary">{profileData.doublesElo}</Typography>
+										<Typography variant="caption" color="text.secondary">Doubles Elo</Typography>
+									</Box>
+								</Box>
+							</Box>
+						</>
+					) : (
+						<CircularProgress sx={{ my: 4 }} />
+					)}
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={() => setProfileDialogOpen(false)}>Close</Button>
+				</DialogActions>
+			</Dialog>
 		</Container>
 	);
 };
