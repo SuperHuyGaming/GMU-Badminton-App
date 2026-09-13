@@ -1,31 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
     Container, Typography, Box, Paper, Tabs, Tab, 
-    Avatar, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip
+    Avatar, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, CircularProgress
 } from '@mui/material';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import apiFetch from '../utils/api';
 
 const Leaderboard = () => {
     const [tab, setTab] = useState('singles');
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchLeaderboard = async () => {
-            setLoading(true);
-            try {
-                const res = await apiFetch(`/api/matches/leaderboard?type=${tab}`);
-                const data = await res.json();
-                setUsers(data);
-            } catch (error) {
-                console.error("Failed to fetch leaderboard", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchLeaderboard();
-    }, [tab]);
+    const { data: users = [], isLoading: loading } = useQuery({
+        queryKey: ['leaderboard', tab],
+        queryFn: async () => {
+            const res = await apiFetch(`/api/matches/leaderboard?type=${tab}`);
+            return res.json();
+        }
+    });
 
     const getRankColor = (index) => {
         if (index === 0) return '#FFD700'; // Gold

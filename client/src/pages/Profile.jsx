@@ -15,6 +15,7 @@ import ProfileIntro from "../components/profile/ProfileIntro";
 import ProfileEditForm from "../components/profile/ProfileEditForm";
 import PostCard from "../components/PostCard";
 import apiFetch from "../utils/api";
+import { useQuery } from '@tanstack/react-query';
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
 import { useAuth } from "../context/AuthContext";
@@ -31,7 +32,6 @@ export default function Profile() {
 	const [friendStatus, setFriendStatus] = useState("none");
 
 	const [userPosts, setUserPosts] = useState([]);
-	const [isLoadingPosts, setIsLoadingPosts] = useState(true);
 
 	const isOwnProfile = user && user.id === id;
 
@@ -45,46 +45,54 @@ export default function Profile() {
 		coverPic: "",
 	});
 
+	const { data: profileQueryData, isLoading: isLoadingProfile, isError: isProfileError } = useQuery({
+		queryKey: ['profile', id],
+		queryFn: async () => {
+			const profileEndpoint = isOwnProfile ? `/api/profile` : `/api/profile/${id}`;
+			const profileRes = isOwnProfile 
+				? await apiFetch(profileEndpoint) 
+				: await fetch(`${import.meta.env.VITE_API_URL}${profileEndpoint}`);
+			
+			if (!profileRes.ok) throw new Error("Profile not found");
+			return profileRes.json();
+		},
+		retry: false
+	});
+
+	const { data: postsQueryData = [], isLoading: isLoadingPosts } = useQuery({
+		queryKey: ['posts', 'user', id],
+		queryFn: async () => {
+			const postsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/forum/user/${id}`);
+			if (!postsRes.ok) return [];
+			return postsRes.json();
+		}
+	});
+
 	useEffect(() => {
-		const fetchProfileData = async () => {
-			try {
-				const profileEndpoint = isOwnProfile
-					? `/api/profile`
-					: `/api/profile/${id}`;
-				
-				const profileRes = isOwnProfile ? await apiFetch(profileEndpoint) : await fetch(`${import.meta.env.VITE_API_URL}${profileEndpoint}`);
-				const data = await profileRes.json();
-
-				if (profileRes.ok) {
-					setProfileData(data);
-					if (isOwnProfile) {
-						setFormData({
-							name: data.name || "",
-							skillLevel: data.skillLevel || "D Level",
-							bio: data.bio || "",
-							preferredPlay: data.preferredPlay || "Any",
-							racket: data.racket || "",
-							profilePic: data.profilePic || "",
-							coverPic: data.coverPic || "",
-						});
-					}
-				} else {
-					setNotFound(true);
-				}
-
-				const postsRes = await fetch(
-					`${import.meta.env.VITE_API_URL}/api/forum/user/${id}`,
-				);
-				if (postsRes.ok) setUserPosts(await postsRes.json());
-			} catch (err) {
-				console.error("Failed to load profile data", err);
-				setNotFound(true);
-			} finally {
-				setIsLoadingPosts(false);
+		if (profileQueryData) {
+			setProfileData(profileQueryData);
+			if (isOwnProfile) {
+				setFormData({
+					name: profileQueryData.name || "",
+					skillLevel: profileQueryData.skillLevel || "D Level",
+					bio: profileQueryData.bio || "",
+					preferredPlay: profileQueryData.preferredPlay || "Any",
+					racket: profileQueryData.racket || "",
+					profilePic: profileQueryData.profilePic || "",
+					coverPic: profileQueryData.coverPic || "",
+				});
 			}
-		};
-		fetchProfileData();
-	}, [id, isOwnProfile]);
+		}
+		if (isProfileError) {
+			setNotFound(true);
+		}
+	}, [profileQueryData, isOwnProfile, isProfileError]);
+
+	useEffect(() => {
+		if (postsQueryData.length > 0) {
+			setUserPosts(postsQueryData);
+		}
+	}, [postsQueryData]);
 
 	useEffect(() => {
 		socket.on("profileUpdated", (updatedUser) => {
