@@ -148,7 +148,7 @@ export default function ProfileEditForm({
 							<Typography variant="h5" fontWeight="800" mb={1.5}>
 								General Information
 							</Typography>
-							<Typography variant="body1" color="text.secondary" mb={5}>
+							<Typography variant="body1" color="text.secondary" mb={8}>
 								Update your personal details and how they appear to the community.
 							</Typography>
 							<Box
@@ -193,7 +193,7 @@ export default function ProfileEditForm({
 							<Typography variant="h5" fontWeight="800" mb={1.5}>
 								Player Profile
 							</Typography>
-							<Typography variant="body1" color="text.secondary" mb={5}>
+							<Typography variant="body1" color="text.secondary" mb={8}>
 								Let others know your play style to find the best match-ups!
 							</Typography>
 							<Box
