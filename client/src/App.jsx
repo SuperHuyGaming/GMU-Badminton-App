@@ -10,6 +10,7 @@ import Admin from "./pages/Admin";
 import Messages from "./pages/Messages";
 import Leaderboard from "./pages/Leaderboard";
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
+import socket from "./utils/socket";
 import {
 	BrowserRouter,
 	Routes,
@@ -154,7 +155,16 @@ function App() {
 	useEffect(() => {
 		const handleOffline = () => setToastMessage("You are offline. Check your network.");
 		window.addEventListener("offline", handleOffline);
-		return () => window.removeEventListener("offline", handleOffline);
+		
+		const handleBadgeUnlocked = (badge) => {
+			setToastMessage(`🏆 Achievement Unlocked: ${badge.name}!`);
+		};
+		socket.on("badgeUnlocked", handleBadgeUnlocked);
+
+		return () => {
+			window.removeEventListener("offline", handleOffline);
+			socket.off("badgeUnlocked", handleBadgeUnlocked);
+		};
 	}, [setToastMessage]);
 
 	return (

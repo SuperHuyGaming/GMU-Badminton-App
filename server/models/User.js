@@ -24,6 +24,14 @@ const userSchema = new mongoose.Schema({
 	profilePic: { type: String, default: "" },
 	coverPic: { type: String, default: "" },
 
+	// Gamification
+	badges: { type: [String], default: [] }, // Array of badge IDs e.g. ["first_win", "streak_5"]
+	stats: {
+		totalMatches: { type: Number, default: 0 },
+		winStreak: { type: Number, default: 0 },
+		highestWinStreak: { type: Number, default: 0 },
+	},
+
 	// Friends System
 	friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 	friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],

@@ -114,17 +114,26 @@ router.put("/:matchId/confirm", authMiddleware, async (req, res, next) => {
         // Apply changes
         for (const u of t1.users) {
             u[t1.eloField] += change1;
-            await u.save();
+            // Removed await u.save() from here because processMatchResults will save the user
             match.eloChanges.push({ userId: u._id, change: change1 });
         }
         
         for (const u of t2.users) {
             u[t2.eloField] += change2;
-            await u.save();
             match.eloChanges.push({ userId: u._id, change: change2 });
         }
         
         await match.save();
+
+        // Process gamification and stats
+        const { processMatchResults } = require("../services/gamification");
+        // t1 won if change1 > 0 (actually t1 won if s1 > s2)
+        const t1Won = match.team1Score > match.team2Score;
+        const t1Ids = t1.users.map(u => u._id);
+        const t2Ids = t2.users.map(u => u._id);
+        
+        await processMatchResults(req.io, t1Ids, t1Won);
+        await processMatchResults(req.io, t2Ids, !t1Won);
         
         res.json(match);
     } catch (error) {

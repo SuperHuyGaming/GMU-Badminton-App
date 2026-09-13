@@ -30,14 +30,22 @@ export default function ProfileIntro({
 				Intro
 			</Typography>
 
-			<Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-				<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
+			<Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 3 }}>
+				<Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
 					<Typography variant="h4" fontWeight="bold" color="primary">{profileData.friends?.length || 0}</Typography>
 					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>Friends</Typography>
 				</Box>
-				<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
+				<Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
 					<Typography variant="h6" fontWeight="bold" color="primary" sx={{ mt: 1 }}>{profileData.skillLevel || 'New'}</Typography>
 					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>Level</Typography>
+				</Box>
+				<Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
+					<Typography variant="h4" fontWeight="bold" color="secondary">{profileData.stats?.totalMatches || 0}</Typography>
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>Matches</Typography>
+				</Box>
+				<Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2, textAlign: 'center' }}>
+					<Typography variant="h4" fontWeight="bold" color="error">{profileData.stats?.winStreak || 0} 🔥</Typography>
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>Win Streak</Typography>
 				</Box>
 			</Box>
 

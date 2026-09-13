@@ -14,6 +14,7 @@ import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileIntro from "../components/profile/ProfileIntro";
 import ProfileEditForm from "../components/profile/ProfileEditForm";
 import PostCard from "../components/PostCard";
+import BadgeShowcase from "../components/profile/BadgeShowcase";
 import apiFetch from "../utils/api";
 import { useQuery } from '@tanstack/react-query';
 
@@ -349,6 +350,11 @@ export default function Profile() {
 							gap: 2,
 						}}
 					>
+						{/* BADGES SHOWCASE */}
+						{profileData.badges && profileData.badges.length > 0 && (
+							<BadgeShowcase badges={profileData.badges} />
+						)}
+
 						{isLoadingPosts ? (
 							[1, 2].map((n) => (
 								<Paper
