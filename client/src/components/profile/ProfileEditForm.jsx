@@ -36,91 +36,85 @@ export default function ProfileEditForm({
 				minHeight: "450px",
 			}}
 		>
-			{/* --- LEFT SIDEBAR NAVIGATION (Horizontal on Mobile!) --- */}
+			{/* --- LEFT SIDEBAR NAVIGATION --- */}
 			<Box
 				sx={{
 					width: { xs: "100%", md: "280px" },
 					borderRight: { xs: "none", md: "1px solid #e0e0e0" },
 					borderBottom: { xs: "1px solid #e0e0e0", md: "none" },
-					backgroundColor: "#f8fafc",
-					p: { xs: 0, md: 2 },
+					background: "linear-gradient(to bottom, #f8fafc, #f1f5f9)",
+					p: { xs: 0, md: 3 },
 				}}
 			>
 				<Typography
 					variant="h6"
-					fontWeight="bold"
+					fontWeight="800"
+					color="primary"
 					sx={{
-						mb: 1,
+						mb: 2,
 						px: 2,
-						pt: 2,
-						display: { xs: "none", md: "block" },
+						pt: { xs: 2, md: 0 },
+						display: { xs: "none", md: "flex" },
+						alignItems: "center",
+						gap: 1
 					}}
 				>
-					Settings
+					⚙️ Settings
 				</Typography>
-
+				<Divider sx={{ mb: 2, display: { xs: "none", md: "block" } }} />
 				<List
-					disablePadding
+					component="nav"
 					sx={{
 						display: "flex",
 						flexDirection: { xs: "row", md: "column" },
-						overflowX: "auto",
-						"&::-webkit-scrollbar": { display: "none" }, // Hides ugly scrollbar on phones
+						overflowX: { xs: "auto", md: "visible" },
 						p: { xs: 1, md: 0 },
+						gap: 1,
 					}}
 				>
 					<ListItemButton
+						selected={activeSection === "general"}
 						onClick={() => setActiveSection("general")}
 						sx={{
 							borderRadius: 2,
-							mb: { xs: 0, md: 0.5 },
-							mr: { xs: 1, md: 0 },
-							flexShrink: 0,
-							backgroundColor:
-								activeSection === "general"
-									? "rgba(0, 102, 51, 0.1)"
-									: "transparent",
-							color:
-								activeSection === "general"
-									? "primary.main"
-									: "text.primary",
+							mb: { xs: 0, md: 1 },
+							whiteSpace: "nowrap",
+							justifyContent: "center",
+							transition: "all 0.2s",
+							bgcolor: activeSection === "general" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
+							color: activeSection === "general" ? "primary.main" : "text.secondary",
+							"&:hover": {
+								bgcolor: "rgba(0, 102, 51, 0.05)",
+							}
 						}}
 					>
 						<ListItemText
-							primary="General Info"
+							primary="👤 General Info"
 							primaryTypographyProps={{
-								fontWeight:
-									activeSection === "general"
-										? "bold"
-										: "medium",
-								whiteSpace: "nowrap",
+								fontWeight: activeSection === "general" ? "bold" : "medium",
 							}}
 						/>
 					</ListItemButton>
-
 					<ListItemButton
+						selected={activeSection === "badminton"}
 						onClick={() => setActiveSection("badminton")}
 						sx={{
 							borderRadius: 2,
-							flexShrink: 0,
-							backgroundColor:
-								activeSection === "badminton"
-									? "rgba(0, 102, 51, 0.1)"
-									: "transparent",
-							color:
-								activeSection === "badminton"
-									? "primary.main"
-									: "text.primary",
+							mb: { xs: 0, md: 1 },
+							whiteSpace: "nowrap",
+							justifyContent: "center",
+							transition: "all 0.2s",
+							bgcolor: activeSection === "badminton" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
+							color: activeSection === "badminton" ? "primary.main" : "text.secondary",
+							"&:hover": {
+								bgcolor: "rgba(0, 102, 51, 0.05)",
+							}
 						}}
 					>
 						<ListItemText
-							primary="Player Profile"
+							primary="🏸 Player Profile"
 							primaryTypographyProps={{
-								fontWeight:
-									activeSection === "badminton"
-										? "bold"
-										: "medium",
-								whiteSpace: "nowrap",
+								fontWeight: activeSection === "badminton" ? "bold" : "medium",
 							}}
 						/>
 					</ListItemButton>
@@ -131,12 +125,12 @@ export default function ProfileEditForm({
 			<Box
 				sx={{
 					flexGrow: 1,
-					p: { xs: 3, md: 4 },
+					p: { xs: 3, md: 5 },
 					backgroundColor: "#fff",
 				}}
 			>
 				{error && (
-					<Alert severity="error" sx={{ mb: 3 }}>
+					<Alert severity="error" sx={{ mb: 4, borderRadius: 2 }}>
 						{error}
 					</Alert>
 				)}
@@ -152,14 +146,17 @@ export default function ProfileEditForm({
 					{/* SECTION 1: GENERAL INFO */}
 					{activeSection === "general" && (
 						<Box sx={{ flexGrow: 1 }}>
-							<Typography variant="h6" fontWeight="bold" mb={3}>
+							<Typography variant="h5" fontWeight="800" mb={1}>
 								General Information
+							</Typography>
+							<Typography variant="body2" color="text.secondary" mb={4}>
+								Update your personal details and how they appear to the community.
 							</Typography>
 							<Box
 								sx={{
 									display: "flex",
 									flexDirection: "column",
-									gap: 3,
+									gap: 4,
 								}}
 							>
 								<TextField
@@ -170,17 +167,23 @@ export default function ProfileEditForm({
 									onChange={handleChange}
 									required
 									variant="outlined"
+									InputProps={{
+										sx: { borderRadius: 2 }
+									}}
 								/>
 								<TextField
 									fullWidth
 									multiline
-									rows={4}
+									rows={5}
 									label="Bio"
 									name="bio"
 									placeholder="Tell the community about yourself..."
 									value={formData.bio}
 									onChange={handleChange}
 									variant="outlined"
+									InputProps={{
+										sx: { borderRadius: 2 }
+									}}
 								/>
 							</Box>
 						</Box>
@@ -189,20 +192,23 @@ export default function ProfileEditForm({
 					{/* SECTION 2: BADMINTON PROFILE */}
 					{activeSection === "badminton" && (
 						<Box sx={{ flexGrow: 1 }}>
-							<Typography variant="h6" fontWeight="bold" mb={3}>
+							<Typography variant="h5" fontWeight="800" mb={1}>
 								Player Profile
+							</Typography>
+							<Typography variant="body2" color="text.secondary" mb={4}>
+								Let others know your play style to find the best match-ups!
 							</Typography>
 							<Box
 								sx={{
 									display: "flex",
 									flexDirection: "column",
-									gap: 3,
+									gap: 4,
 								}}
 							>
 								<Box
 									sx={{
 										display: "flex",
-										gap: 2,
+										gap: 3,
 										flexDirection: {
 											xs: "column",
 											sm: "row",
@@ -216,15 +222,16 @@ export default function ProfileEditForm({
 										name="skillLevel"
 										value={formData.skillLevel}
 										onChange={handleChange}
+										InputProps={{ sx: { borderRadius: 2 } }}
 									>
 										<MenuItem value="D Level">
-											D Level
+											D Level (Beginner)
 										</MenuItem>
 										<MenuItem value="C Level">
-											C Level
+											C Level (Intermediate)
 										</MenuItem>
 										<MenuItem value="B Level">
-											B Level
+											B Level (Advanced)
 										</MenuItem>
 									</TextField>
 									<TextField
@@ -234,25 +241,27 @@ export default function ProfileEditForm({
 										name="preferredPlay"
 										value={formData.preferredPlay}
 										onChange={handleChange}
+										InputProps={{ sx: { borderRadius: 2 } }}
 									>
-										<MenuItem value="Any">Any</MenuItem>
+										<MenuItem value="Any">Any Format</MenuItem>
 										<MenuItem value="Singles">
 											Singles
 										</MenuItem>
 										<MenuItem value="Doubles">
 											Doubles
 										</MenuItem>
-										<MenuItem value="Mixed">Mixed</MenuItem>
+										<MenuItem value="Mixed">Mixed Doubles</MenuItem>
 									</TextField>
 								</Box>
 								<TextField
 									fullWidth
 									label="Weapon of Choice (Racket)"
 									name="racket"
-									placeholder="e.g. Astrox 100zz"
+									placeholder="e.g. Yonex Astrox 100zz"
 									value={formData.racket}
 									onChange={handleChange}
 									variant="outlined"
+									InputProps={{ sx: { borderRadius: 2 } }}
 								/>
 							</Box>
 						</Box>

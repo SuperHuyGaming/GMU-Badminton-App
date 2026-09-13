@@ -50,9 +50,7 @@ export default function Profile() {
 		queryKey: ['profile', id],
 		queryFn: async () => {
 			const profileEndpoint = isOwnProfile ? `/api/profile` : `/api/profile/${id}`;
-			const profileRes = isOwnProfile 
-				? await apiFetch(profileEndpoint) 
-				: await fetch(`${import.meta.env.VITE_API_URL}${profileEndpoint}`);
+			const profileRes = await apiFetch(profileEndpoint);
 			
 			if (!profileRes.ok) throw new Error("Profile not found");
 			return profileRes.json();
@@ -63,7 +61,7 @@ export default function Profile() {
 	const { data: postsQueryData = [], isLoading: isLoadingPosts } = useQuery({
 		queryKey: ['posts', 'user', id],
 		queryFn: async () => {
-			const postsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/forum/user/${id}`);
+			const postsRes = await apiFetch(`/api/forum/user/${id}`);
 			if (!postsRes.ok) return [];
 			return postsRes.json();
 		}
@@ -180,16 +178,10 @@ export default function Profile() {
 		uploadData.append("userId", user.id);
 
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/upload/image`,
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-					body: uploadData,
-				},
-			);
+			const res = await apiFetch("/api/upload/image", {
+				method: "POST",
+				body: uploadData,
+			});
 
 			const data = await res.json();
 
@@ -228,17 +220,10 @@ export default function Profile() {
 
 		setIsSaving(true);
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/profile`,
-				{
-					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-					body: JSON.stringify(formData),
-				},
-			);
+			const res = await apiFetch("/api/profile", {
+				method: "PUT",
+				body: JSON.stringify(formData),
+			});
 			const updatedUser = await res.json();
 
 			if (res.ok) {

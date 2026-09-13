@@ -22,6 +22,11 @@ const apiFetch = async (endpoint, options = {}) => {
 		...options.headers,
 	};
 
+	// Remove Content-Type so browser can set boundary for FormData
+	if (options.body instanceof FormData) {
+		delete headers["Content-Type"];
+	}
+
 	if (token) {
 		headers["Authorization"] = `Bearer ${token}`;
 	}
