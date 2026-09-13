@@ -4,6 +4,7 @@ import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuIt
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { getOptimizedAvatar } from "../utils/image";
+import { formatNotificationTime } from "../utils/dateUtils";
 import { ColorModeContext } from '../App';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -310,15 +311,7 @@ export default function Navbar() {
 																	"block",
 															}}
 														>
-															{new Date(
-																notif.time,
-															).toLocaleTimeString(
-																[],
-																{
-																	hour: "2-digit",
-																	minute: "2-digit",
-																},
-															)}
+															{formatNotificationTime(notif.time)}
 														</Typography>
 													</Box>
 												</MenuItem>

@@ -134,13 +134,9 @@ export default function Dashboard() {
 			try {
 				const [statusRes, scheduleRes, announcementsRes] =
 					await Promise.all([
-						fetch(`${import.meta.env.VITE_API_URL}/api/status`),
-						fetch(
-							`${import.meta.env.VITE_API_URL}/api/schedule/weekly`,
-						),
-						fetch(
-							`${import.meta.env.VITE_API_URL}/api/announcements`,
-						),
+						apiFetch(`/api/status`),
+						apiFetch(`/api/schedule/weekly`),
+						apiFetch(`/api/announcements`),
 					]);
 
 				if (statusRes.ok) setStatus((await statusRes.json()).message);
@@ -174,9 +170,8 @@ export default function Dashboard() {
 		if (!newUpdateText.trim() || currentUser?.role !== "admin") return;
 		setIsPosting(true);
 		try {
-			await fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
+			await apiFetch(`/api/announcements`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					content: newUpdateText,
 					authorName: currentUser.name,
@@ -195,11 +190,11 @@ export default function Dashboard() {
 	const confirmDeleteUpdate = async () => {
 		if (!deleteUpdateId) return;
 		try {
-			await fetch(
-				`${import.meta.env.VITE_API_URL}/api/announcements/${deleteUpdateId}?role=${currentUser.role}`,
+			await apiFetch(
+				`/api/announcements/${deleteUpdateId}?role=${currentUser.role}`,
 				{
 					method: "DELETE",
-				},
+				}
 			);
 		} catch (err) {
 			console.error("Failed to delete update", err);

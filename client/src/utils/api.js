@@ -31,10 +31,17 @@ const apiFetch = async (endpoint, options = {}) => {
 		headers["Authorization"] = `Bearer ${token}`;
 	}
 
-	let response = await fetch(`${API_URL}${endpoint}`, {
-		...options,
-		headers,
-	});
+	let response;
+	try {
+		response = await fetch(`${API_URL}${endpoint}`, {
+			...options,
+			headers,
+		});
+	} catch (error) {
+		console.warn("Network error during apiFetch:", error);
+		// Return a mock failed response so the app doesn't crash
+		return { ok: false, status: 0, json: async () => ({ message: "Network offline" }) };
+	}
 
 	if (response.status === 401) {
 		const refreshToken = localStorage.getItem("refreshToken");

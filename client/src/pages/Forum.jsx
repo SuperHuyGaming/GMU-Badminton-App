@@ -146,8 +146,8 @@ export default function Forum() {
 			else setIsFetchingMore(true);
 
 			try {
-				const res = await fetch(
-					`${import.meta.env.VITE_API_URL}/api/forum?date=${encodeURIComponent(viewDate)}&page=${page}&limit=10`,
+				const res = await apiFetch(
+					`/api/forum?date=${encodeURIComponent(viewDate)}&page=${page}&limit=10`,
 				);
 				const data = await res.json();
 				setHasMore(data.length === 10);
@@ -227,14 +227,8 @@ export default function Forum() {
 	const handleSubmit = async () => {
 		if (!currentUser) return alert("You must be logged in to post!");
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/forum`,
-				{
+			const res = await apiFetch("/api/forum", {
 					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
 					body: JSON.stringify({
 						title: newPost.title,
 						content: newPost.content,
