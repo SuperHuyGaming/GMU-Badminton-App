@@ -44,25 +44,41 @@ router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 	}
 });
 
-// GET: conversation history between two users
+// GET: conversation history between two users (Paginated)
 router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, friendId } = req.params;
+		const page = parseInt(req.query.page) || 1;
+		const limit = parseInt(req.query.limit) || 50;
+		const skip = (page - 1) * limit;
 		
-		const messages = await Message.find({
+		// Sort by descending timestamp to get the newest messages first
+		let messages = await Message.find({
 			$or: [
 				{ sender: userId, receiver: friendId },
 				{ sender: friendId, receiver: userId },
 			],
-		}).sort({ timestamp: 1 });
+		})
+		.sort({ timestamp: -1 })
+		.skip(skip)
+		.limit(limit);
 
-		// Mark messages from friend as read
-		await Message.updateMany(
-			{ sender: friendId, receiver: userId, read: false },
-			{ $set: { read: true } }
-		);
+		// Reverse the array so the frontend renders them top-down chronologically
+		messages = messages.reverse();
 
-		res.json(messages);
+		// Mark unread messages as read (only doing this on the first page load to avoid redundant updates)
+		if (page === 1) {
+			await Message.updateMany(
+				{ sender: friendId, receiver: userId, read: false },
+				{ $set: { read: true } }
+			);
+		}
+
+		res.json({
+			messages,
+			hasMore: messages.length === limit,
+			page
+		});
 	} catch (error) {
 		next(error);
 	}

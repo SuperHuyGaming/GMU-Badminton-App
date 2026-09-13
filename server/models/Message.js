@@ -11,6 +11,10 @@ const messageSchema = new mongoose.Schema({
 	isDeletedByAdmin: { type: Boolean, default: false }
 });
 
+// Create compound indexes for faster message retrieval and sorting
+messageSchema.index({ sender: 1, receiver: 1, timestamp: -1 });
+messageSchema.index({ receiver: 1, sender: 1, timestamp: -1 });
+
 const { encrypt, decrypt } = require("../utils/encryption");
 
 // Encrypt before saving

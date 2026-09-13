@@ -47,6 +47,9 @@ const Messages = () => {
 	const [typingUserIds, setTypingUserIds] = useState(new Set());
 	const [profileDialogOpen, setProfileDialogOpen] = useState(false);
 	const [profileData, setProfileData] = useState(null);
+	const [page, setPage] = useState(1);
+	const [hasMore, setHasMore] = useState(false);
+	const [isLoadingMore, setIsLoadingMore] = useState(false);
 	const typingTimeoutRef = useRef(null);
 	const messagesEndRef = useRef(null);
 	const activeChatRef = useRef(null);
@@ -148,10 +151,15 @@ const Messages = () => {
 	useEffect(() => {
 		if (activeChat && user) {
 			setIsLoadingChat(true);
-			apiFetch(`/api/messages/${user.id}/${activeChat._id}`)
+			setPage(1);
+			setHasMore(false);
+			
+			apiFetch(`/api/messages/${user.id}/${activeChat._id}?page=1&limit=50`)
 				.then(res => res.json())
 				.then(data => {
-					setMessages(data);
+					setMessages(data.messages || []);
+					setHasMore(data.hasMore || false);
+					
 					// Clear unread count in sidebar
 					setRecentChats(prev => prev.map(c => 
 						c.friend._id === activeChat._id ? { ...c, unreadCount: 0 } : c
@@ -162,9 +170,34 @@ const Messages = () => {
 		}
 	}, [activeChat, user]);
 
+	const loadMoreMessages = async () => {
+		if (!hasMore || isLoadingMore || !activeChat || !user) return;
+		
+		setIsLoadingMore(true);
+		const nextPage = page + 1;
+		
+		try {
+			const res = await apiFetch(`/api/messages/${user.id}/${activeChat._id}?page=${nextPage}&limit=50`);
+			const data = await res.json();
+			
+			// We prepend the older messages to the top
+			setMessages(prev => [...(data.messages || []), ...prev]);
+			setHasMore(data.hasMore || false);
+			setPage(nextPage);
+		} catch (err) {
+			console.error("Error loading older messages", err);
+		} finally {
+			setIsLoadingMore(false);
+		}
+	};
+
 	useEffect(() => {
-		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [messages, typingUserIds]);
+		// Only auto-scroll if we are NOT loading older messages,
+		// or if this is an initial load/new message at the bottom
+		if (!isLoadingMore) {
+			messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+		}
+	}, [messages, typingUserIds, isLoadingMore]);
 
 	const handleSendMessage = async (e) => {
 		e.preventDefault();
@@ -475,6 +508,18 @@ const Messages = () => {
 								</Box>
 							) : (
 								<>
+									{hasMore && (
+										<Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+											<Button 
+												variant="outlined" 
+												size="small" 
+												onClick={loadMoreMessages}
+												disabled={isLoadingMore}
+											>
+												{isLoadingMore ? "Loading..." : "Load older messages"}
+											</Button>
+										</Box>
+									)}
 									{messages.map((msg, idx) => {
 										const isMe = msg.sender === user.id || msg.sender._id === user.id;
 										return (
