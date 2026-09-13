@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.16.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
@@ -25,6 +26,7 @@
     "mongoose": "^9.6.1",
     "multer": "^2.1.1",
     "natural": "^8.1.1",
+    "redis": "^6.2.1",
     "sentiment": "^5.0.2",
     "socket.io": "^4.8.3",
     "web-push": "^3.6.7",

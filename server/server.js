@@ -64,6 +64,25 @@ const io = new Server(server, {
 	},
 });
 
+// Setup Socket.io Redis Adapter for multi-instance scaling
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { createClient } = require("redis");
+
+const REDIS_URL = process.env.REDIS_URL;
+if (REDIS_URL) {
+	const pubClient = createClient({ url: REDIS_URL });
+	const subClient = pubClient.duplicate();
+
+	Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+		io.adapter(createAdapter(pubClient, subClient));
+		console.log("🚀 Socket.io Redis Adapter connected for horizontal scaling");
+	}).catch((err) => {
+		console.error("❌ Redis Adapter Error:", err);
+	});
+} else {
+	console.log("ℹ️ No REDIS_URL found. Using local in-memory Socket.io adapter.");
+}
+
 app.use((req, res, next) => {
 	req.io = io;
 	next();
