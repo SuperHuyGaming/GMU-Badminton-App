@@ -125,7 +125,7 @@ export default function ProfileEditForm({
 			<Box
 				sx={{
 					flexGrow: 1,
-					p: { xs: 3, md: 5 },
+					p: { xs: 4, md: 6 },
 					backgroundColor: "#fff",
 				}}
 			>
@@ -143,13 +143,12 @@ export default function ProfileEditForm({
 						flexDirection: "column",
 					}}
 				>
-					{/* SECTION 1: GENERAL INFO */}
 					{activeSection === "general" && (
-						<Box sx={{ flexGrow: 1 }}>
-							<Typography variant="h5" fontWeight="800" mb={1}>
+						<Box sx={{ flexGrow: 1, pt: 1, px: 1 }}>
+							<Typography variant="h5" fontWeight="800" mb={1.5}>
 								General Information
 							</Typography>
-							<Typography variant="body2" color="text.secondary" mb={4}>
+							<Typography variant="body1" color="text.secondary" mb={5}>
 								Update your personal details and how they appear to the community.
 							</Typography>
 							<Box
@@ -189,13 +188,12 @@ export default function ProfileEditForm({
 						</Box>
 					)}
 
-					{/* SECTION 2: BADMINTON PROFILE */}
 					{activeSection === "badminton" && (
-						<Box sx={{ flexGrow: 1 }}>
-							<Typography variant="h5" fontWeight="800" mb={1}>
+						<Box sx={{ flexGrow: 1, pt: 1, px: 1 }}>
+							<Typography variant="h5" fontWeight="800" mb={1.5}>
 								Player Profile
 							</Typography>
-							<Typography variant="body2" color="text.secondary" mb={4}>
+							<Typography variant="body1" color="text.secondary" mb={5}>
 								Let others know your play style to find the best match-ups!
 							</Typography>
 							<Box

@@ -1,5 +1,5 @@
 // client/src/App.jsx
-import { useEffect, createContext, useMemo, useState } from "react";
+import React, { useEffect, createContext, useMemo, useState } from "react";
 import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import Auth from "./pages/Auth";

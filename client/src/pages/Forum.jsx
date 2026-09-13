@@ -1,5 +1,6 @@
 // client/src/pages/Forum.jsx
 import { useState, useEffect, useRef } from "react";
+import apiFetch from "../utils/api";
 import { useLocation } from "react-router-dom";
 import {
 	Typography,
