@@ -107,7 +107,7 @@ export default function ProfileHeader({
 						? "transparent"
 						: "#cfd8dc",
 					backgroundImage: displayCoverPic
-						? `url()`
+						? `url(${getOptimizedCover(displayCoverPic)})`
 						: "none",
 					backgroundSize: "cover",
 					backgroundPosition: "center",
