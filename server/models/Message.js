@@ -14,14 +14,13 @@ const messageSchema = new mongoose.Schema({
 const { encrypt, decrypt } = require("../utils/encryption");
 
 // Encrypt before saving
-messageSchema.pre('save', function (next) {
+messageSchema.pre('save', function () {
     if (this.isModified('content') && this.content) {
         // Only encrypt if it's not already encrypted (starts with ENC:)
         if (!this.content.startsWith('ENC:')) {
             this.content = encrypt(this.content);
         }
     }
-    next();
 });
 
 // Decrypt when retrieving multiple messages
