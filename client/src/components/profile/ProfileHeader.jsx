@@ -1,5 +1,6 @@
 // client/src/components/profile/ProfileHeader.jsx
 import { useState, useRef } from "react";
+import { getOptimizedAvatar, getOptimizedCover } from "../../utils/image";
 import {
 	Box,
 	Paper,
@@ -106,7 +107,7 @@ export default function ProfileHeader({
 						? "transparent"
 						: "#cfd8dc",
 					backgroundImage: displayCoverPic
-						? `url(${displayCoverPic})`
+						? `url()`
 						: "none",
 					backgroundSize: "cover",
 					backgroundPosition: "center",
@@ -154,7 +155,7 @@ export default function ProfileHeader({
 					}}
 				>
 					<Avatar
-						src={displayProfilePic}
+						src={getOptimizedAvatar(displayProfilePic, 200)}
 						onClick={handleAvatarClick}
 						sx={{
 							width: "100%",

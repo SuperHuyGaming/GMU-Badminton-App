@@ -6,6 +6,7 @@ import {
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import apiFetch from '../utils/api';
+import { getOptimizedAvatar } from '../utils/image';
 
 const Leaderboard = () => {
     const [tab, setTab] = useState('singles');
@@ -85,7 +86,7 @@ const Leaderboard = () => {
                                             <TableCell>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                                     <Avatar 
-                                                        src={user.profilePic} 
+                                                        src={getOptimizedAvatar(user.profilePic, 40)}
                                                         sx={{ 
                                                             border: index < 3 ? `3px solid ${getRankColor(index)}` : 'none',
                                                             boxShadow: index < 3 ? `0 0 10px ${getRankColor(index)}` : 'none'

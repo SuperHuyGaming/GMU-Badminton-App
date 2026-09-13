@@ -3,6 +3,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
+import { getOptimizedAvatar } from "../utils/image";
 import { ColorModeContext } from '../App';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -327,11 +328,11 @@ export default function Navbar() {
 									</Menu>
 
 									<Avatar
-										src={user.profilePic}
+										src={getOptimizedAvatar(user.profilePic, 40)}
 										onClick={handleAvatarClick}
 										sx={{
-											width: 38,
-											height: 38,
+											width: 40,
+											height: 40,
 											bgcolor: "secondary.main",
 											color: "primary.main",
 											fontWeight: "bold",

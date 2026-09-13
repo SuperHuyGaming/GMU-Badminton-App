@@ -19,6 +19,8 @@ import {
 	Skeleton,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import apiFetch from "../utils/api";
+import { getOptimizedAvatar } from "../utils/image";
 import { io } from "socket.io-client";
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
@@ -256,7 +258,7 @@ export default function Dashboard() {
 				>
 					{currentUser && (
 						<Avatar
-							src={currentUser.profilePic}
+							src={getOptimizedAvatar(currentUser.profilePic, 60)}
 							sx={{
 								width: 60,
 								height: 60,

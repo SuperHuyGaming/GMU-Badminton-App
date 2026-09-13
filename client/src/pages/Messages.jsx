@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
+import { getOptimizedAvatar } from "../utils/image";
 
 const formatTime = (dateString) => {
 	if (!dateString) return "";
@@ -343,7 +344,7 @@ const Messages = () => {
 										}}
 									>
 										<ListItemAvatar>
-											<Avatar src={resultUser.profilePic || ""} />
+											<Avatar src={getOptimizedAvatar(resultUser.profilePic || "", 50)} />
 										</ListItemAvatar>
 										<ListItemText primary={resultUser.name} secondary={resultUser.skillLevel} />
 									</ListItemButton>
@@ -382,7 +383,7 @@ const Messages = () => {
 									invisible={!onlineUsers.includes(chat.friend._id)}
 									anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 								>
-									<Avatar src={chat.friend.profilePic || ""} />
+									<Avatar src={getOptimizedAvatar(chat.friend.profilePic || "", 50)} />
 								</Badge>
 							</ListItemAvatar>
 							<ListItemText 
@@ -447,7 +448,7 @@ const Messages = () => {
 											invisible={!onlineUsers.includes(friend._id)}
 											anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 										>
-											<Avatar src={friend.profilePic || ""} />
+											<Avatar src={getOptimizedAvatar(friend.profilePic || "", 50)} />
 										</Badge>
 									</ListItemAvatar>
 									<ListItemText primary={friend.name} />
@@ -487,7 +488,7 @@ const Messages = () => {
 							>
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
 							</IconButton>
-							<Avatar src={activeChat.profilePic || ""} />
+							<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 50)} />
 							<Box>
 								<Typography variant="h6" fontWeight="bold">{activeChat.name}</Typography>
 								<Typography variant="caption" color="text.secondary">
@@ -614,7 +615,7 @@ const Messages = () => {
 				<DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
 					{profileData ? (
 						<>
-							<Avatar src={profileData.profilePic || ""} sx={{ width: 100, height: 100, mt: 2 }} />
+							<Avatar src={getOptimizedAvatar(profileData.profilePic || "", 50)} sx={{ width: 100, height: 100, mt: 2 }} />
 							<Typography variant="h5" fontWeight="bold">{profileData.name}</Typography>
 							<Chip label={profileData.skillLevel || "N/A"} color="primary" variant="outlined" />
 							
