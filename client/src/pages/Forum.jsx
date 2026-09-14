@@ -542,6 +542,7 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
+									bgcolor: "rgba(0, 0, 0, 0.2)",
 								},
 							}}
 						/>
@@ -564,6 +565,7 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
+									bgcolor: "rgba(0, 0, 0, 0.2)",
 								},
 							}}
 						/>
