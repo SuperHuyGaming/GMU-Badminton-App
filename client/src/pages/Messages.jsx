@@ -381,9 +381,7 @@ const Messages = () => {
 				width: '100%', 
 				height: '100%', 
 				borderRadius: { xs: 0, md: 3 }, 
-				overflow: 'hidden', 
-				border: { xs: 'none', md: '1px solid' }, 
-				borderColor: 'divider' 
+				overflow: 'hidden'
 			}}>
 				{/* Sidebar */}
 				<Box sx={{ 
