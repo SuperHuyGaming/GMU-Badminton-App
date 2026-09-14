@@ -214,10 +214,22 @@ const Messages = () => {
 	}, [messages, typingUserIds, isLoadingMore]);
 
 	useEffect(() => {
-		// Prevent body from scrolling on mobile to lock the fixed view
+		// Strictly prevent iOS Safari from pushing the viewport out of bounds
+		const originalStyle = window.getComputedStyle(document.body).overflow;
+		const originalPosition = window.getComputedStyle(document.body).position;
+		const originalWidth = window.getComputedStyle(document.body).width;
+		const originalHeight = window.getComputedStyle(document.body).height;
+		
 		document.body.style.overflow = "hidden";
+		document.body.style.position = "fixed";
+		document.body.style.width = "100%";
+		document.body.style.height = "100dvh";
+		
 		return () => {
-			document.body.style.overflow = "auto";
+			document.body.style.overflow = originalStyle;
+			document.body.style.position = originalPosition;
+			document.body.style.width = originalWidth;
+			document.body.style.height = originalHeight;
 		};
 	}, []);
 
