@@ -213,6 +213,14 @@ const Messages = () => {
 		}
 	}, [messages, typingUserIds, isLoadingMore]);
 
+	useEffect(() => {
+		// Prevent body from scrolling on mobile to lock the fixed view
+		document.body.style.overflow = "hidden";
+		return () => {
+			document.body.style.overflow = "auto";
+		};
+	}, []);
+
 	const handleSendMessage = async (e) => {
 		e.preventDefault();
 		if (!newMessage.trim() || !activeChat) return;
@@ -349,14 +357,33 @@ const Messages = () => {
 	};
 
 	return (
-		<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 }, height: { xs: "85vh", md: "80vh" }, display: "flex", gap: 2 }}>
+		<Container 
+			disableGutters 
+			maxWidth="lg" 
+			sx={{ 
+				mt: { xs: 0, md: 4 }, 
+				height: { xs: "calc(100dvh - 56px)", md: "80vh" }, 
+				display: "flex", 
+				gap: { xs: 0, md: 2 },
+				px: { xs: 0, md: 2 },
+				position: { xs: "fixed", md: "static" },
+				top: { xs: 56, md: "auto" },
+				bottom: 0,
+				left: 0,
+				right: 0,
+				width: "100%",
+				zIndex: 1,
+				bgcolor: "background.default"
+			}}
+		>
 			{/* Sidebar */}
 			<Paper elevation={0} sx={{ 
 				width: { xs: "100%", md: 300 }, 
 				display: { xs: activeChat ? "none" : "flex", md: "flex" }, 
 				flexDirection: "column", 
-				border: "1px solid", borderColor: "divider", 
-				borderRadius: 3 
+				border: { xs: "none", md: "1px solid" }, borderColor: "divider", 
+				borderRadius: { xs: 0, md: 3 },
+				height: "100%"
 			}}>
 				<Box sx={{ p: 2, bgcolor: "primary.main", color: "white", borderRadius: "12px 12px 0 0" }}>
 					<Typography variant="h6" fontWeight="bold">Messages</Typography>
@@ -515,9 +542,11 @@ const Messages = () => {
 				flex: 1, 
 				display: { xs: activeChat ? "flex" : "none", md: "flex" }, 
 				flexDirection: "column", 
-				border: "1px solid", borderColor: "divider", 
-				borderRadius: 3,
-				overflow: "hidden"
+				border: { xs: "none", md: "1px solid" }, borderColor: "divider", 
+				borderRadius: { xs: 0, md: 3 },
+				overflow: "hidden",
+				height: "100%",
+				width: "100%",
 			}}>
 				{activeChat ? (
 					<>
