@@ -9,6 +9,7 @@ import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
 import { getOptimizedAvatar } from "../utils/image";
+import { Link as RouterLink } from "react-router-dom";
 
 const formatTime = (dateString) => {
 	if (!dateString) return "";
@@ -288,15 +289,53 @@ const Messages = () => {
 		}
 	};
 
+	const [profileFriendStatus, setProfileFriendStatus] = useState("none");
+
 	const handleProfileClick = async () => {
 		if (!activeChat) return;
 		try {
 			const res = await apiFetch(`/api/profile/${activeChat._id}`);
 			const data = await res.json();
 			setProfileData(data);
+			
+			let status = "none";
+			if (data.friends?.includes(user.id)) status = "friends";
+			else if (data.friendRequests?.includes(user.id)) status = "request_sent";
+			else if (data.sentFriendRequests?.includes(user.id)) status = "request_received";
+			setProfileFriendStatus(status);
+			
 			setProfileDialogOpen(true);
 		} catch (error) {
 			console.error("Error fetching profile", error);
+		}
+	};
+
+	const handleFriendAction = async () => {
+		if (!profileData || !user) return;
+		try {
+			if (profileFriendStatus === "none") {
+				await apiFetch(`/api/friends/request`, {
+					method: "POST",
+					body: JSON.stringify({ requesterId: user.id, recipientId: profileData._id })
+				});
+				setProfileFriendStatus("request_sent");
+			} else if (profileFriendStatus === "request_received") {
+				await apiFetch(`/api/friends/accept`, {
+					method: "POST",
+					body: JSON.stringify({ userId: user.id, requesterId: profileData._id })
+				});
+				setProfileFriendStatus("friends");
+			} else if (profileFriendStatus === "request_sent" || profileFriendStatus === "friends") {
+				const endpoint = profileFriendStatus === "friends" ? "/api/friends/remove" : "/api/friends/reject";
+				const payload = profileFriendStatus === "friends" ? { userId: user.id, friendId: profileData._id } : { userId: user.id, targetId: profileData._id };
+				await apiFetch(endpoint, {
+					method: "POST",
+					body: JSON.stringify(payload)
+				});
+				setProfileFriendStatus("none");
+			}
+		} catch (error) {
+			console.error(error);
 		}
 	};
 
@@ -648,8 +687,38 @@ const Messages = () => {
 						<CircularProgress sx={{ my: 4 }} />
 					)}
 				</DialogContent>
-				<DialogActions>
+				<DialogActions sx={{ p: 2, display: "flex", justifyContent: "space-between" }}>
 					<Button onClick={() => setProfileDialogOpen(false)}>Close</Button>
+					<Box sx={{ display: "flex", gap: 1 }}>
+						<Button 
+							variant="outlined" 
+							component={RouterLink}
+							to={`/profile/${profileData?._id}`}
+						>
+							View Full Profile
+						</Button>
+						{user && profileData && user.id !== profileData._id && (
+							<Button
+								variant="contained"
+								color={
+									profileFriendStatus === "friends"
+										? "error"
+										: profileFriendStatus === "request_sent"
+										? "secondary"
+										: "primary"
+								}
+								onClick={handleFriendAction}
+							>
+								{profileFriendStatus === "friends"
+									? "Remove Friend"
+									: profileFriendStatus === "request_sent"
+									? "Cancel Request"
+									: profileFriendStatus === "request_received"
+									? "Accept Request"
+									: "Add Friend"}
+							</Button>
+						)}
+					</Box>
 				</DialogActions>
 			</Dialog>
 		</Container>
