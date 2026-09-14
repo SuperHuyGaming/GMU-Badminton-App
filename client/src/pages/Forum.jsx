@@ -444,8 +444,8 @@ export default function Forum() {
 					sx: {
 						borderRadius: fullScreen ? 0 : 4,
 						overflow: "hidden",
-						backgroundColor: "#fdfdfd",
-						boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+						backgroundColor: "background.paper",
+						backgroundImage: "none", // remove default MUI paper elevation overlay if we want solid color
 					},
 				}}
 			>
@@ -460,7 +460,8 @@ export default function Forum() {
 						justifyContent: "space-between",
 						alignItems: "center",
 						bgcolor: "background.paper",
-						borderBottom: "1px solid #f0f0f0",
+						borderBottom: "1px solid",
+						borderColor: "divider",
 					}}
 				>
 					<Box
@@ -538,7 +539,7 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
-									bgcolor: "background.paper",
+									bgcolor: "background.default",
 								},
 							}}
 						/>
@@ -561,7 +562,7 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
-									bgcolor: "background.paper",
+									bgcolor: "background.default",
 								},
 							}}
 						/>
@@ -575,7 +576,7 @@ export default function Forum() {
 						pb: 4,
 						pt: 1,
 						justifyContent: "space-between",
-						bgcolor: "#fdfdfd",
+						bgcolor: "background.paper",
 					}}
 				>
 					{!fullScreen && (
