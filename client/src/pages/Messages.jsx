@@ -718,26 +718,34 @@ const Messages = () => {
 										});
 									})()}
 									{typingUserIds.has(activeChat._id) && (
-										<Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2, alignItems: 'center' }}>
-											<Box sx={{
-												p: 2,
-												borderRadius: 3,
-												bgcolor: "background.paper",
-												color: "text.primary",
-												boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-												border: "1px solid", borderColor: "divider",
-												borderBottomLeftRadius: 4,
-												display: "flex",
-												gap: 0.5,
-												alignItems: "center",
-												height: 40
-											}}>
-												<Box sx={{ width: 6, height: 6, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.32s' }} />
-												<Box sx={{ width: 6, height: 6, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.16s' }} />
-												<Box sx={{ width: 6, height: 6, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' }} />
-												<style>
-													{`@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }`}
-												</style>
+										<Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2, alignItems: 'flex-end', gap: 1 }}>
+											<Avatar src={getOptimizedAvatar(activeChat.profilePic, 30)} sx={{ width: 24, height: 24, mb: 2 }} />
+											<Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+												<Box sx={{
+													px: 2,
+													py: 1.5,
+													borderRadius: 3,
+													bgcolor: "background.paper",
+													color: "text.primary",
+													boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+													border: "1px solid", borderColor: "divider",
+													borderBottomLeftRadius: 4,
+													display: "inline-flex",
+													gap: 0.5,
+													alignItems: "center",
+													height: 36,
+													width: "fit-content"
+												}}>
+													<Box sx={{ width: 5, height: 5, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.32s' }} />
+													<Box sx={{ width: 5, height: 5, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.16s' }} />
+													<Box sx={{ width: 5, height: 5, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' }} />
+													<style>
+														{`@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }`}
+													</style>
+												</Box>
+												<Typography variant="caption" color="text.secondary" sx={{ ml: 1, fontSize: '0.7rem' }}>
+													{activeChat.name.split(' ')[0]} is typing...
+												</Typography>
 											</Box>
 										</Box>
 									)}
