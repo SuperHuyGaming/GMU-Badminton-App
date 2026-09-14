@@ -77,6 +77,18 @@ export default function PostCard({ post }) {
 		) || 0;
 	const hasLiked = localPost.likedBy?.includes(currentUser?.id);
 
+	const [showHeart, setShowHeart] = useState(false);
+
+	const handleDoubleTap = (e) => {
+		e.preventDefault();
+		// Avoid liking twice rapidly
+		if (!hasLiked && !isLiking) {
+			handleLike();
+		}
+		setShowHeart(true);
+		setTimeout(() => setShowHeart(false), 1000);
+	};
+
 	const openLikes = (e, title, list) => {
 		e.stopPropagation();
 		if (list?.length > 0) setLikesModal({ open: true, title, list });
@@ -191,6 +203,12 @@ export default function PostCard({ post }) {
 					.highlight-active { animation: highlightFlash 3s ease-out; border-radius: 8px; }
 					@keyframes highlightPostFlash { 0% { border-color: #006633; box-shadow: 0 0 20px rgba(0, 102, 51, 0.4); transform: scale(1.02); } 100% { border-color: #e0e0e0; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transform: scale(1); } }
 					.highlight-post-active { animation: highlightPostFlash 3s ease-out; }
+					@keyframes popAndFade { 
+						0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 
+						30% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 
+						50% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 
+						100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; } 
+					}
 				`}
 			</style>
 
@@ -395,13 +413,44 @@ export default function PostCard({ post }) {
 						</Box>
 					</Box>
 				) : (
-					<Typography
-						variant="body1"
-						color="text.primary"
-						sx={{ mb: 3, whiteSpace: "pre-wrap" }}
+					<Box 
+						onDoubleClick={handleDoubleTap}
+						sx={{ 
+							position: 'relative', 
+							mb: 3, 
+							cursor: 'pointer',
+							userSelect: 'none' // Prevent text selection on rapid double clicking
+						}}
 					>
-						{localPost.content}
-					</Typography>
+						<Typography
+							variant="body1"
+							color="text.primary"
+							sx={{ whiteSpace: "pre-wrap", pointerEvents: 'none' }}
+						>
+							{localPost.content}
+						</Typography>
+
+						{/* Animated Heart Overlay */}
+						{showHeart && (
+							<Box
+								sx={{
+									position: 'absolute',
+									top: '50%',
+									left: '50%',
+									transform: 'translate(-50%, -50%)',
+									color: '#e74c3c',
+									animation: 'popAndFade 1s ease-out forwards',
+									pointerEvents: 'none',
+									zIndex: 10,
+									display: 'flex',
+									justifyContent: 'center',
+									alignItems: 'center'
+								}}
+							>
+								<ThumbUpFilled style={{ fontSize: '100px', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.3))' }} />
+							</Box>
+						)}
+					</Box>
 				)}
 
 				{/* STATS (Likes & Comments counts) */}
