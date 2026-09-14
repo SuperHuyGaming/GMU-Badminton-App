@@ -347,20 +347,20 @@ const Messages = () => {
 				width: { xs: "100%", md: 300 }, 
 				display: { xs: activeChat ? "none" : "flex", md: "flex" }, 
 				flexDirection: "column", 
-				border: "1px solid #eaeaea", 
+				border: "1px solid", borderColor: "divider", 
 				borderRadius: 3 
 			}}>
 				<Box sx={{ p: 2, bgcolor: "primary.main", color: "white", borderRadius: "12px 12px 0 0" }}>
 					<Typography variant="h6" fontWeight="bold">Messages</Typography>
 				</Box>
-				<Box sx={{ p: 1.5, borderBottom: "1px solid #eaeaea" }}>
+				<Box sx={{ p: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
 					<TextField
 						fullWidth
 						size="small"
 						placeholder="Search users..."
 						value={searchQuery}
 						onChange={handleSearch}
-						sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5, bgcolor: '#f5f5f5' } }}
+						sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5, bgcolor: 'background.default' } }}
 					/>
 				</Box>
 				<List sx={{ flex: 1, overflowY: "auto", p: 0 }}>
@@ -507,7 +507,7 @@ const Messages = () => {
 				flex: 1, 
 				display: { xs: activeChat ? "flex" : "none", md: "flex" }, 
 				flexDirection: "column", 
-				border: "1px solid #eaeaea", 
+				border: "1px solid", borderColor: "divider", 
 				borderRadius: 3,
 				overflow: "hidden"
 			}}>
@@ -517,7 +517,8 @@ const Messages = () => {
 							onClick={handleProfileClick}
 							sx={{ 
 								p: 2, 
-								borderBottom: "1px solid #eaeaea", 
+								borderBottom: "1px solid",
+								borderColor: "divider", 
 								display: "flex", 
 								alignItems: "center", 
 								gap: 2,
@@ -542,7 +543,7 @@ const Messages = () => {
 							</Box>
 						</Box>
 						
-						<Box sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2, bgcolor: "#f9f9f9" }}>
+						<Box sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2, bgcolor: "background.default" }}>
 							{isLoadingChat ? (
 								<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
 									<CircularProgress color="primary" />
@@ -579,10 +580,11 @@ const Messages = () => {
 													maxWidth: "70%",
 													p: 2,
 													borderRadius: 3,
-													bgcolor: isMe ? "primary.main" : "white",
+													bgcolor: isMe ? "primary.main" : "background.paper",
 													color: isMe ? "white" : "text.primary",
 													boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-													border: isMe ? "none" : (msg.isDeletedByAdmin ? "1px dashed #ffcccc" : "1px solid #eaeaea"),
+													border: isMe ? "none" : (msg.isDeletedByAdmin ? "1px dashed #ffcccc" : "1px solid"),
+													borderColor: isMe ? undefined : "divider",
 													borderBottomRightRadius: isMe ? 4 : 24,
 													borderBottomLeftRadius: isMe ? 24 : 4
 												}}>
@@ -608,7 +610,7 @@ const Messages = () => {
 												bgcolor: "background.paper",
 												color: "text.primary",
 												boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-												border: "1px solid #eaeaea",
+												border: "1px solid", borderColor: "divider",
 												borderBottomLeftRadius: 4,
 												display: "flex",
 												gap: 0.5,
@@ -634,7 +636,8 @@ const Messages = () => {
 							onSubmit={handleSendMessage} 
 							sx={{ 
 								p: 2, 
-								borderTop: "1px solid #eaeaea", 
+								borderTop: "1px solid",
+								borderColor: "divider",
 								display: "flex", 
 								gap: 1, 
 								bgcolor: "background.paper", 
