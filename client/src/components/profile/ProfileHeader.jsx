@@ -122,7 +122,34 @@ export default function ProfileHeader({
 					},
 				}}
 			>
-				{/* HIDDEN INPUT - NO BUTTON REQUIRED */}
+				{/* EDIT COVER PHOTO BUTTON */}
+				{isOwnProfile && (
+					<Button
+						variant="contained"
+						startIcon={<CameraIcon />}
+						onClick={(e) => {
+							e.stopPropagation();
+							if (coverInputRef.current) coverInputRef.current.click();
+						}}
+						sx={{
+							position: 'absolute',
+							bottom: { xs: 16, md: 24 },
+							right: { xs: 16, md: 24 },
+							bgcolor: 'background.paper',
+							color: 'text.primary',
+							fontWeight: 'bold',
+							textTransform: 'none',
+							borderRadius: 2,
+							px: 2,
+							boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+							'&:hover': { bgcolor: '#f5f6f7' }
+						}}
+					>
+						Edit cover photo
+					</Button>
+				)}
+
+				{/* HIDDEN INPUT */}
 				{isOwnProfile && (
 					<input
 						accept="image/*"

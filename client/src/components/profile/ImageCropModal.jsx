@@ -32,7 +32,8 @@ export default function ImageCropModal({
 	imageSrc,
 	onClose,
 	onCropComplete,
-	aspectRatio = 1,
+	aspectRatio,
+	title = "Crop Image"
 }) {
 	const [crop, setCrop] = useState();
 	const [completedCrop, setCompletedCrop] = useState(null);
@@ -40,7 +41,9 @@ export default function ImageCropModal({
 
 	const onImageLoad = (e) => {
 		const { width, height } = e.currentTarget;
-		setCrop(centerAspectCrop(width, height, aspectRatio));
+		if (aspectRatio) {
+			setCrop(centerAspectCrop(width, height, aspectRatio));
+		}
 	};
 
 	const handleSave = async () => {
@@ -80,7 +83,7 @@ export default function ImageCropModal({
 			}}
 		>
 			<DialogTitle sx={{ fontWeight: "900", textAlign: "center", py: 3 }}>
-				{aspectRatio ? "Adjust Profile Picture" : "Adjust Cover Photo"}
+				{title}
 			</DialogTitle>
 			<DialogContent sx={{ 
 				display: "flex", 
