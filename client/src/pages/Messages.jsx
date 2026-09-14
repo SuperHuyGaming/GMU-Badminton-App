@@ -678,53 +678,59 @@ const Messages = () => {
 											
 											const isNextSame = nextMsg && getSenderId(nextMsg) === getSenderId(msg) && (new Date(nextMsg.timestamp) - new Date(msg.timestamp) < 5 * 60 * 1000);
 											const isPrevSame = prevMsg && getSenderId(prevMsg) === getSenderId(msg) && (new Date(msg.timestamp) - new Date(prevMsg.timestamp) < 5 * 60 * 1000);
+											
+											const showTopTimestamp = !prevMsg || (new Date(msg.timestamp) - new Date(prevMsg.timestamp) > 15 * 60 * 1000);
 
 											return (
-												<Box key={idx} sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
-													{!isMe && !msg.isDeletedByAdmin && (
-														<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message">
-															<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-														</IconButton>
+												<React.Fragment key={idx}>
+													{showTopTimestamp && (
+														<Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%", display: "block", mb: 2, mt: 1, fontWeight: 'medium' }}>
+															{formatTime(msg.timestamp)}
+														</Typography>
 													)}
-													<Box sx={{
-														maxWidth: "70%",
-														p: 1.5,
-														px: 2,
-														borderRadius: 3,
-														bgcolor: isMe ? "primary.main" : "background.paper",
-														color: isMe ? "white" : "text.primary",
-														boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-														border: isMe ? "none" : (msg.isDeletedByAdmin ? "1px dashed #ffcccc" : "1px solid"),
-														borderColor: isMe ? undefined : "divider",
-														borderTopRightRadius: isMe && isPrevSame ? 4 : 24,
-														borderBottomRightRadius: isMe && isNextSame ? 4 : (isMe ? 4 : 24),
-														borderTopLeftRadius: !isMe && isPrevSame ? 4 : 24,
-														borderBottomLeftRadius: !isMe && isNextSame ? 4 : (!isMe ? 4 : 24)
-													}}>
-														{msg.isDeletedByAdmin ? (
-															<Typography variant="body2" sx={{ fontStyle: 'italic', color: isMe ? 'rgba(255,255,255,0.7)' : 'error.main' }}>
-																[This message was removed by an Admin]
-															</Typography>
-														) : (
-															<Typography variant="body1">{msg.content}</Typography>
+													<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
+														{!isMe && !msg.isDeletedByAdmin && (
+															<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message">
+																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+															</IconButton>
 														)}
-														{!isNextSame && (
-															<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", alignItems: "center", mt: 0.5, gap: 1 }}>
-																<Typography variant="caption" sx={{ opacity: 0.7, fontSize: "0.65rem" }}>
-																	{formatTime(msg.timestamp)}
+														<Box sx={{
+															maxWidth: "70%",
+															p: 1.5,
+															px: 2,
+															borderRadius: 3,
+															bgcolor: isMe ? "primary.main" : "background.paper",
+															color: isMe ? "white" : "text.primary",
+															boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+															border: isMe ? "none" : (msg.isDeletedByAdmin ? "1px dashed #ffcccc" : "1px solid"),
+															borderColor: isMe ? undefined : "divider",
+															borderTopRightRadius: isMe && isPrevSame ? 4 : 24,
+															borderBottomRightRadius: isMe && isNextSame ? 4 : (isMe ? 4 : 24),
+															borderTopLeftRadius: !isMe && isPrevSame ? 4 : 24,
+															borderBottomLeftRadius: !isMe && isNextSame ? 4 : (!isMe ? 4 : 24)
+														}}>
+															{msg.isDeletedByAdmin ? (
+																<Typography variant="body2" sx={{ fontStyle: 'italic', color: isMe ? 'rgba(255,255,255,0.7)' : 'error.main' }}>
+																	[This message was removed by an Admin]
 																</Typography>
-																{isMe && !msg.read && (
-																	<Typography variant="caption" sx={{ opacity: 0.7, fontSize: "0.65rem", fontStyle: "italic" }}>
-																		• Sent
-																	</Typography>
-																)}
-																{isMe && idx === lastReadMsgIndex && (
-																	<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 20)} sx={{ width: 14, height: 14 }} />
-																)}
-															</Box>
-														)}
+															) : (
+																<Typography variant="body1">{msg.content}</Typography>
+															)}
+															{!isNextSame && (isMe && (!msg.read || idx === lastReadMsgIndex)) && (
+																<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", alignItems: "center", mt: 0.5, gap: 1 }}>
+																	{isMe && !msg.read && (
+																		<Typography variant="caption" sx={{ opacity: 0.7, fontSize: "0.65rem", fontStyle: "italic" }}>
+																			Sent
+																		</Typography>
+																	)}
+																	{isMe && idx === lastReadMsgIndex && (
+																		<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 20)} sx={{ width: 14, height: 14 }} />
+																	)}
+																</Box>
+															)}
+														</Box>
 													</Box>
-												</Box>
+												</React.Fragment>
 											);
 										});
 									})()}
