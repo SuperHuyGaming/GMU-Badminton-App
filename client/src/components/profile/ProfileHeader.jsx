@@ -301,7 +301,7 @@ export default function ProfileHeader({
 					</Typography>
 					<Typography
 						variant="subtitle1"
-						color="primary"
+						color="secondary.main"
 						sx={{ fontWeight: 800, mt: 0.5 }}
 					>
 						{profileData.skillLevel || "D Level"}

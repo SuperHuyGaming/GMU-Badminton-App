@@ -270,7 +270,7 @@ export default function PostCard({ post }) {
 						<Typography
 							variant="h6"
 							fontWeight="bold"
-							color="primary"
+							color="text.primary"
 							sx={{ lineHeight: 1.2 }}
 						>
 							{localPost.title}

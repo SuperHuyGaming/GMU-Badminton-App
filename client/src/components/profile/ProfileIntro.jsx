@@ -31,19 +31,19 @@ export default function ProfileIntro({
 			</Typography>
 
 			<Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 3 }}>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #006633', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-					<Typography variant="h5" fontWeight="900" color="primary">{profileData.friends?.length || 0}</Typography>
+				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #006633', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+					<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.friends?.length || 0}</Typography>
 					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', mt: 0.5, display: 'block', letterSpacing: 1 }}>Friends</Typography>
 				</Box>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #006633', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-					<Typography variant="h5" fontWeight="900" color="primary">{profileData.skillLevel || 'New'}</Typography>
+				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #006633', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+					<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.skillLevel || 'New'}</Typography>
 					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', mt: 0.5, display: 'block', letterSpacing: 1 }}>Level</Typography>
 				</Box>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #FFCC33', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-					<Typography variant="h5" fontWeight="900" color="secondary">{profileData.stats?.totalMatches || 0}</Typography>
+				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #FFCC33', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+					<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.stats?.totalMatches || 0}</Typography>
 					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', mt: 0.5, display: 'block', letterSpacing: 1 }}>Matches</Typography>
 				</Box>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2, textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #FFCC33', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid #FFCC33', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
 					<Typography variant="h5" fontWeight="900" color="error">{profileData.stats?.winStreak || 0} 🔥</Typography>
 					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', mt: 0.5, display: 'block', letterSpacing: 1 }}>Win Streak</Typography>
 				</Box>
