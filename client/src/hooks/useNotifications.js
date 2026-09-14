@@ -17,6 +17,14 @@ export const useNotifications = () => {
 
 		socket.emit("joinUserRoom", user.id);
 
+		const fetchUnread = () => {
+			apiFetch(`/api/messages/recent/${user.id}`).then(res => res.json())
+			.then(chatsData => {
+				const unread = chatsData.reduce((acc, chat) => acc + chat.unreadCount, 0);
+				setUnreadMessages(unread);
+			}).catch(console.error);
+		};
+
 		// Fetch initial notifications and unread messages
 		Promise.all([
 			apiFetch(`/api/forum/notifications/${user.id}`).then(res => res.json()),
@@ -28,6 +36,8 @@ export const useNotifications = () => {
 			setUnreadMessages(unread);
 		})
 		.catch(console.error);
+
+		window.addEventListener("chatRead", fetchUnread);
 
 		// Handle live notifications
 		const handleNewNotification = (notification) => {
@@ -50,6 +60,7 @@ export const useNotifications = () => {
 		return () => {
 			socket.off("newNotification", handleNewNotification);
 			socket.off("privateMessage", handlePrivateMessage);
+			window.removeEventListener("chatRead", fetchUnread);
 		};
 	}, [user, setToastMessage]);
 
@@ -64,6 +75,16 @@ export const useNotifications = () => {
 		}).catch(console.error);
 	};
 
+	const markSingleAsRead = async (notifId) => {
+		if (!user) return;
+		setNotifications((prev) => 
+			prev.map((n) => n._id === notifId ? { ...n, read: true } : n)
+		);
+		await apiFetch(`/api/forum/notifications/single/${notifId}/read`, {
+			method: "PUT",
+		}).catch(console.error);
+	};
+
 	const clearNotifications = () => {
 		setNotifications([]);
 	};
@@ -74,6 +95,7 @@ export const useNotifications = () => {
 		unreadMessages,
 		setUnreadMessages,
 		markAsRead,
+		markSingleAsRead,
 		clearNotifications,
 	};
 };

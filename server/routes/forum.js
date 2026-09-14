@@ -129,6 +129,18 @@ router.put("/notifications/:userId/read", async (req, res) => {
 	}
 });
 
+router.put("/notifications/single/:notifId/read", async (req, res) => {
+	try {
+		await Notification.findByIdAndUpdate(
+			req.params.notifId,
+			{ read: true }
+		);
+		res.json({ success: true });
+	} catch (error) {
+		res.status(500).json({ message: "Error updating notification" });
+	}
+});
+
 const sendNotification = async (io, targetUserId, message, link) => {
 	if (!targetUserId || targetUserId === "000000000000000000000000") return;
 	const notif = new Notification({ targetUserId, message, link });

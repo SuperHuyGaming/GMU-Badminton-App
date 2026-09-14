@@ -165,6 +165,9 @@ const Messages = () => {
 					setRecentChats(prev => prev.map(c => 
 						c.friend._id === activeChat._id ? { ...c, unreadCount: 0 } : c
 					));
+					
+					// Notify global unread count
+					window.dispatchEvent(new Event("chatRead"));
 				})
 				.catch(console.error)
 				.finally(() => setIsLoadingChat(false));

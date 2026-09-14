@@ -35,7 +35,7 @@ export default function Navbar() {
     const theme = useTheme();
     const colorMode = useContext(ColorModeContext);
     const { user, logout } = useAuth();
-    const { notifications, unreadCount, unreadMessages, markAsRead, clearNotifications } = useNotifications();
+    const { notifications, unreadCount, unreadMessages, markAsRead, markSingleAsRead, clearNotifications } = useNotifications();
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState(null);
     const open = Boolean(anchorEl);
@@ -48,7 +48,6 @@ export default function Navbar() {
     
     const handleNotifClick = (event) => {
         setNotifAnchorEl(event.currentTarget);
-        markAsRead();
     };
     
     const handleNotifClose = () => setNotifAnchorEl(null);
@@ -238,21 +237,24 @@ export default function Navbar() {
 												Notifications
 											</Typography>
 											{notifications.length > 0 && (
-												<Typography
-													variant="caption"
-													color="primary"
-													sx={{
-														cursor: "pointer",
-														fontWeight: "bold",
-														"&:hover": {
-															textDecoration:
-																"underline",
-														},
-													}}
-													onClick={clearNotifications}
-												>
-													Clear All
-												</Typography>
+												<Box sx={{ display: 'flex', gap: 2 }}>
+													<Typography
+														variant="caption"
+														color="primary"
+														sx={{ cursor: "pointer", fontWeight: "bold", "&:hover": { textDecoration: "underline" } }}
+														onClick={markAsRead}
+													>
+														Mark all as read
+													</Typography>
+													<Typography
+														variant="caption"
+														color="error"
+														sx={{ cursor: "pointer", fontWeight: "bold", "&:hover": { textDecoration: "underline" } }}
+														onClick={clearNotifications}
+													>
+														Clear All
+													</Typography>
+												</Box>
 											)}
 										</Box>
 
@@ -275,21 +277,23 @@ export default function Navbar() {
 													animate={{ opacity: 1, x: 0 }}
 													transition={{ delay: index * 0.05 }}
 												>
-													<MenuItem
+											<MenuItem
 														component={RouterLink}
 														to={notif.link}
-														onClick={handleNotifClose}
+														onClick={() => {
+															handleNotifClose();
+															if (!notif.read) markSingleAsRead(notif._id || notif.id);
+														}}
 														sx={{
 															whiteSpace: "normal",
 															py: 1.5,
-															borderBottom:
-																"1px solid #f5f5f5",
+															backgroundColor: notif.read ? "transparent" : "rgba(0, 102, 51, 0.05)",
+															borderBottom: "1px solid #f5f5f5",
 															"&:active": {
-																transform:
-																	"scale(0.98)",
+																transform: "scale(0.98)",
 															},
 															"&:hover": {
-																backgroundColor: "rgba(0, 102, 51, 0.05)",
+																backgroundColor: notif.read ? "rgba(0,0,0,0.02)" : "rgba(0, 102, 51, 0.1)",
 															}
 														}}
 													>
@@ -298,6 +302,7 @@ export default function Navbar() {
 															variant="body2"
 															sx={{
 																lineHeight: 1.3,
+																fontWeight: notif.read ? "normal" : "bold"
 															}}
 														>
 															{notif.message}

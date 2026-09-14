@@ -12,6 +12,7 @@ import {
 	MenuItem,
 	Dialog,
 	IconButton,
+	Badge
 } from "@mui/material";
 
 // Clean Icons
@@ -56,6 +57,7 @@ export default function ProfileHeader({
 	setActiveTab,
 	friendStatus,
 	handleFriendAction,
+	isOnline
 }) {
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
 	const [viewerImage, setViewerImage] = useState(null);
@@ -154,27 +156,48 @@ export default function ProfileHeader({
 						flexShrink: 0,
 					}}
 				>
-					<Avatar
-						src={getOptimizedAvatar(displayProfilePic, 200)}
-						onClick={handleAvatarClick}
+					<Badge
+						overlap="circular"
+						anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+						variant="dot"
 						sx={{
 							width: "100%",
 							height: "100%",
-							border: "4px solid white",
-							bgcolor: "secondary.main",
-							color: "primary.main",
-							fontSize: "4rem",
-							fontWeight: "bold",
-							boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-							cursor:
-								displayProfilePic || isOwnProfile
-									? "pointer"
-									: "default",
+							"& .MuiBadge-badge": {
+								backgroundColor: isOnline ? "#44b700" : "transparent",
+								color: isOnline ? "#44b700" : "transparent",
+								boxShadow: isOnline ? `0 0 0 4px white` : "none",
+								width: 24,
+								height: 24,
+								borderRadius: "50%",
+								bottom: 12,
+								right: 12,
+								transition: "all 0.3s ease"
+							}
 						}}
 					>
-						{!displayProfilePic &&
-							profileData.name.charAt(0).toUpperCase()}
-					</Avatar>
+						<Avatar
+							src={getOptimizedAvatar(displayProfilePic, 200)}
+							onClick={handleAvatarClick}
+							sx={{
+								width: "100%",
+								height: "100%",
+								border: "4px solid white",
+								bgcolor: "secondary.main",
+								color: "primary.main",
+								fontSize: "4rem",
+								fontWeight: "bold",
+								boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+								cursor:
+									displayProfilePic || isOwnProfile
+										? "pointer"
+										: "default",
+							}}
+						>
+							{!displayProfilePic &&
+								profileData.name.charAt(0).toUpperCase()}
+						</Avatar>
+					</Badge>
 
 					{isOwnProfile && (
 						<>

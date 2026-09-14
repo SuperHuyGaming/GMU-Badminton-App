@@ -93,6 +93,8 @@ export default function Profile() {
 		}
 	}, [postsQueryData]);
 
+	const [isOnline, setIsOnline] = useState(false);
+
 	useEffect(() => {
 		socket.on("profileUpdated", (updatedUser) => {
 			if (updatedUser._id === id) setProfileData(updatedUser);
@@ -107,10 +109,20 @@ export default function Profile() {
 				setUserPosts((prev) => [newPost, ...prev]);
 		});
 
+		const handleOnlineUsers = (users) => {
+			setIsOnline(users.includes(id));
+		};
+		socket.on("onlineUsersUpdate", handleOnlineUsers);
+
+		// Ask server to broadcast online users list right now so we get initial state
+		// (optional depending on how often server emits it, but good for immediate feedback)
+		// Or we can just wait for an update. Actually just wait is fine.
+
 		return () => {
 			socket.off("profileUpdated");
 			socket.off("postUpdated");
 			socket.off("postCreated");
+			socket.off("onlineUsersUpdate", handleOnlineUsers);
 		};
 	}, [id]);
 
@@ -299,6 +311,7 @@ export default function Profile() {
 				setActiveTab={setActiveTab}
 				friendStatus={friendStatus}
 				handleFriendAction={handleFriendAction}
+				isOnline={isOnline}
 			/>
 
 			{activeTab === "posts" ? (
