@@ -13,6 +13,7 @@ import { io } from "socket.io-client";
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileIntro from "../components/profile/ProfileIntro";
 import ProfileEditForm from "../components/profile/ProfileEditForm";
+import ImageCropModal from "../components/profile/ImageCropModal";
 import PostCard from "../components/PostCard";
 import BadgeShowcase from "../components/profile/BadgeShowcase";
 import apiFetch from "../utils/api";
@@ -33,6 +34,10 @@ export default function Profile() {
 	const [friendStatus, setFriendStatus] = useState("none");
 
 	const [userPosts, setUserPosts] = useState([]);
+
+	const [cropModalOpen, setCropModalOpen] = useState(false);
+	const [cropImageSrc, setCropImageSrc] = useState(null);
+	const [cropType, setCropType] = useState("profilePic"); // "profilePic" or "coverPic"
 
 	const isOwnProfile = user && user.id === id;
 
@@ -175,18 +180,32 @@ export default function Profile() {
 	const handleChange = (e) =>
 		setFormData({ ...formData, [e.target.name]: e.target.value });
 
-	const handleImageUpload = async (e, type) => {
+	const handleImageUpload = (e, type) => {
 		const file = e.target.files[0];
 		if (!file) return;
 		if (!file.type.startsWith("image/"))
 			return alert("Please select a valid image file.");
 
+		const reader = new FileReader();
+		reader.onload = () => {
+			setCropImageSrc(reader.result);
+			setCropType(type);
+			setCropModalOpen(true);
+		};
+		reader.readAsDataURL(file);
+		
+		// Reset the input so the same file can be selected again
+		if (e.target) e.target.value = "";
+	};
+
+	const handleCroppedUpload = async (croppedBlob) => {
+		setCropModalOpen(false);
 		setIsSaving(true);
 
 		const uploadData = new FormData();
-		uploadData.append("image", file);
-		uploadData.append("type", type);
-		// NEW: Explicitly send the User ID so the backend never guesses!
+		// Assign a filename to the blob
+		uploadData.append("image", croppedBlob, "cropped.jpg");
+		uploadData.append("type", cropType);
 		uploadData.append("userId", user.id);
 
 		try {
@@ -197,14 +216,13 @@ export default function Profile() {
 
 			const data = await res.json();
 
-			// NEW: Added `&& data.user` safety check to prevent React from crashing!
 			if (res.ok && data.user) {
 				const updatedUser = data.user;
 				setProfileData(updatedUser);
 
-				setFormData((prev) => ({ ...prev, [type]: updatedUser[type] }));
+				setFormData((prev) => ({ ...prev, [cropType]: updatedUser[cropType] }));
 
-				if (type === "profilePic") {
+				if (cropType === "profilePic") {
 					const newLocalUser = {
 						...user,
 						name: updatedUser.name,
@@ -222,7 +240,6 @@ export default function Profile() {
 			setToastMessage("Failed to process image.");
 		} finally {
 			setIsSaving(false);
-			if (e.target) e.target.value = "";
 		}
 	};
 
@@ -462,6 +479,16 @@ export default function Profile() {
 					</Box>
 				</Box>
 			)}
+			<ImageCropModal
+				open={cropModalOpen}
+				imageSrc={cropImageSrc}
+				onClose={() => {
+					setCropModalOpen(false);
+					setCropImageSrc(null);
+				}}
+				onCropComplete={handleCroppedUpload}
+				aspectRatio={cropType === "profilePic" ? 1 : 16 / 5}
+			/>
 		</Box>
 	);
 }
