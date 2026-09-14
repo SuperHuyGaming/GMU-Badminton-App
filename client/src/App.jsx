@@ -1,14 +1,14 @@
 // client/src/App.jsx
-import React, { useEffect, createContext, useMemo, useState } from "react";
+import React, { useEffect, createContext, useMemo, useState, Suspense } from "react";
 import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
-import Auth from "./pages/Auth";
-import Profile from "./pages/Profile";
-import Dashboard from "./pages/Dashboard";
-import Forum from "./pages/Forum";
-import Admin from "./pages/Admin";
-import Messages from "./pages/Messages";
-import Leaderboard from "./pages/Leaderboard";
+const Auth = React.lazy(() => import("./pages/Auth"));
+const Profile = React.lazy(() => import("./pages/Profile"));
+const Dashboard = React.lazy(() => import("./pages/Dashboard"));
+const Forum = React.lazy(() => import("./pages/Forum"));
+const Admin = React.lazy(() => import("./pages/Admin"));
+const Messages = React.lazy(() => import("./pages/Messages"));
+const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import socket from "./utils/socket";
 import {
@@ -27,6 +27,8 @@ import {
 	Snackbar,
 	Alert,
 	GlobalStyles,
+	CircularProgress,
+	Box,
 } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -44,79 +46,87 @@ const AnimatedRoutes = () => {
 	
 	return (
 		<AnimatePresence mode="wait">
-			<Routes key={location.pathname}>
-				<Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
-				<Route
-					path="/leaderboard"
-					element={
-						user ? (
-							<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-								<Leaderboard />
-							</motion.div>
-						) : (
-							<Navigate to="/auth" />
-						)
-					}
-				/>
-				<Route
-					path="/"
-					element={
-						user ? (
-							<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-								<Dashboard />
-							</motion.div>
-						) : (
-							<Navigate to="/auth" />
-						)
-					}
-				/>
-				<Route
-					path="/forum"
-					element={
-						user ? (
-							<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-								<Forum />
-							</motion.div>
-						) : (
-							<Navigate to="/auth" />
-						)
-					}
-				/>
-				<Route
-					path="/profile/:id?"
-					element={
-						user ? (
-							<motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.02 }} transition={{ duration: 0.2 }}>
-								<Profile />
-							</motion.div>
-						) : (
-							<Navigate to="/auth" />
-						)
-					}
-				/>
-				<Route
-					path="/messages"
-					element={
-						user ? (
-							<motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
-								<Messages />
-							</motion.div>
-						) : (
-							<Navigate to="/auth" />
-						)
-					}
-				/>
-				<Route
-					path="/admin"
-					element={
-						<AdminRoute>
-							<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-								<Admin />
-							</motion.div>
-						</AdminRoute>
-					}
-				/>
-			</Routes>
+			<Suspense fallback={
+				<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw' }}>
+					<CircularProgress color="primary" />
+				</Box>
+			}>
+				<Routes key={location.pathname}>
+					<Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
+					<Route
+						path="/leaderboard"
+						element={
+							user ? (
+								<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+									<Leaderboard />
+								</motion.div>
+							) : (
+								<Navigate to="/auth" />
+							)
+						}
+					/>
+					<Route
+						path="/"
+						element={
+							user ? (
+								<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+									<Dashboard />
+								</motion.div>
+							) : (
+								<Navigate to="/auth" />
+							)
+						}
+					/>
+					<Route
+						path="/forum"
+						element={
+							user ? (
+								<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+									<Forum />
+								</motion.div>
+							) : (
+								<Navigate to="/auth" />
+							)
+						}
+					/>
+					<Route
+						path="/profile/:id?"
+						element={
+							user ? (
+								<motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.02 }} transition={{ duration: 0.2 }}>
+									<Profile />
+								</motion.div>
+							) : (
+								<Navigate to="/auth" />
+							)
+						}
+					/>
+					<Route
+						path="/messages"
+						element={
+							user ? (
+								<motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+									<Messages />
+								</motion.div>
+							) : (
+								<Navigate to="/auth" />
+							)
+						}
+					/>
+					<Route
+						path="/admin"
+						element={
+							<AdminRoute>
+								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
+									<Admin />
+								</motion.div>
+							</AdminRoute>
+						}
+					/>
+					{/* Catch all */}
+					<Route path="*" element={<Navigate to="/" />} />
+				</Routes>
+			</Suspense>
 		</AnimatePresence>
 	);
 };
