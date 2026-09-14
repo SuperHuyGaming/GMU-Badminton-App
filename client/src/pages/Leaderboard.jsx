@@ -41,8 +41,8 @@ const Leaderboard = () => {
                         value={tab} 
                         onChange={(e, v) => setTab(v)} 
                         centered 
-                        sx={{ bgcolor: 'primary.main', color: 'white' }}
-                        TabIndicatorProps={{ style: { backgroundColor: 'white', height: 4, borderTopLeftRadius: 4, borderTopRightRadius: 4 } }}
+                        sx={{ bgcolor: 'rgba(0, 102, 51, 0.4)', color: 'white' }}
+                        TabIndicatorProps={{ style: { backgroundColor: '#FFCC33', height: 4, borderTopLeftRadius: 4, borderTopRightRadius: 4 } }}
                         textColor="inherit"
                     >
                         <Tab label="Singles (1v1)" value="singles" sx={{ fontWeight: '900', py: 2.5, textTransform: 'none', fontSize: '1rem' }} />

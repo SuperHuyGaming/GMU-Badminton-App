@@ -505,7 +505,7 @@ export default function Dashboard() {
 											width: "100%", // Guarantee children fill the space
 											transition: "all 0.2s",
 											"&:hover": {
-												backgroundColor: "#f9fafb",
+												backgroundColor: "action.hover",
 											},
 										}}
 									>

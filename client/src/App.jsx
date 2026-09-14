@@ -26,6 +26,7 @@ import {
 	Container,
 	Snackbar,
 	Alert,
+	GlobalStyles,
 } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -141,15 +142,40 @@ function App() {
 			secondary: { main: "#FFCC33" },
 			background: { 
 				default: mode === "light" ? "#f4f6f8" : "#02120a", // Ultra deep forest green
-				paper: mode === "light" ? "#ffffff" : "#082114", // Slightly lighter forest green
+				paper: mode === "light" ? "rgba(255, 255, 255, 0.75)" : "rgba(8, 33, 20, 0.75)", // Translucent for glassmorphism
 			},
 		},
-		shape: { borderRadius: 12 },
+		shape: { borderRadius: 16 }, // Rounder for glass UI
 		typography: {
 			fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif',
 			h3: { fontWeight: 800, letterSpacing: "-0.03em" },
 			h5: { fontWeight: 600 },
 		},
+		components: {
+			MuiPaper: {
+				styleOverrides: {
+					root: {
+						backgroundImage: "none",
+						backdropFilter: "blur(20px)",
+						WebkitBackdropFilter: "blur(20px)",
+						boxShadow: mode === "light" 
+							? "0 8px 32px 0 rgba(0, 102, 51, 0.05)" 
+							: "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
+						border: `1px solid ${mode === "light" ? "rgba(255, 255, 255, 0.4)" : "rgba(255, 255, 255, 0.05)"}`,
+					}
+				}
+			},
+			MuiAppBar: {
+				styleOverrides: {
+					root: {
+						backdropFilter: "blur(20px)",
+						WebkitBackdropFilter: "blur(20px)",
+						backgroundColor: mode === "light" ? "rgba(0, 102, 51, 0.85)" : "rgba(2, 18, 10, 0.85)",
+						backgroundImage: "none",
+					}
+				}
+			}
+		}
 	}), [mode]);
 
 	useEffect(() => {
@@ -171,6 +197,21 @@ function App() {
 		<ColorModeContext.Provider value={colorMode}>
 			<ThemeProvider theme={theme}>
 				<CssBaseline />
+				<GlobalStyles styles={{
+					'@keyframes gradientShift': {
+						'0%': { backgroundPosition: '0% 50%' },
+						'50%': { backgroundPosition: '100% 50%' },
+						'100%': { backgroundPosition: '0% 50%' }
+					},
+					body: {
+						background: mode === 'light' 
+							? 'linear-gradient(-45deg, #f4f6f8, #e6f0eb, #fbf7e9, #f4f6f8)' 
+							: 'linear-gradient(-45deg, #02120a, #032b17, #1a1705, #02120a)',
+						backgroundSize: '400% 400%',
+						animation: 'gradientShift 15s ease infinite',
+						backgroundAttachment: 'fixed',
+					}
+				}} />
 				<BrowserRouter>
 					<Navbar />
 
