@@ -235,9 +235,6 @@ const Messages = () => {
 		
 		handleResize(); // Initial set
 		
-		// Prevent body scroll only through CSS, let layout adjust naturally
-		document.body.style.overflow = "hidden";
-		
 		return () => {
 			if (window.visualViewport) {
 				window.visualViewport.removeEventListener("resize", handleResize);
@@ -245,7 +242,6 @@ const Messages = () => {
 			} else {
 				window.removeEventListener("resize", handleResize);
 			}
-			document.body.style.overflow = "auto";
 		};
 	}, []);
 
@@ -952,6 +948,7 @@ const Messages = () => {
 							component={RouterLink} 
 							to={`/profile/${profileData._id}`}
 							fullWidth
+							onClick={() => setProfileDialogOpen(false)}
 							sx={{ 
 								borderRadius: 3, 
 								py: 1.5, 
