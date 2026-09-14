@@ -1,21 +1,23 @@
 # GMU Badminton Community Hub
 
-A full-stack social platform built for George Mason University students to coordinate badminton matches, track court availability at the RAC, and connect with other players through a Facebook-style forum.
+A full-stack, real-time social platform built for George Mason University students to coordinate badminton matches, track court availability at the RAC, and connect with other players through a high-end, gamified interface.
 
 ## 🚀 Features
 
+- **Live Chat & Messaging:** Real-time WebSockets powered chat with iMessage-style typing indicators, unread badges, and "Last Active" presence tracking.
+- **GMU Varsity Aesthetic:** A custom, premium UI utilizing Deep Forest Green OLED dark mode, Gold accents, and animated mesh gradient backgrounds with frosted glassmorphism.
+- **Interactive Forum:** Facebook-style modal comments, nested replies (3 levels deep), and user tagging.
+- **Instagram-style Interactions:** Double-tap anywhere on a post to trigger a massive glowing heart and instantly "Like" it.
+- **Global Leaderboards:** Elo tracking for Singles and Doubles with glowing Top-3 player avatars and Varsity trading card-style profile stats.
+- **Custom Player Profiles:** Free-form, any-ratio cover photo cropping and dynamic badges.
 - **Live RAC Status:** Scraped real-time data on gym availability.
-- **Interactive Forum:** Nested comments (3 levels deep), likes, and user tagging.
-- **Player Profiles:** Customizable "Player Cards" showing skill levels, playstyles, and equipment.
-- **Smart UI:** Facebook-style modal comments and dynamic navigation.
-- **Secure Auth:** JWT-based authentication with hashed passwords.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend:** React.js, Vite, Material-UI (MUI), React Router
-- **Backend:** Node.js, Express.js
+- **Frontend:** React.js, Vite, Material-UI (MUI), Framer Motion, React Router
+- **Backend:** Node.js, Express.js, Socket.IO
 - **Database:** MongoDB Atlas (Mongoose ODM)
 - **Security:** JSON Web Tokens (JWT), Bcrypt.js
 
@@ -32,7 +34,7 @@ Follow these steps to get a local copy up and running.
 
 ### 2. Clone the Repository
 ```bash
-git clone [https://github.com/superhuygaming/gmu-badminton-app.git](https://github.com/superhuygaming/gmu-badminton-app.git)
+git clone https://github.com/superhuygaming/gmu-badminton-app.git
 cd gmu-badminton-app
 ```
 
@@ -49,6 +51,7 @@ cd gmu-badminton-app
    ```env
    MONGO_URI=your_mongodb_connection_string
    JWT_SECRET=your_super_secret_key
+   CLOUDINARY_URL=your_cloudinary_url (optional, for image hosting)
    ```
 4. Start the server:
    ```bash
@@ -77,14 +80,14 @@ cd gmu-badminton-app
 We welcome contributions! To maintain a clean project, please follow our branching workflow.
 
 1. **Fork the Project**
-2. **Create your Feature Branch** from the `development` branch:
+2. **Create your Feature Branch** from the `main` branch:
    ```bash
-   git checkout development
+   git checkout main
    git checkout -b feature/AmazingFeature
    ```
-3. **Commit your Changes** (`git commit -m 'Add some AmazingFeature'`)
+3. **Commit your Changes** (`git commit -m 'feat(ui): add some AmazingFeature'`)
 4. **Push to the Branch** (`git push origin feature/AmazingFeature`)
-5. **Open a Pull Request** against the `development` branch.
+5. **Open a Pull Request** against the `main` branch.
 
 ---
 
@@ -93,20 +96,3 @@ Distributed under the MIT License.
 
 ## ✉️ Contact
 **Project Lead:** Huy Truong
-
----
-
-### How to push this to GitHub:
-
-Once you've saved the file, follow your new Git workflow to update your repository:
-
-```bash
-# 1. Make sure you are on your development branch
-git checkout development
-
-# 2. Add and commit the README
-git add README.md
-git commit -m "Docs: Add comprehensive README with setup and contribution guides"
-
-# 3. Push to GitHub
-git push origin development

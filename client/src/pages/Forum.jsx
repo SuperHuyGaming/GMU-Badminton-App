@@ -261,22 +261,53 @@ export default function Forum() {
 	};
 
 	return (
-		<Box sx={{ mt: { xs: 2, md: 4 }, pb: 10 }}>
-			<Box sx={{ mb: 4, textAlign: "center" }}>
+		<Box sx={{ pb: 10 }}>
+			{/* HERO BANNER */}
+			<Box 
+				sx={{ 
+					width: '100%', 
+					mb: 4, 
+					py: { xs: 6, md: 10 },
+					background: "linear-gradient(135deg, rgba(0, 102, 51, 0.9) 0%, rgba(255, 204, 51, 0.8) 100%)",
+					position: 'relative',
+					overflow: 'hidden',
+					display: 'flex',
+					flexDirection: 'column',
+					alignItems: 'center',
+					justifyContent: 'center',
+					boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
+				}}
+			>
+				{/* Decorative Background Elements */}
+				<Box sx={{ position: 'absolute', top: -50, left: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', filter: 'blur(30px)' }} />
+				<Box sx={{ position: 'absolute', bottom: -50, right: -50, width: 300, height: 300, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', filter: 'blur(40px)' }} />
+				
 				<Typography
-					variant="h3"
-					color="primary"
-					gutterBottom
+					variant="h2"
 					sx={{
 						fontWeight: "900",
-						fontSize: { xs: "2rem", md: "3rem" },
+						fontSize: { xs: "2.5rem", md: "4rem" },
+						color: 'white',
+						textShadow: '0 2px 10px rgba(0,0,0,0.3)',
+						letterSpacing: '-1px',
+						zIndex: 1,
+						textAlign: 'center'
 					}}
 				>
-					GMU Badminton Forum
+					VARSITY FORUM
 				</Typography>
-				<Typography variant="h6" color="text.secondary">
+				<Typography 
+					variant="h6" 
+					sx={{ 
+						color: "rgba(255,255,255,0.9)", 
+						zIndex: 1, 
+						fontWeight: 600,
+						mt: 1,
+						textAlign: 'center'
+					}}
+				>
 					Organizing matches for:{" "}
-					<strong style={{ color: "#006633" }}>
+					<strong style={{ color: "#FFCC33", textShadow: '0 1px 5px rgba(0,0,0,0.5)' }}>
 						{viewDay}, {viewDate}
 					</strong>
 				</Typography>

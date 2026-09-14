@@ -27,14 +27,57 @@ const Leaderboard = () => {
     };
 
     return (
-        <Container maxWidth="md" sx={{ py: 6 }}>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-                <Typography variant="h3" fontWeight="bold" textAlign="center" gutterBottom>
-                    🏆 Global Leaderboard
-                </Typography>
-                <Typography variant="subtitle1" color="text.secondary" textAlign="center" mb={4}>
-                    Compete, log your matches, and climb the ranks.
-                </Typography>
+        <Box sx={{ pb: 10 }}>
+			{/* HERO BANNER */}
+			<Box 
+				sx={{ 
+					width: '100%', 
+					mb: 6, 
+					py: { xs: 6, md: 10 },
+					background: "linear-gradient(135deg, rgba(0, 102, 51, 0.9) 0%, rgba(255, 204, 51, 0.8) 100%)",
+					position: 'relative',
+					overflow: 'hidden',
+					display: 'flex',
+					flexDirection: 'column',
+					alignItems: 'center',
+					justifyContent: 'center',
+					boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
+				}}
+			>
+				{/* Decorative Background Elements */}
+				<Box sx={{ position: 'absolute', top: -50, left: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', filter: 'blur(30px)' }} />
+				<Box sx={{ position: 'absolute', bottom: -50, right: -50, width: 300, height: 300, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', filter: 'blur(40px)' }} />
+				
+				<Typography
+					variant="h2"
+					sx={{
+						fontWeight: "900",
+						fontSize: { xs: "2.5rem", md: "4rem" },
+						color: 'white',
+						textShadow: '0 2px 10px rgba(0,0,0,0.3)',
+						letterSpacing: '-1px',
+						zIndex: 1,
+						textAlign: 'center'
+					}}
+				>
+					GLOBAL RANKINGS
+				</Typography>
+				<Typography 
+					variant="h6" 
+					sx={{ 
+						color: "rgba(255,255,255,0.9)", 
+						zIndex: 1, 
+						fontWeight: 600,
+						mt: 1,
+						textAlign: 'center'
+					}}
+				>
+					Compete, log your matches, and climb the ranks.
+				</Typography>
+			</Box>
+
+            <Container maxWidth="md">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
 
                 <Paper elevation={0} sx={{ borderRadius: 4, overflow: 'hidden', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
                     <Tabs 
@@ -133,6 +176,7 @@ const Leaderboard = () => {
                 </Paper>
             </motion.div>
         </Container>
+		</Box>
     );
 };
 
