@@ -213,23 +213,39 @@ const Messages = () => {
 		}
 	}, [messages, typingUserIds, isLoadingMore]);
 
+	// Dynamic viewport height for iOS Safari keyboard
+	const [vpHeight, setVpHeight] = useState(window.innerHeight);
+
 	useEffect(() => {
-		// Strictly prevent iOS Safari from pushing the viewport out of bounds
-		const originalStyle = window.getComputedStyle(document.body).overflow;
-		const originalPosition = window.getComputedStyle(document.body).position;
-		const originalWidth = window.getComputedStyle(document.body).width;
-		const originalHeight = window.getComputedStyle(document.body).height;
+		const handleResize = () => {
+			if (window.visualViewport) {
+				setVpHeight(window.visualViewport.height);
+			} else {
+				setVpHeight(window.innerHeight);
+			}
+			window.scrollTo(0, 0); // Force scroll back to top if Safari pushes
+		};
+
+		if (window.visualViewport) {
+			window.visualViewport.addEventListener("resize", handleResize);
+			window.visualViewport.addEventListener("scroll", handleResize);
+		} else {
+			window.addEventListener("resize", handleResize);
+		}
 		
+		handleResize(); // Initial set
+		
+		// Prevent body scroll only through CSS, let layout adjust naturally
 		document.body.style.overflow = "hidden";
-		document.body.style.position = "fixed";
-		document.body.style.width = "100%";
-		document.body.style.height = "100dvh";
 		
 		return () => {
-			document.body.style.overflow = originalStyle;
-			document.body.style.position = originalPosition;
-			document.body.style.width = originalWidth;
-			document.body.style.height = originalHeight;
+			if (window.visualViewport) {
+				window.visualViewport.removeEventListener("resize", handleResize);
+				window.visualViewport.removeEventListener("scroll", handleResize);
+			} else {
+				window.removeEventListener("resize", handleResize);
+			}
+			document.body.style.overflow = "auto";
 		};
 	}, []);
 
@@ -375,7 +391,7 @@ const Messages = () => {
 			maxWidth="lg" 
 			sx={{ 
 				mt: { xs: 0, md: 4 }, 
-				height: { xs: "calc(100dvh - 56px)", md: "80vh" }, 
+				height: { xs: `${vpHeight - 56}px`, md: "80vh" }, 
 				display: "flex", 
 				px: { xs: 0, md: 2 },
 				position: { xs: "fixed", md: "static" },

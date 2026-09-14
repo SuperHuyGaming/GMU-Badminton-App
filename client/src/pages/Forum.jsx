@@ -20,6 +20,7 @@ import {
 	Skeleton,
 	CircularProgress,
 	IconButton,
+	Avatar,
 } from "@mui/material";
 import PostCard from "../components/PostCard";
 import { io } from "socket.io-client";
@@ -455,33 +456,19 @@ export default function Forum() {
 				<DialogTitle
 					sx={{
 						fontWeight: "900",
-						color: "primary.main",
-						p: 4,
-						pb: 3,
+						p: 3,
+						pb: 2,
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "center",
 						bgcolor: "background.paper",
-						borderBottom: "1px solid",
-						borderColor: "divider",
 					}}
 				>
-					<Box
-						sx={{
-							display: "flex",
-							alignItems: "center",
-							gap: 1.5,
-							fontSize: "1.4rem",
-						}}
-					>
-						<EditPenIcon /> Create New Post
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1.5, fontSize: "1.3rem" }}>
+						Create Post
 					</Box>
 					{fullScreen && (
-						<IconButton
-							onClick={() => setIsModalOpen(false)}
-							size="small"
-							sx={{ color: "text.secondary" }}
-						>
+						<IconButton onClick={() => setIsModalOpen(false)} size="small">
 							<CloseIcon />
 						</IconButton>
 					)}
@@ -490,95 +477,73 @@ export default function Forum() {
 				{/* Content */}
 				<DialogContent
 					sx={{
-						p: 4,
-						pt: 3,
+						p: 3,
+						pt: 0,
 						display: "flex",
 						flexDirection: "column",
-						gap: 3.5,
+						gap: 2,
 						bgcolor: "background.paper",
 					}}
 				>
 					{/* Information Banner */}
-					<Box
-						sx={{
-							bgcolor: "rgba(0, 102, 51, 0.05)",
-							p: 2.5,
-							borderRadius: 2,
-							borderLeft: "4px solid #006633",
-						}}
-					>
-						<Typography
-							variant="body1"
-							color="text.secondary"
-							sx={{ fontWeight: "500" }}
-						>
-							Organizing matches for{" "}
-							<strong style={{ color: "#006633" }}>
-								{viewDay}, {viewDate}
-							</strong>
+					<Box sx={{ 
+						bgcolor: "rgba(0, 102, 51, 0.08)", 
+						p: 1.5, 
+						borderRadius: 2, 
+						display: "flex", 
+						alignItems: "center", 
+						gap: 1.5,
+						mt: 1,
+						mb: 1
+					}}>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#006633" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+						<Typography variant="body2" color="text.secondary">
+							Organizing for <strong style={{ color: "#006633" }}>{viewDay}, {viewDate}</strong>
 						</Typography>
 					</Box>
 
-					{/* Inputs */}
-					<Box
-						sx={{
-							display: "flex",
-							flexDirection: "column",
-							gap: 3,
-						}}
-					>
-						<TextField
-							fullWidth
-							label="Thread Title"
-							variant="outlined"
-							placeholder="e.g., Looking for doubles partners at 8 PM"
-							value={newPost.title}
-							onChange={(e) =>
-								setNewPost({
-									...newPost,
-									title: e.target.value,
-								})
-							}
-							sx={{
-								"& .MuiOutlinedInput-root": {
-									borderRadius: 2,
-									bgcolor: "rgba(0, 0, 0, 0.2)",
-								},
-							}}
-						/>
-						<TextField
-							fullWidth
-							label="Details"
-							variant="outlined"
-							multiline
-							rows={6}
-							placeholder="Who wants to play? What's your skill level? Are you bringing birdies?"
-							value={newPost.content}
-							onChange={(e) =>
-								setNewPost({
-									...newPost,
-									content: e.target.value.slice(0, 1000), // Max 1000 chars
-								})
-							}
-							helperText={`${newPost.content?.length || 0} / 1000`}
-							FormHelperTextProps={{ sx: { textAlign: 'right' } }}
-							sx={{
-								"& .MuiOutlinedInput-root": {
-									borderRadius: 2,
-									bgcolor: "rgba(0, 0, 0, 0.2)",
-								},
-							}}
-						/>
+					{/* Inputs - Modern Style */}
+					<Box sx={{ display: "flex", gap: 2 }}>
+						<Avatar src={currentUser?.profilePic} sx={{ width: 44, height: 44 }} />
+						<Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
+							<TextField
+								fullWidth
+								variant="standard"
+								placeholder="Thread Title..."
+								value={newPost.title}
+								onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+								InputProps={{ 
+									disableUnderline: true,
+									sx: { fontSize: "1.2rem", fontWeight: "bold" }
+								}}
+							/>
+							<TextField
+								fullWidth
+								variant="standard"
+								multiline
+								minRows={4}
+								placeholder="Who wants to play? What's your skill level? Are you bringing birdies?"
+								value={newPost.content}
+								onChange={(e) => setNewPost({ ...newPost, content: e.target.value.slice(0, 1000) })}
+								InputProps={{ 
+									disableUnderline: true,
+									sx: { fontSize: "1.05rem", lineHeight: 1.5 }
+								}}
+							/>
+							<Typography variant="caption" color="text.secondary" sx={{ textAlign: "right", mt: 1 }}>
+								{newPost.content?.length || 0} / 1000
+							</Typography>
+						</Box>
 					</Box>
 				</DialogContent>
 
 				{/* Actions */}
 				<DialogActions
 					sx={{
-						px: 4,
-						pb: 4,
+						px: 3,
+						pb: 3,
 						pt: 1,
-						justifyContent: "space-between",
+						justifyContent: "flex-end",
 						bgcolor: "background.paper",
 					}}
 				>
