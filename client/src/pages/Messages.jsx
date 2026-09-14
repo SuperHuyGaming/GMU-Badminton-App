@@ -811,56 +811,159 @@ const Messages = () => {
 			</Paper>
 		</Container>	
 			{/* Profile Dialog */}
-			<Dialog open={profileDialogOpen} onClose={() => setProfileDialogOpen(false)} maxWidth="xs" fullWidth>
-				<DialogTitle sx={{ textAlign: "center", fontWeight: "bold" }}>
-					Player Profile
-				</DialogTitle>
-				<DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-					{profileData ? (
-						<>
-							<Avatar src={getOptimizedAvatar(profileData.profilePic || "", 50)} sx={{ width: 100, height: 100, mt: 2 }} />
-							<Typography variant="h5" fontWeight="bold">{profileData.name}</Typography>
-							<Chip label={profileData.skillLevel || "N/A"} color="primary" variant="outlined" />
-							
-							<Box sx={{ width: "100%", mt: 2 }}>
-								<Typography variant="subtitle2" color="text.secondary">Bio</Typography>
-								<Typography variant="body1" paragraph>{profileData.bio || "No bio available."}</Typography>
-								
-								<Typography variant="subtitle2" color="text.secondary">Preferred Play</Typography>
-								<Typography variant="body1" paragraph>{profileData.preferredPlay || "Any"}</Typography>
-								
-								<Typography variant="subtitle2" color="text.secondary">Racket</Typography>
-								<Typography variant="body1" paragraph>{profileData.racket || "N/A"}</Typography>
+			<Dialog 
+				open={profileDialogOpen} 
+				onClose={() => setProfileDialogOpen(false)} 
+				maxWidth="xs" 
+				fullWidth
+				PaperProps={{ 
+					sx: { 
+						borderRadius: 4, 
+						overflow: 'hidden',
+						bgcolor: 'background.paper',
+						backgroundImage: 'none'
+					} 
+				}}
+			>
+				{/* Cover Header */}
+				<Box sx={{ 
+					height: 120, 
+					bgcolor: 'primary.main', 
+					backgroundImage: 'linear-gradient(135deg, #006633 0%, #00b359 100%)', 
+					position: 'relative' 
+				}}>
+					<IconButton 
+						onClick={() => setProfileDialogOpen(false)} 
+						sx={{ 
+							position: 'absolute', 
+							top: 8, 
+							right: 8, 
+							color: 'white', 
+							bgcolor: 'rgba(0,0,0,0.2)', 
+							'&:hover': { bgcolor: 'rgba(0,0,0,0.4)' } 
+						}}
+					>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+					</IconButton>
+				</Box>
 
-								<Box sx={{ display: "flex", justifyContent: "space-around", mt: 2, p: 2, bgcolor: "background.default", borderRadius: 2 }}>
-									<Box sx={{ textAlign: "center" }}>
-										<Typography variant="h6" color="primary">{profileData.singlesElo}</Typography>
-										<Typography variant="caption" color="text.secondary">Singles Elo</Typography>
+				<DialogContent sx={{ px: 3, pb: 4, pt: 0, position: 'relative' }}>
+					{profileData ? (
+						<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: -6 }}>
+							<Avatar 
+								src={getOptimizedAvatar(profileData.profilePic || "", 150)} 
+								sx={{ 
+									width: 104, 
+									height: 104, 
+									border: '4px solid', 
+									borderColor: 'background.paper', 
+									boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+									bgcolor: 'background.default'
+								}} 
+							/>
+							
+							<Box sx={{ mt: 1.5, textAlign: 'center' }}>
+								<Typography variant="h5" fontWeight="900" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+									{profileData.name}
+								</Typography>
+								<Chip 
+									size="small" 
+									label={profileData.skillLevel || "N/A"} 
+									sx={{ 
+										mt: 0.5, 
+										bgcolor: 'rgba(0, 102, 51, 0.1)', 
+										color: '#006633', 
+										fontWeight: '800',
+										px: 1,
+										fontSize: '0.75rem'
+									}} 
+								/>
+							</Box>
+
+							{/* Elo Stats */}
+							<Box sx={{ display: "flex", justifyContent: "space-between", width: '100%', mt: 3, gap: 2 }}>
+								<Box sx={{ 
+									flex: 1, 
+									textAlign: "center", 
+									p: 1.5, 
+									bgcolor: "rgba(0, 102, 51, 0.06)", 
+									borderRadius: 3, 
+									border: '1px solid', 
+									borderColor: 'rgba(0, 102, 51, 0.1)' 
+								}}>
+									<Typography variant="h5" color="#006633" fontWeight="900">{profileData.singlesElo || 1200}</Typography>
+									<Typography variant="caption" sx={{ color: '#006633', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.8 }}>Singles</Typography>
+								</Box>
+								<Box sx={{ 
+									flex: 1, 
+									textAlign: "center", 
+									p: 1.5, 
+									bgcolor: "rgba(170, 59, 255, 0.06)", 
+									borderRadius: 3, 
+									border: '1px solid', 
+									borderColor: 'rgba(170, 59, 255, 0.1)' 
+								}}>
+									<Typography variant="h5" color="#aa3bff" fontWeight="900">{profileData.doublesElo || 1200}</Typography>
+									<Typography variant="caption" sx={{ color: '#aa3bff', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.8 }}>Doubles</Typography>
+								</Box>
+							</Box>
+
+							{/* Details */}
+							<Box sx={{ width: "100%", mt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+								{profileData.bio && (
+									<Box>
+										<Typography variant="overline" sx={{ color: "text.secondary", fontWeight: 800, letterSpacing: 1 }}>About</Typography>
+										<Typography variant="body2" sx={{ color: 'text.primary', lineHeight: 1.6, mt: 0.5 }}>{profileData.bio}</Typography>
 									</Box>
-									<Box sx={{ textAlign: "center" }}>
-										<Typography variant="h6" color="secondary">{profileData.doublesElo}</Typography>
-										<Typography variant="caption" color="text.secondary">Doubles Elo</Typography>
+								)}
+								
+								<Box sx={{ display: 'flex', gap: 2 }}>
+									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
+										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+											<Typography variant="caption" color="text.secondary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Play Style</Typography>
+										</Box>
+										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.preferredPlay || "Any"}</Typography>
+									</Box>
+									
+									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
+										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+											<Typography variant="caption" color="text.secondary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Racket</Typography>
+										</Box>
+										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.racket || "N/A"}</Typography>
 									</Box>
 								</Box>
 							</Box>
-						</>
+						</Box>
 					) : (
-						<CircularProgress sx={{ my: 4 }} />
+						<Box sx={{ display: 'flex', justifyContent: 'center', my: 6 }}>
+							<CircularProgress />
+						</Box>
 					)}
 				</DialogContent>
-				<DialogActions sx={{ p: 2, display: "flex", justifyContent: "space-between" }}>
-					<Button onClick={() => setProfileDialogOpen(false)}>Close</Button>
-					<Box sx={{ display: "flex", gap: 1 }}>
+				{profileData && (
+					<DialogActions sx={{ px: 3, pb: 3, pt: 0, display: "flex", flexDirection: "column", gap: 1 }}>
 						<Button 
-							variant="outlined" 
-							component={RouterLink}
-							to={`/profile/${profileData?._id}`}
+							variant="contained" 
+							component={RouterLink} 
+							to={`/profile/${profileData._id}`}
+							fullWidth
+							sx={{ 
+								borderRadius: 3, 
+								py: 1.5, 
+								fontWeight: "bold",
+								bgcolor: "primary.main",
+								textTransform: 'none',
+								fontSize: '1rem'
+							}}
 						>
 							View Full Profile
 						</Button>
-						{user && profileData && user.id !== profileData._id && (
+						{user && user.id !== profileData._id && (
 							<Button
-								variant="contained"
+								variant="outlined"
+								fullWidth
 								color={
 									profileFriendStatus === "friends"
 										? "error"
@@ -869,6 +972,13 @@ const Messages = () => {
 										: "primary"
 								}
 								onClick={handleFriendAction}
+								sx={{
+									borderRadius: 3, 
+									py: 1.5, 
+									fontWeight: "bold",
+									textTransform: 'none',
+									fontSize: '1rem'
+								}}
 							>
 								{profileFriendStatus === "friends"
 									? "Remove Friend"
@@ -879,8 +989,8 @@ const Messages = () => {
 									: "Add Friend"}
 							</Button>
 						)}
-					</Box>
-				</DialogActions>
+					</DialogActions>
+				)}
 			</Dialog>
 		</>
 	);
