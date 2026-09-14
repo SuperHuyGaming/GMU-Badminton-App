@@ -139,7 +139,7 @@ export default function CommentBubble({
 								onChange={(e) => setEditContent(e.target.value)}
 								sx={{
 									mb: 1,
-									bgcolor: "white",
+									bgcolor: "background.paper",
 									borderRadius: 1,
 								}}
 							/>
@@ -185,7 +185,7 @@ export default function CommentBubble({
 								position: "absolute",
 								bottom: -8,
 								right: -8,
-								bgcolor: "white",
+								bgcolor: "background.paper",
 								borderRadius: 10,
 								px: 0.6,
 								py: 0.2,

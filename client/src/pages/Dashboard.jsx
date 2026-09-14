@@ -406,7 +406,7 @@ export default function Dashboard() {
 									mb: 1.5,
 									"& .MuiOutlinedInput-root": {
 										borderRadius: 2,
-										backgroundColor: "white",
+										backgroundColor: "background.paper",
 									},
 								}}
 							/>
@@ -438,7 +438,7 @@ export default function Dashboard() {
 							maxHeight: { xs: "350px", md: "600px" },
 							overflowY: "auto",
 							overflowX: "hidden",
-							backgroundColor: "white",
+							backgroundColor: "background.paper",
 							display: "flex",
 							flexDirection: "column",
 							width: "100%", // Force 100% width on the container

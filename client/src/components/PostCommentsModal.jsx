@@ -242,7 +242,7 @@ export default function PostCommentsModal({
 				<Box
 					sx={{
 						p: { xs: 2, sm: 3 },
-						backgroundColor: "white",
+						backgroundColor: "background.paper",
 						mb: 1,
 					}}
 				>
@@ -293,7 +293,7 @@ export default function PostCommentsModal({
 			<Box
 				sx={{
 					p: 1.5,
-					backgroundColor: "white",
+					backgroundColor: "background.paper",
 					borderTop: "1px solid #e0e0e0",
 					display: "flex",
 					gap: 1,

@@ -126,7 +126,7 @@ export default function ProfileEditForm({
 				sx={{
 					flexGrow: 1,
 					p: { xs: 4, md: 6 },
-					backgroundColor: "#fff",
+					backgroundColor: "background.paper",
 				}}
 			>
 				{error && (

@@ -352,7 +352,7 @@ export default function PostCard({ post }) {
 							label="Edit Title"
 							value={editTitle}
 							onChange={(e) => setEditTitle(e.target.value)}
-							sx={{ mb: 2, bgcolor: "white" }}
+							sx={{ mb: 2, bgcolor: "background.paper" }}
 						/>
 						<TextField
 							fullWidth
@@ -361,7 +361,7 @@ export default function PostCard({ post }) {
 							label="Edit Details"
 							value={editContent}
 							onChange={(e) => setEditContent(e.target.value)}
-							sx={{ mb: 2, bgcolor: "white" }}
+							sx={{ mb: 2, bgcolor: "background.paper" }}
 						/>
 						<Box sx={{ display: "flex", gap: 1 }}>
 							<Button

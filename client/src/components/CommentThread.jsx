@@ -157,7 +157,7 @@ export default function CommentThread({
 						sx={{
 							"& .MuiOutlinedInput-root": {
 								borderRadius: "20px",
-								bgcolor: "white",
+								bgcolor: "background.paper",
 								py: 1,
 								px: 2,
 							},

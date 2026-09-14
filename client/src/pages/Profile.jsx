@@ -405,7 +405,7 @@ export default function Profile() {
 									p: 4,
 									borderRadius: 3,
 									textAlign: "center",
-									backgroundColor: "#fff",
+									backgroundColor: "background.paper",
 									width: "100%",
 								}}
 							>
@@ -442,7 +442,7 @@ export default function Profile() {
 									p: 4,
 									borderRadius: 3,
 									textAlign: "center",
-									backgroundColor: "#fff",
+									backgroundColor: "background.paper",
 									width: "100%",
 								}}
 							>

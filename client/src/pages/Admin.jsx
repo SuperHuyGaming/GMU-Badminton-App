@@ -219,7 +219,7 @@ export default function Admin() {
 									mb: 3,
 									whiteSpace: "pre-wrap",
 									p: 2,
-									backgroundColor: "white",
+									backgroundColor: "background.paper",
 									borderRadius: 2,
 									border: "1px dashed #ffcccc",
 								}}
@@ -246,7 +246,7 @@ export default function Admin() {
 									onClick={() => handleApprovePost(post._id)}
 									sx={{
 										fontWeight: "bold",
-										bgcolor: "white",
+										bgcolor: "background.paper",
 										textTransform: "none",
 									}}
 								>
@@ -317,7 +317,7 @@ export default function Admin() {
 									mb: 3,
 									whiteSpace: "pre-wrap",
 									p: 2,
-									backgroundColor: "white",
+									backgroundColor: "background.paper",
 									borderRadius: 2,
 									border: "1px dashed #ff9999",
 								}}
@@ -337,7 +337,7 @@ export default function Admin() {
 									variant="outlined"
 									color="success"
 									onClick={() => handleApproveMessage(msg._id)}
-									sx={{ fontWeight: "bold", bgcolor: "white", textTransform: "none" }}
+									sx={{ fontWeight: "bold", bgcolor: "background.paper", textTransform: "none" }}
 								>
 									Dismiss Flag
 								</Button>

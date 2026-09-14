@@ -563,7 +563,7 @@ const Messages = () => {
 											<Box sx={{
 												p: 2,
 												borderRadius: 3,
-												bgcolor: "white",
+												bgcolor: "background.paper",
 												color: "text.primary",
 												boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
 												border: "1px solid #eaeaea",
@@ -587,7 +587,7 @@ const Messages = () => {
 							)}
 						</Box>
 
-						<Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, borderTop: "1px solid #eaeaea", display: "flex", gap: 1, bgcolor: "white", borderRadius: "0 0 12px 12px" }}>
+						<Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, borderTop: "1px solid #eaeaea", display: "flex", gap: 1, bgcolor: "background.paper", borderRadius: "0 0 12px 12px" }}>
 							<TextField 
 								fullWidth 
 								size="small"

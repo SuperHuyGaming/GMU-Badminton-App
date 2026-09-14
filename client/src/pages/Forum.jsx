@@ -459,7 +459,7 @@ export default function Forum() {
 						display: "flex",
 						justifyContent: "space-between",
 						alignItems: "center",
-						bgcolor: "white",
+						bgcolor: "background.paper",
 						borderBottom: "1px solid #f0f0f0",
 					}}
 				>
@@ -538,7 +538,7 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
-									bgcolor: "white",
+									bgcolor: "background.paper",
 								},
 							}}
 						/>
@@ -561,7 +561,7 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
-									bgcolor: "white",
+									bgcolor: "background.paper",
 								},
 							}}
 						/>
