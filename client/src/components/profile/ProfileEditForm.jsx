@@ -31,7 +31,8 @@ export default function ProfileEditForm({
 				display: "flex",
 				flexDirection: { xs: "column", md: "row" },
 				overflow: "hidden",
-				border: "1px solid #e0e0e0",
+				border: "1px solid",
+				borderColor: "divider",
 				width: "100%",
 				minHeight: "450px",
 			}}
@@ -40,16 +41,17 @@ export default function ProfileEditForm({
 			<Box
 				sx={{
 					width: { xs: "100%", md: "280px" },
-					borderRight: { xs: "none", md: "1px solid #e0e0e0" },
-					borderBottom: { xs: "1px solid #e0e0e0", md: "none" },
-					background: "linear-gradient(to bottom, #f8fafc, #f1f5f9)",
+					borderRight: { xs: "none", md: "1px solid" },
+					borderBottom: { xs: "1px solid", md: "none" },
+					borderColor: "divider",
+					bgcolor: "action.hover",
 					p: { xs: 0, md: 3 },
 				}}
 			>
 				<Typography
 					variant="h6"
 					fontWeight="800"
-					color="primary"
+					color="text.primary"
 					sx={{
 						mb: 2,
 						px: 2,
@@ -82,7 +84,7 @@ export default function ProfileEditForm({
 							justifyContent: "center",
 							transition: "all 0.2s",
 							bgcolor: activeSection === "general" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
-							color: activeSection === "general" ? "primary.main" : "text.secondary",
+							color: activeSection === "general" ? "text.primary" : "text.secondary",
 							"&:hover": {
 								bgcolor: "rgba(0, 102, 51, 0.05)",
 							}
@@ -105,7 +107,7 @@ export default function ProfileEditForm({
 							justifyContent: "center",
 							transition: "all 0.2s",
 							bgcolor: activeSection === "badminton" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
-							color: activeSection === "badminton" ? "primary.main" : "text.secondary",
+							color: activeSection === "badminton" ? "text.primary" : "text.secondary",
 							"&:hover": {
 								bgcolor: "rgba(0, 102, 51, 0.05)",
 							}
