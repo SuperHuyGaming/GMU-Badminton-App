@@ -142,7 +142,6 @@ export default function ProfileHeader({
 					display: "flex",
 					flexDirection: { xs: "column", sm: "row" },
 					alignItems: { xs: "center", sm: "flex-end" },
-					mt: { xs: -8, sm: -4 },
 					position: "relative",
 				}}
 			>
@@ -151,6 +150,7 @@ export default function ProfileHeader({
 						position: "relative",
 						mr: { sm: 3 },
 						mb: { xs: 2, sm: 0 },
+						mt: { xs: -10, sm: -8 }, // Only the avatar overlaps
 						width: 168,
 						height: 168,
 						flexShrink: 0,
@@ -182,7 +182,8 @@ export default function ProfileHeader({
 							sx={{
 								width: "100%",
 								height: "100%",
-								border: "4px solid white",
+								border: "4px solid",
+								borderColor: "background.paper",
 								bgcolor: "secondary.main",
 								color: "primary.main",
 								fontSize: "4rem",
