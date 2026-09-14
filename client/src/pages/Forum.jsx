@@ -495,6 +495,7 @@ export default function Forum() {
 						display: "flex",
 						flexDirection: "column",
 						gap: 3.5,
+						bgcolor: "background.paper",
 					}}
 				>
 					{/* Information Banner */}
@@ -541,7 +542,6 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
-									bgcolor: "background.default",
 								},
 							}}
 						/>
@@ -564,7 +564,6 @@ export default function Forum() {
 							sx={{
 								"& .MuiOutlinedInput-root": {
 									borderRadius: 2,
-									bgcolor: "background.default",
 								},
 							}}
 						/>

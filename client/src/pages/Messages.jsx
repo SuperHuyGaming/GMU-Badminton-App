@@ -357,6 +357,7 @@ const Messages = () => {
 	};
 
 	return (
+		<>
 		<Container 
 			disableGutters 
 			maxWidth="lg" 
@@ -364,7 +365,6 @@ const Messages = () => {
 				mt: { xs: 0, md: 4 }, 
 				height: { xs: "calc(100dvh - 56px)", md: "80vh" }, 
 				display: "flex", 
-				gap: { xs: 0, md: 2 },
 				px: { xs: 0, md: 2 },
 				position: { xs: "fixed", md: "static" },
 				top: { xs: 56, md: "auto" },
@@ -376,15 +376,25 @@ const Messages = () => {
 				bgcolor: "background.default"
 			}}
 		>
-			{/* Sidebar */}
 			<Paper elevation={0} sx={{ 
-				width: { xs: "100%", md: 300 }, 
-				display: { xs: activeChat ? "none" : "flex", md: "flex" }, 
-				flexDirection: "column", 
-				border: { xs: "none", md: "1px solid" }, borderColor: "divider", 
-				borderRadius: { xs: 0, md: 3 },
-				height: "100%"
+				display: 'flex', 
+				width: '100%', 
+				height: '100%', 
+				borderRadius: { xs: 0, md: 3 }, 
+				overflow: 'hidden', 
+				border: { xs: 'none', md: '1px solid' }, 
+				borderColor: 'divider' 
 			}}>
+				{/* Sidebar */}
+				<Box sx={{ 
+					width: { xs: "100%", md: 300 }, 
+					display: { xs: activeChat ? "none" : "flex", md: "flex" }, 
+					flexDirection: "column", 
+					borderRight: { xs: "none", md: "1px solid" }, 
+					borderColor: "divider", 
+					height: "100%",
+					bgcolor: "background.paper"
+				}}>
 				<Box sx={{ p: 2, bgcolor: "primary.main", color: "white", borderRadius: "12px 12px 0 0" }}>
 					<Typography variant="h6" fontWeight="bold">Messages</Typography>
 				</Box>
@@ -398,7 +408,14 @@ const Messages = () => {
 						sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5, bgcolor: 'background.default' } }}
 					/>
 				</Box>
-				<List sx={{ flex: 1, overflowY: "auto", p: 0 }}>
+				<List sx={{ 
+					flex: 1, 
+					overflowY: "auto", 
+					p: 1,
+					"&::-webkit-scrollbar": { width: 8 },
+					"&::-webkit-scrollbar-track": { bgcolor: "transparent" },
+					"&::-webkit-scrollbar-thumb": { bgcolor: "divider", borderRadius: 4 },
+				}}>
 					{searchQuery && (
 						<>
 							<Box sx={{ p: 2, pb: 0 }}>
@@ -535,18 +552,13 @@ const Messages = () => {
 						</>
 					)}
 				</List>
-			</Paper>
-
-			{/* Chat Window */}
-			<Paper elevation={0} sx={{ 
+			</Box>
+			<Box sx={{ 
 				flex: 1, 
 				display: { xs: activeChat ? "flex" : "none", md: "flex" }, 
 				flexDirection: "column", 
-				border: { xs: "none", md: "1px solid" }, borderColor: "divider", 
-				borderRadius: { xs: 0, md: 3 },
-				overflow: "hidden",
 				height: "100%",
-				width: "100%",
+				bgcolor: "background.paper"
 			}}>
 				{activeChat ? (
 					<>
@@ -580,7 +592,18 @@ const Messages = () => {
 							</Box>
 						</Box>
 						
-						<Box sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2, bgcolor: "background.default" }}>
+						<Box sx={{ 
+							flex: 1, 
+							overflowY: "auto", 
+							p: 3, 
+							display: "flex", 
+							flexDirection: "column", 
+							gap: 2, 
+							bgcolor: "background.default",
+							"&::-webkit-scrollbar": { width: 8 },
+							"&::-webkit-scrollbar-track": { bgcolor: "transparent" },
+							"&::-webkit-scrollbar-thumb": { bgcolor: "divider", borderRadius: 4 },
+						}}>
 							{isLoadingChat ? (
 								<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
 									<CircularProgress color="primary" />
@@ -730,8 +753,9 @@ const Messages = () => {
 						<Typography variant="h6" sx={{ mt: 2 }}>Select a friend to start chatting</Typography>
 					</Box>
 				)}
+			</Box>
 			</Paper>
-			
+		</Container>	
 			{/* Profile Dialog */}
 			<Dialog open={profileDialogOpen} onClose={() => setProfileDialogOpen(false)} maxWidth="xs" fullWidth>
 				<DialogTitle sx={{ textAlign: "center", fontWeight: "bold" }}>
@@ -804,7 +828,7 @@ const Messages = () => {
 					</Box>
 				</DialogActions>
 			</Dialog>
-		</Container>
+		</>
 	);
 };
 
