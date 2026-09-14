@@ -754,7 +754,7 @@ const Messages = () => {
 								<Typography variant="subtitle2" color="text.secondary">Racket</Typography>
 								<Typography variant="body1" paragraph>{profileData.racket || "N/A"}</Typography>
 
-								<Box sx={{ display: "flex", justifyContent: "space-around", mt: 2, p: 2, bgcolor: "#f5f5f5", borderRadius: 2 }}>
+								<Box sx={{ display: "flex", justifyContent: "space-around", mt: 2, p: 2, bgcolor: "background.default", borderRadius: 2 }}>
 									<Box sx={{ textAlign: "center" }}>
 										<Typography variant="h6" color="primary">{profileData.singlesElo}</Typography>
 										<Typography variant="caption" color="text.secondary">Singles Elo</Typography>

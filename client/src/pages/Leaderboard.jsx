@@ -49,9 +49,9 @@ const Leaderboard = () => {
                         <Tab label="Doubles (2v2)" value="doubles" sx={{ fontWeight: 'bold' }} />
                     </Tabs>
 
-                    <TableContainer>
-                        <Table>
-                            <TableHead sx={{ bgcolor: '#f8f9fa' }}>
+                    <TableContainer component={Paper} elevation={3} sx={{ borderRadius: { xs: 0, sm: 3 }, overflow: 'hidden' }}>
+                        <Table aria-label="leaderboard table">
+                            <TableHead sx={{ bgcolor: 'background.default' }}>
                                 <TableRow>
                                     <TableCell align="center" sx={{ fontWeight: 'bold', width: '10%' }}>Rank</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold' }}>Player</TableCell>

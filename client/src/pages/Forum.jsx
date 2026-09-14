@@ -306,10 +306,12 @@ export default function Forum() {
 						mb: 4,
 						p: 2,
 						borderRadius: 3,
-						border: "1px solid #eaeaea",
+						border: "1px solid", borderColor: "divider",
 						overflowX: "auto",
 						whiteSpace: "nowrap",
-						boxShadow: "inset 0 0 10px rgba(0,0,0,0.02)",
+						"&::-webkit-scrollbar": { height: 8 },
+						"&::-webkit-scrollbar-track": { bgcolor: "transparent" },
+						"&::-webkit-scrollbar-thumb": { bgcolor: "divider", borderRadius: 4 },
 					}}
 				>
 					<Box sx={{ display: "inline-flex", gap: 1.5 }}>
