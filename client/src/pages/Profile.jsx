@@ -488,7 +488,7 @@ export default function Profile() {
 					setCropImageSrc(null);
 				}}
 				onCropComplete={handleCroppedUpload}
-				aspectRatio={cropType === "profilePic" ? 1 : 16 / 5}
+				aspectRatio={cropType === "profilePic" ? 1 : undefined}
 			/>
 		</Box>
 	);

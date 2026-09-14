@@ -66,9 +66,31 @@ export default function ImageCropModal({
 	};
 
 	return (
-		<Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-			<DialogTitle sx={{ fontWeight: "bold" }}>Crop Image</DialogTitle>
-			<DialogContent dividers sx={{ display: "flex", justifyContent: "center", alignItems: "center", bgcolor: "#333", minHeight: 400 }}>
+		<Dialog 
+			open={open} 
+			onClose={onClose} 
+			maxWidth="md" 
+			fullWidth
+			PaperProps={{
+				sx: {
+					bgcolor: 'background.paper',
+					borderRadius: 4,
+					overflow: 'hidden'
+				}
+			}}
+		>
+			<DialogTitle sx={{ fontWeight: "900", textAlign: "center", py: 3 }}>
+				{aspectRatio ? "Adjust Profile Picture" : "Adjust Cover Photo"}
+			</DialogTitle>
+			<DialogContent sx={{ 
+				display: "flex", 
+				justifyContent: "center", 
+				alignItems: "center", 
+				bgcolor: "background.default", 
+				minHeight: 400,
+				p: 0,
+				position: "relative"
+			}}>
 				{imageSrc && (
 					<ReactCrop
 						crop={crop}
@@ -76,29 +98,45 @@ export default function ImageCropModal({
 						onComplete={(c) => setCompletedCrop(c)}
 						aspect={aspectRatio}
 						ruleOfThirds
+						style={{ maxWidth: '100%', maxHeight: '60vh' }}
 					>
 						<img
 							ref={imgRef}
 							src={imageSrc}
 							onLoad={onImageLoad}
-							style={{ maxHeight: "60vh", maxWidth: "100%", display: "block" }}
+							style={{ maxHeight: "60vh", maxWidth: "100%", display: "block", objectFit: "contain" }}
 							alt="Crop"
 						/>
 					</ReactCrop>
 				)}
 			</DialogContent>
-			<DialogActions sx={{ p: 2 }}>
-				<Button onClick={onClose} variant="outlined" sx={{ borderRadius: 2, textTransform: "none" }}>
+			<DialogActions sx={{ p: 3, display: "flex", justifyContent: "space-between", bgcolor: "background.paper" }}>
+				<Button 
+					onClick={onClose} 
+					sx={{ 
+						borderRadius: 3, 
+						textTransform: "none",
+						fontWeight: "bold",
+						color: "text.secondary",
+						px: 3
+					}}
+				>
 					Cancel
 				</Button>
 				<Button 
 					onClick={handleSave} 
 					variant="contained" 
 					color="primary" 
-					sx={{ borderRadius: 2, textTransform: "none", fontWeight: "bold" }}
+					sx={{ 
+						borderRadius: 3, 
+						textTransform: "none", 
+						fontWeight: "bold",
+						px: 4,
+						py: 1
+					}}
 					disabled={!completedCrop?.width || !completedCrop?.height}
 				>
-					Save Changes
+					Save Photo
 				</Button>
 			</DialogActions>
 		</Dialog>

@@ -829,7 +829,9 @@ const Messages = () => {
 				<Box sx={{ 
 					height: 120, 
 					bgcolor: 'primary.main', 
-					backgroundImage: 'linear-gradient(135deg, #006633 0%, #00b359 100%)', 
+					backgroundImage: profileData?.coverPic ? `url(${profileData.coverPic})` : 'linear-gradient(135deg, #006633 0%, #00b359 100%)',
+					backgroundSize: 'cover',
+					backgroundPosition: 'center',
 					position: 'relative' 
 				}}>
 					<IconButton 
@@ -839,15 +841,16 @@ const Messages = () => {
 							top: 8, 
 							right: 8, 
 							color: 'white', 
-							bgcolor: 'rgba(0,0,0,0.2)', 
-							'&:hover': { bgcolor: 'rgba(0,0,0,0.4)' } 
+							bgcolor: 'rgba(0,0,0,0.4)', 
+							'&:hover': { bgcolor: 'rgba(0,0,0,0.6)' },
+							backdropFilter: 'blur(4px)'
 						}}
 					>
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 					</IconButton>
 				</Box>
 
-				<DialogContent sx={{ px: 3, pb: 4, pt: 0, position: 'relative' }}>
+				<DialogContent sx={{ px: 3, pb: 4, pt: 0, position: 'relative', overflowY: 'auto' }}>
 					{profileData ? (
 						<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: -6 }}>
 							<Avatar 
