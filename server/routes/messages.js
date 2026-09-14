@@ -68,10 +68,14 @@ router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
 
 		// Mark unread messages as read (only doing this on the first page load to avoid redundant updates)
 		if (page === 1) {
-			await Message.updateMany(
+			const updateResult = await Message.updateMany(
 				{ sender: friendId, receiver: userId, read: false },
 				{ $set: { read: true } }
 			);
+			if (updateResult.modifiedCount > 0) {
+				const io = req.app.get("io");
+				if (io) io.to(friendId).emit("messagesRead", { readerId: userId });
+			}
 		}
 
 		res.json({
@@ -170,10 +174,14 @@ router.post("/report/:msgId", authMiddleware, async (req, res, next) => {
 router.put("/read/:userId/:friendId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, friendId } = req.params;
-		await Message.updateMany(
+		const result = await Message.updateMany(
 			{ sender: friendId, receiver: userId, read: false },
 			{ $set: { read: true } }
 		);
+		if (result.modifiedCount > 0) {
+			const io = req.app.get("io");
+			if (io) io.to(friendId).emit("messagesRead", { readerId: userId });
+		}
 		res.json({ message: "Messages marked as read" });
 	} catch (error) {
 		next(error);

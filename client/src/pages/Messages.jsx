@@ -138,16 +138,24 @@ const Messages = () => {
 			});
 		};
 
+		const handleMessagesRead = ({ readerId }) => {
+			setMessages(prev => prev.map(m => 
+				(m.receiver === readerId || m.receiver?._id === readerId) ? { ...m, read: true } : m
+			));
+		};
+
 		socket.on("privateMessage", handlePrivateMessage);
 		socket.on("onlineUsersUpdate", handleOnlineUsers);
 		socket.on("typing", handleTyping);
 		socket.on("stopTyping", handleStopTyping);
+		socket.on("messagesRead", handleMessagesRead);
 		
 		return () => {
 			socket.off("privateMessage", handlePrivateMessage);
 			socket.off("onlineUsersUpdate", handleOnlineUsers);
 			socket.off("typing", handleTyping);
 			socket.off("stopTyping", handleStopTyping);
+			socket.off("messagesRead", handleMessagesRead);
 		};
 	}, [user]);
 
@@ -597,6 +605,11 @@ const Messages = () => {
 													)}
 													<Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.7, textAlign: isMe ? "right" : "left" }}>
 														{formatTime(msg.timestamp)}
+														{isMe && (
+															<Box component="span" sx={{ ml: 1, fontStyle: "italic", fontSize: "0.7rem" }}>
+																{msg.read ? "• Seen" : "• Sent"}
+															</Box>
+														)}
 													</Typography>
 												</Box>
 											</Box>
