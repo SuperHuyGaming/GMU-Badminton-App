@@ -69,7 +69,8 @@ export default function ReplyBubble({
 				display: "flex",
 				mt: 1,
 				ml: { xs: 4, sm: 6 },
-				borderLeft: "2px solid #ccc",
+				borderLeft: "2px solid",
+				borderColor: "divider",
 				pl: 1.5,
 				p: 0.5,
 			}}
@@ -92,7 +93,7 @@ export default function ReplyBubble({
 				<Box
 					sx={{
 						position: "relative",
-						backgroundColor: "#e4e6eb",
+						backgroundColor: "action.hover",
 						p: 1,
 						borderRadius: 3,
 						display: "inline-block",

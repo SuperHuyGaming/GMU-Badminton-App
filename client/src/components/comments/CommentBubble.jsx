@@ -79,7 +79,7 @@ export default function CommentBubble({
 				<Box
 					sx={{
 						position: "relative",
-						backgroundColor: "#e4e6eb",
+						backgroundColor: "action.hover",
 						p: 1.5,
 						borderRadius: 3,
 						display: "inline-block",

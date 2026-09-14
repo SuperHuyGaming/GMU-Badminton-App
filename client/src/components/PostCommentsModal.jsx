@@ -212,7 +212,8 @@ export default function PostCommentsModal({
 					alignItems: "center",
 					gap: 1.5,
 					pb: 1,
-					borderBottom: "1px solid #eee",
+					borderBottom: "1px solid",
+					borderColor: "divider",
 				}}
 			>
 				<Typography
@@ -238,7 +239,7 @@ export default function PostCommentsModal({
 				</Button>
 			</DialogTitle>
 
-			<DialogContent sx={{ p: 0, backgroundColor: "#f4f6f8" }}>
+			<DialogContent sx={{ p: 0, backgroundColor: "background.default" }}>
 				<Box
 					sx={{
 						p: { xs: 2, sm: 3 },
@@ -294,7 +295,8 @@ export default function PostCommentsModal({
 				sx={{
 					p: 1.5,
 					backgroundColor: "background.paper",
-					borderTop: "1px solid #e0e0e0",
+					borderTop: "1px solid",
+					borderColor: "divider",
 					display: "flex",
 					gap: 1,
 					alignItems: "flex-end",
@@ -333,7 +335,7 @@ export default function PostCommentsModal({
 					sx={{
 						"& .MuiOutlinedInput-root": {
 							borderRadius: "20px",
-							backgroundColor: "#f0f2f5",
+							backgroundColor: "action.hover",
 							py: 1,
 							px: 2,
 						},
