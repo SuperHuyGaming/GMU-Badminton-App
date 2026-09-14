@@ -140,8 +140,8 @@ function App() {
 			primary: { main: "#006633", dark: "#004d26", light: "#33855c" },
 			secondary: { main: "#FFCC33" },
 			background: { 
-				default: mode === "light" ? "#f4f6f8" : "#121212",
-				paper: mode === "light" ? "#ffffff" : "#1e1e1e",
+				default: mode === "light" ? "#f4f6f8" : "#02120a", // Ultra deep forest green
+				paper: mode === "light" ? "#ffffff" : "#082114", // Slightly lighter forest green
 			},
 		},
 		shape: { borderRadius: 12 },

@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
@@ -37,6 +37,7 @@ export default function Navbar() {
     const { user, logout } = useAuth();
     const { notifications, unreadCount, unreadMessages, markAsRead, markSingleAsRead, clearNotifications } = useNotifications();
     const navigate = useNavigate();
+    const location = useLocation();
     const [anchorEl, setAnchorEl] = useState(null);
     const open = Boolean(anchorEl);
     const [notifAnchorEl, setNotifAnchorEl] = useState(null);
@@ -107,7 +108,7 @@ export default function Navbar() {
 								}}
 							>
 								<Button
-									color="inherit"
+									color={location.pathname === "/" ? "secondary" : "inherit"}
 									component={RouterLink}
 									to="/"
 									sx={{
@@ -118,7 +119,7 @@ export default function Navbar() {
 									Dashboard
 								</Button>
 								<Button
-									color="inherit"
+									color={location.pathname === "/forum" ? "secondary" : "inherit"}
 									component={RouterLink}
 									to="/forum"
 									sx={{
@@ -129,7 +130,7 @@ export default function Navbar() {
 									Forum
 								</Button>
 								<Button
-									color="inherit"
+									color={location.pathname === "/leaderboard" ? "secondary" : "inherit"}
 									component={RouterLink}
 									to="/leaderboard"
 									sx={{

@@ -540,7 +540,7 @@ const Messages = () => {
 								}}
 							/>
 							{chat.unreadCount > 0 && (
-								<Badge badgeContent={chat.unreadCount} color="error" sx={{ position: 'absolute', right: 24, top: '50%' }} />
+								<Badge badgeContent={chat.unreadCount} color="secondary" sx={{ position: 'absolute', right: 24, top: '50%' }} />
 							)}
 						</ListItemButton>
 					))}

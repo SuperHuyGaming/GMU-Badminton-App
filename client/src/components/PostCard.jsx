@@ -438,7 +438,7 @@ export default function PostCard({ post }) {
 									top: '50%',
 									left: '50%',
 									transform: 'translate(-50%, -50%)',
-									color: '#e74c3c',
+									color: 'secondary.main',
 									animation: 'popAndFade 1s ease-out forwards',
 									pointerEvents: 'none',
 									zIndex: 10,
@@ -534,7 +534,7 @@ export default function PostCard({ post }) {
 					<Button
 						onClick={handleLike}
 						disabled={isLiking}
-						color={hasLiked ? "primary" : "inherit"}
+						color={hasLiked ? "secondary" : "inherit"}
 						sx={actionBtnStyle}
 					>
 						<Box
