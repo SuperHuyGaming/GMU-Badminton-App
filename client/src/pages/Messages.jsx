@@ -23,6 +23,17 @@ const formatTime = (dateString) => {
 	return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+const formatLastActive = (dateString) => {
+	if (!dateString) return "Offline";
+	const date = new Date(dateString);
+	const diffInSeconds = Math.floor((new Date() - date) / 1000);
+	if (diffInSeconds < 60) return "Active just now";
+	if (diffInSeconds < 3600) return `Active ${Math.floor(diffInSeconds / 60)}m ago`;
+	if (diffInSeconds < 86400) return `Active ${Math.floor(diffInSeconds / 3600)}h ago`;
+	if (diffInSeconds < 604800) return `Active ${Math.floor(diffInSeconds / 86400)}d ago`;
+	return `Active on ${date.toLocaleDateString()}`;
+};
+
 const formatShortTime = (dateString) => {
 	if (!dateString) return "";
 	const date = new Date(dateString);
@@ -609,7 +620,7 @@ const Messages = () => {
 							<Box>
 								<Typography variant="h6" fontWeight="bold">{activeChat.name}</Typography>
 								<Typography variant="caption" color="text.secondary">
-									{onlineUsers.includes(activeChat._id) ? "Online" : "Offline"}
+									{onlineUsers.includes(activeChat._id) ? "Online" : formatLastActive(activeChat.lastActive)}
 								</Typography>
 							</Box>
 						</Box>

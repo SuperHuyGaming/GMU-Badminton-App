@@ -117,12 +117,20 @@ const onlineUsers = new Set();
 io.on("connection", (socket) => {
 	console.log("New socket connection:", socket.id);
 	
-	socket.on("joinUserRoom", (userId) => {
+	socket.on("joinUserRoom", async (userId) => {
 		socket.userId = userId;
 		socket.join(userId);
 		onlineUsers.add(userId);
 		io.emit("onlineUsersUpdate", Array.from(onlineUsers));
 		console.log(`User ${userId} joined their personal room`);
+		
+		// Also update lastActive on connect just in case
+		try {
+			const User = require("./models/User");
+			await User.findByIdAndUpdate(userId, { lastActive: Date.now() });
+		} catch (err) {
+			console.error("Error updating lastActive on join:", err);
+		}
 	});
 
 	socket.on("typing", (receiverId) => {
@@ -137,10 +145,17 @@ io.on("connection", (socket) => {
 		}
 	});
 
-	socket.on("disconnect", () => {
+	socket.on("disconnect", async () => {
 		if (socket.userId) {
 			onlineUsers.delete(socket.userId);
 			io.emit("onlineUsersUpdate", Array.from(onlineUsers));
+			
+			try {
+				const User = require("./models/User");
+				await User.findByIdAndUpdate(socket.userId, { lastActive: Date.now() });
+			} catch (err) {
+				console.error("Error updating lastActive on disconnect:", err);
+			}
 		}
 		console.log("Socket disconnected:", socket.id);
 	});

@@ -44,6 +44,7 @@ const userSchema = new mongoose.Schema({
 	// Web Push Subscriptions for Notifications
 	pushSubscriptions: { type: Array, default: [] },
 
+	lastActive: { type: Date, default: Date.now },
 	createdAt: { type: Date, default: Date.now },
 });
 

@@ -16,8 +16,8 @@ router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 			$or: [{ sender: userId }, { receiver: userId }],
 		})
 		.sort({ timestamp: -1 })
-		.populate("sender", "_id name profilePic")
-		.populate("receiver", "_id name profilePic");
+		.populate("sender", "_id name profilePic lastActive")
+		.populate("receiver", "_id name profilePic lastActive");
 
 		const recentChats = {};
 		messages.forEach(msg => {

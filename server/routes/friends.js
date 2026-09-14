@@ -10,7 +10,7 @@ const Notification = require("../models/Notification");
 router.get("/:userId", authMiddleware, async (req, res, next) => {
 	try {
 		const user = await User.findById(req.params.userId)
-			.populate("friends", "_id name profilePic skillLevel")
+			.populate("friends", "_id name profilePic skillLevel lastActive")
 			.populate("friendRequests", "_id name profilePic skillLevel")
 			.populate("sentFriendRequests", "_id name profilePic skillLevel");
 
