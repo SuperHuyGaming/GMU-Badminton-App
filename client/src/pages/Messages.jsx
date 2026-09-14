@@ -654,9 +654,16 @@ const Messages = () => {
 										</Box>
 									)}
 									{messages.map((msg, idx) => {
-										const isMe = msg.sender === user.id || msg.sender._id === user.id;
+										const getSenderId = (m) => m?.sender?._id || m?.sender;
+										const isMe = getSenderId(msg) === user.id;
+										const nextMsg = messages[idx + 1];
+										const prevMsg = messages[idx - 1];
+										
+										const isNextSame = nextMsg && getSenderId(nextMsg) === getSenderId(msg) && (new Date(nextMsg.timestamp) - new Date(msg.timestamp) < 5 * 60 * 1000);
+										const isPrevSame = prevMsg && getSenderId(prevMsg) === getSenderId(msg) && (new Date(msg.timestamp) - new Date(prevMsg.timestamp) < 5 * 60 * 1000);
+
 										return (
-											<Box key={idx} sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
+											<Box key={idx} sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
 												{!isMe && !msg.isDeletedByAdmin && (
 													<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message">
 														<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
@@ -664,15 +671,18 @@ const Messages = () => {
 												)}
 												<Box sx={{
 													maxWidth: "70%",
-													p: 2,
+													p: 1.5,
+													px: 2,
 													borderRadius: 3,
 													bgcolor: isMe ? "primary.main" : "background.paper",
 													color: isMe ? "white" : "text.primary",
 													boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
 													border: isMe ? "none" : (msg.isDeletedByAdmin ? "1px dashed #ffcccc" : "1px solid"),
 													borderColor: isMe ? undefined : "divider",
-													borderBottomRightRadius: isMe ? 4 : 24,
-													borderBottomLeftRadius: isMe ? 24 : 4
+													borderTopRightRadius: isMe && isPrevSame ? 4 : 24,
+													borderBottomRightRadius: isMe && isNextSame ? 4 : (isMe ? 4 : 24),
+													borderTopLeftRadius: !isMe && isPrevSame ? 4 : 24,
+													borderBottomLeftRadius: !isMe && isNextSame ? 4 : (!isMe ? 4 : 24)
 												}}>
 													{msg.isDeletedByAdmin ? (
 														<Typography variant="body2" sx={{ fontStyle: 'italic', color: isMe ? 'rgba(255,255,255,0.7)' : 'error.main' }}>
@@ -681,14 +691,16 @@ const Messages = () => {
 													) : (
 														<Typography variant="body1">{msg.content}</Typography>
 													)}
-													<Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.7, textAlign: isMe ? "right" : "left" }}>
-														{formatTime(msg.timestamp)}
-														{isMe && (
-															<Box component="span" sx={{ ml: 1, fontStyle: "italic", fontSize: "0.7rem" }}>
-																{msg.read ? "• Seen" : "• Sent"}
-															</Box>
-														)}
-													</Typography>
+													{!isNextSame && (
+														<Typography variant="caption" sx={{ display: "block", mt: 0.5, opacity: 0.7, textAlign: isMe ? "right" : "left", fontSize: "0.65rem" }}>
+															{formatTime(msg.timestamp)}
+															{isMe && (
+																<Box component="span" sx={{ ml: 1, fontStyle: "italic" }}>
+																	{msg.read ? "• Seen" : "• Sent"}
+																</Box>
+															)}
+														</Typography>
+													)}
 												</Box>
 											</Box>
 										);
