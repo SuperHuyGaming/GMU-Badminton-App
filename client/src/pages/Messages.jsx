@@ -507,7 +507,8 @@ const Messages = () => {
 				display: { xs: activeChat ? "flex" : "none", md: "flex" }, 
 				flexDirection: "column", 
 				border: "1px solid #eaeaea", 
-				borderRadius: 3 
+				borderRadius: 3,
+				overflow: "hidden"
 			}}>
 				{activeChat ? (
 					<>
@@ -521,7 +522,8 @@ const Messages = () => {
 								gap: 2,
 								cursor: "pointer",
 								transition: "background-color 0.2s",
-								"&:hover": { bgcolor: "rgba(0, 0, 0, 0.02)" }
+								"&:hover": { bgcolor: "rgba(0, 0, 0, 0.02)" },
+								flexShrink: 0
 							}}
 						>
 							<IconButton 
@@ -626,17 +628,52 @@ const Messages = () => {
 							)}
 						</Box>
 
-						<Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, borderTop: "1px solid #eaeaea", display: "flex", gap: 1, bgcolor: "background.paper", borderRadius: "0 0 12px 12px" }}>
+						<Box 
+							component="form" 
+							onSubmit={handleSendMessage} 
+							sx={{ 
+								p: 2, 
+								borderTop: "1px solid #eaeaea", 
+								display: "flex", 
+								gap: 1, 
+								bgcolor: "background.paper", 
+								borderRadius: "0 0 12px 12px",
+								alignItems: "flex-end",
+								flexShrink: 0
+							}}
+						>
 							<TextField 
 								fullWidth 
 								size="small"
 								placeholder="Type a message..." 
 								variant="outlined" 
+								multiline
+								maxRows={4}
 								value={newMessage}
 								onChange={handleTypingChange}
-								sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5 } }}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" && !e.shiftKey) {
+										e.preventDefault();
+										handleSendMessage(e);
+									}
+								}}
+								sx={{ 
+									"& .MuiOutlinedInput-root": { 
+										borderRadius: 5,
+										bgcolor: "background.default",
+									} 
+								}}
 							/>
-							<IconButton type="submit" color="primary" sx={{ bgcolor: "primary.main", color: "white", "&:hover": { bgcolor: "primary.dark" } }}>
+							<IconButton 
+								type="submit" 
+								color="primary" 
+								sx={{ 
+									bgcolor: "primary.main", 
+									color: "white", 
+									"&:hover": { bgcolor: "primary.dark" },
+									mb: 0.5 
+								}}
+							>
 								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
 							</IconButton>
 						</Box>
