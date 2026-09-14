@@ -41,14 +41,14 @@ export default async function getCroppedImg(
 	ctx.drawImage(image, 0, 0);
 
 	const data = ctx.getImageData(
-		pixelCrop.x,
-		pixelCrop.y,
-		pixelCrop.width,
-		pixelCrop.height
+		Math.round(pixelCrop.x),
+		Math.round(pixelCrop.y),
+		Math.round(pixelCrop.width),
+		Math.round(pixelCrop.height)
 	);
 
-	canvas.width = pixelCrop.width;
-	canvas.height = pixelCrop.height;
+	canvas.width = Math.round(pixelCrop.width);
+	canvas.height = Math.round(pixelCrop.height);
 
 	ctx.putImageData(data, 0, 0);
 

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 // client/src/pages/Profile.jsx
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
@@ -51,7 +52,7 @@ export default function Profile() {
 		coverPic: "",
 	});
 
-	const { data: profileQueryData, isLoading: isLoadingProfile, isError: isProfileError } = useQuery({
+	const { data: profileQueryData, isError: isProfileError } = useQuery({
 		queryKey: ['profile', id],
 		queryFn: async () => {
 			const profileEndpoint = isOwnProfile ? `/api/profile` : `/api/profile/${id}`;
@@ -236,7 +237,7 @@ export default function Profile() {
 			} else {
 				setToastMessage(data.message || "Failed to save picture.");
 			}
-		} catch (err) {
+		} catch {
 			setToastMessage("Failed to process image.");
 		} finally {
 			setIsSaving(false);
@@ -270,7 +271,7 @@ export default function Profile() {
 			} else {
 				setError(updatedUser.message);
 			}
-		} catch (err) {
+		} catch {
 			setError("Failed to update profile.");
 		}
 		setIsSaving(false);

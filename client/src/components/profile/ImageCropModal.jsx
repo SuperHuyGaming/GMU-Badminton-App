@@ -1,16 +1,31 @@
-import React, { useState, useCallback } from "react";
-import Cropper from "react-easy-crop";
+import React, { useState, useRef } from "react";
+import ReactCrop, { centerCrop, makeAspectCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
 import {
 	Dialog,
 	DialogTitle,
 	DialogContent,
 	DialogActions,
 	Button,
-	Slider,
 	Box,
-	Typography,
 } from "@mui/material";
 import getCroppedImg from "../../utils/cropImage";
+
+function centerAspectCrop(mediaWidth, mediaHeight, aspect) {
+	return centerCrop(
+		makeAspectCrop(
+			{
+				unit: "%",
+				width: 90,
+			},
+			aspect,
+			mediaWidth,
+			mediaHeight
+		),
+		mediaWidth,
+		mediaHeight
+	);
+}
 
 export default function ImageCropModal({
 	open,
@@ -19,28 +34,31 @@ export default function ImageCropModal({
 	onCropComplete,
 	aspectRatio = 1,
 }) {
-	const [crop, setCrop] = useState({ x: 0, y: 0 });
-	const [zoom, setZoom] = useState(1);
-	const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+	const [crop, setCrop] = useState();
+	const [completedCrop, setCompletedCrop] = useState(null);
+	const imgRef = useRef(null);
 
-	const onCropChange = (location) => {
-		setCrop(location);
+	const onImageLoad = (e) => {
+		const { width, height } = e.currentTarget;
+		setCrop(centerAspectCrop(width, height, aspectRatio));
 	};
-
-	const onZoomChange = (zoom) => {
-		setZoom(zoom);
-	};
-
-	const handleCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
-		setCroppedAreaPixels(croppedAreaPixels);
-	}, []);
 
 	const handleSave = async () => {
+		if (!completedCrop || !imgRef.current) return;
+
+		const image = imgRef.current;
+		const scaleX = image.naturalWidth / image.width;
+		const scaleY = image.naturalHeight / image.height;
+
+		const pixelCrop = {
+			x: completedCrop.x * scaleX,
+			y: completedCrop.y * scaleY,
+			width: completedCrop.width * scaleX,
+			height: completedCrop.height * scaleY,
+		};
+
 		try {
-			const croppedImageBlob = await getCroppedImg(
-				imageSrc,
-				croppedAreaPixels
-			);
+			const croppedImageBlob = await getCroppedImg(imageSrc, pixelCrop);
 			onCropComplete(croppedImageBlob);
 		} catch (e) {
 			console.error(e);
@@ -48,38 +66,38 @@ export default function ImageCropModal({
 	};
 
 	return (
-		<Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+		<Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
 			<DialogTitle sx={{ fontWeight: "bold" }}>Crop Image</DialogTitle>
-			<DialogContent dividers sx={{ height: 400, position: "relative" }}>
-				<Box sx={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 80 }}>
-					<Cropper
-						image={imageSrc}
+			<DialogContent dividers sx={{ display: "flex", justifyContent: "center", alignItems: "center", bgcolor: "#333", minHeight: 400 }}>
+				{imageSrc && (
+					<ReactCrop
 						crop={crop}
-						zoom={zoom}
+						onChange={(_, percentCrop) => setCrop(percentCrop)}
+						onComplete={(c) => setCompletedCrop(c)}
 						aspect={aspectRatio}
-						onCropChange={onCropChange}
-						onCropComplete={handleCropComplete}
-						onZoomChange={onZoomChange}
-						showGrid={true}
-					/>
-				</Box>
-				<Box sx={{ position: "absolute", bottom: 20, left: "10%", right: "10%", display: "flex", alignItems: "center", gap: 2 }}>
-					<Typography variant="body2" fontWeight="bold">Zoom</Typography>
-					<Slider
-						value={zoom}
-						min={1}
-						max={3}
-						step={0.1}
-						aria-labelledby="Zoom"
-						onChange={(e, zoom) => setZoom(zoom)}
-					/>
-				</Box>
+						ruleOfThirds
+					>
+						<img
+							ref={imgRef}
+							src={imageSrc}
+							onLoad={onImageLoad}
+							style={{ maxHeight: "60vh", maxWidth: "100%", display: "block" }}
+							alt="Crop"
+						/>
+					</ReactCrop>
+				)}
 			</DialogContent>
 			<DialogActions sx={{ p: 2 }}>
 				<Button onClick={onClose} variant="outlined" sx={{ borderRadius: 2, textTransform: "none" }}>
 					Cancel
 				</Button>
-				<Button onClick={handleSave} variant="contained" color="primary" sx={{ borderRadius: 2, textTransform: "none", fontWeight: "bold" }}>
+				<Button 
+					onClick={handleSave} 
+					variant="contained" 
+					color="primary" 
+					sx={{ borderRadius: 2, textTransform: "none", fontWeight: "bold" }}
+					disabled={!completedCrop?.width || !completedCrop?.height}
+				>
 					Save Changes
 				</Button>
 			</DialogActions>
