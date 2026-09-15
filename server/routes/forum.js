@@ -24,11 +24,10 @@ const postLimiter = rateLimit({
 	},
 });
 
-const { analyzeContent } = require("../utils/aiModeration");
 
 // 2. THE UPGRADED AI SPAM ENGINE
-const checkSpam = (text) => {
-	const result = analyzeContent(text);
+const checkSpam = async (text) => {
+	const result = await analyzeContent(text);
 	return result.isFlagged;
 };
 
@@ -180,7 +179,7 @@ router.post("/", postLimiter, async (req, res) => {
 		const cleanContent = xss(content);
 		const cleanImageUrl = imageUrl ? xss(imageUrl) : "";
 		
-		const isSpam = checkSpam(cleanTitle) || checkSpam(cleanContent);
+		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
 		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
 
 		const newPost = new Post({
@@ -240,7 +239,7 @@ router.put("/:postId", async (req, res) => {
 		if (post.authorId.toString() !== userId.toString())
 			return res.status(403).json({ message: "Unauthorized" });
 
-		if (checkSpam(title) || checkSpam(content)) {
+		if (await checkSpam(title) || await checkSpam(content)) {
 			post.isFlagged = true;
 			await post.save();
 			if (req.io) req.io.emit("postDeleted", post._id);
@@ -290,7 +289,7 @@ router.post("/:postId/comments", postLimiter, async (req, res) => {
 		const { content, authorName, authorId } = req.body;
 		const post = await Post.findById(req.params.postId);
 
-		const isSpam = checkSpam(content);
+		const isSpam = await checkSpam(content);
 		const aiAnalysis = await analyzeContent(content);
 
 		if (isSpam || aiAnalysis.isFlagged)
@@ -331,7 +330,7 @@ router.put("/:postId/comments/:commentId", async (req, res) => {
 
 		if (comment.authorId.toString() !== userId.toString())
 			return res.status(403).json({ message: "Unauthorized" });
-		if (checkSpam(content))
+		if (await checkSpam(content))
 			return res.json(await hydrateWithPictures(post.toObject()));
 
 		comment.content = content;
@@ -376,7 +375,7 @@ router.post(
 			const post = await Post.findById(req.params.postId);
 			const comment = post.comments.id(req.params.commentId);
 
-			const isSpam = checkSpam(content);
+			const isSpam = await checkSpam(content);
 			const aiAnalysis = await analyzeContent(content);
 
 			if (isSpam || aiAnalysis.isFlagged)
@@ -430,7 +429,7 @@ router.put(
 
 			if (reply.authorId.toString() !== userId.toString())
 				return res.status(403).json({ message: "Unauthorized" });
-			if (checkSpam(content))
+			if (await checkSpam(content))
 				return res.json(await hydrateWithPictures(post.toObject()));
 
 			reply.content = content;
