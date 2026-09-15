@@ -2,6 +2,7 @@
 // client/src/pages/Profile.jsx
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import { ProfileSkeleton } from "../components/Skeletons";
 import {
 	Typography,
 	Box,
@@ -285,23 +286,7 @@ export default function Profile() {
 		);
 	if (!profileData)
 		return (
-			<Box
-				sx={{
-					display: "flex",
-					flexDirection: "column",
-					alignItems: "center",
-					mt: 10,
-				}}
-			>
-				<CircularProgress color="primary" size={60} thickness={4} />
-				<Typography
-					variant="h6"
-					color="text.secondary"
-					sx={{ mt: 3, fontWeight: "bold" }}
-				>
-					Waking up the server...
-				</Typography>
-			</Box>
+			<ProfileSkeleton />
 		);
 
 	const displayProfilePic = isOwnProfile

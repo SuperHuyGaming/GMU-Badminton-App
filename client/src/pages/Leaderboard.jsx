@@ -4,6 +4,7 @@ import {
     Avatar, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, CircularProgress
 } from '@mui/material';
 import { motion } from 'framer-motion';
+import { LeaderboardRowSkeleton } from '../components/Skeletons';
 import { useQuery } from '@tanstack/react-query';
 import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
@@ -104,11 +105,13 @@ const Leaderboard = () => {
                             </TableHead>
                             <TableBody>
                                 {loading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={4} align="center" sx={{ py: 8 }}>
-                                            <CircularProgress />
-                                        </TableCell>
-                                    </TableRow>
+                                    [1, 2, 3, 4, 5].map((n) => (
+                                        <TableRow key={n}>
+                                            <TableCell colSpan={4} sx={{ p: 0 }}>
+                                                <LeaderboardRowSkeleton />
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
                                 ) : users.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={4} align="center" sx={{ py: 8, color: 'text.secondary', fontWeight: 'bold' }}>

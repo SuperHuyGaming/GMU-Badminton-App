@@ -23,6 +23,8 @@ import {
 	Avatar,
 } from "@mui/material";
 import PostCard from "../components/PostCard";
+import PostCommentsModal from "../components/PostCommentsModal";
+import { PostSkeleton } from "../components/Skeletons";
 import { io } from "socket.io-client";
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
@@ -376,39 +378,7 @@ export default function Forum() {
 
 				<Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
 					{isLoading ? (
-						[1, 2].map((n) => (
-							<Paper
-								key={n}
-								elevation={0}
-								sx={{
-									p: 3,
-									borderRadius: 3,
-									border: "1px solid #e0e0e0",
-								}}
-							>
-								<Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-									<Skeleton
-										variant="circular"
-										width={40}
-										height={40}
-									/>
-									<Box sx={{ width: "100%" }}>
-										<Skeleton
-											variant="text"
-											width="60%"
-											height={30}
-										/>
-										<Skeleton variant="text" width="40%" />
-									</Box>
-								</Box>
-								<Skeleton
-									variant="rectangular"
-									width="100%"
-									height={100}
-									sx={{ borderRadius: 2 }}
-								/>
-							</Paper>
-						))
+						[1, 2, 3].map((n) => <PostSkeleton key={n} />)
 					) : posts.length === 0 ? (
 						<Box sx={{ textAlign: "center", my: 4 }}>
 							<Typography color="text.secondary">
