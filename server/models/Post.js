@@ -10,6 +10,7 @@ const PostSchema = new mongoose.Schema({
 	timestamp: { type: Date, default: Date.now },
 	likedBy: { type: [String], default: [] },
 	isFlagged: { type: Boolean, default: false },
+	toxicityScore: { type: Number, default: 0 }, // NEW: Sentiment toxicity tracking
 	isEdited: { type: Boolean, default: false }, // NEW: Track post edits
 	imageUrl: { type: String, default: "" }, // NEW: Image attachment
 	comments: [

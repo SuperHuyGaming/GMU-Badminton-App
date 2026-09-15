@@ -41,31 +41,34 @@ const analyzeContent = (text) => {
     // Prevent DOS attacks by limiting analysis to the first 1000 characters
     const safeText = text.substring(0, 1000);
 
+    let baseScore = 0;
     try {
         // 1. Toxicity / Sentiment Analysis
         const sentimentResult = sentimentAnalyzer.analyze(safeText);
+        baseScore = sentimentResult.score;
+
         // Score < -4 usually indicates heavy toxicity or aggression
         if (sentimentResult.score < -4) {
             return {
                 isFlagged: true,
-                reason: `AI Moderation: Highly negative sentiment detected (Score: ${sentimentResult.score}).`
+                reason: `AI Moderation: Highly negative sentiment detected (Score: ${sentimentResult.score}).`,
+                score: sentimentResult.score
             };
         }
 
         // 2. ML Spam Classification
-        // If the text is extremely short (under 3 words), the classifier often false-flags it as spam
         if (safeText.split(' ').length > 2) {
             const classification = classifier.classify(safeText);
             if (classification === 'spam') {
                 return {
                     isFlagged: true,
-                    reason: "AI Moderation: Classified as SPAM by ML algorithm."
+                    reason: "AI Moderation: Classified as SPAM by ML algorithm.",
+                    score: sentimentResult.score
                 };
             }
         }
     } catch (error) {
         console.error("AI Moderation Error:", error);
-        // Fail open if the ML model crashes
     }
 
     // 3. Fallback Hardcoded Filter for severe slurs (which bypass sentiment sometimes)
@@ -74,7 +77,8 @@ const analyzeContent = (text) => {
     if (slurs.some(slur => lowerText.includes(slur))) {
         return {
             isFlagged: true,
-            reason: "AI Moderation: Restricted language detected."
+            reason: "AI Moderation: Restricted language detected.",
+            score: baseScore
         };
     }
 
@@ -82,11 +86,12 @@ const analyzeContent = (text) => {
     if (/(.)\1{20,}/.test(lowerText)) {
         return {
             isFlagged: true,
-            reason: "AI Moderation: Spam pattern (repeated characters) detected."
+            reason: "AI Moderation: Spam pattern (repeated characters) detected.",
+            score: baseScore
         };
     }
 
-    return { isFlagged: false, reason: "" };
+    return { isFlagged: false, reason: "", score: baseScore };
 };
 
 module.exports = { analyzeContent, classifier };

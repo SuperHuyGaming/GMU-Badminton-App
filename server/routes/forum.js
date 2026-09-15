@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 const rateLimit = require("express-rate-limit");
 const xss = require("xss");
+const { analyzeContent } = require("../utils/aiModeration");
 const router = express.Router();
 
 // Helper to shorten long comments in notifications
@@ -180,6 +181,7 @@ router.post("/", postLimiter, async (req, res) => {
 		const cleanImageUrl = imageUrl ? xss(imageUrl) : "";
 		
 		const isSpam = checkSpam(cleanTitle) || checkSpam(cleanContent);
+		const aiAnalysis = analyzeContent(cleanTitle + " " + cleanContent);
 
 		const newPost = new Post({
 			title: cleanTitle,
@@ -188,12 +190,13 @@ router.post("/", postLimiter, async (req, res) => {
 			authorName,
 			targetDate: targetDate || "General",
 			authorId: authorId || "000000000000000000000000",
-			isFlagged: isSpam,
+			isFlagged: isSpam || aiAnalysis.isFlagged,
+			toxicityScore: aiAnalysis.score || 0
 		});
 
 		await newPost.save();
 
-		if (isSpam)
+		if (isSpam || isToxic)
 			return res
 				.status(201)
 				.json({ message: "Post submitted for review." });
@@ -282,15 +285,18 @@ router.delete("/:postId", async (req, res) => {
 // ==========================================
 // COMMENTS & REPLIES (CREATE, EDIT, DELETE)
 // ==========================================
-router.post("/:postId/comments", postLimiter, async (req, res) => {
+router.post("/:postId/comments", postLimiter, sentimentMiddleware, async (req, res) => {
 	try {
-		const { authorId, authorName, content } = req.body;
+		const { content, authorName, authorId } = req.body;
 		const post = await Post.findById(req.params.postId);
 
-		if (checkSpam(content))
+		const isSpam = checkSpam(content);
+		const isToxic = req.isToxic;
+
+		if (isSpam || isToxic)
 			return res
-				.status(201)
-				.json(await hydrateWithPictures(post.toObject()));
+				.status(400)
+				.json({ message: "Comment rejected: Spam or toxicity detected." });
 
 		post.comments.push({ authorId, authorName, content });
 		await post.save();
@@ -364,16 +370,20 @@ router.delete("/:postId/comments/:commentId", async (req, res) => {
 router.post(
 	"/:postId/comments/:commentId/replies",
 	postLimiter,
+	sentimentMiddleware,
 	async (req, res) => {
 		try {
 			const { authorId, authorName, content } = req.body;
 			const post = await Post.findById(req.params.postId);
 			const comment = post.comments.id(req.params.commentId);
 
-			if (checkSpam(content))
+			const isSpam = checkSpam(content);
+			const isToxic = req.isToxic;
+
+			if (isSpam || isToxic)
 				return res
-					.status(201)
-					.json(await hydrateWithPictures(post.toObject()));
+					.status(400)
+					.json({ message: "Reply rejected: Spam or toxicity detected." });
 
 			comment.replies.push({ authorId, authorName, content });
 			await post.save();

@@ -8,6 +8,7 @@ const messageSchema = new mongoose.Schema({
 	timestamp: { type: Date, default: Date.now },
 	isFlagged: { type: Boolean, default: false },
 	flagReason: { type: String, default: "" },
+	toxicityScore: { type: Number, default: 0 },
 	isDeletedByAdmin: { type: Boolean, default: false }
 });
 

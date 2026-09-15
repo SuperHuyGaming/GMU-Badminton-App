@@ -102,7 +102,8 @@ router.post("/", authMiddleware, async (req, res, next) => {
 			receiver: receiverId,
 			content,
 			isFlagged: mlResult.isFlagged,
-			flagReason: mlResult.reason
+			flagReason: mlResult.reason,
+			toxicityScore: mlResult.score || 0
 		});
 		await msg.save();
 		
