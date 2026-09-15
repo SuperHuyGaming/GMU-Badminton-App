@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Fragment } from "react";
 import { 
 	Container, Box, Typography, Paper, List, ListItemButton, 
 	ListItemAvatar, ListItemText, Avatar, TextField, IconButton,
@@ -682,7 +682,7 @@ const Messages = () => {
 											const showTopTimestamp = !prevMsg || (new Date(msg.timestamp) - new Date(prevMsg.timestamp) > 15 * 60 * 1000);
 
 											return (
-												<React.Fragment key={idx}>
+												<Fragment key={idx}>
 													{showTopTimestamp && (
 														<Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%", display: "block", mb: 2, mt: 1, fontWeight: 'medium' }}>
 															{formatTime(msg.timestamp)}
@@ -730,7 +730,7 @@ const Messages = () => {
 															)}
 														</Box>
 													</Box>
-												</React.Fragment>
+												</Fragment>
 											);
 										});
 									})()}
