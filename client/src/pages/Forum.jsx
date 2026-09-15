@@ -108,7 +108,9 @@ export default function Forum() {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [spamModalOpen, setSpamModalOpen] = useState(false);
 
-	const [newPost, setNewPost] = useState({ title: "", content: "" });
+	const [newPost, setNewPost] = useState({ title: "", content: "", imageUrl: "" });
+	const [postImage, setPostImage] = useState(null);
+	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
 
 	const [posts, setPosts] = useState([]);
@@ -218,11 +220,36 @@ export default function Forum() {
 	const handleSubmit = async () => {
 		if (!currentUser) return alert("You must be logged in to post!");
 		try {
+			setIsUploadingImage(true);
+			let finalImageUrl = "";
+
+			// 1. Upload Image to Cloudinary if exists
+			if (postImage) {
+				const formData = new FormData();
+				formData.append("image", postImage);
+				formData.append("type", "postAttachment");
+				formData.append("userId", currentUser.id);
+
+				const uploadRes = await apiFetch("/api/upload/image", {
+					method: "POST",
+					body: formData,
+				});
+				const uploadData = await uploadRes.json();
+				if (uploadRes.ok) {
+					finalImageUrl = uploadData.imageUrl;
+				} else {
+					setIsUploadingImage(false);
+					return toast.error("Failed to upload image. " + uploadData.message);
+				}
+			}
+
+			// 2. Submit Post
 			const res = await apiFetch("/api/forum", {
 					method: "POST",
 					body: JSON.stringify({
 						title: newPost.title,
 						content: newPost.content,
+						imageUrl: finalImageUrl,
 						authorName: currentUser.name,
 						authorId: currentUser.id,
 						targetDate: viewDate,
@@ -231,6 +258,7 @@ export default function Forum() {
 			);
 
 			const data = await res.json();
+			setIsUploadingImage(false);
 			if (!res.ok) {
 				return toast.error(
 					data.message || "Failed to post. Please try again.",
@@ -248,15 +276,18 @@ export default function Forum() {
 			if (data.message === "Post submitted for review.") {
 				setSpamModalOpen(true);
 			} else {
-				setNewPost({ title: "", content: "" });
-				setOpenNewPost(false);
+				setNewPost({ title: "", content: "", imageUrl: "" });
+				setPostImage(null);
+				setIsModalOpen(false);
 				if (toast) toast.success("Post created successfully!");
 			}
 
 			if (document.activeElement) document.activeElement.blur();
 			setTimeout(() => setIsModalOpen(false), 10);
-			setNewPost({ title: "", content: "" });
+			setNewPost({ title: "", content: "", imageUrl: "" });
+			setPostImage(null);
 		} catch (error) {
+			setIsUploadingImage(false);
 			console.error("Failed to post", error);
 		}
 	};
@@ -538,6 +569,31 @@ export default function Forum() {
 							</Typography>
 						</Box>
 					</Box>
+					
+					{/* Image Upload Input */}
+					<Box sx={{ mt: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+						<Button variant="outlined" component="label" sx={{ width: "fit-content", textTransform: "none", borderRadius: 2 }}>
+							{postImage ? "Change Image" : "Attach Image"}
+							<input
+								type="file"
+								hidden
+								accept="image/*"
+								onChange={(e) => setPostImage(e.target.files[0])}
+							/>
+						</Button>
+						{postImage && (
+							<Box sx={{ position: "relative", mt: 1, borderRadius: 2, overflow: "hidden", maxWidth: "100%", height: 200 }}>
+								<img src={URL.createObjectURL(postImage)} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+								<IconButton
+									size="small"
+									onClick={() => setPostImage(null)}
+									sx={{ position: "absolute", top: 8, right: 8, bgcolor: "rgba(0,0,0,0.5)", color: "white", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}
+								>
+									<CloseIcon />
+								</IconButton>
+							</Box>
+						)}
+					</Box>
 				</DialogContent>
 
 				{/* Actions */}
@@ -567,21 +623,17 @@ export default function Forum() {
 						onClick={handleSubmit}
 						variant="contained"
 						color="primary"
-						disabled={!isFormValid}
-						fullWidth={fullScreen}
+						disabled={!isFormValid || isUploadingImage}
 						sx={{
 							fontWeight: "bold",
-							py: 1.5,
-							px: 4,
-							borderRadius: 3,
 							textTransform: "none",
-							fontSize: "1rem",
-							boxShadow: isFormValid
-								? "0 4px 14px rgba(0, 102, 51, 0.3)"
-								: "none",
+							px: 4,
+							borderRadius: 2,
+							boxShadow: "none",
+							"&:hover": { boxShadow: "0 4px 12px rgba(0,102,51,0.2)" },
 						}}
 					>
-						Post to Forum
+						{isUploadingImage ? <CircularProgress size={24} color="inherit" /> : "Post Thread"}
 					</Button>
 				</DialogActions>
 			</Dialog>

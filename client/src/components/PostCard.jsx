@@ -431,6 +431,16 @@ export default function PostCard({ post }) {
 							{localPost.content}
 						</Typography>
 
+						{localPost.imageUrl && (
+							<Box sx={{ mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 400 }}>
+								<img 
+									src={localPost.imageUrl} 
+									alt="Post attachment" 
+									style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+								/>
+							</Box>
+						)}
+
 						{/* Animated Heart Overlay */}
 						{showHeart && (
 							<Box

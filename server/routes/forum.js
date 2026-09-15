@@ -173,16 +173,18 @@ router.get("/", async (req, res) => {
 
 router.post("/", postLimiter, async (req, res) => {
 	try {
-		const { title, content, authorName, targetDate, authorId } = req.body;
+		const { title, content, imageUrl, authorName, targetDate, authorId } = req.body;
 		
 		const cleanTitle = xss(title);
 		const cleanContent = xss(content);
+		const cleanImageUrl = imageUrl ? xss(imageUrl) : "";
 		
 		const isSpam = checkSpam(cleanTitle) || checkSpam(cleanContent);
 
 		const newPost = new Post({
 			title: cleanTitle,
 			content: cleanContent,
+			imageUrl: cleanImageUrl,
 			authorName,
 			targetDate: targetDate || "General",
 			authorId: authorId || "000000000000000000000000",
