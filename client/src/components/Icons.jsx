@@ -1,4 +1,4 @@
-// client/src/components/Icons.jsx
+import React from 'react';
 
 export const ThumbUpOutline = () => (
 	<svg

@@ -1,4 +1,5 @@
 // client/src/components/comments/CommentBubble.jsx
+import React from "react";
 import { useState } from "react";
 import {
 	Box,

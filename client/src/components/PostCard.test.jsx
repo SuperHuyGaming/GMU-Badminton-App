@@ -48,7 +48,7 @@ describe('PostCard Component QA Tests', () => {
     it('prevents text selection during rapid double clicking', () => {
         const { container } = renderWithContext(mockPost, mockUser);
         // The outer Paper component is usually what we click
-        const cardArea = container.firstChild;
+        const cardArea = container.querySelector(`#post-${mockPost._id}`);
         // Since we explicitly added userSelect: 'none' to the Card to prevent blue highlights
         expect(cardArea).toHaveStyle({ userSelect: 'none' });
     });

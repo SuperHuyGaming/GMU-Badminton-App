@@ -1,5 +1,5 @@
 // client/src/components/PostCard.jsx
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	Typography,
@@ -228,6 +228,7 @@ export default function PostCard({ post }) {
 					border: "1px solid",
 					borderColor: "divider",
 					borderRadius: 4,
+					userSelect: "none",
 					bgcolor: 'background.paper',
 					backgroundImage: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
 					backdropFilter: 'blur(10px)',

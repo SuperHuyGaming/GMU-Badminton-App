@@ -1,4 +1,5 @@
 // client/src/components/comments/ReplyBubble.jsx
+import React from "react";
 import { useState } from "react";
 import {
 	Box,
