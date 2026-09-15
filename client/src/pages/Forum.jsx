@@ -25,6 +25,7 @@ import {
 import PostCard from "../components/PostCard";
 import PostCommentsModal from "../components/PostCommentsModal";
 import { PostSkeleton } from "../components/Skeletons";
+import { Virtuoso } from "react-virtuoso";
 import { io } from "socket.io-client";
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
@@ -178,22 +179,6 @@ export default function Forum() {
 		fetchPosts();
 	}, [viewDate, page]);
 
-	useEffect(() => {
-		const observer = new IntersectionObserver(
-			(entries) => {
-				if (
-					entries[0].isIntersecting &&
-					hasMore &&
-					!isLoading &&
-					!isFetchingMore
-				)
-					setPage((prev) => prev + 1);
-			},
-			{ threshold: 1.0 },
-		);
-		if (observerTarget.current) observer.observe(observerTarget.current);
-		return () => observer.disconnect();
-	}, [hasMore, isLoading, isFetchingMore]);
 
 	useEffect(() => {
 		const handleNewPost = (newPost) => {
@@ -389,32 +374,35 @@ export default function Forum() {
 							</Typography>
 						</Box>
 					) : (
-						posts.map((post) => (
-							<PostCard key={post._id} post={post} />
-						))
-					)}
-
-					{isFetchingMore && (
-						<Box
-							sx={{
-								display: "flex",
-								justifyContent: "center",
-								my: 4,
+						<Virtuoso
+							useWindowScroll
+							data={posts}
+							endReached={() => {
+								if (hasMore && !isLoading && !isFetchingMore) {
+									setPage((prev) => prev + 1);
+								}
 							}}
-						>
-							<CircularProgress size={30} />
-						</Box>
+							itemContent={(index, post) => (
+								<PostCard key={post._id} post={post} />
+							)}
+							components={{
+								Footer: () => (
+									<Box sx={{ pb: 4 }}>
+										{isFetchingMore && (
+											<Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
+												<CircularProgress size={30} />
+											</Box>
+										)}
+										{!hasMore && posts.length > 0 && (
+											<Typography textAlign="center" color="text.secondary" sx={{ my: 4, fontStyle: "italic" }}>
+												You've reached the end of the line! 🏸
+											</Typography>
+										)}
+									</Box>
+								)
+							}}
+						/>
 					)}
-					{!isLoading && posts.length > 0 && !hasMore && (
-						<Typography
-							textAlign="center"
-							color="text.secondary"
-							sx={{ my: 4, fontStyle: "italic" }}
-						>
-							You've reached the end of the line! 🏸
-						</Typography>
-					)}
-					<div ref={observerTarget} style={{ height: "10px" }}></div>
 				</Box>
 			</Container>
 
