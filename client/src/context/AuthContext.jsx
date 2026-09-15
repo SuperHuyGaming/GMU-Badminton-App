@@ -1,6 +1,7 @@
 // client/src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 import apiFetch from "../utils/api";
+import { toast } from "react-hot-toast";
 
 export const AuthContext = createContext(null);
 
@@ -13,7 +14,15 @@ export const AuthProvider = ({ children }) => {
 			return null;
 		}
 	});
-	const [toastMessage, setToastMessage] = useState("");
+	const setToastMessage = (msg) => {
+		if (msg) toast.success(msg, {
+			style: {
+				borderRadius: '10px',
+				background: '#333',
+				color: '#fff',
+			},
+		});
+	};
 
 	useEffect(() => {
 		if (localStorage.getItem("justLoggedOut")) {
@@ -59,7 +68,7 @@ export const AuthProvider = ({ children }) => {
 				login,
 				logout,
 				updateUser,
-				toastMessage,
+				toastMessage: null,
 				setToastMessage,
 			}}
 		>

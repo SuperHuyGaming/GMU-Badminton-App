@@ -1,8 +1,9 @@
 // client/src/hooks/useNotifications.js
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import socket from "../utils/socket";
 import apiFetch from "../utils/api";
+import socket from "../utils/socket";
+import { toast } from "react-hot-toast";
 
 export const useNotifications = () => {
 	const { user, setToastMessage } = useAuth();
@@ -43,14 +44,14 @@ export const useNotifications = () => {
 		const handleNewNotification = (notification) => {
 			if (notification.targetUserId === user.id) {
 				setNotifications((prev) => [notification, ...prev]);
-				setToastMessage(notification.message);
+				toast(notification.message, { icon: '🔔' });
 			}
 		};
 
 		const handlePrivateMessage = (msg) => {
 			if (msg.receiver._id === user.id || msg.receiver === user.id) {
 				setUnreadMessages(prev => prev + 1);
-				setToastMessage(`New message from ${msg.sender.name || 'someone'}`);
+				toast(`New message from ${msg.sender.name || 'someone'}`, { icon: '💬' });
 			}
 		};
 

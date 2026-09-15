@@ -1,5 +1,6 @@
 // client/src/App.jsx
 import React, { useEffect, createContext, useMemo, useState, Suspense } from "react";
+import { Toaster } from 'react-hot-toast';
 import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 const Auth = React.lazy(() => import("./pages/Auth"));
@@ -228,21 +229,7 @@ function App() {
 				<BrowserRouter>
 					<Navbar />
 
-					<Snackbar
-						open={!!toastMessage}
-						autoHideDuration={4000}
-						onClose={() => setToastMessage("")}
-						anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-					>
-						<Alert
-							onClose={() => setToastMessage("")}
-							severity="success"
-							variant="filled"
-							sx={{ width: "100%" }}
-						>
-							{toastMessage}
-						</Alert>
-					</Snackbar>
+					<Toaster position="top-center" reverseOrder={false} />
 
 					<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 } }}>
 						<AnimatedRoutes />
