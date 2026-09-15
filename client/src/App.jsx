@@ -9,6 +9,7 @@ const Forum = React.lazy(() => import("./pages/Forum"));
 const Admin = React.lazy(() => import("./pages/Admin"));
 const Messages = React.lazy(() => import("./pages/Messages"));
 const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
+const Landing = React.lazy(() => import("./pages/Landing"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import socket from "./utils/socket";
 import {
@@ -73,7 +74,9 @@ const AnimatedRoutes = () => {
 									<Dashboard />
 								</motion.div>
 							) : (
-								<Navigate to="/auth" />
+								<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+									<Landing />
+								</motion.div>
 							)
 						}
 					/>
