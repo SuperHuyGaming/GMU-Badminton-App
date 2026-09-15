@@ -17,9 +17,9 @@ import {
 import { useAuth } from "../context/AuthContext";
 
 function Auth() {
-	const { setUser, setToastMessage } = useAuth();
-	const navigate = useNavigate();
 	const [isLogin, setIsLogin] = useState(true);
+	const navigate = useNavigate();
+	const { login } = useAuth();
 	const [error, setError] = useState(null);
 
 	const [formData, setFormData] = useState({
@@ -29,13 +29,17 @@ function Auth() {
 		skillLevel: "D Level",
 	});
 
+	const [isSubmitting, setIsSubmitting] = useState(false);
+
 	const handleChange = (e) => {
 		setFormData({ ...formData, [e.target.name]: e.target.value });
 	};
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
+		if (isSubmitting) return;
 		setError(null);
+		setIsSubmitting(true);
 
 		const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
 
@@ -53,18 +57,15 @@ function Auth() {
 			if (!response.ok)
 				throw new Error(data.message || "Something went wrong.");
 
-			// Save to browser
-			localStorage.setItem("accessToken", data.accessToken);
-			localStorage.setItem("refreshToken", data.refreshToken);
-			localStorage.setItem("user", JSON.stringify(data.user));
-
-			// INSTANT UI UPDATES
-			setUser(data.user);
-			setToastMessage(`Welcome to the courts, ${data.user.name}!`);
+			// INSTANT UI UPDATES using the central login method
+			const welcomeMsg = isLogin ? `Welcome back, ${data.user.name}!` : `Welcome to the courts, ${data.user.name}!`;
+			login(data.user, data.accessToken, data.refreshToken, welcomeMsg);
 
 			navigate("/");
 		} catch (err) {
 			setError(err.message);
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
@@ -199,9 +200,10 @@ function Auth() {
 						variant="contained"
 						color="primary"
 						size="large"
+						disabled={isSubmitting}
 						sx={{ mt: 4, mb: 2, fontWeight: "bold", py: 1.5 }}
 					>
-						{isLogin ? "Login" : "Sign Up"}
+						{isSubmitting ? "Please wait..." : isLogin ? "Login" : "Sign Up"}
 					</Button>
 				</form>
 			</Paper>

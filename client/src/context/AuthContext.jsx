@@ -14,7 +14,7 @@ export const AuthProvider = ({ children }) => {
 			return null;
 		}
 	});
-	const setToastMessage = (msg) => {
+	const setToastMessage = React.useCallback((msg) => {
 		if (msg) toast.success(msg, {
 			style: {
 				borderRadius: '10px',
@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
 				color: '#fff',
 			},
 		});
-	};
+	}, []);
 
 	useEffect(() => {
 		if (localStorage.getItem("justLoggedOut")) {
@@ -31,15 +31,15 @@ export const AuthProvider = ({ children }) => {
 		}
 	}, []);
 
-	const login = (userData, accessToken, refreshToken) => {
+	const login = React.useCallback((userData, accessToken, refreshToken, customMessage = null) => {
 		localStorage.setItem("accessToken", accessToken);
 		localStorage.setItem("refreshToken", refreshToken);
 		localStorage.setItem("user", JSON.stringify(userData));
 		setUser(userData);
-		setToastMessage(`Welcome back, ${userData.name}!`);
-	};
+		setToastMessage(customMessage || `Welcome back, ${userData.name}!`);
+	}, [setToastMessage]);
 
-	const logout = async () => {
+	const logout = React.useCallback(async () => {
 		const refreshToken = localStorage.getItem("refreshToken");
 		if (refreshToken) {
 			await apiFetch("/api/auth/logout", {
@@ -53,25 +53,25 @@ export const AuthProvider = ({ children }) => {
 		setUser(null);
 		localStorage.setItem("justLoggedOut", "true");
 		window.location.href = "/";
-	};
+	}, []);
 
-	const updateUser = (updatedUser) => {
+	const updateUser = React.useCallback((updatedUser) => {
 		localStorage.setItem("user", JSON.stringify(updatedUser));
 		setUser(updatedUser);
-	};
+	}, []);
+
+	const contextValue = React.useMemo(() => ({
+		user,
+		setUser,
+		login,
+		logout,
+		updateUser,
+		toastMessage: null,
+		setToastMessage,
+	}), [user, setToastMessage, login, logout, updateUser]);
 
 	return (
-		<AuthContext.Provider
-			value={{
-				user,
-				setUser,
-				login,
-				logout,
-				updateUser,
-				toastMessage: null,
-				setToastMessage,
-			}}
-		>
+		<AuthContext.Provider value={contextValue}>
 			{children}
 		</AuthContext.Provider>
 	);
