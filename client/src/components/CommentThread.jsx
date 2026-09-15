@@ -39,7 +39,7 @@ export default function CommentThread({
 			{
 				authorId: currentUser.id,
 				authorName: currentUser.name,
-				content: nestedReplyText,
+				content: nestedReplyText.trim(),
 			},
 		);
 		setNestedReplyText("");

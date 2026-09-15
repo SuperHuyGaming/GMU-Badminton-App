@@ -177,7 +177,7 @@ export default function PostCommentsModal({
 		apiCall(`/api/forum/${localPost._id}/comments`, "POST", {
 			authorId: currentUser.id,
 			authorName: currentUser.name,
-			content: newReplyText,
+			content: newReplyText.trim(),
 		});
 		setNewReplyText("");
 	};

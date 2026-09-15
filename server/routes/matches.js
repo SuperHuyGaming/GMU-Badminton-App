@@ -12,7 +12,7 @@ router.get("/leaderboard", async (req, res, next) => {
         const sortField = type === 'singles' ? 'singlesElo' : 'doublesElo';
         
         const users = await User.find({})
-            .sort({ [sortField]: -1 })
+            .sort({ [sortField]: -1, 'stats.totalMatches': -1 })
             .limit(50)
             .select(`name profilePic skillLevel ${sortField}`);
             

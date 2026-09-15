@@ -149,6 +149,7 @@ io.on("connection", (socket) => {
 		if (socket.userId) {
 			onlineUsers.delete(socket.userId);
 			io.emit("onlineUsersUpdate", Array.from(onlineUsers));
+			socket.broadcast.emit("stopTyping", { senderId: socket.userId });
 			
 			try {
 				const User = require("./models/User");
