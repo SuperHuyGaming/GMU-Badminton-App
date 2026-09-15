@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['icon.jpg'],
       manifest: {
         name: 'GMU Badminton Hub',
         short_name: 'Badminton',
@@ -18,19 +18,14 @@ export default defineConfig({
         orientation: 'portrait',
         icons: [
           {
-            src: '/favicon.svg',
-            sizes: '192x192',
-            type: 'image/svg+xml'
+            src: '/icon.jpg',
+            sizes: '1024x1024',
+            type: 'image/jpeg'
           },
           {
-            src: '/favicon.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml'
-          },
-          {
-            src: '/favicon.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml',
+            src: '/icon.jpg',
+            sizes: '1024x1024',
+            type: 'image/jpeg',
             purpose: 'any maskable'
           }
         ]
