@@ -13,6 +13,17 @@ const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import socket from "./utils/socket";
+import posthog from 'posthog-js';
+
+// Initialize PostHog Analytics
+posthog.init('mock-posthog-api-key', {
+    api_host: 'https://app.posthog.com',
+    autocapture: true, // Automatically captures clicks, pageviews, etc.
+    loaded: (posthog) => {
+        if (process.env.NODE_ENV === 'development') posthog.debug(false);
+    }
+});
+
 import {
 	BrowserRouter,
 	Routes,
@@ -148,6 +159,17 @@ function App() {
 			});
 		},
 	}), []);
+
+	useEffect(() => {
+		if (user) {
+			posthog.identify(user.id || user._id, {
+				name: user.name,
+				skillLevel: user.skillLevel
+			});
+		} else {
+			posthog.reset();
+		}
+	}, [user]);
 
 	const theme = useMemo(() => createTheme({
 		palette: {

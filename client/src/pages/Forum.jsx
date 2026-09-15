@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import apiFetch from "../utils/api";
 import { useSearchParams } from "react-router-dom";
 import { useLocation } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import {
 	Typography,
 	Button,
@@ -230,15 +231,27 @@ export default function Forum() {
 			);
 
 			const data = await res.json();
-			if (!res.ok)
-				return alert(
+			if (!res.ok) {
+				return toast.error(
 					data.message || "Failed to post. Please try again.",
 				);
+			}
 
-			if (data.message === "Post submitted for review.")
+			// PostHog Analytics Event
+			import('posthog-js').then((posthog) => {
+				posthog.default.capture('created_forum_post', {
+					targetDate: viewDate,
+					titleLength: newPost.title.length
+				});
+			});
+
+			if (data.message === "Post submitted for review.") {
 				setSpamModalOpen(true);
-			else if (setToastMessage)
-				setToastMessage("Post created successfully!");
+			} else {
+				setNewPost({ title: "", content: "" });
+				setOpenNewPost(false);
+				if (toast) toast.success("Post created successfully!");
+			}
 
 			if (document.activeElement) document.activeElement.blur();
 			setTimeout(() => setIsModalOpen(false), 10);

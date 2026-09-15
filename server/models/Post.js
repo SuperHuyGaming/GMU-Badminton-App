@@ -11,6 +11,7 @@ const PostSchema = new mongoose.Schema({
 	likedBy: { type: [String], default: [] },
 	isFlagged: { type: Boolean, default: false },
 	isEdited: { type: Boolean, default: false }, // NEW: Track post edits
+	imageUrl: { type: String, default: "" }, // NEW: Image attachment
 	comments: [
 		{
 			authorId: String,

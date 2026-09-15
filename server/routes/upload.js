@@ -25,8 +25,8 @@ router.post(
 			if (!req.file)
 				return res.status(400).json({ message: "No image provided" });
 
-			const imageType = req.body.type;
-			if (imageType !== "profilePic" && imageType !== "coverPic") {
+			const imageType = req.body.type || "general";
+			if (imageType !== "profilePic" && imageType !== "coverPic" && imageType !== "postAttachment") {
 				return res.status(400).json({ message: "Invalid image type" });
 			}
 
@@ -51,6 +51,13 @@ router.post(
 						}
 
 						const imageUrl = result.secure_url;
+
+						if (imageType === "postAttachment") {
+							return res.json({
+								message: "Image uploaded successfully",
+								imageUrl: imageUrl
+							});
+						}
 
 						// Use the precise ID to find the user
 						const updatedUser = await User.findByIdAndUpdate(

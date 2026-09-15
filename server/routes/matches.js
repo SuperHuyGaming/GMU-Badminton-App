@@ -5,17 +5,33 @@ const User = require("../models/User");
 const { calculateElo } = require("../utils/elo");
 const { authMiddleware } = require("../middleware/auth");
 
+const { redisClient, redisEnabled } = require("../config/redis");
+
 // GET: Leaderboard
 router.get("/leaderboard", async (req, res, next) => {
     try {
         const type = req.query.type || 'singles'; // 'singles' or 'doubles'
+        const cacheKey = `leaderboard:${type}`;
+
+        // 1. Check Cache
+        if (redisEnabled) {
+            const cachedLeaderboard = await redisClient.get(cacheKey);
+            if (cachedLeaderboard) {
+                return res.json(JSON.parse(cachedLeaderboard));
+            }
+        }
+
         const sortField = type === 'singles' ? 'singlesElo' : 'doublesElo';
-        
         const users = await User.find({})
             .sort({ [sortField]: -1, 'stats.totalMatches': -1 })
             .limit(50)
             .select(`name profilePic skillLevel ${sortField}`);
             
+        // 2. Set Cache (Expire after 5 minutes)
+        if (redisEnabled) {
+            await redisClient.setex(cacheKey, 300, JSON.stringify(users));
+        }
+
         res.json(users);
     } catch (error) {
         next(error);
@@ -134,6 +150,11 @@ router.put("/:matchId/confirm", authMiddleware, async (req, res, next) => {
         
         await processMatchResults(req.io, t1Ids, t1Won);
         await processMatchResults(req.io, t2Ids, !t1Won);
+
+        // 3. Invalidate Leaderboard Cache
+        if (redisEnabled) {
+            await redisClient.del(`leaderboard:${match.type}`);
+        }
         
         res.json(match);
     } catch (error) {

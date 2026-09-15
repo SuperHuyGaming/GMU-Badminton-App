@@ -24,12 +24,20 @@ app.use(helmet());
 // 2. Prevent NoSQL Injection
 app.use(mongoSanitize());
 
-// 3. Global API Rate Limiting
+const { redisClient, redisEnabled } = require("./config/redis");
+const RedisStore = require("rate-limit-redis").default;
+
+// 3. Global API Rate Limiting (Backed by Redis if available)
 const apiLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
 	max: 500, // Limit each IP to 500 requests per `window`
 	standardHeaders: true,
 	legacyHeaders: false,
+    ...(redisEnabled && {
+        store: new RedisStore({
+            sendCommand: (...args) => redisClient.call(...args),
+        }),
+    }),
 	message: "Too many requests from this IP, please try again after 15 minutes."
 });
 app.use("/api/", apiLimiter);
