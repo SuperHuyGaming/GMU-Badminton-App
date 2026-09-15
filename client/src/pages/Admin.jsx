@@ -206,6 +206,14 @@ export default function Admin() {
 									{new Date(post.timestamp).toLocaleString()}
 								</Typography>
 							</Box>
+							<Box sx={{ mb: 2 }}>
+								<Chip 
+									label={`Toxicity Score: ${post.toxicityScore || 0}`} 
+									color={post.toxicityScore < -4 ? "error" : "warning"} 
+									size="small" 
+									sx={{ fontWeight: "bold" }} 
+								/>
+							</Box>
 							<Typography
 								variant="h6"
 								fontWeight="bold"
@@ -310,6 +318,14 @@ export default function Admin() {
 								<Typography variant="caption" color="error.main" fontWeight="bold">
 									{msg.flagReason}
 								</Typography>
+							</Box>
+							<Box sx={{ mb: 2 }}>
+								<Chip 
+									label={`Toxicity Score: ${msg.toxicityScore || 0}`} 
+									color={msg.toxicityScore < -4 ? "error" : "warning"} 
+									size="small" 
+									sx={{ fontWeight: "bold" }} 
+								/>
 							</Box>
 							<Typography
 								variant="body2"

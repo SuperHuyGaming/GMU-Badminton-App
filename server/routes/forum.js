@@ -181,7 +181,7 @@ router.post("/", postLimiter, async (req, res) => {
 		const cleanImageUrl = imageUrl ? xss(imageUrl) : "";
 		
 		const isSpam = checkSpam(cleanTitle) || checkSpam(cleanContent);
-		const aiAnalysis = analyzeContent(cleanTitle + " " + cleanContent);
+		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
 
 		const newPost = new Post({
 			title: cleanTitle,
@@ -196,7 +196,7 @@ router.post("/", postLimiter, async (req, res) => {
 
 		await newPost.save();
 
-		if (isSpam || isToxic)
+		if (isSpam || aiAnalysis.isFlagged)
 			return res
 				.status(201)
 				.json({ message: "Post submitted for review." });
@@ -285,15 +285,15 @@ router.delete("/:postId", async (req, res) => {
 // ==========================================
 // COMMENTS & REPLIES (CREATE, EDIT, DELETE)
 // ==========================================
-router.post("/:postId/comments", postLimiter, sentimentMiddleware, async (req, res) => {
+router.post("/:postId/comments", postLimiter, async (req, res) => {
 	try {
 		const { content, authorName, authorId } = req.body;
 		const post = await Post.findById(req.params.postId);
 
 		const isSpam = checkSpam(content);
-		const isToxic = req.isToxic;
+		const aiAnalysis = await analyzeContent(content);
 
-		if (isSpam || isToxic)
+		if (isSpam || aiAnalysis.isFlagged)
 			return res
 				.status(400)
 				.json({ message: "Comment rejected: Spam or toxicity detected." });
@@ -370,7 +370,6 @@ router.delete("/:postId/comments/:commentId", async (req, res) => {
 router.post(
 	"/:postId/comments/:commentId/replies",
 	postLimiter,
-	sentimentMiddleware,
 	async (req, res) => {
 		try {
 			const { authorId, authorName, content } = req.body;
@@ -378,9 +377,9 @@ router.post(
 			const comment = post.comments.id(req.params.commentId);
 
 			const isSpam = checkSpam(content);
-			const isToxic = req.isToxic;
+			const aiAnalysis = await analyzeContent(content);
 
-			if (isSpam || isToxic)
+			if (isSpam || aiAnalysis.isFlagged)
 				return res
 					.status(400)
 					.json({ message: "Reply rejected: Spam or toxicity detected." });

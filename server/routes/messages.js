@@ -95,7 +95,7 @@ router.post("/", authMiddleware, async (req, res, next) => {
 	try {
 		const { senderId, receiverId, content } = req.body;
 		
-		const mlResult = analyzeContent(content);
+		const mlResult = await analyzeContent(content);
 		
 		const msg = new Message({
 			sender: senderId,
