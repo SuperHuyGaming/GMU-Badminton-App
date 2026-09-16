@@ -6,9 +6,14 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { getRacStatus, getWeeklySchedule } = require("./services/scraper");
 
+const { initializeGemini } = require("./utils/aiCoach");
+
 mongoose
 	.connect(process.env.MONGO_URI)
-	.then(() => console.log("Successfully connected to MongoDB!"))
+	.then(() => {
+		console.log("Successfully connected to MongoDB!");
+		initializeGemini();
+	})
 	.catch((error) => console.error("MongoDB connection failed:", error));
 
 const helmet = require("helmet");
@@ -116,6 +121,7 @@ app.use("/api/friends", require("./routes/friends"));
 app.use("/api/messages", require("./routes/messages"));
 app.use("/api/matches", require("./routes/matches"));
 app.use("/api/push", require("./routes/push"));
+app.use("/api/coach", require("./routes/coach"));
 
 // Make io accessible globally
 app.set("io", io);
