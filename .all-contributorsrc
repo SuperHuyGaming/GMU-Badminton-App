@@ -1,0 +1,27 @@
+{
+  "projectName": "GMU-Badminton-App",
+  "projectOwner": "SuperHuyGaming",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributors": [
+    {
+      "login": "SuperHuyGaming",
+      "name": "Huy Truong",
+      "avatar_url": "https://avatars.githubusercontent.com/u/SuperHuyGaming",
+      "profile": "https://github.com/SuperHuyGaming",
+      "contributions": [
+        "code",
+        "design",
+        "maintenance",
+        "projectManagement"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7
+}

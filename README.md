@@ -72,6 +72,29 @@ We welcome contributions across all roles (Frontend, Backend, AI, UI/UX, QA, Dev
 
 ---
 
+## ✨ Contributors
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/SuperHuyGaming"><img src="https://avatars.githubusercontent.com/u/SuperHuyGaming?v=4" width="100px;" alt="Huy Truong"/><br /><sub><b>Huy Truong</b></sub></a><br /><a href="https://github.com/SuperHuyGaming/GMU-Badminton-App/commits?author=SuperHuyGaming" title="Code">💻</a> <a href="#design-SuperHuyGaming" title="Design">🎨</a> <a href="#maintenance-SuperHuyGaming" title="Maintenance">🚧</a> <a href="#projectManagement-SuperHuyGaming" title="Project Management">📆</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
+
+---
+
 ## 📜 License & Contact
 Distributed under the MIT License.
 
