@@ -1,0 +1,45 @@
+name: Architecture Discussion
+description: Propose a major architectural change or microservice refactor
+title: "[RFC] "
+labels: ["architecture", "rfc"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Request for Comments (RFC)
+        Use this template when proposing major infrastructure changes, microservice updates, or new technologies (e.g., adding Kafka, switching databases, upgrading Spring Boot versions).
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Provide a high-level summary of the proposed architectural change.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why are we doing this? What use cases does it support? What is the expected outcome?
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Detailed Design
+      description: Describe the technical implementation. How will this fit into the current ecosystem (Java/Python/Node/React)?
+    validations:
+      required: true
+  - type: textarea
+    id: drawbacks
+    attributes:
+      label: Drawbacks
+      description: Why should we *not* do this? (e.g., added complexity, cost on Render, learning curve)
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What other designs have been considered? What is the impact of not doing this?
+    validations:
+      required: false
