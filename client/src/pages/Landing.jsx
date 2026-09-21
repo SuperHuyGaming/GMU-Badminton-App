@@ -39,12 +39,12 @@ export default function Landing() {
 					/>
 					<motion.div variants={itemVariants}>
 						<Typography variant="h2" fontWeight="900" sx={{ mb: 2, background: "linear-gradient(45deg, #006633, #FFCC33)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-							GMU Badminton Hub
+							Mason Badminton Connect
 						</Typography>
 					</motion.div>
 					<motion.div variants={itemVariants}>
 						<Typography variant="h6" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: "auto" }}>
-							The official community platform for George Mason University badminton players. Connect, rank up, and hit the courts.
+							A student-run community platform for George Mason University badminton players. Connect, rank up, and hit the courts.
 						</Typography>
 					</motion.div>
 					<motion.div variants={itemVariants}>
