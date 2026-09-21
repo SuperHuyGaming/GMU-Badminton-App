@@ -1,5 +1,5 @@
 # Multi-stage build for Spring Boot 3.3 / Java 25
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 
 WORKDIR /build
 
@@ -7,8 +7,7 @@ COPY pom.xml .
 COPY src ./src
 
 # Build jar skipping tests for fast docker image creation
-RUN apk add --no-cache maven && \
-    mvn clean package -DskipTests
+RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
 
