@@ -61,19 +61,31 @@ export default function Landing() {
 				</Box>
 
 				{/* Features Grid */}
-				<Grid container spacing={4} sx={{ mt: 4 }}>
+				<Grid container spacing={3} sx={{ mt: 4 }} alignItems="stretch">
 					{[
 						{ title: "Live RAC Status", desc: "Instantly see if courts are open before you walk all the way to the gym.", icon: "🏸" },
 						{ title: "Elo Leaderboards", desc: "Climb the ranks. Challenge players to official matches and prove you're the best on campus.", icon: "🏆" },
 						{ title: "Active Forum", desc: "Find doubles partners, discuss gear, and organize late-night smash sessions.", icon: "💬" },
 						{ title: "Player Profiles", desc: "Show off your racket, playstyle, and win streaks to the entire university.", icon: "🎴" }
 					].map((feature, i) => (
-						<Grid item xs={12} sm={6} md={3} key={i}>
-							<motion.div variants={itemVariants} whileHover={{ y: -10 }}>
-								<Paper elevation={0} sx={{ p: 3, height: "100%", borderRadius: 4, backgroundColor: "background.paper", border: "1px solid", borderColor: "divider", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+						<Grid item xs={12} sm={6} md={6} key={i}>
+							<motion.div variants={itemVariants} whileHover={{ y: -5 }} style={{ height: "100%" }}>
+								<Paper elevation={0} sx={{ 
+									p: 4, 
+									height: "100%", 
+									borderRadius: 4, 
+									backgroundColor: "background.paper", 
+									border: "1px solid", 
+									borderColor: "divider", 
+									display: "flex", 
+									flexDirection: "column", 
+									alignItems: "center", 
+									justifyContent: "center",
+									textAlign: "center" 
+								}}>
 									<Typography variant="h2" sx={{ mb: 2 }}>{feature.icon}</Typography>
-									<Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>{feature.title}</Typography>
-									<Typography variant="body2" color="text.secondary">{feature.desc}</Typography>
+									<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{feature.title}</Typography>
+									<Typography variant="body1" color="text.secondary">{feature.desc}</Typography>
 								</Paper>
 							</motion.div>
 						</Grid>
