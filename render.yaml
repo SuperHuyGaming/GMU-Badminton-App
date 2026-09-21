@@ -10,24 +10,7 @@ services:
       - key: MONGO_URI
         sync: false
 
-  # 2. Tournament Scraper Background Worker (Python)
-  - type: worker
-    name: tournament-scraper
-    env: python
-    rootDir: tournament-services/scraper-service
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A src.tasks.celery_app.app worker
-
-  # 3. Core Tournament Service (Java)
-  - type: web
-    name: tournament-core-api
-    env: docker
-    rootDir: tournament-services/core-service
-    envVars:
-      - key: SPRING_DATA_MONGODB_URI
-        sync: false
-
-  # 4. GMU React Frontend
+  # 2. GMU React Frontend
   - type: web
     name: gmu-frontend
     env: static
@@ -38,10 +21,5 @@ services:
       - key: VITE_API_URL
         fromService:
           name: gmu-social-api
-          type: web
-          property: host
-      - key: VITE_TOURNAMENT_API_URL
-        fromService:
-          name: tournament-core-api
           type: web
           property: host
