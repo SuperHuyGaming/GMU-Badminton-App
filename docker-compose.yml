@@ -71,6 +71,7 @@ services:
       dockerfile: ../Dockerfile.client
       args:
         - VITE_API_URL=http://localhost:5005
+        - VITE_TOURNAMENT_API_URL=http://localhost:8081
     container_name: gmu-react-client
     restart: unless-stopped
     ports:

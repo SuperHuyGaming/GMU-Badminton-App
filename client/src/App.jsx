@@ -11,6 +11,7 @@ const Admin = React.lazy(() => import("./pages/Admin"));
 const Messages = React.lazy(() => import("./pages/Messages"));
 const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
+const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
@@ -136,6 +137,14 @@ const AnimatedRoutes = () => {
 									<Admin />
 								</motion.div>
 							</AdminRoute>
+						}
+					/>
+					<Route
+						path="/tournaments"
+						element={
+							<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
+								<Tournaments />
+							</motion.div>
 						}
 					/>
 					{/* Catch all */}
