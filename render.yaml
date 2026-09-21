@@ -44,7 +44,7 @@ services:
     env: static
     rootDir: client
     buildCommand: npm install --legacy-peer-deps && npm run build
-    publishPath: dist
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
         fromService:
