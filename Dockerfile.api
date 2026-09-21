@@ -1,0 +1,7 @@
+FROM node:20-alpine
+WORKDIR /app
+COPY server/package*.json ./
+RUN npm install --legacy-peer-deps
+COPY server/ .
+EXPOSE 5005
+CMD ["node", "server.js"]

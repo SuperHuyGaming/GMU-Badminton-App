@@ -1,0 +1,15 @@
+com\badminton\core\websocket\WebSocketConfig.class
+com\badminton\core\service\TournamentService.class
+com\badminton\core\service\GeocodingService.class
+com\badminton\core\domain\OutboxEvent$OutboxEventBuilder.class
+com\badminton\core\controller\TournamentController.class
+com\badminton\core\outbox\KafkaEventPublisher.class
+com\badminton\core\outbox\MongoChangeStreamListener.class
+com\badminton\core\controller\InternalIngestionController.class
+com\badminton\core\websocket\TournamentWebSocketBroadcaster.class
+com\badminton\core\domain\Tournament.class
+com\badminton\core\repository\TournamentRepository.class
+com\badminton\core\domain\OutboxEvent.class
+com\badminton\core\domain\Tournament$TournamentBuilder.class
+com\badminton\core\repository\OutboxEventRepository.class
+com\badminton\core\CoreApplication.class

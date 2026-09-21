@@ -1,0 +1,58 @@
+services:
+  # 1. Private MongoDB (So you don't need Mongo Atlas!)
+  - type: pserv
+    name: gmu-mongodb
+    env: docker
+    repo: https://github.com/mongo-express/mongo-express # Placeholder to let us use Docker
+    dockerfilePath: Dockerfile.mongo
+    disk:
+      name: mongo-data
+      mountPath: /data/db
+      sizeGB: 1
+
+  # 2. GMU Social Backend (Node.js)
+  - type: web
+    name: gmu-social-api
+    env: node
+    rootDir: server
+    buildCommand: npm install --legacy-peer-deps
+    startCommand: node server.js
+    envVars:
+      - key: MONGO_URI
+        value: mongodb://gmu-mongodb:27017/gmu_social_db
+
+  # 3. Tournament Scraper Background Worker (Python)
+  - type: worker
+    name: tournament-scraper
+    env: python
+    rootDir: tournament-services/scraper-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A src.tasks.celery_app.app worker
+
+  # 4. Core Tournament Service (Java)
+  - type: web
+    name: tournament-core-api
+    env: docker
+    rootDir: tournament-services/core-service
+    envVars:
+      - key: SPRING_DATA_MONGODB_URI
+        value: mongodb://gmu-mongodb:27017/gmu_tournaments
+
+  # 5. GMU React Frontend
+  - type: web
+    name: gmu-frontend
+    env: static
+    rootDir: client
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: gmu-social-api
+          type: web
+          property: host
+      - key: VITE_TOURNAMENT_API_URL
+        fromService:
+          name: tournament-core-api
+          type: web
+          property: host
