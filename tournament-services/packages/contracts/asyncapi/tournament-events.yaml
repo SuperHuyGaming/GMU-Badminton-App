@@ -1,0 +1,57 @@
+asyncapi: 3.0.0
+info:
+  title: Badminton Tournament Events Stream
+  version: 1.0.0
+  description: Event-driven architecture specification for Kafka outbox events and real-time STOMP WebSocket broadcast topics.
+
+channels:
+  tournaments.events:
+    address: tournaments.events
+    messages:
+      tournamentCreated:
+        $ref: '#/components/messages/TournamentEventMessage'
+    description: Apache Kafka topic populated by Spring Boot Transactional Outbox Change Stream listener.
+
+  /topic/tournaments:
+    address: /topic/tournaments
+    messages:
+      tournamentBroadcast:
+        $ref: '#/components/messages/TournamentEventMessage'
+    description: STOMP over WebSocket destination broadcast to connected React MUI clients.
+
+operations:
+  publishTournamentEvent:
+    action: send
+    channel:
+      $ref: '#/channels/tournaments.events'
+    messages:
+      - $ref: '#/components/messages/TournamentEventMessage'
+
+  receiveTournamentBroadcast:
+    action: receive
+    channel:
+      $ref: '#/channels/~1topic~1tournaments'
+    messages:
+      - $ref: '#/components/messages/TournamentEventMessage'
+
+components:
+  messages:
+    TournamentEventMessage:
+      name: TournamentDiscoveredEvent
+      title: Tournament Discovered Event
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          eventId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+            example: TOURNAMENT_CREATED
+          timestamp:
+            type: string
+            format: date-time
+          data:
+            $ref: '../schemas/tournament.json'
+

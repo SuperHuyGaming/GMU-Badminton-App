@@ -1,0 +1,149 @@
+openapi: 3.1.0
+info:
+  title: Badminton Tournament Finder API
+  description: Public and internal REST API specification for tournament discovery, geospatial proximity search, and ingestion.
+  version: 1.0.0
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: API Gateway (Public Access)
+  - url: http://localhost:8081/api/v1
+    description: Core Backend Service (Direct Internal Access)
+
+paths:
+  /tournaments:
+    get:
+      summary: Discover tournaments with proximity and filters
+      description: Returns a list of upcoming tournaments sorted by distance or registration deadline.
+      parameters:
+        - name: latitude
+          in: query
+          description: User's latitude for proximity calculation
+          required: false
+          schema:
+            type: number
+            format: double
+            example: 38.9897
+        - name: longitude
+          in: query
+          description: User's longitude for proximity calculation
+          required: false
+          schema:
+            type: number
+            format: double
+            example: -76.9378
+        - name: max_distance_meters
+          in: query
+          description: Max radius in meters (using MongoDB $near / 2dsphere)
+          required: false
+          schema:
+            type: integer
+            default: 150000
+        - name: is_open_only
+          in: query
+          description: Filter for tournaments open to external/non-collegiate players
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of tournaments matching criteria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TournamentResponse'
+
+  /tournaments/{id}/rsvp:
+    post:
+      summary: RSVP for tournament participation
+      description: Optimistically toggles user RSVP status for tournament tracking.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                status:
+                  type: string
+                  enum: [CONFIRMED, INTERESTED, CANCELLED]
+      responses:
+        '200':
+          description: RSVP status recorded
+        '400':
+          description: Tournament reached capacity or deadline passed
+
+  /internal/ingest:
+    post:
+      summary: Internal ingestion endpoint for validated tournament intelligence
+      description: Invoked by Python FastAPI scraper service to persist extracted TournamentData.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/tournament.json'
+      responses:
+        '201':
+          description: Tournament persisted and queued in Transactional Outbox
+        '400':
+          description: Invalid tournament payload
+
+components:
+  schemas:
+    TournamentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        tournament_name:
+          type: string
+        host_university:
+          type: string
+        event_location:
+          type: string
+        location:
+          type: object
+          properties:
+            type:
+              type: string
+              example: Point
+            coordinates:
+              type: array
+              items:
+                type: number
+              example: [-76.9378, 38.9897]
+        distance_meters:
+          type: number
+          description: Distance from queried user location in meters
+        registration_deadline:
+          type: string
+          format: date-time
+        ride_form_deadline:
+          type: string
+          format: date-time
+        is_open_tournament:
+          type: boolean
+        registration_url:
+          type: string
+          format: uri
+        flyer_image_url:
+          type: string
+          format: uri
+        rsvp_count:
+          type: integer
+          default: 0
+

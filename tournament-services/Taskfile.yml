@@ -1,0 +1,86 @@
+version: '3'
+
+vars:
+  DOCKER_COMPOSE: docker compose
+
+tasks:
+  default:
+    desc: "List all available tasks"
+    cmds:
+      - task --list
+
+  dev:up:
+    desc: "Start all services and databases in development mode"
+    cmds:
+      - "{{.DOCKER_COMPOSE}} up --build"
+
+  dev:down:
+    desc: "Stop and remove all development containers"
+    cmds:
+      - "{{.DOCKER_COMPOSE}} down -v"
+
+  dev:logs:
+    desc: "Tail logs for all services"
+    cmds:
+      - "{{.DOCKER_COMPOSE}} logs -f"
+
+  # Testing Tasks
+  test:
+    desc: "Run tests across all services (Scraper, Core, Web)"
+    cmds:
+      - task: test:scraper
+      - task: test:core
+      - task: test:web
+
+  test:scraper:
+    desc: "Run Python Scraper unit tests with pytest"
+    dir: services/scraper-service
+    cmds:
+      - pytest tests/ -v
+
+  test:core:
+    desc: "Run Java Spring Boot unit & integration tests with Maven"
+    dir: services/core-service
+    cmds:
+      - mvn clean test
+
+  test:web:
+    desc: "Run React frontend unit tests with Vitest"
+    dir: web
+    cmds:
+      - npm run test
+
+  # Linting & Formatting Tasks
+  lint:
+    desc: "Run lint checks across all services"
+    cmds:
+      - task: lint:scraper
+      - task: lint:core
+      - task: lint:web
+
+  lint:scraper:
+    desc: "Lint and format Python scraper service with ruff"
+    dir: services/scraper-service
+    cmds:
+      - ruff check .
+      - ruff format --check .
+
+  lint:core:
+    desc: "Verify Java code style with Spotless"
+    dir: services/core-service
+    cmds:
+      - mvn spotless:check
+
+  lint:web:
+    desc: "Lint React frontend with ESLint"
+    dir: web
+    cmds:
+      - npm run lint
+
+  # Contract & Schema Tasks
+  contracts:validate:
+    desc: "Validate OpenAPI and AsyncAPI schemas"
+    cmds:
+      - npx @stoplight/spectral-cli lint packages/contracts/openapi/*.yaml
+      - npx @asyncapi/cli validate packages/contracts/asyncapi/*.yaml
+

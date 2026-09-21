@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TournamentData",
+  "description": "Standardized tournament intelligence schema extracted from collegiate flyers and captions.",
+  "type": "object",
+  "properties": {
+    "tournament_name": {
+      "type": "string",
+      "description": "The formal name of the badminton tournament."
+    },
+    "host_university": {
+      "type": "string",
+      "description": "The institution hosting the event (e.g., VCU, UMD, Towson, UMBC, JHU)."
+    },
+    "event_location": {
+      "type": "string",
+      "description": "The physical address or facility/building name of the tournament."
+    },
+    "registration_deadline": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The exact date and time registration closes in ISO 8601 format."
+    },
+    "ride_form_deadline": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "The deadline for submitting carpool or ride-share requests, if applicable."
+    },
+    "is_open_tournament": {
+      "type": "boolean",
+      "description": "True if the tournament is open to non-collegiate or external players."
+    },
+    "registration_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "The extracted Google Form, Linktree, or registration portal URL."
+    },
+    "source_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "The source Instagram post or flyer URL."
+    },
+    "flyer_image_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "URL or storage path of the downloaded tournament graphic flyer."
+    }
+  },
+  "required": [
+    "tournament_name",
+    "host_university",
+    "event_location",
+    "registration_deadline",
+    "is_open_tournament"
+  ],
+  "additionalProperties": false
+}
+
