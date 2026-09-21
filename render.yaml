@@ -1,16 +1,5 @@
 services:
-  # 1. Private MongoDB (So you don't need Mongo Atlas!)
-  - type: pserv
-    name: gmu-mongodb
-    env: docker
-    repo: https://github.com/mongo-express/mongo-express # Placeholder to let us use Docker
-    dockerfilePath: Dockerfile.mongo
-    disk:
-      name: mongo-data
-      mountPath: /data/db
-      sizeGB: 1
-
-  # 2. GMU Social Backend (Node.js)
+  # 1. GMU Social Backend (Node.js)
   - type: web
     name: gmu-social-api
     env: node
@@ -19,9 +8,9 @@ services:
     startCommand: node server.js
     envVars:
       - key: MONGO_URI
-        value: mongodb://gmu-mongodb:27017/gmu_social_db
+        sync: false
 
-  # 3. Tournament Scraper Background Worker (Python)
+  # 2. Tournament Scraper Background Worker (Python)
   - type: worker
     name: tournament-scraper
     env: python
@@ -29,16 +18,16 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A src.tasks.celery_app.app worker
 
-  # 4. Core Tournament Service (Java)
+  # 3. Core Tournament Service (Java)
   - type: web
     name: tournament-core-api
     env: docker
     rootDir: tournament-services/core-service
     envVars:
       - key: SPRING_DATA_MONGODB_URI
-        value: mongodb://gmu-mongodb:27017/gmu_tournaments
+        sync: false
 
-  # 5. GMU React Frontend
+  # 4. GMU React Frontend
   - type: web
     name: gmu-frontend
     env: static
