@@ -25,7 +25,7 @@ export default function Landing() {
 	};
 
 	return (
-		<Box sx={{ minHeight: "100vh", backgroundColor: "background.default", pt: { xs: 8, md: 12 }, pb: 8 }}>
+		<Box sx={{ minHeight: "100vh", pt: { xs: 8, md: 12 }, pb: 8 }}>
 			<Container maxWidth="lg" component={motion.div} variants={containerVariants} initial="hidden" animate="visible">
 				{/* Hero Section */}
 				<Box sx={{ textAlign: "center", mb: 8 }}>
@@ -61,36 +61,42 @@ export default function Landing() {
 				</Box>
 
 				{/* Features Grid */}
-				<Grid container spacing={3} sx={{ mt: 4 }} alignItems="stretch">
+				<Box sx={{ 
+					display: 'grid', 
+					gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fit, minmax(280px, 1fr))' }, 
+					gap: 4, 
+					mt: 6 
+				}}>
 					{[
 						{ title: "Live RAC Status", desc: "Instantly see if courts are open before you walk all the way to the gym.", icon: "🏸" },
 						{ title: "Elo Leaderboards", desc: "Climb the ranks. Challenge players to official matches and prove you're the best on campus.", icon: "🏆" },
 						{ title: "Active Forum", desc: "Find doubles partners, discuss gear, and organize late-night smash sessions.", icon: "💬" },
 						{ title: "Player Profiles", desc: "Show off your racket, playstyle, and win streaks to the entire university.", icon: "🎴" }
 					].map((feature, i) => (
-						<Grid item xs={12} sm={6} md={6} key={i}>
-							<motion.div variants={itemVariants} whileHover={{ y: -5 }} style={{ height: "100%" }}>
-								<Paper elevation={0} sx={{ 
-									p: 4, 
-									height: "100%", 
-									borderRadius: 4, 
-									backgroundColor: "background.paper", 
-									border: "1px solid", 
-									borderColor: "divider", 
-									display: "flex", 
-									flexDirection: "column", 
-									alignItems: "center", 
-									justifyContent: "center",
-									textAlign: "center" 
-								}}>
-									<Typography variant="h2" sx={{ mb: 2 }}>{feature.icon}</Typography>
-									<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{feature.title}</Typography>
-									<Typography variant="body1" color="text.secondary">{feature.desc}</Typography>
-								</Paper>
-							</motion.div>
-						</Grid>
+						<motion.div key={i} variants={itemVariants} whileHover={{ y: -8 }} style={{ height: "100%" }}>
+							<Paper elevation={0} sx={{ 
+								p: 4, 
+								height: "100%", 
+								borderRadius: "24px", 
+								backgroundColor: "background.paper", 
+								border: "1px solid", 
+								borderColor: "divider", 
+								display: "flex", 
+								flexDirection: "column", 
+								alignItems: "flex-start", 
+								textAlign: "left",
+								boxShadow: "0 10px 30px rgba(0,0,0,0.03)",
+								transition: "box-shadow 0.3s ease"
+							}}>
+								<Box sx={{ fontSize: "2.5rem", mb: 2, background: "rgba(0, 102, 51, 0.1)", p: 2, borderRadius: "16px", display: "inline-flex" }}>
+									{feature.icon}
+								</Box>
+								<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{feature.title}</Typography>
+								<Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.6 }}>{feature.desc}</Typography>
+							</Paper>
+						</motion.div>
 					))}
-				</Grid>
+				</Box>
 			</Container>
 		</Box>
 	);
