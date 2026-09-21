@@ -19,8 +19,8 @@ describe('Landing Page Component', () => {
 
     it('renders the main hero text', () => {
         renderWithProviders();
-        expect(screen.getByText('GMU Badminton Hub')).toBeInTheDocument();
-        expect(screen.getByText(/The official community platform/i)).toBeInTheDocument();
+        expect(screen.getByText('Mason Badminton Connect')).toBeInTheDocument();
+        expect(screen.getByText(/A student-run community platform/i)).toBeInTheDocument();
     });
 
     it('renders all four feature cards', () => {
