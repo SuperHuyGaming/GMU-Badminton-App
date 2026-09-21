@@ -95,4 +95,4 @@ We welcome contributions! To maintain a clean project, please follow our branchi
 Distributed under the MIT License.
 
 ## ✉️ Contact
-**Project Lead:** Huy Truong
+**Project Lead:** Huy Truong - [SuperHuyGaming](https://github.com/SuperHuyGaming)
