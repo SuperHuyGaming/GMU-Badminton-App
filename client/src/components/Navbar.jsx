@@ -141,6 +141,17 @@ export default function Navbar() {
 									Leaderboard
 								</Button>
 								<Button
+									color={location.pathname === "/matchmaking" ? "secondary" : "inherit"}
+									component={RouterLink}
+									to="/matchmaking"
+									sx={{
+										textTransform: "none",
+										fontWeight: 600,
+									}}
+								>
+									Players
+								</Button>
+								<Button
 									color={location.pathname === "/tournaments" ? "secondary" : "inherit"}
 									component={RouterLink}
 									to="/tournaments"
@@ -496,6 +507,18 @@ export default function Navbar() {
 										fontWeight: "bold",
 									}}
 									primary="Leaderboard"
+								/>
+							</ListItemButton>
+							<ListItemButton
+								component={RouterLink}
+								to="/matchmaking"
+								sx={{ textAlign: "center" }}
+							>
+								<ListItemText
+									primaryTypographyProps={{
+										fontWeight: "bold",
+									}}
+									primary="Players"
 								/>
 							</ListItemButton>
 							<ListItemButton
