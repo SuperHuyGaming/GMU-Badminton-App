@@ -1,4 +1,4 @@
-﻿// client/src/components/profile/ProfileEditForm.jsx
+// client/src/components/profile/ProfileEditForm.jsx
 import { useState } from "react";
 import {
 	Paper,
@@ -309,15 +309,25 @@ export default function ProfileEditForm({
 								}}
 							>
 								<TextField
+									select
 									fullWidth
 									label="Home University"
 									name="homeUniversity"
-									placeholder="e.g. George Mason University"
 									value={formData.homeUniversity}
 									onChange={handleChange}
 									variant="outlined"
 									InputProps={{ sx: { borderRadius: 2 } }}
-								/>
+								>
+									<MenuItem value="George Mason University">George Mason University (GMU)</MenuItem>
+									<MenuItem value="Virginia Tech">Virginia Tech (VT)</MenuItem>
+									<MenuItem value="University of Virginia">University of Virginia (UVA)</MenuItem>
+									<MenuItem value="Virginia Commonwealth University">Virginia Commonwealth University (VCU)</MenuItem>
+									<MenuItem value="University of Maryland">University of Maryland (UMD)</MenuItem>
+									<MenuItem value="George Washington University">George Washington University (GWU)</MenuItem>
+									<MenuItem value="American University">American University</MenuItem>
+									<MenuItem value="Georgetown University">Georgetown University</MenuItem>
+									<MenuItem value="Other">Other</MenuItem>
+								</TextField>
 								<TextField
 									fullWidth
 									type="number"
