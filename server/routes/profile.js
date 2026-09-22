@@ -38,6 +38,8 @@ router.put("/", authMiddleware, async (req, res) => {
 			racket,
 			profilePic,
 			coverPic,
+			homeUniversity,
+			searchRadius,
 		} = req.body;
 
 		const updatedUser = await User.findByIdAndUpdate(
@@ -51,6 +53,8 @@ router.put("/", authMiddleware, async (req, res) => {
 				racket,
 				profilePic,
 				coverPic,
+				homeUniversity,
+				searchRadius,
 			},
 			{ new: true, runValidators: true },
 		).select("-password");

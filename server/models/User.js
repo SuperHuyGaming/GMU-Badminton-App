@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema({
 	profilePic: { type: String, default: "" },
 	coverPic: { type: String, default: "" },
 
+	// Preferences
+	homeUniversity: { type: String, default: "George Mason University" },
+	searchRadius: { type: Number, default: 50 },
+
 	// Gamification
 	badges: { type: [String], default: [] }, // Array of badge IDs e.g. ["first_win", "streak_5"]
 	stats: {

@@ -51,6 +51,8 @@ export default function Profile() {
 		racket: "",
 		profilePic: "",
 		coverPic: "",
+		homeUniversity: "",
+		searchRadius: 50,
 	});
 
 	const { data: profileQueryData, isError: isProfileError } = useQuery({
@@ -86,6 +88,8 @@ export default function Profile() {
 					racket: profileQueryData.racket || "",
 					profilePic: profileQueryData.profilePic || "",
 					coverPic: profileQueryData.coverPic || "",
+					homeUniversity: profileQueryData.homeUniversity || "",
+					searchRadius: profileQueryData.searchRadius || 50,
 				});
 			}
 		}
