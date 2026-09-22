@@ -1,4 +1,4 @@
-// client/src/components/profile/ProfileEditForm.jsx
+﻿// client/src/components/profile/ProfileEditForm.jsx
 import { useState } from "react";
 import {
 	Paper,
@@ -117,6 +117,29 @@ export default function ProfileEditForm({
 							primary="🏸 Player Profile"
 							primaryTypographyProps={{
 								fontWeight: activeSection === "badminton" ? "bold" : "medium",
+							}}
+						/>
+					</ListItemButton>
+					<ListItemButton
+						selected={activeSection === "preferences"}
+						onClick={() => setActiveSection("preferences")}
+						sx={{
+							borderRadius: 2,
+							mb: { xs: 0, md: 1 },
+							whiteSpace: "nowrap",
+							justifyContent: "center",
+							transition: "all 0.2s",
+							bgcolor: activeSection === "preferences" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
+							color: activeSection === "preferences" ? "text.primary" : "text.secondary",
+							"&:hover": {
+								bgcolor: "rgba(0, 102, 51, 0.05)",
+							}
+						}}
+					>
+						<ListItemText
+							primary="⚙️ Preferences"
+							primaryTypographyProps={{
+								fontWeight: activeSection === "preferences" ? "bold" : "medium",
 							}}
 						/>
 					</ListItemButton>
@@ -261,6 +284,47 @@ export default function ProfileEditForm({
 									name="racket"
 									placeholder="e.g. Yonex Astrox 100zz"
 									value={formData.racket}
+									onChange={handleChange}
+									variant="outlined"
+									InputProps={{ sx: { borderRadius: 2 } }}
+								/>
+							</Box>
+						</Box>
+					)}
+
+					{activeSection === "preferences" && (
+						<Box sx={{ flexGrow: 1, pt: 1, px: 1 }}>
+							<Typography variant="h5" fontWeight="800" mb={1.5}>
+								Preferences
+							</Typography>
+							<Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+								Customize your tournament discovery radius and home university.
+							</Typography>
+							<Box
+								sx={{
+									display: "flex",
+									flexDirection: "column",
+									gap: 4,
+									mt: 2,
+								}}
+							>
+								<TextField
+									fullWidth
+									label="Home University"
+									name="homeUniversity"
+									placeholder="e.g. George Mason University"
+									value={formData.homeUniversity}
+									onChange={handleChange}
+									variant="outlined"
+									InputProps={{ sx: { borderRadius: 2 } }}
+								/>
+								<TextField
+									fullWidth
+									type="number"
+									label="Search Radius (Miles)"
+									name="searchRadius"
+									placeholder="50"
+									value={formData.searchRadius}
 									onChange={handleChange}
 									variant="outlined"
 									InputProps={{ sx: { borderRadius: 2 } }}
