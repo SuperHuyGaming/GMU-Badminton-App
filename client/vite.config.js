@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.jpg'],
       manifest: {
-        name: 'GMU Badminton Hub',
-        short_name: 'Badminton',
-        description: 'GMU Badminton community hub for finding matches and viewing live RAC court statuses.',
+        name: 'Mason Badminton Connect',
+        short_name: 'Mason Badminton',
+        description: 'A student-run community platform for George Mason University badminton players. Connect, rank up, and hit the courts.',
         theme_color: '#006633',
         background_color: '#02120a',
         display: 'standalone',

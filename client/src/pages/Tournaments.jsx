@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent, CircularProgress, Alert, Grid } from '@mui/material';
 
 export default function Tournaments() {
@@ -9,8 +9,13 @@ export default function Tournaments() {
     useEffect(() => {
         const fetchTournaments = async () => {
             try {
-                // If the ENV variable isn't set, default to standard localhost port
-                const apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL || 'http://localhost:8081';
+                // If the ENV variable isn't set, default to standard port
+                let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL || 'http://localhost:8081';
+                // Automatically fix localhost when testing on mobile devices over LAN
+                if (apiUrl.includes('localhost') && window.location.hostname !== 'localhost') {
+                    apiUrl = apiUrl.replace('localhost', window.location.hostname);
+                }
+                
                 // The Java core returns paginated data: { content: [...] }
                 const response = await fetch(`${apiUrl}/api/v1/tournaments`);
                 if (!response.ok) throw new Error('Failed to fetch tournaments');
@@ -56,10 +61,10 @@ export default function Tournaments() {
                                     {tournament.name}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    📍 {tournament.location}
+                                    ðŸ“ {tournament.location}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                    📅 {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
+                                    ðŸ“… {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
                                 </Typography>
                                 <Typography variant="body1">
                                     {tournament.description}
