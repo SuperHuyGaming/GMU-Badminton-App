@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent, CircularProgress, Alert, Grid } from '@mui/material';
 
 export default function Tournaments() {
@@ -9,11 +9,21 @@ export default function Tournaments() {
     useEffect(() => {
         const fetchTournaments = async () => {
             try {
-                // If the ENV variable isn't set, default to standard port
-                let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL || 'http://localhost:8081';
-                // Automatically fix localhost when testing on mobile devices over LAN
-                if (apiUrl.includes('localhost') && window.location.hostname !== 'localhost') {
-                    apiUrl = apiUrl.replace('localhost', window.location.hostname);
+                let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL;
+                const isLocalNetwork = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.');
+                
+                if (!apiUrl) {
+                    if (isLocalNetwork) {
+                        apiUrl = `http://${window.location.hostname}:8081`;
+                    } else {
+                        // On production, if VITE_TOURNAMENT_API_URL is missing, it means Java isn't deployed (Free Tier constraints).
+                        // Fail gracefully instead of causing a Network Error on port 8081.
+                        setTournaments([]);
+                        setLoading(false);
+                        return;
+                    }
+                } else if (apiUrl && !apiUrl.startsWith("http")) {
+                    apiUrl = "https://" + apiUrl;
                 }
                 
                 // The Java core returns paginated data: { content: [...] }
