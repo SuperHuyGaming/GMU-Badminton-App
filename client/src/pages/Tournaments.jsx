@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid } from '@mui/material';
 
 export default function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
+    const [nextCursor, setNextCursor] = useState(null);
+    const [hasNext, setHasNext] = useState(false);
 
     const handleExportICS = (tournament) => {
         const formatDateForICS = (dateString) => {
@@ -36,40 +39,68 @@ END:VCALENDAR`;
         document.body.removeChild(link);
     };
 
-    useEffect(() => {
-        const fetchTournaments = async () => {
-            try {
-                let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL;
-                const isLocalNetwork = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.');
-                
-                if (!apiUrl) {
-                    if (isLocalNetwork) {
-                        apiUrl = `http://${window.location.hostname}:8081`;
-                    } else {
-                        // On production, if VITE_TOURNAMENT_API_URL is missing, it means Java isn't deployed (Free Tier constraints).
-                        // Fail gracefully instead of causing a Network Error on port 8081.
-                        setTournaments([]);
-                        setLoading(false);
-                        return;
-                    }
-                } else if (apiUrl && !apiUrl.startsWith("http")) {
-                    apiUrl = "https://" + apiUrl;
-                }
-                
-                // The Java core returns paginated data: { content: [...] }
-                const response = await fetch(`${apiUrl}/api/v1/tournaments`);
-                if (!response.ok) throw new Error('Failed to fetch tournaments');
-                const data = await response.json();
-                setTournaments(data.content || []);
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
+    const fetchTournaments = useCallback(async (cursor = null) => {
+        try {
+            if (cursor) {
+                setLoadingMore(true);
+            } else {
+                setLoading(true);
             }
-        };
+            setError(null);
 
-        fetchTournaments();
+            let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL;
+            const isLocalNetwork = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.');
+            
+            if (!apiUrl) {
+                if (isLocalNetwork) {
+                    apiUrl = `http://${window.location.hostname}:8081`;
+                } else {
+                    // On production, if VITE_TOURNAMENT_API_URL is missing, it means Java isn't deployed (Free Tier constraints).
+                    // Fail gracefully instead of causing a Network Error on port 8081.
+                    setTournaments([]);
+                    setLoading(false);
+                    setLoadingMore(false);
+                    return;
+                }
+            } else if (apiUrl && !apiUrl.startsWith("http")) {
+                apiUrl = "https://" + apiUrl;
+            }
+            
+            const endpoint = new URL(`${apiUrl}/api/v1/tournaments`);
+            if (cursor) {
+                endpoint.searchParams.append('cursor', cursor);
+            }
+            
+            // The Java core returns paginated data: { content: [...] }
+            const response = await fetch(endpoint.toString());
+            if (!response.ok) throw new Error('Failed to fetch tournaments');
+            const data = await response.json();
+            
+            if (cursor) {
+                setTournaments(prev => [...prev, ...(data.content || [])]);
+            } else {
+                setTournaments(data.content || []);
+            }
+            
+            setNextCursor(data.nextCursor || null);
+            setHasNext(data.hasNext || false);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
+        }
     }, []);
+
+    useEffect(() => {
+        fetchTournaments();
+    }, [fetchTournaments]);
+
+    const handleLoadMore = () => {
+        if (hasNext && nextCursor) {
+            fetchTournaments(nextCursor);
+        }
+    };
 
     return (
         <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3, mt: 4 }}>
@@ -80,7 +111,7 @@ END:VCALENDAR`;
                 Find local badminton tournaments scraped from across the web.
             </Typography>
 
-            {loading && <CircularProgress />}
+            {loading && !tournaments.length && <CircularProgress />}
             
             {error && (
                 <Alert severity="error" sx={{ mb: 3 }}>
@@ -125,6 +156,20 @@ END:VCALENDAR`;
                     </Grid>
                 ))}
             </Grid>
+
+            {hasNext && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                    <Button 
+                        variant="contained" 
+                        size="large"
+                        onClick={handleLoadMore} 
+                        disabled={loadingMore}
+                        sx={{ borderRadius: 2, fontWeight: 'bold', px: 4 }}
+                    >
+                        {loadingMore ? 'Loading...' : 'Load More Tournaments'}
+                    </Button>
+                </Box>
+            )}
         </Box>
     );
 }
