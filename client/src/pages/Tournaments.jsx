@@ -1,10 +1,40 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Card, CardContent, CircularProgress, Alert, Grid } from '@mui/material';
+import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid } from '@mui/material';
 
 export default function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    const handleExportICS = (tournament) => {
+        const formatDateForICS = (dateString) => {
+            if (!dateString) return '';
+            const d = new Date(dateString);
+            return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        };
+
+        const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Mason Badminton Connect//EN
+BEGIN:VEVENT
+UID:${tournament.id}@masonbadminton.com
+DTSTAMP:${formatDateForICS(new Date().toISOString())}
+DTSTART:${formatDateForICS(tournament.startDate)}
+DTEND:${formatDateForICS(tournament.endDate)}
+SUMMARY:${tournament.name || "Badminton Tournament"}
+LOCATION:${tournament.location || ""}
+DESCRIPTION:${(tournament.description || "").replace(/\n/g, '\\n')}
+END:VEVENT
+END:VCALENDAR`;
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.setAttribute('download', `${(tournament.name || "Tournament").replace(/\s+/g, '_')}.ics`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     useEffect(() => {
         const fetchTournaments = async () => {
@@ -71,15 +101,26 @@ export default function Tournaments() {
                                     {tournament.name}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    ðŸ“ {tournament.location}
+                                    📍 {tournament.location}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                    ðŸ“… {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
+                                    📅 {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
                                 </Typography>
                                 <Typography variant="body1">
                                     {tournament.description}
                                 </Typography>
                             </CardContent>
+                            <CardActions sx={{ px: 2, pb: 2 }}>
+                                <Button 
+                                    variant="outlined" 
+                                    size="small" 
+                                    color="primary"
+                                    onClick={() => handleExportICS(tournament)}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                >
+                                    🗓️ Add to Calendar (.ics)
+                                </Button>
+                            </CardActions>
                         </Card>
                     </Grid>
                 ))}
