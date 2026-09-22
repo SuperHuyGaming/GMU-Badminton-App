@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid } from '@mui/material';
+import CarpoolModal from '../components/CarpoolModal';
 
 export default function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [selectedTournament, setSelectedTournament] = useState(null);
 
     const handleExportICS = (tournament) => {
         const formatDateForICS = (dateString) => {
@@ -34,6 +37,11 @@ END:VCALENDAR`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handleOpenCarpool = (tournament) => {
+        setSelectedTournament(tournament);
+        setModalOpen(true);
     };
 
     useEffect(() => {
@@ -110,7 +118,16 @@ END:VCALENDAR`;
                                     {tournament.description}
                                 </Typography>
                             </CardContent>
-                            <CardActions sx={{ px: 2, pb: 2 }}>
+                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', gap: 1 }}>
+                                <Button 
+                                    variant="contained" 
+                                    size="small" 
+                                    color="primary"
+                                    onClick={() => handleOpenCarpool(tournament)}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                >
+                                    🚗 RSVP / Carpool
+                                </Button>
                                 <Button 
                                     variant="outlined" 
                                     size="small" 
@@ -118,13 +135,19 @@ END:VCALENDAR`;
                                     onClick={() => handleExportICS(tournament)}
                                     sx={{ borderRadius: 2, fontWeight: 'bold' }}
                                 >
-                                    🗓️ Add to Calendar (.ics)
+                                    🗓️ Add to Calendar
                                 </Button>
                             </CardActions>
                         </Card>
                     </Grid>
                 ))}
             </Grid>
+
+            <CarpoolModal 
+                open={modalOpen} 
+                onClose={() => setModalOpen(false)} 
+                tournament={selectedTournament} 
+            />
         </Box>
     );
 }
