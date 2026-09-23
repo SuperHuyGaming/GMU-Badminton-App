@@ -45,8 +45,19 @@ public class KafkaEventPublisher {
                                 err -> log.error("Failed to delete OutboxEvent {} after Kafka ACK: {}", event.getId(), err.getMessage())
                         );
             } else {
-                log.error("Kafka publish FAILED for OutboxEvent [{}]: {}. Event remains in outbox for retry.",
-                        event.getId(), ex.getMessage());
+                event.setRetryCount(event.getRetryCount() + 1);
+                event.setLastAttemptedAt(java.time.Instant.now());
+                
+                if (event.getRetryCount() >= 3) {
+                    event.setStatus("DLQ");
+                    log.error("Kafka publish FAILED 3 times for OutboxEvent [{}]. Moving to DLQ.", event.getId());
+                } else {
+                    event.setStatus("FAILED");
+                    log.error("Kafka publish FAILED for OutboxEvent [{}]: {}. Event marked as FAILED for retry.",
+                            event.getId(), ex.getMessage());
+                }
+
+                outboxEventRepository.save(event).subscribe();
             }
         });
     }

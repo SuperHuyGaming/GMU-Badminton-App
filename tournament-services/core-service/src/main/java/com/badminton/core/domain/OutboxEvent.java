@@ -30,5 +30,13 @@ public class OutboxEvent {
 
     @Builder.Default
     private Instant createdAt = Instant.now();
+
+    @Builder.Default
+    private int retryCount = 0;
+
+    private Instant lastAttemptedAt;
+
+    @Builder.Default
+    private String status = "PENDING"; // "PENDING", "FAILED", "DLQ"
 }
 
