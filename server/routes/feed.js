@@ -49,7 +49,8 @@ router.get("/", async (req, res, next) => {
             createdAt: match.date
         }));
 
-        // 3. Fetch recent Marketplace Listings
+        // 3. Fetch recent Marketplace Listings (HIDDEN FOR NOW)
+        /*
         const listings = await EquipmentListing.find({ status: "available" })
             .sort({ date: -1 })
             .limit(limit)
@@ -67,9 +68,10 @@ router.get("/", async (req, res, next) => {
             image: listing.images?.[0] || null,
             createdAt: listing.date
         }));
+        */
 
         // Combine all arrays
-        const combinedFeed = [...formattedPosts, ...formattedMatches, ...formattedListings];
+        const combinedFeed = [...formattedPosts, ...formattedMatches];
 
         // Sort chronologically (newest first)
         combinedFeed.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
