@@ -40,13 +40,13 @@ const ScoreAdjuster = ({ label, score, setScore, isWinner, handleIncrement, hand
             {label} {isWinner && <TrophyIcon />}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton onClick={() => handleDecrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }}>
+            <IconButton onClick={() => handleDecrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }} aria-label="Decrease score">
                 <RemoveIcon />
             </IconButton>
             <Typography variant="h3" fontWeight="900" sx={{ minWidth: '70px', textAlign: 'center', color: isWinner ? 'primary.main' : 'text.primary' }}>
                 {score}
             </Typography>
-            <IconButton onClick={() => handleIncrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }}>
+            <IconButton onClick={() => handleIncrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }} aria-label="Increase score">
                 <AddIcon />
             </IconButton>
         </Box>

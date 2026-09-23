@@ -82,6 +82,7 @@ export default function Navbar() {
 								edge="start"
 								onClick={handleDrawerToggle}
 								sx={{ display: { md: "none" } }}
+								aria-label="Open navigation menu"
 							>
 								<HamburgerIcon />
 							</IconButton>
@@ -191,6 +192,7 @@ export default function Navbar() {
 							<IconButton 
 								onClick={colorMode.toggleColorMode} 
 								color="inherit"
+								aria-label="Toggle dark mode"
 								sx={{
 									transition: "all 0.2s",
 									"&:hover": { color: "secondary.main", transform: "rotate(15deg)" },
@@ -204,6 +206,7 @@ export default function Navbar() {
 										color="inherit"
 										component={RouterLink}
 										to="/messages"
+										aria-label="View messages"
 										sx={{
 											transition: "all 0.2s",
 											"&:hover": { color: "secondary.main" },
@@ -217,6 +220,7 @@ export default function Navbar() {
 									<IconButton
 										color="inherit"
 										onClick={handleNotifClick}
+										aria-label="View notifications"
 										sx={{
 											transition: "all 0.2s",
 											"&:hover": {
