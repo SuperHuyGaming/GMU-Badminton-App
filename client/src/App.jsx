@@ -24,7 +24,12 @@ import posthog from 'posthog-js';
 // Initialize PostHog Analytics
 posthog.init('mock-posthog-api-key', {
     api_host: 'https://app.posthog.com',
-    autocapture: true, // Automatically captures clicks, pageviews, etc.
+    autocapture: true, // Automatically captures clicks, etc.
+    capture_pageview: false, // We will manually capture SPA page views
+    session_recording: {
+        maskAllInputs: false,
+        maskTextSelector: "password",
+    },
     loaded: (posthog) => {
         if (process.env.NODE_ENV === 'development') posthog.debug(false);
     }
@@ -77,6 +82,13 @@ const AnimatedRoutes = () => {
         const newUrl = window.location.pathname;
         window.history.pushState({}, '', newUrl);
     };
+
+    useEffect(() => {
+        // Track SPA pageviews for analytics and heatmaps
+        posthog.capture('$pageview', {
+            $current_url: window.location.href,
+        });
+    }, [location]);
 
 	return (
 		<AnimatePresence mode="wait">
