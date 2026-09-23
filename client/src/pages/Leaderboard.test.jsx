@@ -36,7 +36,7 @@ describe('Leaderboard Page Component', () => {
         });
 
         renderWithProviders();
-        expect(screen.getByText('GLOBAL RANKINGS')).toBeInTheDocument();
+        expect(screen.getByText('Leaderboard')).toBeInTheDocument();
     });
 
     it('displays loading skeletons initially', () => {
