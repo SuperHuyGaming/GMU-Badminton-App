@@ -332,22 +332,13 @@ function App() {
 			<ThemeProvider theme={theme}>
 				<CssBaseline />
 				<GlobalStyles styles={{
-					'@keyframes gradientShift': {
-						'0%': { backgroundPosition: '0% 50%' },
-						'50%': { backgroundPosition: '100% 50%' },
-						'100%': { backgroundPosition: '0% 50%' }
-					},
 					'@keyframes dialogPop': {
 						'0%': { opacity: 0, transform: 'scale(0.9) translateY(20px)' },
 						'100%': { opacity: 1, transform: 'scale(1) translateY(0)' }
 					},
 					body: {
-						background: mode === 'light' 
-							? 'linear-gradient(-45deg, #f4f6f8, #e6f0eb, #fbf7e9, #f4f6f8)' 
-							: 'linear-gradient(-45deg, #02120a, #032b17, #1a1705, #02120a)',
-						backgroundSize: '400% 400%',
-						animation: 'gradientShift 15s ease infinite',
-						backgroundAttachment: 'fixed',
+						backgroundColor: mode === 'light' ? '#f4f6f8' : '#02120a',
+						minHeight: '100vh',
 					}
 				}} />
 				<BrowserRouter>
