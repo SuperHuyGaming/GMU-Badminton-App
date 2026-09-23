@@ -3,6 +3,7 @@ import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgre
 import TournamentBracket from '../components/TournamentBracket';
 import EmptyTournaments from '../components/EmptyTournaments';
 import apiFetch from '../utils/api';
+import MapPinIcon from '../components/MapPinIcon';
 
 export default function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
@@ -154,8 +155,8 @@ END:VCALENDAR`;
                                 <Typography variant="h6" fontWeight="bold" gutterBottom>
                                     {tournament.name}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    📍 {tournament.location}
+                                <Typography variant="body2" color="text.secondary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <MapPinIcon width={16} height={16} /> {tournament.location}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                                     📅 {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
