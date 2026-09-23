@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/SuperHuyGaming/GMU-Badminton-App/compare/v1.0.0...v1.1.0) (2026-09-23)
+
+
+### Features
+
+* **ui:** implement global Dark Mode / Light Mode toggle (UX Task 1) ([476d07a](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/476d07a1da48deef170f6ac837d0a3d10e3e4ed7))
+
 ## 1.0.0 (2026-09-23)
 
 
