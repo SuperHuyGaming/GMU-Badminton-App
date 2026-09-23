@@ -155,10 +155,9 @@ export default function Navbar() {
 									color={location.pathname === "/tournaments" ? "secondary" : "inherit"}
 									component={RouterLink}
 									to="/tournaments"
-									sx={{ 
-										mx: 1, 
-										fontWeight: location.pathname === "/tournaments" ? 800 : 600,
-										textTransform: 'none'
+									sx={{
+										textTransform: "none",
+										fontWeight: 600,
 									}}
 								>
 									Tournaments
