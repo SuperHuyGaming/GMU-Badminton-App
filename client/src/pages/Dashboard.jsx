@@ -389,7 +389,7 @@ export default function Dashboard() {
 			</Paper>
 
 			<Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-				<Grid item xs={12} md={4}>
+				<Grid size={{'xs': 12, 'md': 4}}>
 					<Box
 						sx={{
 							display: "flex",
@@ -692,7 +692,7 @@ export default function Dashboard() {
 					</Paper>
 				</Grid>
 
-				<Grid item xs={12} md={8}>
+				<Grid size={{'xs': 12, 'md': 8}}>
 					<Typography
 						variant="h5"
 						fontWeight="900"
@@ -881,19 +881,19 @@ export default function Dashboard() {
 				<Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
 					{loading ? (
 						[1, 2, 3].map(n => (
-							<Grid item xs={12} md={4} key={n}>
+							<Grid size={{'xs': 12, 'md': 4}} key={n}>
 								<Skeleton variant="rounded" height={150} sx={{ borderRadius: 3 }} />
 							</Grid>
 						))
 					) : feed.length === 0 ? (
-						<Grid item xs={12}>
+						<Grid size={{'xs': 12}}>
 							<Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: "1px solid #e0e0e0" }}>
 								<Typography color="text.secondary">No recent activity.</Typography>
 							</Paper>
 						</Grid>
 					) : (
 						feed.map((item, idx) => (
-							<Grid item xs={12} md={4} key={`${item.type}-${item.id}-${idx}`}>
+							<Grid size={{'xs': 12, 'md': 4}} key={`${item.type}-${item.id}-${idx}`}>
 								<Paper 
 									elevation={0} 
 									sx={{ 

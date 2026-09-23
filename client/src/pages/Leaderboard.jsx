@@ -81,7 +81,7 @@ const Leaderboard = () => {
                         <Typography variant="h6" fontWeight="bold">Advanced Filters</Typography>
                     </Box>
                     <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-                        <Grid xs={12} sm={6} md={3}>
+                        <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <TextField 
                                 fullWidth 
                                 label="Search Player" 
@@ -90,7 +90,7 @@ const Leaderboard = () => {
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                         </Grid>
-                        <Grid xs={12} sm={6} md={3}>
+                        <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
                                 <InputLabel>University</InputLabel>
                                 <Select value={university} label="University" onChange={(e) => setUniversity(e.target.value)}>
@@ -103,7 +103,7 @@ const Leaderboard = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid xs={12} sm={6} md={3}>
+                        <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
                                 <InputLabel>Skill Level</InputLabel>
                                 <Select value={skillLevel} label="Skill Level" onChange={(e) => setSkillLevel(e.target.value)}>
@@ -115,7 +115,7 @@ const Leaderboard = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid xs={12} sm={6} md={3}>
+                        <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
                                 <InputLabel>Min Matches</InputLabel>
                                 <Select value={minMatches} label="Min Matches" onChange={(e) => setMinMatches(e.target.value)}>

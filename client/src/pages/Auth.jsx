@@ -120,7 +120,7 @@ export default function Auth() {
 								{ level: 'C Level', title: 'Intermediate', desc: 'Plays regularly, knows basic positioning.' },
 								{ level: 'B Level', title: 'Advanced', desc: 'Competitive player, strong fundamentals.' }
 							].map((item) => (
-								<Grid item xs={12} key={item.level}>
+								<Grid size={{'xs': 12}} key={item.level}>
 									<Card 
 										onClick={() => handleSkillSelect(item.level)}
 										sx={{ 

@@ -149,7 +149,7 @@ END:VCALENDAR`;
 
             <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                 {tournaments.map((tournament) => (
-                    <Grid item xs={12} md={6} key={tournament.id}>
+                    <Grid size={{'xs': 12, 'md': 6}} key={tournament.id}>
                         <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3 }}>
                             <CardContent sx={{ flexGrow: 1 }}>
                                 <Typography variant="h6" fontWeight="bold" gutterBottom>

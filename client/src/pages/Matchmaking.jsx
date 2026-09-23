@@ -54,7 +54,7 @@ export default function Matchmaking() {
             ) : (
                 <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                     {matches.map((player) => (
-                        <Grid item xs={12} sm={6} md={4} key={player._id}>
+                        <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={player._id}>
                             <Card 
                                 sx={{ 
                                     height: '100%', 
