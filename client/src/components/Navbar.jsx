@@ -155,12 +155,17 @@ export default function Navbar() {
 									color={location.pathname === "/tournaments" ? "secondary" : "inherit"}
 									component={RouterLink}
 									to="/tournaments"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
+									sx={{ mx: 1, fontWeight: "bold" }}
 								>
 									Tournaments
+								</Button>
+								<Button
+									color="inherit"
+									component={RouterLink}
+									to="/marketplace"
+									sx={{ mx: 1, fontWeight: "bold" }}
+								>
+									Marketplace
 								</Button>
 								{user && user.role === "admin" && (
 									<Button
@@ -531,6 +536,18 @@ export default function Navbar() {
 										fontWeight: "bold",
 									}}
 									primary="Tournaments"
+								/>
+							</ListItemButton>
+							<ListItemButton
+								component={RouterLink}
+								to="/marketplace"
+								sx={{ textAlign: "center" }}
+							>
+								<ListItemText
+									primaryTypographyProps={{
+										fontWeight: "bold",
+									}}
+									primary="Marketplace"
 								/>
 							</ListItemButton>
 							{user && user.role === "admin" && (

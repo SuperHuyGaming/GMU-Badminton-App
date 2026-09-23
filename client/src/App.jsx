@@ -12,6 +12,7 @@ const Messages = React.lazy(() => import("./pages/Messages"));
 const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
 const Tournaments = React.lazy(() => import("./pages/Tournaments"));
+const Marketplace = React.lazy(() => import("./pages/Marketplace"));
 const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
@@ -160,6 +161,14 @@ const AnimatedRoutes = () => {
 									<Admin />
 								</motion.div>
 							</AdminRoute>
+						}
+					/>
+					<Route
+						path="/marketplace"
+						element={
+							<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
+								<Marketplace />
+							</motion.div>
 						}
 					/>
 					<Route
