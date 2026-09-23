@@ -154,13 +154,37 @@ export default function Dashboard() {
 				}
 
 				if (apiUrl) {
-					const courtRes = await fetch(`${apiUrl}/api/v1/courts/status`);
-					if (courtRes.ok) {
-						setSchedule(await courtRes.json());
-					} else {
-						setSchedule(null);
+					try {
+						const courtRes = await fetch(`${apiUrl}/api/v1/courts/status`);
+						if (courtRes.ok) {
+							setSchedule(await courtRes.json());
+							return;
+						}
+					} catch (e) {
+						console.log("Java backend unreachable, using fallback...");
 					}
 				}
+
+				// FALLBACK: Mock Weekly Schedule based on User's Screenshot
+				const now = new Date();
+				const getNextDay = (dayOfWeek) => {
+					const d = new Date(now);
+					d.setDate(d.getDate() + ((dayOfWeek + 7 - d.getDay()) % 7));
+					return d;
+				};
+
+				const fallbackSchedule = {
+					facilityName: "RAC Linn Gym Court B",
+					timeSlots: [
+						{ startTime: getNextDay(1).setHours(17, 0, 0), endTime: getNextDay(1).setHours(19, 0, 0), status: 'CLUB_ONLY', eventName: 'Club Badminton Practice' },
+						{ startTime: getNextDay(2).setHours(16, 30, 0), endTime: getNextDay(2).setHours(18, 30, 0), status: 'DEDICATED', eventName: 'Dedicated Drop In Badminton ct. B' },
+						{ startTime: getNextDay(4).setHours(19, 0, 0), endTime: getNextDay(4).setHours(21, 0, 0), status: 'DEDICATED', eventName: 'Dedicated Drop in Badminton...' },
+						{ startTime: getNextDay(6).setHours(18, 0, 0), endTime: getNextDay(6).setHours(20, 0, 0), status: 'CLUB_ONLY', eventName: 'Club Badminton Practice' }
+					]
+				};
+				// Sort chronologically
+				fallbackSchedule.timeSlots.sort((a, b) => a.startTime - b.startTime);
+				setSchedule(fallbackSchedule);
 
 			} catch (err) {
 				console.error("Failed to load dashboard data", err);
@@ -726,8 +750,10 @@ export default function Dashboard() {
 									}
 								};
 
-								const startTime = new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+								const startTimeObj = new Date(slot.startTime);
+								const startTime = startTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 								const endTime = new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+								const dayName = startTimeObj.toLocaleDateString('en-US', { weekday: 'short' });
 
 								return (
 									<Paper
@@ -758,6 +784,9 @@ export default function Dashboard() {
 												textAlign: "center"
 											}}
 										>
+											<Typography variant="caption" fontWeight="bold" sx={{ textTransform: 'uppercase', letterSpacing: '1px', mb: 0.5, opacity: 0.9 }}>
+												{dayName}
+											</Typography>
 											<Typography variant="body2" fontWeight="bold">
 												{startTime}
 											</Typography>
