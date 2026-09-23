@@ -14,6 +14,8 @@ const Landing = React.lazy(() => import("./pages/Landing"));
 const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
+import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
+import ReportMatchModal from "./components/ReportMatchModal";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
 
@@ -59,6 +61,21 @@ const AnimatedRoutes = () => {
 	const location = useLocation();
 	const { user } = useAuth();
 	
+    const searchParams = new URLSearchParams(location.search);
+    const reportMatchId = searchParams.get("reportMatch");
+    const [reportModalOpen, setReportModalOpen] = useState(!!reportMatchId);
+
+    useEffect(() => {
+        setReportModalOpen(!!reportMatchId);
+    }, [reportMatchId]);
+
+    const handleCloseReportModal = () => {
+        setReportModalOpen(false);
+        // remove from url
+        const newUrl = window.location.pathname;
+        window.history.pushState({}, '', newUrl);
+    };
+
 	return (
 		<AnimatePresence mode="wait">
 			<Suspense fallback={
@@ -66,6 +83,11 @@ const AnimatedRoutes = () => {
 					<CircularProgress color="primary" />
 				</Box>
 			}>
+                <ReportMatchModal 
+                    open={reportModalOpen} 
+                    onClose={handleCloseReportModal} 
+                    opponentId={reportMatchId} 
+                />
 				<Routes key={location.pathname}>
 					<Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
 					<Route
@@ -276,6 +298,7 @@ function App() {
 					<Toaster position="top-center" reverseOrder={false} />
 
 					<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 } }}>
+                        {user && <PendingMatchesPrompt />}
 						<AnimatedRoutes />
 						{user && <PushNotificationPrompt />}
 					</Container>

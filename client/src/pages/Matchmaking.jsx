@@ -108,14 +108,25 @@ export default function Matchmaking() {
                                     )}
                                 </CardContent>
                                 
-                                <Button 
-                                    variant="contained" 
-                                    fullWidth 
-                                    sx={{ mt: 'auto', borderRadius: 2, fontWeight: 'bold' }}
-                                    onClick={() => window.location.href = `/profile/${player._id}`}
-                                >
-                                    View Profile
-                                </Button>
+                                <Box sx={{ display: 'flex', gap: 1, width: '100%', mt: 'auto' }}>
+                                    <Button 
+                                        variant="outlined" 
+                                        fullWidth 
+                                        sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                        onClick={() => window.location.href = `/profile/${player._id}`}
+                                    >
+                                        Profile
+                                    </Button>
+                                    <Button 
+                                        variant="contained" 
+                                        color="primary"
+                                        fullWidth 
+                                        sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                        onClick={() => window.location.href = `/?reportMatch=${player._id}`}
+                                    >
+                                        Report Match
+                                    </Button>
+                                </Box>
                             </Card>
                         </Grid>
                     ))}

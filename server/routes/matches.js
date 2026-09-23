@@ -38,6 +38,29 @@ router.get("/leaderboard", async (req, res, next) => {
     }
 });
 
+// GET: Pending matches for a user
+router.get("/pending", authMiddleware, async (req, res, next) => {
+    try {
+        const matches = await Match.find({
+            status: "pending",
+            $or: [
+                { team1: req.user.id },
+                { team2: req.user.id }
+            ],
+            // We want to fetch matches the user has to confirm, so theoretically
+            // submittedBy shouldn't be req.user.id, but let's return all pending for now
+        })
+        .sort({ date: -1 })
+        .populate("team1", "name profilePic")
+        .populate("team2", "name profilePic")
+        .populate("submittedBy", "name profilePic");
+        
+        res.json(matches);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET: Match history for a user
 router.get("/user/:userId", async (req, res, next) => {
     try {
@@ -156,6 +179,39 @@ router.put("/:matchId/confirm", authMiddleware, async (req, res, next) => {
             await redisClient.del(`leaderboard:${match.type}`);
         }
         
+        res.json(match);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT: Dispute/Reject a match
+router.put("/:matchId/dispute", authMiddleware, async (req, res, next) => {
+    try {
+        const match = await Match.findById(req.params.matchId);
+        if (!match) return res.status(404).json({ message: "Match not found" });
+        if (match.status !== "pending") return res.status(400).json({ message: "Match is already processed" });
+        
+        // Basic check: only a player from the opposing team of the submitter can dispute
+        const submitterId = match.submittedBy.toString();
+        const team1Ids = match.team1.map(id => id.toString());
+        const team2Ids = match.team2.map(id => id.toString());
+        
+        const submitterInTeam1 = team1Ids.includes(submitterId);
+        const opposingTeam = submitterInTeam1 ? team2Ids : team1Ids;
+        
+        if (!opposingTeam.includes(req.user.id)) {
+            return res.status(403).json({ message: "Only an opposing team member can dispute this match." });
+        }
+        
+        match.status = "rejected";
+        await match.save();
+        
+        // Optionally notify the submitter that their match was disputed via socket
+        if (req.io) {
+            req.io.to(submitterId).emit("matchDisputed", match);
+        }
+
         res.json(match);
     } catch (error) {
         next(error);

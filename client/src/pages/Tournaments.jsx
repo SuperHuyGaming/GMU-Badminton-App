@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid } from '@mui/material';
+import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, DialogActions as MuiDialogActions, IconButton } from '@mui/material';
+import TournamentBracket from '../components/TournamentBracket';
+import apiFetch from '../utils/api';
 
 export default function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
@@ -8,6 +10,26 @@ export default function Tournaments() {
     const [error, setError] = useState(null);
     const [nextCursor, setNextCursor] = useState(null);
     const [hasNext, setHasNext] = useState(false);
+
+    // Bracket State
+    const [bracketOpen, setBracketOpen] = useState(false);
+    const [bracketData, setBracketData] = useState(null);
+    const [bracketLoading, setBracketLoading] = useState(false);
+
+    const handleViewBracket = async () => {
+        setBracketOpen(true);
+        if (bracketData) return; // already loaded
+        setBracketLoading(true);
+        try {
+            const res = await apiFetch('/api/matchmaking/generate-bracket');
+            const data = await res.json();
+            setBracketData(data);
+        } catch (err) {
+            console.error("Failed to fetch bracket", err);
+        } finally {
+            setBracketLoading(false);
+        }
+    };
 
     const handleExportICS = (tournament) => {
         const formatDateForICS = (dateString) => {
@@ -141,7 +163,7 @@ END:VCALENDAR`;
                                     {tournament.description}
                                 </Typography>
                             </CardContent>
-                            <CardActions sx={{ px: 2, pb: 2 }}>
+                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', gap: 1 }}>
                                 <Button 
                                     variant="outlined" 
                                     size="small" 
@@ -150,6 +172,15 @@ END:VCALENDAR`;
                                     sx={{ borderRadius: 2, fontWeight: 'bold' }}
                                 >
                                     🗓️ Add to Calendar
+                                </Button>
+                                <Button 
+                                    variant="contained" 
+                                    size="small" 
+                                    color="primary"
+                                    onClick={handleViewBracket}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold', ml: 'auto' }}
+                                >
+                                    View Bracket
                                 </Button>
                             </CardActions>
                         </Card>
@@ -170,6 +201,22 @@ END:VCALENDAR`;
                     </Button>
                 </Box>
             )}
+
+            <Dialog open={bracketOpen} onClose={() => setBracketOpen(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 4, height: '80vh' } }}>
+                <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    16-Player Knockout Bracket
+                    <Button onClick={() => setBracketOpen(false)} color="inherit" sx={{ fontWeight: 'bold' }}>Close</Button>
+                </DialogTitle>
+                <DialogContent dividers sx={{ backgroundColor: '#f9f9f9' }}>
+                    {bracketLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <TournamentBracket rootMatch={bracketData} />
+                    )}
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }
