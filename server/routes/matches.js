@@ -84,6 +84,19 @@ router.get("/user/:userId", async (req, res, next) => {
 // POST: Submit a new match result
 router.post("/", authMiddleware, async (req, res, next) => {
     try {
+        const idempotencyKey = req.headers['idempotency-key'];
+
+        if (redisEnabled && idempotencyKey) {
+            const redisKey = `idempotency:match:${idempotencyKey}`;
+            // Use SETNX to ensure atomic lock creation
+            const isNew = await redisClient.setnx(redisKey, "1");
+            if (!isNew) {
+                return res.status(409).json({ message: "Duplicate match submission detected. Your score is already being processed." });
+            }
+            // Lock expires after 5 minutes
+            await redisClient.expire(redisKey, 300);
+        }
+
         const { type, team1, team2, team1Score, team2Score } = req.body;
         const submittedBy = req.user.id; // from authMiddleware
         
@@ -106,6 +119,10 @@ router.post("/", authMiddleware, async (req, res, next) => {
         
         res.status(201).json(match);
     } catch (error) {
+        // If it errors out, maybe remove the lock so they can retry?
+        if (redisEnabled && req.headers['idempotency-key']) {
+            await redisClient.del(`idempotency:match:${req.headers['idempotency-key']}`).catch(() => {});
+        }
         next(error);
     }
 });

@@ -21,15 +21,33 @@ router.get("/discover", authMiddleware, async (req, res) => {
             query.homeUniversity = currentUser.homeUniversity;
         }
 
-        // 2. Filter by Skill Level (exact match for now, or could do $+/- 1 level)
-        // If preferredPlay is "Any", ignore playstyle filter.
+        // 2. Filter by Skill Level
         if (currentUser.preferredPlay && currentUser.preferredPlay !== "Any") {
             query.preferredPlay = { $in: [currentUser.preferredPlay, "Any"] };
         }
 
+        // 3. Geolocation Proximity ($near query)
+        // Check if the user has a valid geolocation set (not default 0,0)
+        const hasLocation = currentUser.location && 
+                            currentUser.location.coordinates && 
+                            (currentUser.location.coordinates[0] !== 0 || currentUser.location.coordinates[1] !== 0);
+
+        if (hasLocation) {
+            const maxDistanceMeters = (currentUser.searchRadius || 50) * 1609.34; // Convert miles to meters
+            query.location = {
+                $near: {
+                    $geometry: {
+                        type: "Point",
+                        coordinates: currentUser.location.coordinates
+                    },
+                    $maxDistance: maxDistanceMeters
+                }
+            };
+        }
+
         // To add some randomness and limit payload size, we limit to 20 users
         const potentialMatches = await User.find(query)
-            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive")
+            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location")
             .limit(20)
             .lean();
 

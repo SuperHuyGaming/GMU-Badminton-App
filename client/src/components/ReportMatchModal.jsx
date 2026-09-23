@@ -38,8 +38,13 @@ export default function ReportMatchModal({ open, onClose, opponentId }) {
                 payload.team1 = [user.id || user._id];
             }
 
+            const idempotencyKey = `${user.id || user._id}-${opponentId}-${Date.now()}`;
+
             await apiFetch('/api/matches', {
                 method: 'POST',
+                headers: {
+                    'Idempotency-Key': idempotencyKey
+                },
                 body: JSON.stringify(payload)
             });
             onClose();

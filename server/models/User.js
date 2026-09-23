@@ -28,6 +28,19 @@ const userSchema = new mongoose.Schema({
 	homeUniversity: { type: String, default: "George Mason University" },
 	searchRadius: { type: Number, default: 50 },
 
+	// Geospatial Location (Task 4: Geolocation Proximity API)
+	location: {
+		type: {
+			type: String,
+			enum: ["Point"],
+			default: "Point",
+		},
+		coordinates: {
+			type: [Number], // [longitude, latitude]
+			default: [0, 0],
+		},
+	},
+
 	// Gamification
 	badges: { type: [String], default: [] }, // Array of badge IDs e.g. ["first_win", "streak_5"]
 	stats: {
@@ -51,5 +64,8 @@ const userSchema = new mongoose.Schema({
 	lastActive: { type: Date, default: Date.now },
 	createdAt: { type: Date, default: Date.now },
 });
+
+// Create geospatial index for sub-millisecond location discovery
+userSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("User", userSchema);
