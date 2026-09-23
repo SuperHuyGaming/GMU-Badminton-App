@@ -245,6 +245,16 @@ function App() {
 			h3: { fontWeight: 800, letterSpacing: "-0.03em" },
 			h5: { fontWeight: 600 },
 		},
+		transitions: {
+			easing: {
+				// Highly satisfying custom cubic-bezier curves for micro-interactions
+				easeInOut: 'cubic-bezier(0.65, 0, 0.35, 1)',
+				easeOut: 'cubic-bezier(0.16, 1, 0.3, 1)', // Snappy out (spring-like)
+				easeIn: 'cubic-bezier(0.87, 0, 0.13, 1)',
+				sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
+				bouncy: 'cubic-bezier(0.68, -0.6, 0.32, 1.6)', // Playful over-shoot
+			}
+		},
 		components: {
 			MuiPaper: {
 				styleOverrides: {
@@ -266,6 +276,36 @@ function App() {
 						WebkitBackdropFilter: "blur(20px)",
 						backgroundColor: mode === "light" ? "rgba(0, 102, 51, 0.85)" : "rgba(2, 18, 10, 0.85)",
 						backgroundImage: "none",
+					}
+				}
+			},
+			MuiButton: {
+				styleOverrides: {
+					root: {
+						transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+						'&:active': {
+							transform: 'scale(0.95)',
+						}
+					}
+				}
+			},
+			MuiCard: {
+				styleOverrides: {
+					root: {
+						transition: 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 300ms cubic-bezier(0.16, 1, 0.3, 1)',
+						'&:hover': {
+							transform: 'translateY(-4px)',
+							boxShadow: mode === "light" 
+								? "0 12px 40px 0 rgba(0, 102, 51, 0.12)" 
+								: "0 12px 40px 0 rgba(0, 0, 0, 0.6)",
+						}
+					}
+				}
+			},
+			MuiDialog: {
+				styleOverrides: {
+					paper: {
+						animation: 'dialogPop 350ms cubic-bezier(0.16, 1, 0.3, 1)',
 					}
 				}
 			}
@@ -296,6 +336,10 @@ function App() {
 						'0%': { backgroundPosition: '0% 50%' },
 						'50%': { backgroundPosition: '100% 50%' },
 						'100%': { backgroundPosition: '0% 50%' }
+					},
+					'@keyframes dialogPop': {
+						'0%': { opacity: 0, transform: 'scale(0.9) translateY(20px)' },
+						'100%': { opacity: 1, transform: 'scale(1) translateY(0)' }
 					},
 					body: {
 						background: mode === 'light' 
