@@ -163,7 +163,7 @@ export default function Admin() {
 						mb: 6,
 						textAlign: "center",
 						borderRadius: 3,
-						border: "1px solid #e0e0e0",
+						border: "1px solid", borderColor: "divider",
 					}}
 				>
 					<Typography variant="h6" color="text.secondary">
@@ -284,7 +284,7 @@ export default function Admin() {
 						mb: 6,
 						textAlign: "center",
 						borderRadius: 3,
-						border: "1px solid #e0e0e0",
+						border: "1px solid", borderColor: "divider",
 					}}
 				>
 					<Typography variant="h6" color="text.secondary">
@@ -377,7 +377,7 @@ export default function Admin() {
 				elevation={0}
 				sx={{
 					mb: 6,
-					border: "1px solid #e0e0e0",
+					border: "1px solid", borderColor: "divider",
 					borderRadius: 3,
 					width: "100%",
 					overflowX: "auto",
@@ -441,7 +441,7 @@ export default function Admin() {
 				elevation={0}
 				sx={{
 					mb: 6,
-					border: "1px solid #e0e0e0",
+					border: "1px solid", borderColor: "divider",
 					borderRadius: 3,
 					width: "100%",
 					overflowX: "auto",
@@ -545,7 +545,7 @@ export default function Admin() {
 				component={Paper}
 				elevation={0}
 				sx={{
-					border: "1px solid #e0e0e0",
+					border: "1px solid", borderColor: "divider",
 					borderRadius: 3,
 					width: "100%",
 					overflowX: "auto",

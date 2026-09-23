@@ -18,6 +18,7 @@ import {
 	DialogActions as MuiDialogActions,
 	Skeleton,
 } from "@mui/material";
+import Masonry from "@mui/lab/Masonry";
 import { useNavigate } from "react-router-dom";
 import apiFetch from "../utils/api";
 import { getOptimizedAvatar } from "../utils/image";
@@ -476,7 +477,7 @@ export default function Dashboard() {
 						elevation={0}
 						className="custom-scrollbar"
 						sx={{
-							border: "1px solid #e0e0e0",
+							border: "1px solid", borderColor: "divider",
 							borderRadius: 4,
 							maxHeight: { xs: "350px", md: "600px" },
 							overflowY: "auto",
@@ -716,7 +717,7 @@ export default function Dashboard() {
 									sx={{
 										p: 3,
 										borderRadius: 3,
-										border: "1px solid #e0e0e0",
+										border: "1px solid", borderColor: "divider",
 										display: 'flex',
 										gap: 2
 									}}
@@ -763,7 +764,7 @@ export default function Dashboard() {
 											display: "flex",
 											borderRadius: 4,
 											overflow: "hidden",
-											border: "1px solid #e0e0e0",
+											border: "1px solid", borderColor: "divider",
 											transition: "all 0.2s",
 											"&:hover": {
 												borderColor: "primary.main",
@@ -860,7 +861,7 @@ export default function Dashboard() {
 								sx={{
 									p: 4,
 									borderRadius: 3,
-									border: "1px solid #e0e0e0",
+									border: "1px solid", borderColor: "divider",
 									textAlign: "center",
 								}}
 							>
@@ -878,35 +879,35 @@ export default function Dashboard() {
 				<Typography variant="h5" fontWeight="900" color="primary" sx={{ mb: 2 }}>
 					Community Activity
 				</Typography>
-				<Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
+				<Masonry columns={{ xs: 1, sm: 2, md: 3 }} spacing={{ xs: 2, sm: 3, md: 4 }}>
 					{loading ? (
 						[1, 2, 3].map(n => (
-							<Grid size={{'xs': 12, 'md': 4}} key={n}>
+							<Box key={n}>
 								<Skeleton variant="rounded" height={150} sx={{ borderRadius: 3 }} />
-							</Grid>
+							</Box>
 						))
 					) : feed.length === 0 ? (
-						<Grid size={{'xs': 12}}>
-							<Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: "1px solid #e0e0e0" }}>
+						<Box>
+							<Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
 								<Typography color="text.secondary">No recent activity.</Typography>
 							</Paper>
-						</Grid>
+						</Box>
 					) : (
 						feed.map((item, idx) => (
-							<Grid size={{'xs': 12, 'md': 4}} key={`${item.type}-${item.id}-${idx}`}>
+							<Box key={`${item.type}-${item.id}-${idx}`}>
 								<Paper 
 									elevation={0} 
 									sx={{ 
 										p: 3, 
 										height: '100%', 
 										borderRadius: 3, 
-										border: "1px solid #e0e0e0", 
+										border: "1px solid", borderColor: "divider", 
 										display: 'flex', 
 										flexDirection: 'column',
-										transition: '0.2s',
+										transition: '0.3s cubic-bezier(0.16, 1, 0.3, 1)',
 										'&:hover': {
-											transform: 'translateY(-4px)',
-											boxShadow: '0 8px 25px rgba(0,0,0,0.05)',
+											transform: 'scale(1.02) translateY(-4px)',
+											boxShadow: '0 12px 30px rgba(0,102,51,0.15)',
 											borderColor: 'primary.main'
 										}
 									}}
@@ -966,10 +967,10 @@ export default function Dashboard() {
 										</>
 									)}
 								</Paper>
-							</Grid>
+							</Box>
 						))
 					)}
-				</Grid>
+				</Masonry>
 			</Box>
 
 			<Dialog

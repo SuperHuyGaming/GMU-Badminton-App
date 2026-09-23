@@ -251,7 +251,7 @@ function App() {
 				paper: mode === "light" ? "rgba(255, 255, 255, 0.75)" : "rgba(8, 33, 20, 0.75)", // Translucent for glassmorphism
 			},
 		},
-		shape: { borderRadius: 16 }, // Rounder for glass UI
+		shape: { borderRadius: 4 }, // Reset to standard 4px multiplier to prevent 48px jellybean shapes
 		typography: {
 			fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif',
 			h3: { fontWeight: 800, letterSpacing: "-0.03em" },
