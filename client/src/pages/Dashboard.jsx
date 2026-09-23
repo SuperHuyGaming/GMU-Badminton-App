@@ -123,6 +123,7 @@ export default function Dashboard() {
 	const [status, setStatus] = useState(null);
 	const [schedule, setSchedule] = useState([]);
 	const [announcements, setAnnouncements] = useState([]);
+	const [feed, setFeed] = useState([]);
 	const [loading, setLoading] = useState(true);
 
 	const [newUpdateText, setNewUpdateText] = useState("");
@@ -132,17 +133,20 @@ export default function Dashboard() {
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
-				const [statusRes, scheduleRes, announcementsRes] =
+				const [statusRes, scheduleRes, announcementsRes, feedRes] =
 					await Promise.all([
 						apiFetch(`/api/status`),
 						apiFetch(`/api/schedule/weekly`),
 						apiFetch(`/api/announcements`),
+						apiFetch(`/api/feed`)
 					]);
 
 				if (statusRes.ok) setStatus((await statusRes.json()).message);
 				if (scheduleRes.ok) setSchedule(await scheduleRes.json());
 				if (announcementsRes.ok)
 					setAnnouncements(await announcementsRes.json());
+				if (feedRes.ok)
+					setFeed((await feedRes.json()).feed);
 			} catch (err) {
 				console.error("Failed to load dashboard data", err);
 			} finally {
@@ -879,6 +883,105 @@ export default function Dashboard() {
 					</Box>
 				</Grid>
 			</Grid>
+
+			{/* ACTIVITY FEED SECTION */}
+			<Box sx={{ mt: 6 }}>
+				<Typography variant="h5" fontWeight="900" color="primary" sx={{ mb: 2 }}>
+					Community Activity
+				</Typography>
+				<Grid container spacing={3}>
+					{loading ? (
+						[1, 2, 3].map(n => (
+							<Grid item xs={12} md={4} key={n}>
+								<Skeleton variant="rounded" height={150} sx={{ borderRadius: 3 }} />
+							</Grid>
+						))
+					) : feed.length === 0 ? (
+						<Grid item xs={12}>
+							<Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: "1px solid #e0e0e0" }}>
+								<Typography color="text.secondary">No recent activity.</Typography>
+							</Paper>
+						</Grid>
+					) : (
+						feed.map((item, idx) => (
+							<Grid item xs={12} md={4} key={`${item.type}-${item.id}-${idx}`}>
+								<Paper 
+									elevation={0} 
+									sx={{ 
+										p: 3, 
+										height: '100%', 
+										borderRadius: 3, 
+										border: "1px solid #e0e0e0", 
+										display: 'flex', 
+										flexDirection: 'column',
+										transition: '0.2s',
+										'&:hover': {
+											transform: 'translateY(-4px)',
+											boxShadow: '0 8px 25px rgba(0,0,0,0.05)',
+											borderColor: 'primary.main'
+										}
+									}}
+									onClick={() => {
+										if (item.type === 'post') navigate('/forum');
+										if (item.type === 'listing') navigate('/marketplace');
+									}}
+									style={{ cursor: 'pointer' }}
+								>
+									{item.type === 'post' && (
+										<>
+											<Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+												<Chip label="Forum Post" size="small" color="primary" variant="outlined" />
+												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
+											</Box>
+											<Typography variant="h6" fontWeight="bold" sx={{ mb: 1, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+												{item.title}
+											</Typography>
+											<Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 'auto', pt: 2 }}>
+												<Avatar src={item.author?.profilePic} sx={{ width: 24, height: 24 }} />
+												<Typography variant="caption" fontWeight="bold">{item.author?.name}</Typography>
+											</Box>
+										</>
+									)}
+
+									{item.type === 'match' && (
+										<>
+											<Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+												<Chip label="Match Result" size="small" color="secondary" variant="outlined" />
+												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
+											</Box>
+											<Typography variant="h6" fontWeight="bold" sx={{ mb: 1, textAlign: 'center' }}>
+												{item.team1Score} - {item.team2Score}
+											</Typography>
+											<Typography variant="body2" sx={{ textAlign: 'center', color: 'text.secondary' }}>
+												{item.team1?.map(p => p.name).join(' & ')} <b>vs</b> {item.team2?.map(p => p.name).join(' & ')}
+											</Typography>
+										</>
+									)}
+
+									{item.type === 'listing' && (
+										<>
+											<Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+												<Chip label="Marketplace" size="small" color="success" variant="outlined" />
+												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
+											</Box>
+											<Typography variant="h6" fontWeight="bold" sx={{ mb: 1, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+												{item.title}
+											</Typography>
+											<Typography variant="h6" color="primary" fontWeight="bold" sx={{ mb: 1 }}>
+												${item.price}
+											</Typography>
+											<Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 'auto', pt: 2 }}>
+												<Avatar src={item.seller?.profilePic} sx={{ width: 24, height: 24 }} />
+												<Typography variant="caption" fontWeight="bold">{item.seller?.name}</Typography>
+											</Box>
+										</>
+									)}
+								</Paper>
+							</Grid>
+						))
+					)}
+				</Grid>
+			</Box>
 
 			<Dialog
 				open={!!deleteUpdateId}
