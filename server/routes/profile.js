@@ -15,6 +15,55 @@ router.get("/", authMiddleware, async (req, res) => {
 	}
 });
 
+// GET: Export all user data (GDPR Compliance - Task 10)
+router.get("/export", authMiddleware, async (req, res, next) => {
+    try {
+        const archiver = require("archiver");
+        const Match = require("../models/Match");
+        const Post = require("../models/Post");
+        
+        const userId = req.user.userId || req.user.id;
+        
+        // 1. Gather all user data
+        const userProfile = await User.findById(userId).select("-password").lean();
+        if (!userProfile) return res.status(404).json({ message: "User not found" });
+
+        const userMatches = await Match.find({
+            $or: [{ team1: userId }, { team2: userId }]
+        }).lean();
+
+        const userPosts = await Post.find({ author: userId }).lean();
+
+        // 2. Set headers for file download
+        res.setHeader("Content-Type", "application/zip");
+        res.setHeader("Content-Disposition", `attachment; filename=GMU_Badminton_Export_${userProfile.name.replace(/\s+/g, '_')}.zip`);
+
+        // 3. Create zip archive stream
+        const archive = archiver("zip", {
+            zlib: { level: 9 } // Maximum compression
+        });
+
+        // Listen for errors
+        archive.on("error", function (err) {
+            console.error("Archive error:", err);
+            res.status(500).send({ error: err.message });
+        });
+
+        // Pipe archive data to the response
+        archive.pipe(res);
+
+        // 4. Append files to the archive
+        archive.append(JSON.stringify(userProfile, null, 2), { name: "profile.json" });
+        archive.append(JSON.stringify(userMatches, null, 2), { name: "matches.json" });
+        archive.append(JSON.stringify(userPosts, null, 2), { name: "forum_posts.json" });
+
+        // 5. Finalize the archive (this will finish the stream and send the response)
+        await archive.finalize();
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET: Fetch a public profile by ID
 router.get("/:id", authMiddleware, async (req, res) => {
 	try {

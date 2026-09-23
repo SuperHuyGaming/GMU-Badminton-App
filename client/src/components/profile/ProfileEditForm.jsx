@@ -143,6 +143,29 @@ export default function ProfileEditForm({
 							}}
 						/>
 					</ListItemButton>
+					<ListItemButton
+						selected={activeSection === "privacy"}
+						onClick={() => setActiveSection("privacy")}
+						sx={{
+							borderRadius: 2,
+							mb: { xs: 0, md: 1 },
+							whiteSpace: "nowrap",
+							justifyContent: "center",
+							transition: "all 0.2s",
+							bgcolor: activeSection === "privacy" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
+							color: activeSection === "privacy" ? "text.primary" : "text.secondary",
+							"&:hover": {
+								bgcolor: "rgba(0, 102, 51, 0.05)",
+							}
+						}}
+					>
+						<ListItemText
+							primary="🔒 Data & Privacy"
+							primaryTypographyProps={{
+								fontWeight: activeSection === "privacy" ? "bold" : "medium",
+							}}
+						/>
+					</ListItemButton>
 				</List>
 			</Box>
 
@@ -343,26 +366,79 @@ export default function ProfileEditForm({
 						</Box>
 					)}
 
+					{activeSection === "privacy" && (
+						<Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+							<Typography variant="h5" fontWeight="bold" color="primary.main" mb={1}>
+								Data & Privacy
+							</Typography>
+							
+							<Box sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 3, bgcolor: 'rgba(0,0,0,0.01)' }}>
+								<Typography variant="h6" fontWeight="bold" gutterBottom>
+									Download Your Data
+								</Typography>
+								<Typography variant="body2" color="text.secondary" paragraph>
+									Get a copy of your GMU Badminton data. This includes your profile information, match history, and forum posts. The file will be formatted as a downloadable ZIP archive containing JSON files.
+								</Typography>
+								<Button
+									variant="outlined"
+									color="primary"
+									onClick={async () => {
+										try {
+											const token = localStorage.getItem("accessToken");
+											let API_URL = import.meta.env.VITE_API_URL || "";
+											if (API_URL && !API_URL.startsWith("http")) API_URL = "https://" + API_URL;
+											
+											const response = await fetch(`${API_URL}/api/profile/export`, {
+												headers: { 'Authorization': `Bearer ${token}` }
+											});
+											
+											if (!response.ok) throw new Error("Failed to export data");
+											
+											const blob = await response.blob();
+											const url = window.URL.createObjectURL(blob);
+											const a = document.createElement('a');
+											a.href = url;
+											a.download = `GMU_Badminton_Export.zip`;
+											document.body.appendChild(a);
+											a.click();
+											window.URL.revokeObjectURL(url);
+											document.body.removeChild(a);
+										} catch (err) {
+											alert("Failed to export data: " + err.message);
+										}
+									}}
+									sx={{ mt: 1, borderRadius: 2, fontWeight: 'bold' }}
+								>
+									Request Data Export
+								</Button>
+							</Box>
+						</Box>
+					)}
+
 					{/* ALWAYS VISIBLE SAVE BUTTON */}
-					<Divider sx={{ mt: 4, mb: 3 }} />
-					<Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-						<Button
-							type="submit"
-							variant="contained"
-							color="primary"
-							size="large"
-							disableElevation
-							sx={{
-								fontWeight: "bold",
-								px: 4,
-								py: 1.2,
-								borderRadius: 2,
-							}}
-							disabled={isSaving}
-						>
-							{isSaving ? "Saving..." : "Save Changes"}
-						</Button>
-					</Box>
+					{activeSection !== "privacy" && (
+						<>
+							<Divider sx={{ mt: 4, mb: 3 }} />
+							<Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+								<Button
+									type="submit"
+									variant="contained"
+									color="primary"
+									size="large"
+									disableElevation
+									sx={{
+										fontWeight: "bold",
+										px: 4,
+										py: 1.2,
+										borderRadius: 2,
+									}}
+									disabled={isSaving}
+								>
+									{isSaving ? "Saving..." : "Save Changes"}
+								</Button>
+							</Box>
+						</>
+					)}
 				</form>
 			</Box>
 		</Paper>
