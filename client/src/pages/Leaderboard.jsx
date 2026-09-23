@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
     Container, Typography, Box, Paper, Tabs, Tab, 
-    Avatar, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, CircularProgress
+    Avatar, Table, TableBody, TableCell, TableContainer, TableHead, 
+    TableRow, Chip, CircularProgress, TextField, Select, MenuItem, InputLabel, FormControl, Grid, InputAdornment
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { LeaderboardRowSkeleton } from '../components/Skeletons';
@@ -11,11 +12,21 @@ import { getOptimizedAvatar } from '../utils/image';
 
 const Leaderboard = () => {
     const [tab, setTab] = useState('singles');
+    const [search, setSearch] = useState('');
+    const [university, setUniversity] = useState('');
+    const [skillLevel, setSkillLevel] = useState('');
+    const [minMatches, setMinMatches] = useState('');
 
     const { data: users = [], isLoading: loading } = useQuery({
-        queryKey: ['leaderboard', tab],
+        queryKey: ['leaderboard', tab, search, university, skillLevel, minMatches],
         queryFn: async () => {
-            const res = await apiFetch(`/api/matches/leaderboard?type=${tab}`);
+            const params = new URLSearchParams({ type: tab });
+            if (search) params.append('search', search);
+            if (university) params.append('university', university);
+            if (skillLevel) params.append('skillLevel', skillLevel);
+            if (minMatches) params.append('minMatches', minMatches);
+            
+            const res = await apiFetch(`/api/matches/leaderboard?${params.toString()}`);
             return res.json();
         }
     });
@@ -51,34 +62,72 @@ const Leaderboard = () => {
 				
 				<Typography
 					variant="h2"
-					sx={{
-						fontWeight: "900",
-						fontSize: { xs: "2.5rem", md: "4rem" },
-						color: 'white',
-						textShadow: '0 2px 10px rgba(0,0,0,0.3)',
-						letterSpacing: '-1px',
-						zIndex: 1,
-						textAlign: 'center'
-					}}
+					fontWeight="900"
+					sx={{ color: 'white', textShadow: '0 2px 10px rgba(0,0,0,0.2)', mb: 2, textAlign: 'center' }}
 				>
-					GLOBAL RANKINGS
+					Leaderboard
 				</Typography>
-				<Typography 
-					variant="h6" 
-					sx={{ 
-						color: "rgba(255,255,255,0.9)", 
-						zIndex: 1, 
-						fontWeight: 600,
-						mt: 1,
-						textAlign: 'center'
-					}}
-				>
-					Compete, log your matches, and climb the ranks.
+				<Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.9)', textAlign: 'center', maxWidth: 600 }}>
+					The most competitive players in the area. Climb the ranks and claim your spot at the top.
 				</Typography>
 			</Box>
 
             <Container maxWidth="md">
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+
+                <Paper elevation={0} sx={{ borderRadius: 4, overflow: 'hidden', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', mb: 4, p: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 1, color: 'primary.main' }}>
+                        <span style={{ fontSize: '1.2rem' }}>⚙️</span>
+                        <Typography variant="h6" fontWeight="bold">Advanced Filters</Typography>
+                    </Box>
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <TextField 
+                                fullWidth 
+                                label="Search Player" 
+                                variant="outlined" 
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <FormControl fullWidth>
+                                <InputLabel>University</InputLabel>
+                                <Select value={university} label="University" onChange={(e) => setUniversity(e.target.value)}>
+                                    <MenuItem value=""><em>Any University</em></MenuItem>
+                                    <MenuItem value="George Mason University">George Mason University</MenuItem>
+                                    <MenuItem value="Virginia Tech">Virginia Tech</MenuItem>
+                                    <MenuItem value="UVA">UVA</MenuItem>
+                                    <MenuItem value="VCU">VCU</MenuItem>
+                                    <MenuItem value="Other">Other</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <FormControl fullWidth>
+                                <InputLabel>Skill Level</InputLabel>
+                                <Select value={skillLevel} label="Skill Level" onChange={(e) => setSkillLevel(e.target.value)}>
+                                    <MenuItem value=""><em>Any Skill</em></MenuItem>
+                                    <MenuItem value="A Level">A Level (Advanced)</MenuItem>
+                                    <MenuItem value="B Level">B Level (High Intermediate)</MenuItem>
+                                    <MenuItem value="C Level">C Level (Intermediate)</MenuItem>
+                                    <MenuItem value="D Level">D Level (Beginner)</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <FormControl fullWidth>
+                                <InputLabel>Min Matches</InputLabel>
+                                <Select value={minMatches} label="Min Matches" onChange={(e) => setMinMatches(e.target.value)}>
+                                    <MenuItem value=""><em>Any</em></MenuItem>
+                                    <MenuItem value="5">5+ Matches</MenuItem>
+                                    <MenuItem value="10">10+ Matches</MenuItem>
+                                    <MenuItem value="25">25+ Matches</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                    </Grid>
+                </Paper>
 
                 <Paper elevation={0} sx={{ borderRadius: 4, overflow: 'hidden', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
                     <Tabs 

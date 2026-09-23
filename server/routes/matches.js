@@ -10,10 +10,12 @@ const { redisClient, redisEnabled } = require("../config/redis");
 // GET: Leaderboard
 router.get("/leaderboard", async (req, res, next) => {
     try {
-        const type = req.query.type || 'singles'; // 'singles' or 'doubles'
-        const cacheKey = `leaderboard:${type}`;
+        const type = req.query.type || 'singles';
+        const { university, skillLevel, minMatches, search } = req.query;
 
-        // 1. Check Cache
+        // Generate dynamic cache key based on all filters
+        const cacheKey = `leaderboard:${type}:${university || 'any'}:${skillLevel || 'any'}:${minMatches || 0}:${search || 'none'}`;
+
         if (redisEnabled) {
             const cachedLeaderboard = await redisClient.get(cacheKey);
             if (cachedLeaderboard) {
@@ -22,12 +24,42 @@ router.get("/leaderboard", async (req, res, next) => {
         }
 
         const sortField = type === 'singles' ? 'singlesElo' : 'doublesElo';
-        const users = await User.find({})
-            .sort({ [sortField]: -1, 'stats.totalMatches': -1 })
-            .limit(50)
-            .select(`name profilePic skillLevel ${sortField}`);
+        
+        // Build the advanced aggregation pipeline
+        const pipeline = [];
+
+        // 1. $match stage: Multi-variable filtering
+        const matchStage = {};
+        
+        if (university) matchStage.homeUniversity = university;
+        if (skillLevel) matchStage.skillLevel = skillLevel;
+        if (minMatches) matchStage['stats.totalMatches'] = { $gte: parseInt(minMatches, 10) };
+        if (search) matchStage.name = { $regex: search, $options: "i" };
+
+        if (Object.keys(matchStage).length > 0) {
+            pipeline.push({ $match: matchStage });
+        }
+
+        // 2. $sort stage
+        pipeline.push({ $sort: { [sortField]: -1, 'stats.totalMatches': -1 } });
+
+        // 3. $limit stage
+        pipeline.push({ $limit: 50 });
+
+        // 4. $project stage to shape the response
+        pipeline.push({
+            $project: {
+                name: 1,
+                profilePic: 1,
+                skillLevel: 1,
+                homeUniversity: 1,
+                [sortField]: 1,
+                'stats.totalMatches': 1
+            }
+        });
+
+        const users = await User.aggregate(pipeline);
             
-        // 2. Set Cache (Expire after 5 minutes)
         if (redisEnabled) {
             await redisClient.setex(cacheKey, 300, JSON.stringify(users));
         }
