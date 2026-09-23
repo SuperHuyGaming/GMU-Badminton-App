@@ -188,6 +188,16 @@ export default function Navbar() {
 								gap: 2,
 							}}
 						>
+							<IconButton 
+								onClick={colorMode.toggleColorMode} 
+								color="inherit"
+								sx={{
+									transition: "all 0.2s",
+									"&:hover": { color: "secondary.main", transform: "rotate(15deg)" },
+								}}
+							>
+								{theme.palette.mode === 'dark' ? <SunIcon /> : <MoonIcon />}
+							</IconButton>
 							{user ? (
 								<>
 									<IconButton
@@ -401,14 +411,6 @@ export default function Navbar() {
 											sx={{ fontWeight: "bold" }}
 										>
 											View Profile
-										</MenuItem>
-										<MenuItem onClick={(e) => {
-											if (e.currentTarget) e.currentTarget.blur();
-											colorMode.toggleColorMode();
-											handleMenuClose();
-										}} sx={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 1 }}>
-											{theme.palette.mode === 'dark' ? <SunIcon /> : <MoonIcon />}
-											Toggle Theme
 										</MenuItem>
 										<Divider />
 										<MenuItem
