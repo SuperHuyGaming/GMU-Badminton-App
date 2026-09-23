@@ -121,7 +121,7 @@ export default function Dashboard() {
 	const currentUser = JSON.parse(localStorage.getItem("user"));
 
 	const [status, setStatus] = useState(null);
-	const [schedule, setSchedule] = useState([]);
+	const [schedule, setSchedule] = useState(null);
 	const [announcements, setAnnouncements] = useState([]);
 	const [feed, setFeed] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -133,20 +133,35 @@ export default function Dashboard() {
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
-				const [statusRes, scheduleRes, announcementsRes, feedRes] =
-					await Promise.all([
-						apiFetch(`/api/status`),
-						apiFetch(`/api/schedule/weekly`),
-						apiFetch(`/api/announcements`),
-						apiFetch(`/api/feed`)
-					]);
+				const [statusRes, announcementsRes, feedRes] = await Promise.all([
+					apiFetch(`/api/status`),
+					apiFetch(`/api/announcements`),
+					apiFetch(`/api/feed`)
+				]);
 
 				if (statusRes.ok) setStatus((await statusRes.json()).message);
-				if (scheduleRes.ok) setSchedule(await scheduleRes.json());
-				if (announcementsRes.ok)
-					setAnnouncements(await announcementsRes.json());
-				if (feedRes.ok)
-					setFeed((await feedRes.json()).feed);
+				if (announcementsRes.ok) setAnnouncements(await announcementsRes.json());
+				if (feedRes.ok) setFeed((await feedRes.json()).feed);
+
+				// Fetch Java Court Schedule
+				let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL;
+				const isLocalNetwork = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.');
+				
+				if (!apiUrl) {
+					apiUrl = isLocalNetwork ? `http://${window.location.hostname}:8081` : null;
+				} else if (!apiUrl.startsWith("http")) {
+					apiUrl = "https://" + apiUrl;
+				}
+
+				if (apiUrl) {
+					const courtRes = await fetch(`${apiUrl}/api/v1/courts/status`);
+					if (courtRes.ok) {
+						setSchedule(await courtRes.json());
+					} else {
+						setSchedule(null);
+					}
+				}
+
 			} catch (err) {
 				console.error("Failed to load dashboard data", err);
 			} finally {
@@ -660,7 +675,7 @@ export default function Dashboard() {
 						color="primary"
 						sx={{ mb: 2 }}
 					>
-						Weekly Schedule
+						Live RAC Court Status
 					</Typography>
 					<Box
 						sx={{
@@ -689,79 +704,68 @@ export default function Dashboard() {
 									</Box>
 								</Paper>
 							))
-						) : schedule.length > 0 ? (
-							schedule.map((item, index) => {
-								const isDedicated =
-									item.playType?.includes("Dedicated");
-								const displayTime =
-									item.time ||
-									(isDedicated
-										? "8:00 PM - 10:45 PM"
-										: "6:00 AM - 11:00 PM");
+						) : schedule?.timeSlots?.length > 0 ? (
+							schedule.timeSlots.map((slot, index) => {
+								const getStatusColor = (status) => {
+									switch(status) {
+										case 'DEDICATED': return 'success.main';
+										case 'CLUB_ONLY': return 'info.main';
+										case 'OPEN_REQ': return 'warning.main';
+										case 'UNAVAILABLE': return 'error.main';
+										default: return 'text.secondary';
+									}
+								};
+								
+								const getStatusLabel = (status) => {
+									switch(status) {
+										case 'DEDICATED': return '🟢 Dedicated Drop-in';
+										case 'CLUB_ONLY': return '🔵 Club Members Only';
+										case 'OPEN_REQ': return '🟡 Open Rec (Ask for Nets)';
+										case 'UNAVAILABLE': return '🔴 Unavailable';
+										default: return status;
+									}
+								};
 
-								const rawLocation =
-									item.location || "Linn Gym Court A/B";
-								const displayLocation =
-									rawLocation.includes("RAC") ||
-									rawLocation.includes(
-										"Recreation Athletic Complex",
-									)
-										? rawLocation
-										: `Recreation Athletic Complex (RAC) • ${rawLocation}`;
+								const startTime = new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+								const endTime = new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 								return (
 									<Paper
 										key={index}
 										elevation={0}
-										onClick={() => navigate("/forum")}
 										sx={{
 											display: "flex",
 											borderRadius: 4,
 											overflow: "hidden",
 											border: "1px solid #e0e0e0",
 											transition: "all 0.2s",
-											cursor: "pointer",
 											"&:hover": {
 												borderColor: "primary.main",
-												transform: "translateY(-4px)",
-												boxShadow:
-													"0 8px 25px rgba(0,0,0,0.05)",
+												boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
 											},
 										}}
 									>
 										<Box
 											sx={{
-												bgcolor: isDedicated
-													? "secondary.main"
-													: "primary.main",
-												color: isDedicated
-													? "black"
-													: "white",
+												bgcolor: getStatusColor(slot.status),
+												color: "white",
 												minWidth: { xs: 80, sm: 100 },
 												display: "flex",
 												flexDirection: "column",
 												justifyContent: "center",
 												alignItems: "center",
 												p: 2,
+												textAlign: "center"
 											}}
 										>
-											<Typography
-												variant="caption"
-												fontWeight="bold"
-												sx={{
-													textTransform: "uppercase",
-													letterSpacing: "1px",
-												}}
-											>
-												{item.date?.split(" ")[0] ||
-													"Day"}
+											<Typography variant="body2" fontWeight="bold">
+												{startTime}
 											</Typography>
-											<Typography
-												variant="h4"
-												fontWeight="900"
-											>
-												{item.date?.split(" ")[1] ||
-													"-"}
+											<Typography variant="caption" sx={{ opacity: 0.8 }}>
+												to
+											</Typography>
+											<Typography variant="body2" fontWeight="bold">
+												{endTime}
 											</Typography>
 										</Box>
 										<Box
@@ -776,37 +780,23 @@ export default function Dashboard() {
 											<Box
 												sx={{
 													display: "flex",
-													justifyContent:
-														"space-between",
+													justifyContent: "space-between",
 													alignItems: "flex-start",
 													mb: 1,
 												}}
 											>
-												<Typography
-													variant="h6"
-													fontWeight="bold"
-												>
-													{item.day || "Loading Day"}
+												<Typography variant="h6" fontWeight="bold">
+													{slot.eventName}
 												</Typography>
 												<Chip
-													label={
-														item.playType ||
-														"Open Play"
-													}
-													color={
-														isDedicated
-															? "secondary"
-															: "default"
-													}
-													variant={
-														isDedicated
-															? "filled"
-															: "outlined"
-													}
+													label={getStatusLabel(slot.status)}
 													size="small"
 													sx={{
 														fontWeight: "bold",
 														borderRadius: 2,
+														bgcolor: `${getStatusColor(slot.status)}22`,
+														color: getStatusColor(slot.status),
+														border: `1px solid ${getStatusColor(slot.status)}`
 													}}
 												/>
 											</Box>
@@ -821,44 +811,14 @@ export default function Dashboard() {
 											>
 												<Typography
 													variant="body2"
-													fontWeight="bold"
-													sx={{
-														display: "flex",
-														alignItems: "center",
-														gap: 0.5,
-														color: isDedicated
-															? "primary.main"
-															: "text.secondary",
-													}}
-												>
-													<ClockIcon /> {displayTime}
-												</Typography>
-
-												<Typography
-													variant="body2"
-													component="a"
-													href="https://maps.google.com/?q=Recreation+Athletic+Complex+GMU"
-													target="_blank"
-													onClick={(e) =>
-														e.stopPropagation()
-													}
 													sx={{
 														display: "flex",
 														alignItems: "center",
 														gap: 0.5,
 														color: "text.secondary",
-														textDecoration: "none",
-														transition:
-															"color 0.2s",
-														"&:hover": {
-															color: "primary.main",
-															textDecoration:
-																"underline",
-														},
 													}}
 												>
-													<PinIcon />{" "}
-													{displayLocation}
+													<PinIcon /> {schedule.facilityName}
 												</Typography>
 											</Box>
 										</Box>
@@ -876,7 +836,7 @@ export default function Dashboard() {
 								}}
 							>
 								<Typography color="text.secondary">
-									No schedule data available right now.
+									No live court schedule available right now.
 								</Typography>
 							</Paper>
 						)}
