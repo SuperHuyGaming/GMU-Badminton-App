@@ -80,7 +80,7 @@ const Leaderboard = () => {
                         <span style={{ fontSize: '1.2rem' }}>⚙️</span>
                         <Typography variant="h6" fontWeight="bold">Advanced Filters</Typography>
                     </Box>
-                    <Grid container spacing={2}>
+                    <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                         <Grid xs={12} sm={6} md={3}>
                             <TextField 
                                 fullWidth 

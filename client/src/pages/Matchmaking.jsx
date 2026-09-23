@@ -52,7 +52,7 @@ export default function Matchmaking() {
                     We couldn't find any exact matches right now. Try expanding your search preferences!
                 </Alert>
             ) : (
-                <Grid container spacing={3}>
+                <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                     {matches.map((player) => (
                         <Grid item xs={12} sm={6} md={4} key={player._id}>
                             <Card 

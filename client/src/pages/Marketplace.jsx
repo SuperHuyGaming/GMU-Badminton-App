@@ -162,7 +162,7 @@ export default function Marketplace() {
             ) : listings.length === 0 ? (
                 <Alert severity="info">No gear found in this category right now.</Alert>
             ) : (
-                <Grid container spacing={3}>
+                <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                     {listings.map(listing => (
                         <Grid item xs={12} sm={6} md={4} lg={3} key={listing._id}>
                             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, overflow: 'hidden' }}>

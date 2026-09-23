@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.jpg'],
+      includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Mason Badminton Connect',
         short_name: 'Mason Badminton',
@@ -18,15 +18,9 @@ export default defineConfig({
         orientation: 'portrait',
         icons: [
           {
-            src: '/icon.jpg',
-            sizes: '1024x1024',
-            type: 'image/jpeg'
-          },
-          {
-            src: '/icon.jpg',
-            sizes: '1024x1024',
-            type: 'image/jpeg',
-            purpose: 'any maskable'
+            src: '/favicon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml'
           }
         ]
       }

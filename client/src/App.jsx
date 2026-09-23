@@ -346,7 +346,14 @@ function App() {
 
 					<Toaster position="top-center" reverseOrder={false} />
 
-					<Container maxWidth="lg" sx={{ mt: { xs: 2, md: 4 } }}>
+					<Container 
+						maxWidth="lg" 
+						sx={{ 
+							mt: { xs: 2, sm: 3, md: 4 }, 
+							mb: { xs: 4, sm: 6, md: 8 },
+							px: { xs: 2, sm: 3, md: 4 }
+						}}
+					>
                         {user && <PendingMatchesPrompt />}
 						<AnimatedRoutes />
 						{user && <PushNotificationPrompt />}

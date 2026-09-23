@@ -146,7 +146,7 @@ END:VCALENDAR`;
                 <EmptyTournaments />
             )}
 
-            <Grid container spacing={3}>
+            <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                 {tournaments.map((tournament) => (
                     <Grid item xs={12} md={6} key={tournament.id}>
                         <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3 }}>

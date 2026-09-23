@@ -114,7 +114,7 @@ export default function Auth() {
 						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
 							Select your badminton skill level.
 						</Typography>
-						<Grid container spacing={2}>
+						<Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
 							{[
 								{ level: 'D Level', title: 'Beginner', desc: 'Just starting out or playing casually.' },
 								{ level: 'C Level', title: 'Intermediate', desc: 'Plays regularly, knows basic positioning.' },

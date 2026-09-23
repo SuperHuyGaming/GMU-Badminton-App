@@ -388,7 +388,7 @@ export default function Dashboard() {
 				</Box>
 			</Paper>
 
-			<Grid container spacing={4}>
+			<Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
 				<Grid item xs={12} md={4}>
 					<Box
 						sx={{
@@ -878,7 +878,7 @@ export default function Dashboard() {
 				<Typography variant="h5" fontWeight="900" color="primary" sx={{ mb: 2 }}>
 					Community Activity
 				</Typography>
-				<Grid container spacing={3}>
+				<Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
 					{loading ? (
 						[1, 2, 3].map(n => (
 							<Grid item xs={12} md={4} key={n}>
