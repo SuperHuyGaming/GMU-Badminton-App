@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, DialogActions as MuiDialogActions, IconButton } from '@mui/material';
 import TournamentBracket from '../components/TournamentBracket';
+import EmptyTournaments from '../components/EmptyTournaments';
 import apiFetch from '../utils/api';
 
 export default function Tournaments() {
@@ -142,7 +143,7 @@ END:VCALENDAR`;
             )}
 
             {!loading && !error && tournaments.length === 0 && (
-                <Alert severity="info">No tournaments found right now. Check back later!</Alert>
+                <EmptyTournaments />
             )}
 
             <Grid container spacing={3}>

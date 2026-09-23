@@ -14,6 +14,7 @@ const Landing = React.lazy(() => import("./pages/Landing"));
 const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 const Marketplace = React.lazy(() => import("./pages/Marketplace"));
 const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
+const NotFound = React.lazy(() => import("./pages/NotFound"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
 import ReportMatchModal from "./components/ReportMatchModal";
@@ -192,7 +193,11 @@ const AnimatedRoutes = () => {
 						}
 					/>
 					{/* Catch all */}
-					<Route path="*" element={<Navigate to="/" />} />
+					<Route path="*" element={
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} transition={{ duration: 0.2 }}>
+                            <NotFound />
+                        </motion.div>
+                    } />
 				</Routes>
 			</Suspense>
 		</AnimatePresence>
