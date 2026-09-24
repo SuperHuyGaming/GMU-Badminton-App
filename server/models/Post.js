@@ -13,6 +13,7 @@ const PostSchema = new mongoose.Schema({
 	toxicityScore: { type: Number, default: 0 }, // NEW: Sentiment toxicity tracking
 	isEdited: { type: Boolean, default: false }, // NEW: Track post edits
 	imageUrl: { type: String, default: "" }, // NEW: Image attachment
+	tags: { type: [String], default: [] }, // NEW: Post categorization tags
 	comments: [
 		{
 			authorId: String,
@@ -54,6 +55,7 @@ PostSchema.post('save', async function(doc) {
 				title: doc.title,
 				content: doc.content,
 				image: doc.imageUrl,
+				tags: doc.tags || [],
 				likes: doc.likedBy?.length || 0,
 				comments: doc.comments?.length || 0,
 				createdAt: doc.timestamp,

@@ -61,6 +61,9 @@ const userSchema = new mongoose.Schema({
 	// Web Push Subscriptions for Notifications
 	pushSubscriptions: { type: Array, default: [] },
 
+	// Calendar / RSVPs
+	rsvpedTournaments: [{ type: String }], // Array of Tournament IDs
+
 	lastActive: { type: Date, default: Date.now },
 	createdAt: { type: Date, default: Date.now },
 });

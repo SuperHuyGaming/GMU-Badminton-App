@@ -19,6 +19,7 @@ export default function Forum() {
 	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
+	const [selectedTag, setSelectedTag] = useState("");
 	const [feed, setFeed] = useState([]);
 	const [page, setPage] = useState(1);
 	const [hasMore, setHasMore] = useState(true);
@@ -27,7 +28,7 @@ export default function Forum() {
 	const observer = useRef();
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [newPost, setNewPost] = useState({ title: "", content: "", imageUrl: "" });
+	const [newPost, setNewPost] = useState({ title: "", content: "", imageUrl: "", tags: [] });
 	const [postImage, setPostImage] = useState(null);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
@@ -56,7 +57,8 @@ export default function Forum() {
 			else setIsFetchingMore(true);
 
 			try {
-				const res = await apiFetch(`/api/feed?tab=${tab}&page=${page}`);
+				const tagQuery = selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : "";
+				const res = await apiFetch(`/api/feed?tab=${tab}&page=${page}${tagQuery}`);
 				if (res.ok) {
 					const data = await res.json();
 					setHasMore(data.hasMore);
@@ -74,7 +76,7 @@ export default function Forum() {
 			}
 		};
 		fetchFeed();
-	}, [tab, page]);
+	}, [tab, page, selectedTag]);
 
 	// Listen for real-time updates
 	useEffect(() => {
@@ -135,6 +137,7 @@ export default function Forum() {
 					imageUrl: finalImageUrl,
 					authorName: currentUser.name,
 					authorId: currentUser.id,
+                    tags: newPost.tags,
 					targetDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
 				}),
 			});
@@ -143,7 +146,7 @@ export default function Forum() {
 			setIsUploadingImage(false);
 			if (!res.ok) return toast.error(data.message || "Failed to post. Please try again.");
 
-			setNewPost({ title: "", content: "", imageUrl: "" });
+			setNewPost({ title: "", content: "", imageUrl: "", tags: [] });
 			setPostImage(null);
 			setIsModalOpen(false);
 			toast.success("Post created successfully!");
@@ -202,8 +205,12 @@ export default function Forum() {
 							key={tag} 
 							label={tag} 
 							size="small" 
-							variant="outlined" 
-							onClick={() => {}} // Dummy click handler
+							variant={selectedTag === tag ? "filled" : "outlined"}
+                            color={selectedTag === tag ? "primary" : "default"}
+							onClick={() => {
+                                setSelectedTag(selectedTag === tag ? "" : tag);
+                                setPage(1);
+                            }}
 							sx={{ 
 								fontWeight: 'bold', cursor: 'pointer', 
 								'&:hover': { bgcolor: 'primary.main', color: 'white', borderColor: 'primary.main' } 
@@ -236,6 +243,7 @@ export default function Forum() {
 								authorName: item.authorName,
 								authorBadges: item.authorBadges,
 								timestamp: item.createdAt,
+                                tags: item.tags || [],
 								likedBy: new Array(item.likes).fill('mock_id'), // PostCard only cares about length
 								comments: new Array(item.comments).fill({}), 
 							};
@@ -321,7 +329,37 @@ export default function Forum() {
 				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
 					<TextField label="Title" variant="outlined" fullWidth value={newPost.title} onChange={(e) => setNewPost({ ...newPost, title: e.target.value })} />
 					<TextField label="What's on your mind?" multiline rows={4} variant="outlined" fullWidth value={newPost.content} onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} />
-					<Box>
+					
+                    {/* Tags Selection */}
+                    <Box>
+                        <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
+                            Add Tags (Optional)
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                            {['#GMUTournament', '#RAC', '#Stringing', '#LookingForDoubles', '#Yonex', '#Skyline'].map(tag => {
+                                const isSelected = newPost.tags.includes(tag);
+                                return (
+                                    <Chip 
+                                        key={tag}
+                                        label={tag}
+                                        size="small"
+                                        variant={isSelected ? "filled" : "outlined"}
+                                        color={isSelected ? "primary" : "default"}
+                                        onClick={() => {
+                                            if (isSelected) {
+                                                setNewPost(p => ({ ...p, tags: p.tags.filter(t => t !== tag) }));
+                                            } else if (newPost.tags.length < 3) {
+                                                setNewPost(p => ({ ...p, tags: [...p.tags, tag] }));
+                                            }
+                                        }}
+                                        sx={{ cursor: 'pointer' }}
+                                    />
+                                );
+                            })}
+                        </Box>
+                    </Box>
+
+                    <Box>
 						<input accept="image/*" style={{ display: "none" }} id="post-image-upload" type="file" onChange={(e) => setPostImage(e.target.files[0])} />
 						<label htmlFor="post-image-upload">
 							<Button variant="outlined" component="span" fullWidth color={postImage ? "success" : "primary"}>

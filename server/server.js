@@ -126,6 +126,7 @@ app.use("/api/coach", require("./routes/coach"));
 app.use("/api/matchmaking", require("./routes/matchmaking"));
 app.use("/api/marketplace", require("./routes/marketplace"));
 app.use("/api/feed", require("./routes/feed"));
+app.use("/api/calendar", require("./routes/calendar"));
 
 // Make io accessible globally
 app.set("io", io);

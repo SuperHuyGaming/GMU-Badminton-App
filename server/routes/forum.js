@@ -173,11 +173,12 @@ router.get("/", async (req, res) => {
 
 router.post("/", postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, authorName, targetDate, authorId } = req.body;
+		const { title, content, imageUrl, authorName, targetDate, authorId, tags } = req.body;
 		
 		const cleanTitle = xss(title);
 		const cleanContent = xss(content);
 		const cleanImageUrl = imageUrl ? xss(imageUrl) : "";
+		const cleanTags = Array.isArray(tags) ? tags.map(t => xss(t)) : [];
 		
 		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
 		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
@@ -186,6 +187,7 @@ router.post("/", postLimiter, async (req, res) => {
 			title: cleanTitle,
 			content: cleanContent,
 			imageUrl: cleanImageUrl,
+			tags: cleanTags,
 			authorName,
 			targetDate: targetDate || "General",
 			authorId: authorId || "000000000000000000000000",
@@ -199,6 +201,21 @@ router.post("/", postLimiter, async (req, res) => {
 			return res
 				.status(201)
 				.json({ message: "Post submitted for review." });
+
+		// Add to ActivityFeed so it appears in the Community tab
+		const ActivityFeed = require("../models/ActivityFeed");
+		await ActivityFeed.create({
+			type: "post",
+			referenceId: newPost._id,
+			authorId: newPost.authorId,
+			authorName: newPost.authorName,
+			title: newPost.title,
+			content: newPost.content,
+			image: newPost.imageUrl,
+            tags: newPost.tags,
+			createdAt: newPost.timestamp || new Date(),
+			score: 0
+		}).catch(e => console.error("ActivityFeed create error:", e));
 
 		const hydratedPost = await hydrateWithPictures(newPost.toObject());
 		if (req.io) req.io.emit("postCreated", hydratedPost);
@@ -299,6 +316,13 @@ router.post("/:postId/comments", postLimiter, async (req, res) => {
 
 		post.comments.push({ authorId, authorName, content });
 		await post.save();
+        
+        // Increment comment count in ActivityFeed
+        const ActivityFeed = require("../models/ActivityFeed");
+        await ActivityFeed.updateOne(
+            { referenceId: post._id },
+            { $inc: { comments: 1, score: 3 } }
+        ).catch(() => {});
 
 		const updatedPost = await Post.findById(req.params.postId).lean();
 		const hydratedPost = await hydrateWithPictures(updatedPost);
@@ -490,6 +514,12 @@ router.put("/:postId/like", async (req, res) => {
 			post.likedBy.push(userId);
 		}
 		await post.save();
+
+        const ActivityFeed = require("../models/ActivityFeed");
+        await ActivityFeed.updateOne(
+            { referenceId: post._id },
+            { $inc: { likes: hasLiked ? -1 : 1, score: hasLiked ? -2 : 2 } }
+        ).catch(() => {});
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {

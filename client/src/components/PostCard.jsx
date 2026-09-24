@@ -445,10 +445,28 @@ export default function PostCard({ post }) {
 						<Typography
 							variant="body1"
 							color="text.primary"
-							sx={{ whiteSpace: "pre-wrap", pointerEvents: 'none' }}
+							sx={{ whiteSpace: "pre-wrap", pointerEvents: 'none', mb: localPost.tags?.length ? 2 : 0 }}
 						>
 							{localPost.content}
 						</Typography>
+
+                        {localPost.tags && localPost.tags.length > 0 && (
+                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1, pointerEvents: 'none' }}>
+                                {localPost.tags.map(tag => (
+                                    <Chip 
+                                        key={tag} 
+                                        label={tag} 
+                                        size="small" 
+                                        sx={{ 
+                                            fontSize: '0.7rem', 
+                                            fontWeight: 'bold', 
+                                            color: 'primary.main', 
+                                            bgcolor: 'rgba(0, 102, 51, 0.1)' 
+                                        }} 
+                                    />
+                                ))}
+                            </Box>
+                        )}
 
 						{localPost.imageUrl && (
 							<>

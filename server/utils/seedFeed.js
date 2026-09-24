@@ -12,11 +12,14 @@ async function seedFeedIfEmpty() {
         
         const posts = await Post.find().populate("authorId", "name profilePic skillLevel").lean();
         for (const post of posts) {
+            // Fix: If authorId population failed (e.g., dummy user or deleted), fallback to the original post.authorId or a generic ObjectId
+            const resolvedAuthorId = post.authorId?._id || post.authorId || "000000000000000000000000";
+            
             await ActivityFeed.create({
                 type: "post",
                 referenceId: post._id,
-                authorId: post.authorId?._id,
-                authorName: post.authorId?.name || "Unknown User",
+                authorId: resolvedAuthorId,
+                authorName: post.authorId?.name || post.authorName || "Unknown User",
                 authorProfilePic: post.authorId?.profilePic,
                 authorSkillLevel: post.authorId?.skillLevel,
                 title: post.title,
@@ -26,7 +29,7 @@ async function seedFeedIfEmpty() {
                 comments: post.comments?.length || 0,
                 createdAt: post.createdAt,
                 score: (post.likedBy?.length || 0) * 2 + (post.comments?.length || 0) * 3
-            }).catch(() => {});
+            }).catch((err) => console.error("Failed to seed post:", post._id, err.message));
         }
 
         const matches = await Match.find({ status: "confirmed" })

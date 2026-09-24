@@ -13,6 +13,7 @@ const activityFeedSchema = new mongoose.Schema({
     title: { type: String },
     content: { type: String },
     image: { type: String },
+    tags: { type: [String], default: [] },
     
     // Match specific
     team1Score: Number,

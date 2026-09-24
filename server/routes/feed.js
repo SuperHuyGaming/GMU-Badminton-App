@@ -18,6 +18,11 @@ router.get("/", authMiddleware, async (req, res, next) => {
         const currentUser = await User.findById(req.user.id).select("skillLevel");
         
         let matchStage = {}; // Fetch all
+        
+        // Tag filtering
+        if (req.query.tag) {
+            matchStage.tags = req.query.tag;
+        }
 
         if (tab === "top") {
             const feedItems = await ActivityFeed.find(matchStage)
