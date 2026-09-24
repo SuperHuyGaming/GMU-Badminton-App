@@ -9,6 +9,7 @@ router.get("/", authMiddleware, async (req, res) => {
 	try {
 		// Find user but exclude the password from the data sent to React!
 		const user = await User.findById(req.user.userId).select("-password");
+		if (!user) return res.status(401).json({ message: "Session invalid or user deleted" });
 		res.json(user);
 	} catch (err) {
 		res.status(500).json({ message: "Server error fetching profile" });
