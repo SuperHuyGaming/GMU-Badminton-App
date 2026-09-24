@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const ActivityFeed = require("../models/ActivityFeed");
-const authMiddleware = require("../middleware/auth");
+const { authMiddleware } = require("../middleware/auth");
 const User = require("../models/User");
 
 // GET /api/feed
