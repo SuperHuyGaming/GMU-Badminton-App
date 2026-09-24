@@ -39,6 +39,12 @@ const PostSchema = new mongoose.Schema({
 PostSchema.post('save', async function(doc) {
 	try {
 		const ActivityFeed = require('./ActivityFeed');
+        
+        if (doc.isFlagged) {
+            await ActivityFeed.deleteOne({ type: "post", referenceId: doc._id });
+            return;
+        }
+
 		const User = require('./User');
 		const author = await User.findById(doc.authorId).lean();
 		

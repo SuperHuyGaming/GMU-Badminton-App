@@ -5,12 +5,18 @@ const ActivityFeed = require("../models/ActivityFeed");
 
 async function seedFeedIfEmpty() {
     try {
-        const count = await ActivityFeed.countDocuments();
-        if (count > 0) return;
+        const feedCount = await ActivityFeed.countDocuments({ type: "post" });
+        const postCount = await Post.countDocuments();
         
-        console.log("ActivityFeed is empty. Seeding from existing Posts and Matches...");
+        // Self-heal: If the feed has fewer posts than the DB (due to the previous validation bug), force a re-seed.
+        if (feedCount >= postCount && feedCount > 0) {
+            return; 
+        }
         
-        const posts = await Post.find().populate("authorId", "name profilePic skillLevel").lean();
+        console.log(`ActivityFeed out of sync (Feed: ${feedCount}, Posts: ${postCount}). Wiping and reseeding...`);
+        await ActivityFeed.deleteMany({});
+        
+        const posts = await Post.find({ isFlagged: { $ne: true } }).populate("authorId", "name profilePic skillLevel").lean();
         for (const post of posts) {
             // Fix: If authorId population failed (e.g., dummy user or deleted), fallback to the original post.authorId or a generic ObjectId
             const resolvedAuthorId = post.authorId?._id || post.authorId || "000000000000000000000000";
