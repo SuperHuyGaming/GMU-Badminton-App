@@ -13,6 +13,7 @@ import {
 	Menu,
 	MenuItem,
 	TextField,
+	Dialog,
 } from "@mui/material";
 
 // Separated Sub-Components
@@ -25,6 +26,7 @@ import {
 	MessageCircleIcon,
 	ShareIcon,
 	MoreVertIcon,
+	CloseIcon,
 } from "./Icons";
 
 export default function PostCard({ post }) {
@@ -32,6 +34,7 @@ export default function PostCard({ post }) {
 	const currentUser = JSON.parse(localStorage.getItem("user"));
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
 
 	const [likesModal, setLikesModal] = useState({
@@ -432,13 +435,47 @@ export default function PostCard({ post }) {
 						</Typography>
 
 						{localPost.imageUrl && (
-							<Box sx={{ mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 400 }}>
-								<img 
-									src={localPost.imageUrl} 
-									alt="Post attachment" 
-									style={{ width: "100%", height: "100%", objectFit: "cover" }} 
-								/>
-							</Box>
+							<>
+								<Box 
+									onClick={() => setIsLightboxOpen(true)}
+									sx={{ 
+										mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 400, 
+										cursor: "pointer", position: "relative",
+										'&::after': {
+											content: '""', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+											background: 'rgba(0,0,0,0)', transition: 'background 0.2s',
+										},
+										'&:hover::after': { background: 'rgba(0,0,0,0.1)' }
+									}}
+								>
+									<img 
+										src={localPost.imageUrl} 
+										alt="Post attachment" 
+										style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+									/>
+								</Box>
+								<Dialog 
+									open={isLightboxOpen} 
+									onClose={() => setIsLightboxOpen(false)}
+									maxWidth="lg"
+									fullWidth
+									PaperProps={{ sx: { background: 'transparent', boxShadow: 'none' } }}
+								>
+									<Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+										<IconButton 
+											onClick={() => setIsLightboxOpen(false)}
+											sx={{ position: 'absolute', top: 10, right: 10, color: 'white', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+										>
+											<CloseIcon />
+										</IconButton>
+										<img 
+											src={localPost.imageUrl} 
+											alt="Post attachment fullscreen" 
+											style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} 
+										/>
+									</Box>
+								</Dialog>
+							</>
 						)}
 
 						{/* Animated Heart Overlay */}
