@@ -259,7 +259,7 @@ export default function PostCard({ post }) {
 					<Avatar
 						src={localPost.authorPic}
 						onClick={() =>
-							navigate(`/profile/${localPost.authorId}`)
+							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 						}
 						sx={{
 							bgcolor: "secondary.main",
@@ -286,7 +286,7 @@ export default function PostCard({ post }) {
 						<Typography variant="caption" color="text.secondary">
 							<strong
 								onClick={() =>
-									navigate(`/profile/${localPost.authorId}`)
+									localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 								}
 								style={{ cursor: "pointer", display: 'inline-flex', alignItems: 'center', gap: '4px' }}
 							>

@@ -68,6 +68,9 @@ router.get("/export", authMiddleware, async (req, res, next) => {
 // GET: Fetch a public profile by ID
 router.get("/:id", authMiddleware, async (req, res) => {
 	try {
+		if (req.params.id === 'undefined' || req.params.id === 'null' || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+			return res.status(404).json({ message: "User not found" });
+		}
 		const user = await User.findById(req.params.id).select("-password -pushSubscriptions");
 		if (!user) return res.status(404).json({ message: "User not found" });
 		res.json(user);
@@ -123,6 +126,9 @@ router.put("/", authMiddleware, async (req, res) => {
 // GET: Fetch ANY user's profile by ID (Public/Read-Only view)
 router.get("/:id", async (req, res) => {
 	try {
+		if (req.params.id === 'undefined' || req.params.id === 'null' || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+			return res.status(404).json({ message: "User not found" });
+		}
 		// We use .select("-password -email") to ensure we NEVER send
 		// someone's private email or hashed password to the public forum!
 		const user = await User.findById(req.params.id).select(
