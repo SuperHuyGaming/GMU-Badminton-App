@@ -120,15 +120,15 @@ export default function Navbar() {
 									Dashboard
 								</Button>
 								<Button
-									color={location.pathname === "/forum" ? "secondary" : "inherit"}
+									color={location.pathname === "/community" ? "secondary" : "inherit"}
 									component={RouterLink}
-									to="/forum"
+									to="/community"
 									sx={{
 										textTransform: "none",
 										fontWeight: 600,
 									}}
 								>
-									Forum
+									Community
 								</Button>
 								<Button
 									color={location.pathname === "/leaderboard" ? "secondary" : "inherit"}
@@ -493,14 +493,14 @@ export default function Navbar() {
 							</ListItemButton>
 							<ListItemButton
 								component={RouterLink}
-								to="/forum"
+								to="/community"
 								sx={{ textAlign: "center" }}
 							>
 								<ListItemText
 									primaryTypographyProps={{
 										fontWeight: "bold",
 									}}
-									primary="Forum"
+									primary="Community"
 								/>
 							</ListItemButton>
 							<ListItemButton

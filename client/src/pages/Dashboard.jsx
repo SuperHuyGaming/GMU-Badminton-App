@@ -18,7 +18,6 @@ import {
 	DialogActions as MuiDialogActions,
 	Skeleton,
 } from "@mui/material";
-import Masonry from "@mui/lab/Masonry";
 import { useNavigate } from "react-router-dom";
 import apiFetch from "../utils/api";
 import { getOptimizedAvatar } from "../utils/image";
@@ -152,19 +151,13 @@ export default function Dashboard() {
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
-				const [statusRes, announcementsRes, feedRes] = await Promise.all([
+				const [statusRes, announcementsRes] = await Promise.all([
 					apiFetch(`/api/status`),
-					apiFetch(`/api/announcements`),
-					apiFetch(`/api/feed?page=1`)
+					apiFetch(`/api/announcements`)
 				]);
 
 				if (statusRes.ok) setStatus((await statusRes.json()).message);
 				if (announcementsRes.ok) setAnnouncements(await announcementsRes.json());
-				if (feedRes.ok) {
-					const feedData = await feedRes.json();
-					setFeed(feedData.feed);
-					setHasMore(feedData.hasMore);
-				}
 
 				// Fetch Java Court Schedule
 				let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL;
@@ -223,53 +216,16 @@ export default function Dashboard() {
 		const handleDeletedAnnouncement = (deletedId) =>
 			setAnnouncements((prev) => prev.filter((a) => a._id !== deletedId));
 
-		const handleNewFeedActivity = async () => {
-			try {
-				const feedRes = await apiFetch(`/api/feed?page=1`);
-				if (feedRes.ok) {
-					const feedData = await feedRes.json();
-					setFeed(feedData.feed);
-					setPage(1); // Reset pagination so we don't duplicate
-					setHasMore(feedData.hasMore);
-				}
-			} catch (e) {
-				console.error("Failed to fetch new feed activity", e);
-			}
-		};
 
 		socket.on("announcementCreated", handleNewAnnouncement);
 		socket.on("announcementDeleted", handleDeletedAnnouncement);
-		socket.on("postCreated", handleNewFeedActivity);
-		socket.on("matchConfirmed", handleNewFeedActivity);
 
 		return () => {
 			socket.off("announcementCreated", handleNewAnnouncement);
 			socket.off("announcementDeleted", handleDeletedAnnouncement);
-			socket.off("postCreated", handleNewFeedActivity);
-			socket.off("matchConfirmed", handleNewFeedActivity);
 		};
 	}, []);
 
-	// Fetch more feed items when page increments
-	useEffect(() => {
-		if (page === 1) return; // Initial load is handled above
-		const fetchMore = async () => {
-			setIsFetchingMore(true);
-			try {
-				const res = await apiFetch(`/api/feed?page=${page}`);
-				if (res.ok) {
-					const data = await res.json();
-					setFeed(prev => [...prev, ...data.feed]);
-					setHasMore(data.hasMore);
-				}
-			} catch (e) {
-				console.error("Failed to load more feed", e);
-			} finally {
-				setIsFetchingMore(false);
-			}
-		};
-		fetchMore();
-	}, [page]);
 
 	const handlePostUpdate = async () => {
 		if (!newUpdateText.trim() || currentUser?.role !== "admin") return;
@@ -943,144 +899,7 @@ export default function Dashboard() {
 				</Grid>
 			</Grid>
 
-			{/* ACTIVITY FEED SECTION */}
-			<Box sx={{ mt: 6 }}>
-				<Typography variant="h5" fontWeight="900" color="primary" sx={{ mb: 2 }}>
-					Community Activity
-				</Typography>
-				<Masonry columns={{ xs: 1, sm: 2, md: 3 }} spacing={{ xs: 2, sm: 3, md: 4 }}>
-					{loading ? (
-						[1, 2, 3].map(n => (
-							<Box key={n}>
-								<Skeleton variant="rounded" height={150} sx={{ borderRadius: 3 }} />
-							</Box>
-						))
-					) : feed.length === 0 ? (
-						<Box>
-							<Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
-								<Typography color="text.secondary">No recent activity.</Typography>
-							</Paper>
-						</Box>
-					) : (
-						feed.map((item, idx) => (
-							<Box key={`${item.type}-${item.id}-${idx}`}>
-								<Paper 
-									elevation={0} 
-									sx={{ 
-										p: 3, 
-										height: '100%', 
-										borderRadius: 3, 
-										border: "1px solid", borderColor: "divider", 
-										display: 'flex', 
-										flexDirection: 'column',
-										transition: '0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-										'&:hover': {
-											transform: 'scale(1.02) translateY(-4px)',
-											boxShadow: '0 12px 30px rgba(0,102,51,0.15)',
-											borderColor: 'primary.main'
-										}
-									}}
-									onClick={() => {
-										if (item.type === 'post') navigate('/forum');
-										if (item.type === 'listing') navigate('/marketplace');
-									}}
-									style={{ cursor: 'pointer' }}
-								>
-									{item.type === 'post' && (
-										<>
-											{item.image && (
-												<Box sx={{ width: 'calc(100% + 48px)', m: '-24px -24px 16px -24px', height: 140, overflow: 'hidden', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
-													<img src={item.image} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-												</Box>
-											)}
-											<Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
-												<Chip label="Forum Post" size="small" color="primary" variant="outlined" />
-												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
-											</Box>
-											<Typography variant="h6" fontWeight="bold" sx={{ mb: 0.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-												{item.title}
-											</Typography>
-											{item.content && !item.image && (
-												<Typography variant="body2" color="text.secondary" sx={{ mb: 2, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-													{item.content.replace(/<[^>]+>/g, '')}
-												</Typography>
-											)}
-											<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 'auto', pt: 2 }}>
-												<Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-													<Avatar src={item.author?.profilePic} sx={{ width: 24, height: 24 }} />
-													<Typography variant="caption" fontWeight="bold">{item.author?.name || item.authorName}</Typography>
-												</Box>
-												<Box sx={{ display: 'flex', gap: 1.5, color: 'text.secondary' }}>
-													{item.likes > 0 && <Typography variant="caption">❤️ {item.likes}</Typography>}
-													{item.comments > 0 && <Typography variant="caption">💬 {item.comments}</Typography>}
-												</Box>
-											</Box>
-										</>
-									)}
-
-									{item.type === 'match' && (
-										<>
-											<Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
-												<Chip label="Match Result" size="small" color="secondary" variant="outlined" />
-												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
-											</Box>
-											<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-												<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '40%' }}>
-													<Box sx={{ display: 'flex' }}>
-														{item.team1?.map((p, i) => (
-															<Avatar key={p._id} src={p.profilePic} sx={{ width: 32, height: 32, ml: i > 0 ? -1.5 : 0, border: '2px solid', borderColor: 'background.paper', zIndex: 2 - i }} />
-														))}
-													</Box>
-													<Typography variant="caption" fontWeight="bold" textAlign="center" noWrap sx={{ width: '100%' }}>
-														{item.team1?.map(p => p.name.split(' ')[0]).join(' & ')}
-													</Typography>
-												</Box>
-												<Typography variant="h5" fontWeight="900" sx={{ color: item.team1Score > item.team2Score ? 'primary.main' : item.team2Score > item.team1Score ? 'secondary.main' : 'text.primary' }}>
-													{item.team1Score} - {item.team2Score}
-												</Typography>
-												<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '40%' }}>
-													<Box sx={{ display: 'flex' }}>
-														{item.team2?.map((p, i) => (
-															<Avatar key={p._id} src={p.profilePic} sx={{ width: 32, height: 32, ml: i > 0 ? -1.5 : 0, border: '2px solid', borderColor: 'background.paper', zIndex: 2 - i }} />
-														))}
-													</Box>
-													<Typography variant="caption" fontWeight="bold" textAlign="center" noWrap sx={{ width: '100%' }}>
-														{item.team2?.map(p => p.name.split(' ')[0]).join(' & ')}
-													</Typography>
-												</Box>
-											</Box>
-										</>
-									)}
-
-									{item.type === 'listing' && (
-										<>
-											<Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
-												<Chip label="Marketplace" size="small" color="success" variant="outlined" />
-												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
-											</Box>
-											<Typography variant="h6" fontWeight="bold" sx={{ mb: 1, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-												{item.title}
-											</Typography>
-											<Typography variant="h6" color="primary" fontWeight="bold" sx={{ mb: 1 }}>
-												${item.price}
-											</Typography>
-											<Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 'auto', pt: 2 }}>
-												<Avatar src={item.seller?.profilePic} sx={{ width: 24, height: 24 }} />
-												<Typography variant="caption" fontWeight="bold">{item.seller?.name}</Typography>
-											</Box>
-										</>
-									)}
-								</Paper>
-							</Box>
-						))
-					)}
-				</Masonry>
-
-				{/* Infinite Scroll Loader */}
-				<Box ref={lastFeedElementRef} sx={{ display: 'flex', justifyContent: 'center', mt: 4, height: 40 }}>
-					{isFetchingMore && <CircularProgress size={24} color="primary" />}
-				</Box>
-			</Box>
+			
 
 			<Dialog
 				open={!!deleteUpdateId}
