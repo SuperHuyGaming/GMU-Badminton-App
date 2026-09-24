@@ -234,6 +234,7 @@ export default function Forum() {
 								imageUrl: item.image,
 								authorId: item.authorId,
 								authorName: item.authorName,
+								authorBadges: item.authorBadges,
 								timestamp: item.createdAt,
 								likedBy: new Array(item.likes).fill('mock_id'), // PostCard only cares about length
 								comments: new Array(item.comments).fill({}), 

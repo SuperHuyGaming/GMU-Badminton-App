@@ -15,6 +15,7 @@ import {
 	TextField,
 	Dialog,
 	Collapse,
+	Chip,
 } from "@mui/material";
 
 // Separated Sub-Components
@@ -287,9 +288,21 @@ export default function PostCard({ post }) {
 								onClick={() =>
 									navigate(`/profile/${localPost.authorId}`)
 								}
-								style={{ cursor: "pointer" }}
+								style={{ cursor: "pointer", display: 'inline-flex', alignItems: 'center', gap: '4px' }}
 							>
 								{localPost.authorName || "Unknown"}
+								{localPost.authorBadges?.includes("top_contributor") && (
+									<Chip 
+										label="Top Contributor" 
+										size="small" 
+										icon={<span style={{ marginLeft: 4 }}>🏅</span>}
+										sx={{ 
+											height: 20, fontSize: '0.65rem', fontWeight: 'bold', 
+											background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', 
+											color: '#000', ml: 0.5 
+										}} 
+									/>
+								)}
 							</strong>{" "}
 							• {formatTime(localPost.timestamp)}
 							{localPost.isEdited && (

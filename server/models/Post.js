@@ -50,6 +50,7 @@ PostSchema.post('save', async function(doc) {
 				authorName: doc.authorName,
 				authorProfilePic: author?.profilePic,
 				authorSkillLevel: author?.skillLevel,
+				authorBadges: author?.badges || [],
 				title: doc.title,
 				content: doc.content,
 				image: doc.imageUrl,

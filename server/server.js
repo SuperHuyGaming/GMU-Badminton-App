@@ -206,3 +206,5 @@ app.use(errorHandler);
 server.listen(PORT, () => {
 	console.log(`Server is running on port: ${PORT}`);
 });
+
+require('./utils/cronJobs')();

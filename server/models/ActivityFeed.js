@@ -7,6 +7,7 @@ const activityFeedSchema = new mongoose.Schema({
     authorName: { type: String },
     authorProfilePic: { type: String },
     authorSkillLevel: { type: String },
+    authorBadges: { type: [String], default: [] },
     
     // Extracted payload for O(1) reads without population
     title: { type: String },

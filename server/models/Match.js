@@ -40,6 +40,7 @@ matchSchema.post('save', async function(doc) {
 				authorName: submitter?.name,
 				authorProfilePic: submitter?.profilePic,
 				authorSkillLevel: submitter?.skillLevel,
+				authorBadges: submitter?.badges || [],
 				team1Score: doc.team1Score,
 				team2Score: doc.team2Score,
 				team1: t1Users.map(u => u.name),
