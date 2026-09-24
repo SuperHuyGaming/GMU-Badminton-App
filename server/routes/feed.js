@@ -9,10 +9,12 @@ router.get("/", async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = 20;
+        const skip = (page - 1) * limit;
 
         // 1. Fetch recent Forum Posts
         const posts = await Post.find()
             .sort({ createdAt: -1 })
+            .skip(skip)
             .limit(limit)
             .populate("authorId", "name profilePic skillLevel homeUniversity")
             .lean();
@@ -21,6 +23,7 @@ router.get("/", async (req, res, next) => {
             type: "post",
             id: post._id,
             author: post.authorId,
+            authorName: post.authorName, // Keep legacy field
             content: post.content,
             title: post.title,
             image: post.image,
@@ -32,6 +35,7 @@ router.get("/", async (req, res, next) => {
         // 2. Fetch recent Confirmed Matches
         const matches = await Match.find({ status: "confirmed" })
             .sort({ date: -1 })
+            .skip(skip)
             .limit(limit)
             .populate("team1", "name profilePic")
             .populate("team2", "name profilePic")
@@ -49,41 +53,19 @@ router.get("/", async (req, res, next) => {
             createdAt: match.date
         }));
 
-        // 3. Fetch recent Marketplace Listings (HIDDEN FOR NOW)
-        /*
-        const listings = await EquipmentListing.find({ status: "available" })
-            .sort({ date: -1 })
-            .limit(limit)
-            .populate("sellerId", "name profilePic")
-            .lean();
-
-        const formattedListings = listings.map(listing => ({
-            type: "listing",
-            id: listing._id,
-            seller: listing.sellerId,
-            title: listing.title,
-            price: listing.price,
-            category: listing.category,
-            condition: listing.condition,
-            image: listing.images?.[0] || null,
-            createdAt: listing.date
-        }));
-        */
-
         // Combine all arrays
         const combinedFeed = [...formattedPosts, ...formattedMatches];
 
         // Sort chronologically (newest first)
         combinedFeed.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        // Paginate the combined feed in memory
-        const startIndex = (page - 1) * limit;
-        const endIndex = page * limit;
-        const paginatedFeed = combinedFeed.slice(startIndex, endIndex);
+        // We fetched 'limit' items from each collection, so we have up to 2*limit items.
+        // We only return the top 'limit' items to form a perfect chronological page.
+        const paginatedFeed = combinedFeed.slice(0, limit);
 
         res.json({
             feed: paginatedFeed,
-            hasMore: endIndex < combinedFeed.length
+            hasMore: combinedFeed.length > limit // If we had more than limit items, there's likely another page
         });
 
     } catch (error) {

@@ -1,5 +1,5 @@
 // client/src/pages/Dashboard.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
 	Typography,
 	Box,
@@ -126,23 +126,45 @@ export default function Dashboard() {
 	const [announcements, setAnnouncements] = useState([]);
 	const [feed, setFeed] = useState([]);
 	const [loading, setLoading] = useState(true);
+	
+	// Infinite Scroll State
+	const [page, setPage] = useState(1);
+	const [hasMore, setHasMore] = useState(true);
+	const [isFetchingMore, setIsFetchingMore] = useState(false);
+	const observer = useRef();
+
+	const lastFeedElementRef = useCallback(node => {
+		if (loading || isFetchingMore) return;
+		if (observer.current) observer.current.disconnect();
+		observer.current = new IntersectionObserver(entries => {
+			if (entries[0].isIntersecting && hasMore) {
+				setPage(prevPage => prevPage + 1);
+			}
+		});
+		if (node) observer.current.observe(node);
+	}, [loading, isFetchingMore, hasMore]);
 
 	const [newUpdateText, setNewUpdateText] = useState("");
 	const [isPosting, setIsPosting] = useState(false);
 	const [deleteUpdateId, setDeleteUpdateId] = useState(null);
 
+	// Load Initial Dashboard Data
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
 				const [statusRes, announcementsRes, feedRes] = await Promise.all([
 					apiFetch(`/api/status`),
 					apiFetch(`/api/announcements`),
-					apiFetch(`/api/feed`)
+					apiFetch(`/api/feed?page=1`)
 				]);
 
 				if (statusRes.ok) setStatus((await statusRes.json()).message);
 				if (announcementsRes.ok) setAnnouncements(await announcementsRes.json());
-				if (feedRes.ok) setFeed((await feedRes.json()).feed);
+				if (feedRes.ok) {
+					const feedData = await feedRes.json();
+					setFeed(feedData.feed);
+					setHasMore(feedData.hasMore);
+				}
 
 				// Fetch Java Court Schedule
 				let apiUrl = import.meta.env.VITE_TOURNAMENT_API_URL;
@@ -209,6 +231,27 @@ export default function Dashboard() {
 			socket.off("announcementDeleted", handleDeletedAnnouncement);
 		};
 	}, []);
+
+	// Fetch more feed items when page increments
+	useEffect(() => {
+		if (page === 1) return; // Initial load is handled above
+		const fetchMore = async () => {
+			setIsFetchingMore(true);
+			try {
+				const res = await apiFetch(`/api/feed?page=${page}`);
+				if (res.ok) {
+					const data = await res.json();
+					setFeed(prev => [...prev, ...data.feed]);
+					setHasMore(data.hasMore);
+				}
+			} catch (e) {
+				console.error("Failed to load more feed", e);
+			} finally {
+				setIsFetchingMore(false);
+			}
+		};
+		fetchMore();
+	}, [page]);
 
 	const handlePostUpdate = async () => {
 		if (!newUpdateText.trim() || currentUser?.role !== "admin") return;
@@ -927,32 +970,67 @@ export default function Dashboard() {
 								>
 									{item.type === 'post' && (
 										<>
+											{item.image && (
+												<Box sx={{ width: 'calc(100% + 48px)', m: '-24px -24px 16px -24px', height: 140, overflow: 'hidden', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+													<img src={item.image} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+												</Box>
+											)}
 											<Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
 												<Chip label="Forum Post" size="small" color="primary" variant="outlined" />
 												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
 											</Box>
-											<Typography variant="h6" fontWeight="bold" sx={{ mb: 1, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+											<Typography variant="h6" fontWeight="bold" sx={{ mb: 0.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
 												{item.title}
 											</Typography>
-											<Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 'auto', pt: 2 }}>
-												<Avatar src={item.author?.profilePic} sx={{ width: 24, height: 24 }} />
-												<Typography variant="caption" fontWeight="bold">{item.author?.name}</Typography>
+											{item.content && !item.image && (
+												<Typography variant="body2" color="text.secondary" sx={{ mb: 2, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+													{item.content.replace(/<[^>]+>/g, '')}
+												</Typography>
+											)}
+											<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 'auto', pt: 2 }}>
+												<Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+													<Avatar src={item.author?.profilePic} sx={{ width: 24, height: 24 }} />
+													<Typography variant="caption" fontWeight="bold">{item.author?.name || item.authorName}</Typography>
+												</Box>
+												<Box sx={{ display: 'flex', gap: 1.5, color: 'text.secondary' }}>
+													{item.likes > 0 && <Typography variant="caption">❤️ {item.likes}</Typography>}
+													{item.comments > 0 && <Typography variant="caption">💬 {item.comments}</Typography>}
+												</Box>
 											</Box>
 										</>
 									)}
 
 									{item.type === 'match' && (
 										<>
-											<Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+											<Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
 												<Chip label="Match Result" size="small" color="secondary" variant="outlined" />
 												<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
 											</Box>
-											<Typography variant="h6" fontWeight="bold" sx={{ mb: 1, textAlign: 'center' }}>
-												{item.team1Score} - {item.team2Score}
-											</Typography>
-											<Typography variant="body2" sx={{ textAlign: 'center', color: 'text.secondary' }}>
-												{item.team1?.map(p => p.name).join(' & ')} <b>vs</b> {item.team2?.map(p => p.name).join(' & ')}
-											</Typography>
+											<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+												<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '40%' }}>
+													<Box sx={{ display: 'flex' }}>
+														{item.team1?.map((p, i) => (
+															<Avatar key={p._id} src={p.profilePic} sx={{ width: 32, height: 32, ml: i > 0 ? -1.5 : 0, border: '2px solid', borderColor: 'background.paper', zIndex: 2 - i }} />
+														))}
+													</Box>
+													<Typography variant="caption" fontWeight="bold" textAlign="center" noWrap sx={{ width: '100%' }}>
+														{item.team1?.map(p => p.name.split(' ')[0]).join(' & ')}
+													</Typography>
+												</Box>
+												<Typography variant="h5" fontWeight="900" sx={{ color: item.team1Score > item.team2Score ? 'primary.main' : item.team2Score > item.team1Score ? 'secondary.main' : 'text.primary' }}>
+													{item.team1Score} - {item.team2Score}
+												</Typography>
+												<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '40%' }}>
+													<Box sx={{ display: 'flex' }}>
+														{item.team2?.map((p, i) => (
+															<Avatar key={p._id} src={p.profilePic} sx={{ width: 32, height: 32, ml: i > 0 ? -1.5 : 0, border: '2px solid', borderColor: 'background.paper', zIndex: 2 - i }} />
+														))}
+													</Box>
+													<Typography variant="caption" fontWeight="bold" textAlign="center" noWrap sx={{ width: '100%' }}>
+														{item.team2?.map(p => p.name.split(' ')[0]).join(' & ')}
+													</Typography>
+												</Box>
+											</Box>
 										</>
 									)}
 
@@ -979,6 +1057,11 @@ export default function Dashboard() {
 						))
 					)}
 				</Masonry>
+
+				{/* Infinite Scroll Loader */}
+				<Box ref={lastFeedElementRef} sx={{ display: 'flex', justifyContent: 'center', mt: 4, height: 40 }}>
+					{isFetchingMore && <CircularProgress size={24} color="primary" />}
+				</Box>
 			</Box>
 
 			<Dialog
