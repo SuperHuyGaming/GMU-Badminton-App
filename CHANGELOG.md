@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.2.0](https://github.com/SuperHuyGaming/GMU-Badminton-App/compare/v1.1.0...v1.2.0) (2026-09-24)
+
+
+### Features
+
+* **analytics:** integrate PostHog session recording and SPA heatmaps (UX Task 9) ([dfead9e](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/dfead9ea3522f20c6890d85ead16817cf5c0bcbb))
+* **backend:** implement automated Top Contributor Badges and Match of the Week gamification (Plan Items 9 & 10) ([c7516c1](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/c7516c179066624318c47420a0079783fd478273))
+* **backend:** implement unified ActivityFeed collection and algorithmic feed personalization (Plan Items 8 & 10) ([de4d191](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/de4d191f5a83f823aae1a334070d2237cede3f44))
+* **dashboard:** implement infinite scroll pagination and rich media/avatar stacks (Plan Items 3 & 7) ([a1cadbb](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/a1cadbba1eea734fd192a4d7a36720e76fbf2dcb))
+* **dashboard:** implement Masonry layout and refined glassmorphism (Plan Items 1 & 2) ([deaa05b](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/deaa05b695e30de28532d6ce6e90b0de2badd138))
+* **dashboard:** integrate WebSockets for a real-time auto-updating activity feed (Plan Item 6) ([9ed2f6f](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/9ed2f6f098019824476b6286df09ff21a9454b8a))
+* **ui:** add Hot Tags trending sidebar/pill list (Plan Item 5) ([850a681](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/850a681fc5b61f7476083c588d86826cfe7b89a9))
+* **ui:** add satisfying CSS bezier curve micro-interactions (UX Task 7) ([0465a5b](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/0465a5b6fd1087e9569a58af465c5b032fbce793))
+* **ui:** convert Like button into custom Badminton Emojis Reaction bar (Plan Item 7) ([2623fc7](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/2623fc796d9ab50becb071bff549566f25f60935))
+* **ui:** convert PostCommentsModal to Inline Collapse Accordion (Plan Item 6) ([6c6831f](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/6c6831fe43adbd6f396a9a8aaa91afb253e79439))
+* **ui:** design custom splash screen and PWA brand identity (UX Task 5) ([f89c992](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/f89c992b4e13fb862301f8ae8fd7528cfdd983ac))
+* **ui:** design GMU-branded custom map markers (UX Task 10) ([0be8e69](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/0be8e696611f80398246760b9a650a1f18ef5969))
+* **ui:** design scalable SVG Gamification Badges and remove 3D dependencies (UX Task 3) ([6117a5c](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/6117a5c7161cacc6138c54da7cb6fe9379e6809c))
+* **ui:** implement custom Empty States and 404 Error Pages (UX Task 6) ([de53f1a](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/de53f1a659c354a90177b08c726ad5eae1fc21a1))
+* **ui:** implement Rich Media Lightbox Gallery for feed images (Plan Item 4) ([5dde5db](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/5dde5dbc282495b74b027b373e244d7242f5ecc2))
+* **ui:** implement step-by-step onboarding wizard (UX Task 1) ([410d725](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/410d7250d4619dc81b2cee6579f9a8786eea970d))
+* **ui:** implement Unified Community Hub with For You/Top/Latest tabs (Plan Items 1, 2, 3) ([7d650c7](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/7d650c7e39871b0c41f2bd2cca1baba8aa7570ee))
+* **ui:** redesign Live RAC Status into a dynamic glassmorphism widget (Plan Item 4) ([e434ecf](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/e434ecff5ba153b17729770ea5fcd2832cec8ec4))
+* **ui:** redesign Match Screen modal to prevent scoring errors (UX Task 2) ([4121582](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/412158276b058b06073900e74d01165e404752d4))
+* **ui:** standardize responsive layout grids and replace AI logo with clean SVG (UX Task 8) ([a288a00](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/a288a001ea3d8dd3262b5b1866e18599e99998ff))
+
+
+### Bug Fixes
+
+* **backend:** destructure authMiddleware import in feed.js to fix startup crash ([f045167](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/f0451674bc52e7e9547dbe67f8ac323397e2d6a8))
+* **backend:** fix express-rate-limit IPv6 validation and resolve syntax error in cronJobs.js ([c941b71](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/c941b71fcc48026ee34f035f0ce017f10d21f356))
+* **backend:** return 401 instead of 404 when querying own profile and user is deleted, triggering auto-logout ([a7a5fc4](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/a7a5fc4864034746196e666083f590e94a275ef0))
+* **ui:** migrate MUI Grid to new Grid2 size prop API to fix broken wrapping ([35b15ff](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/35b15ff34584e92c9ec81e15fbe8c4bf8a1bd775))
+* **ui:** prevent background cutoff on long pages by using min-height ([3d2916a](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/3d2916ade0e68430dcca1e613297ca2aa164becf))
+* **ui:** prevent navigating to undefined profile IDs and gracefully handle invalid ObjectIDs in backend to prevent 500 crashes ([8352454](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/8352454ce5e4571924e513f61da3f2ce45407ed8))
+* **ui:** remove old PostCommentsModal usage causing ReferenceError ([5019cf3](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/5019cf3a00f5457b979f503fcb836e9b0a7ef8c2))
+* **ui:** resolve Button ReferenceError in Community feed and pending matches response parsing ([1619c73](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/1619c7388babf3d877d4c083154ec448f0a4f717))
+* **ui:** safeguard all charAt calls against undefined names to prevent crashes ([3efc9f9](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/3efc9f9468146e0c33905e6030f564e07687d6b0))
+* **ui:** synchronize splash screen logo with new geometric favicon ([25cf058](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/25cf058a32a5ced9c465965463a4d135f5bdd3f0))
+
+
+### Performance Improvements
+
+* **backend:** implement Redis caching for RAC court status to reduce load times (Plan Item 9) ([b11ba32](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/b11ba3291b0e3a51d5dd2cbac61c72afc47e1fe7))
+
 ## [1.1.0](https://github.com/SuperHuyGaming/GMU-Badminton-App/compare/v1.0.0...v1.1.0) (2026-09-23)
 
 
