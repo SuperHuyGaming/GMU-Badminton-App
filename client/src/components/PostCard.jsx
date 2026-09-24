@@ -686,23 +686,17 @@ export default function PostCard({ post }) {
 					setLikesModal({ open: false, title: "", list: [] })
 				}
 			/>
-			<PostCommentsModal
-				open={isCommentModalOpen}
-				onClose={() => {
-					if (highlightId)
-						window.history.replaceState(
-							null,
-							"",
-							window.location.pathname,
-						);
-					setIsCommentModalOpen(false);
-				}}
-				localPost={localPost}
-				setLocalPost={setLocalPost}
-				currentUser={currentUser}
-				highlightId={highlightId}
-				openLikes={openLikes}
-			/>
+
+			{/* IMPORTED POST COMMENTS INLINE */}
+			<Collapse in={isCommentModalOpen}>
+				<PostCommentsInline
+					localPost={localPost}
+					setLocalPost={setLocalPost}
+					currentUser={currentUser}
+					highlightId={highlightId}
+					openLikes={openLikes}
+				/>
+			</Collapse>
 
 			{/* IMPORTED DELETE CONFIRMATION */}
 			<ConfirmDeleteDialog
