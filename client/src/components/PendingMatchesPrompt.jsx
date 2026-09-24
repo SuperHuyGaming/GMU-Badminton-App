@@ -11,7 +11,8 @@ export default function PendingMatchesPrompt() {
     const fetchPendingMatches = async () => {
         if (!user) return;
         try {
-            const matches = await apiFetch('/api/matches/pending');
+            const res = await apiFetch('/api/matches/pending');
+            const matches = await res.json();
             // Only show matches where the current user is NOT the submitter
             // i.e. the current user needs to confirm it
             const requiresConfirmation = matches.filter(
