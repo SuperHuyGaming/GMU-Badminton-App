@@ -10,6 +10,7 @@ const User = require("../models/User");
 router.get("/", authMiddleware, async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1;
+        const tab = req.query.tab || "foryou"; // "foryou", "top", "latest"
         const limit = 20;
         const skip = (page - 1) * limit;
 
@@ -18,26 +19,42 @@ router.get("/", authMiddleware, async (req, res, next) => {
         
         let matchStage = {}; // Fetch all
 
-        let sortStage = { createdAt: -1 }; // Default chronological
+        if (tab === "top") {
+            const feedItems = await ActivityFeed.find(matchStage)
+                .sort({ score: -1, createdAt: -1 }) // Sort purely by score (likes+comments)
+                .skip(skip)
+                .limit(limit + 1)
+                .lean();
 
+            const hasMore = feedItems.length > limit;
+            if (hasMore) feedItems.pop();
+            return res.json({ feed: feedItems, hasMore });
+        }
+
+        if (tab === "latest") {
+            const feedItems = await ActivityFeed.find(matchStage)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit + 1)
+                .lean();
+
+            const hasMore = feedItems.length > limit;
+            if (hasMore) feedItems.pop();
+            return res.json({ feed: feedItems, hasMore });
+        }
+
+        // Default to "foryou"
         if (currentUser && currentUser.skillLevel) {
             // ALGORITHMIC PERSONALIZATION (Item 10)
-            // Instead of pure chronological, we use an aggregation pipeline to boost 
-            // posts from users with the SAME skillLevel, while keeping newer posts relevant.
-            
             const pipeline = [
                 { $match: matchStage },
                 {
                     $addFields: {
-                        // Calculate a "relevance" score
-                        // Base score comes from likes/comments (Item 8 seeding)
-                        // Add +50 points if the author has the same skill level
-                        // Add points based on recency (newer = higher)
                         timeScore: { $toLong: "$createdAt" },
                         skillBoost: {
                             $cond: {
                                 if: { $eq: ["$authorSkillLevel", currentUser.skillLevel] },
-                                then: 500000000, // Big boost to float them up slightly
+                                then: 500000000, 
                                 else: 0
                             }
                         }
@@ -50,11 +67,10 @@ router.get("/", authMiddleware, async (req, res, next) => {
                 },
                 { $sort: { finalScore: -1 } },
                 { $skip: skip },
-                { $limit: limit + 1 } // fetch 1 extra to check if hasMore
+                { $limit: limit + 1 }
             ];
 
             const feedItems = await ActivityFeed.aggregate(pipeline);
-            
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
 
@@ -63,7 +79,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
 
         // Fallback to purely chronological if no user skill level
         const feedItems = await ActivityFeed.find(matchStage)
-            .sort(sortStage)
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit + 1)
             .lean();
