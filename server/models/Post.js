@@ -35,4 +35,42 @@ const PostSchema = new mongoose.Schema({
 	],
 });
 
+PostSchema.post('save', async function(doc) {
+	try {
+		const ActivityFeed = require('./ActivityFeed');
+		const User = require('./User');
+		const author = await User.findById(doc.authorId).lean();
+		
+		await ActivityFeed.findOneAndUpdate(
+			{ type: "post", referenceId: doc._id },
+			{
+				type: "post",
+				referenceId: doc._id,
+				authorId: doc.authorId,
+				authorName: doc.authorName,
+				authorProfilePic: author?.profilePic,
+				authorSkillLevel: author?.skillLevel,
+				title: doc.title,
+				content: doc.content,
+				image: doc.imageUrl,
+				likes: doc.likedBy?.length || 0,
+				comments: doc.comments?.length || 0,
+				createdAt: doc.timestamp,
+				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3
+			},
+			{ upsert: true, new: true }
+		);
+	} catch (e) {
+		console.error("ActivityFeed sync error (Post):", e);
+	}
+});
+
+PostSchema.post('findOneAndDelete', async function(doc) {
+	if (!doc) return;
+	try {
+		const ActivityFeed = require('./ActivityFeed');
+		await ActivityFeed.deleteOne({ type: "post", referenceId: doc._id });
+	} catch (e) {}
+});
+
 module.exports = mongoose.model("Post", PostSchema);

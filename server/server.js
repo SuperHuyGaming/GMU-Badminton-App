@@ -13,6 +13,7 @@ mongoose
 	.then(() => {
 		console.log("Successfully connected to MongoDB!");
 		initializeGemini();
+		require("./utils/seedFeed")();
 	})
 	.catch((error) => console.error("MongoDB connection failed:", error));
 

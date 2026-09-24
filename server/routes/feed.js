@@ -1,73 +1,77 @@
 const express = require("express");
 const router = express.Router();
-const Post = require("../models/Post");
-const Match = require("../models/Match");
-const EquipmentListing = require("../models/EquipmentListing");
+const ActivityFeed = require("../models/ActivityFeed");
+const authMiddleware = require("../middleware/auth");
 const User = require("../models/User");
 
-router.get("/", async (req, res, next) => {
+// GET /api/feed
+// Now uses the unified ActivityFeed collection (Item 8)
+// And implements Algorithmic Personalization (Item 10)
+router.get("/", authMiddleware, async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = 20;
         const skip = (page - 1) * limit;
 
-        // 1. Fetch recent Forum Posts
-        const posts = await Post.find()
-            .sort({ createdAt: -1 })
+        // Fetch current user to personalize feed
+        const currentUser = await User.findById(req.user.id).select("skillLevel");
+        
+        let matchStage = {}; // Fetch all
+
+        let sortStage = { createdAt: -1 }; // Default chronological
+
+        if (currentUser && currentUser.skillLevel) {
+            // ALGORITHMIC PERSONALIZATION (Item 10)
+            // Instead of pure chronological, we use an aggregation pipeline to boost 
+            // posts from users with the SAME skillLevel, while keeping newer posts relevant.
+            
+            const pipeline = [
+                { $match: matchStage },
+                {
+                    $addFields: {
+                        // Calculate a "relevance" score
+                        // Base score comes from likes/comments (Item 8 seeding)
+                        // Add +50 points if the author has the same skill level
+                        // Add points based on recency (newer = higher)
+                        timeScore: { $toLong: "$createdAt" },
+                        skillBoost: {
+                            $cond: {
+                                if: { $eq: ["$authorSkillLevel", currentUser.skillLevel] },
+                                then: 500000000, // Big boost to float them up slightly
+                                else: 0
+                            }
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        finalScore: { $add: ["$score", "$timeScore", "$skillBoost"] }
+                    }
+                },
+                { $sort: { finalScore: -1 } },
+                { $skip: skip },
+                { $limit: limit + 1 } // fetch 1 extra to check if hasMore
+            ];
+
+            const feedItems = await ActivityFeed.aggregate(pipeline);
+            
+            const hasMore = feedItems.length > limit;
+            if (hasMore) feedItems.pop();
+
+            return res.json({ feed: feedItems, hasMore });
+        }
+
+        // Fallback to purely chronological if no user skill level
+        const feedItems = await ActivityFeed.find(matchStage)
+            .sort(sortStage)
             .skip(skip)
-            .limit(limit)
-            .populate("authorId", "name profilePic skillLevel homeUniversity")
+            .limit(limit + 1)
             .lean();
 
-        const formattedPosts = posts.map(post => ({
-            type: "post",
-            id: post._id,
-            author: post.authorId,
-            authorName: post.authorName, // Keep legacy field
-            content: post.content,
-            title: post.title,
-            image: post.image,
-            createdAt: post.createdAt,
-            likes: post.likedBy?.length || 0,
-            comments: post.comments?.length || 0
-        }));
+        const hasMore = feedItems.length > limit;
+        if (hasMore) feedItems.pop();
 
-        // 2. Fetch recent Confirmed Matches
-        const matches = await Match.find({ status: "confirmed" })
-            .sort({ date: -1 })
-            .skip(skip)
-            .limit(limit)
-            .populate("team1", "name profilePic")
-            .populate("team2", "name profilePic")
-            .lean();
-
-        const formattedMatches = matches.map(match => ({
-            type: "match",
-            id: match._id,
-            matchType: match.type,
-            team1: match.team1,
-            team2: match.team2,
-            team1Score: match.team1Score,
-            team2Score: match.team2Score,
-            winner: match.winner,
-            createdAt: match.date
-        }));
-
-        // Combine all arrays
-        const combinedFeed = [...formattedPosts, ...formattedMatches];
-
-        // Sort chronologically (newest first)
-        combinedFeed.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        // We fetched 'limit' items from each collection, so we have up to 2*limit items.
-        // We only return the top 'limit' items to form a perfect chronological page.
-        const paginatedFeed = combinedFeed.slice(0, limit);
-
-        res.json({
-            feed: paginatedFeed,
-            hasMore: combinedFeed.length > limit // If we had more than limit items, there's likely another page
-        });
-
+        res.json({ feed: feedItems, hasMore });
     } catch (error) {
         next(error);
     }

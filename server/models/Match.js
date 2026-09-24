@@ -21,4 +21,47 @@ const matchSchema = new mongoose.Schema({
 	date: { type: Date, default: Date.now }
 });
 
+matchSchema.post('save', async function(doc) {
+	if (doc.status !== "confirmed") return;
+	try {
+		const ActivityFeed = require('./ActivityFeed');
+		const User = require('./User');
+		
+		const submitter = await User.findById(doc.submittedBy).lean();
+		const t1Users = await User.find({ _id: { $in: doc.team1 } }).lean();
+		const t2Users = await User.find({ _id: { $in: doc.team2 } }).lean();
+
+		await ActivityFeed.findOneAndUpdate(
+			{ type: "match", referenceId: doc._id },
+			{
+				type: "match",
+				referenceId: doc._id,
+				authorId: doc.submittedBy,
+				authorName: submitter?.name,
+				authorProfilePic: submitter?.profilePic,
+				authorSkillLevel: submitter?.skillLevel,
+				team1Score: doc.team1Score,
+				team2Score: doc.team2Score,
+				team1: t1Users.map(u => u.name),
+				team2: t2Users.map(u => u.name),
+				team1Avatars: t1Users.map(u => u.profilePic),
+				team2Avatars: t2Users.map(u => u.profilePic),
+				createdAt: doc.date,
+				score: doc.team1Score + doc.team2Score
+			},
+			{ upsert: true, new: true }
+		);
+	} catch (e) {
+		console.error("ActivityFeed sync error (Match):", e);
+	}
+});
+
+matchSchema.post('findOneAndDelete', async function(doc) {
+	if (!doc) return;
+	try {
+		const ActivityFeed = require('./ActivityFeed');
+		await ActivityFeed.deleteOne({ type: "match", referenceId: doc._id });
+	} catch (e) {}
+});
+
 module.exports = mongoose.model("Match", matchSchema);
