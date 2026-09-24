@@ -39,9 +39,6 @@ async function assignTopContributorBadges() {
             
             console.log(`[Gamification] Awarded Top Contributor to ${topIds.length} users.`);
         }
-            );
-            console.log(`[Gamification] Awarded Top Contributor to ${topIds.length} users.`);
-        }
     } catch (e) {
         console.error("[Gamification] Failed to compute Top Contributors:", e);
     }

@@ -1,4 +1,4 @@
-﻿// server/routes/coach.js
+// server/routes/coach.js
 const express = require("express");
 const router = express.Router();
 const CoachChat = require("../models/CoachChat");
@@ -11,7 +11,7 @@ const coachLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 20,
     message: { message: "You're sending messages too fast. Take a breather! 🏸" },
-    keyGenerator: (req) => req.body.userId || req.ip,
+    keyGenerator: (req) => req.body.userId || "anonymous",
 });
 
 // POST /api/coach/message - Send a message to the AI Coach
