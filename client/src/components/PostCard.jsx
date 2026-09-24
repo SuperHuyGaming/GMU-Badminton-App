@@ -82,6 +82,8 @@ export default function PostCard({ post }) {
 	const hasLiked = localPost.likedBy?.includes(currentUser?.id);
 
 	const [showHeart, setShowHeart] = useState(false);
+	const [showReactions, setShowReactions] = useState(false);
+
 
 	const handleDoubleTap = (e) => {
 		e.preventDefault();
@@ -580,27 +582,40 @@ export default function PostCard({ post }) {
 						color: "text.secondary",
 					}}
 				>
-					<Button
-						onClick={handleLike}
-						disabled={isLiking}
-						color={hasLiked ? "secondary" : "inherit"}
-						sx={actionBtnStyle}
+					<Box 
+						onMouseEnter={() => setShowReactions(true)} 
+						onMouseLeave={() => setShowReactions(false)}
+						sx={{ position: 'relative' }}
 					>
-						<Box
-							sx={{
-								mr: { xs: 0.5, sm: 1 },
-								display: "flex",
-								alignItems: "center",
-							}}
+						{/* Floating Reaction Bar */}
+						<Collapse in={showReactions} timeout="auto" unmountOnExit sx={{ position: 'absolute', bottom: '100%', left: 0, mb: 1, zIndex: 10 }}>
+							<Paper elevation={4} sx={{ display: 'flex', gap: 1, p: 0.5, borderRadius: 10, bgcolor: 'background.paper' }}>
+								{['🏸', '🔥', '💯', '👏'].map(emoji => (
+									<IconButton 
+										key={emoji} 
+										onClick={(e) => { e.stopPropagation(); handleLike(); setShowReactions(false); }}
+										sx={{ transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.3)' } }}
+									>
+										<Typography fontSize="1.2rem">{emoji}</Typography>
+									</IconButton>
+								))}
+							</Paper>
+						</Collapse>
+
+						<Button
+							onClick={handleLike}
+							disabled={isLiking}
+							color={hasLiked ? "secondary" : "inherit"}
+							sx={actionBtnStyle}
 						>
-							{hasLiked ? <ThumbUpFilled /> : <ThumbUpOutline />}
-						</Box>
-						<Box
-							sx={{ display: { xs: "none", sm: "inline-block" } }}
-						>
-							Like
-						</Box>
-					</Button>
+							<Box sx={{ mr: { xs: 0.5, sm: 1 }, display: "flex", alignItems: "center" }}>
+								{hasLiked ? <ThumbUpFilled /> : <ThumbUpOutline />}
+							</Box>
+							<Box sx={{ display: { xs: "none", sm: "inline-block" } }}>
+								React
+							</Box>
+						</Button>
+					</Box>
 					<Button
 						onClick={() => setIsCommentModalOpen(true)}
 						color="inherit"
