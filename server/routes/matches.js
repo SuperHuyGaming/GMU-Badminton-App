@@ -228,6 +228,10 @@ router.put("/:matchId/confirm", authMiddleware, async (req, res, next) => {
             await redisClient.del(`leaderboard:${match.type}`);
         }
         
+        if (req.io) {
+            req.io.emit("matchConfirmed");
+        }
+
         res.json(match);
     } catch (error) {
         next(error);

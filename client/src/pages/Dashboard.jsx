@@ -223,12 +223,30 @@ export default function Dashboard() {
 		const handleDeletedAnnouncement = (deletedId) =>
 			setAnnouncements((prev) => prev.filter((a) => a._id !== deletedId));
 
+		const handleNewFeedActivity = async () => {
+			try {
+				const feedRes = await apiFetch(`/api/feed?page=1`);
+				if (feedRes.ok) {
+					const feedData = await feedRes.json();
+					setFeed(feedData.feed);
+					setPage(1); // Reset pagination so we don't duplicate
+					setHasMore(feedData.hasMore);
+				}
+			} catch (e) {
+				console.error("Failed to fetch new feed activity", e);
+			}
+		};
+
 		socket.on("announcementCreated", handleNewAnnouncement);
 		socket.on("announcementDeleted", handleDeletedAnnouncement);
+		socket.on("postCreated", handleNewFeedActivity);
+		socket.on("matchConfirmed", handleNewFeedActivity);
 
 		return () => {
 			socket.off("announcementCreated", handleNewAnnouncement);
 			socket.off("announcementDeleted", handleDeletedAnnouncement);
+			socket.off("postCreated", handleNewFeedActivity);
+			socket.off("matchConfirmed", handleNewFeedActivity);
 		};
 	}, []);
 
