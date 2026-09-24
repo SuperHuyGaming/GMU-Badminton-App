@@ -176,16 +176,41 @@ export default function Forum() {
 			</Box>
 
 			{/* TABS NAVIGATION */}
-			<Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', mb: 4 }}>
+			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4, gap: 2 }}>
 				<Tabs value={tab} onChange={handleTabChange} textColor="primary" indicatorColor="primary" 
 					sx={{ 
-						'& .MuiTab-root': { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'none', px: 4 },
+						'& .MuiTab-root': { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'none', px: { xs: 2, sm: 4 } },
 						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5
 					}}>
 					<Tab label="✨ For You" value="foryou" />
 					<Tab label="🔥 Top" value="top" />
 					<Tab label="🕒 Latest" value="latest" />
 				</Tabs>
+
+				{/* TRENDING TAGS BAR (Item 5) */}
+				<Box 
+					sx={{ 
+						width: '100%', maxWidth: '800px',
+						display: 'flex', gap: 1, overflowX: 'auto', pb: 1,
+						'&::-webkit-scrollbar': { display: 'none' }, // Hide scrollbar for clean UI
+						msOverflowStyle: 'none', scrollbarWidth: 'none' 
+					}}
+				>
+					<Chip label="🔥 Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
+					{['#GMUTournament', '#RAC', '#Stringing', '#LookingForDoubles', '#Yonex', '#Skyline'].map((tag) => (
+						<Chip 
+							key={tag} 
+							label={tag} 
+							size="small" 
+							variant="outlined" 
+							onClick={() => {}} // Dummy click handler
+							sx={{ 
+								fontWeight: 'bold', cursor: 'pointer', 
+								'&:hover': { bgcolor: 'primary.main', color: 'white', borderColor: 'primary.main' } 
+							}} 
+						/>
+					))}
+				</Box>
 			</Box>
 
 			{/* FEED */}
