@@ -14,9 +14,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import CommentThread from "./CommentThread"; // FIX: Import the new separated component!
 
-export default function PostCommentsModal({
-	open,
-	onClose,
+export default function PostCommentsInline({
 	localPost,
 	setLocalPost,
 	currentUser,
@@ -192,62 +190,11 @@ export default function PostCommentsModal({
 			: "Just now";
 
 	return (
-		<Dialog
-			open={open}
-			onClose={onClose}
-			fullWidth
-			maxWidth="sm"
-			fullScreen={fullScreen}
-			PaperProps={{
-				sx: {
-					borderRadius: fullScreen ? 0 : 3,
-					maxHeight: fullScreen ? "100vh" : "80vh",
-				},
-			}}
-		>
-			<DialogTitle
-				sx={{
-					display: "flex",
-					alignItems: "center",
-					gap: 1.5,
-					pb: 1,
-					borderBottom: "1px solid",
-					borderColor: "divider",
-				}}
-			>
-				<Typography
-					component="div"
-					variant="h6"
-					fontWeight="bold"
-					sx={{ flexGrow: 1 }}
-				>
-					{localPost.authorName}'s Post
-				</Typography>
-				<Button
-					onClick={onClose}
-					color="inherit"
-					sx={{
-						minWidth: 0,
-						p: 1,
-						borderRadius: 5,
-						transition: "all 0.2s",
-						"&:active": { transform: "scale(0.9)" },
-					}}
-				>
-					✕
-				</Button>
-			</DialogTitle>
+		<Box sx={{ borderTop: "1px solid", borderColor: "divider", mt: 2, pt: 2 }}>
+			
 
-			<DialogContent sx={{ p: 0, backgroundColor: "background.default" }}>
-				<Box
-					sx={{
-						p: { xs: 2, sm: 3 },
-						backgroundColor: "background.paper",
-						mb: 1,
-					}}
-				>
-					<Typography variant="body1">{localPost.content}</Typography>
-				</Box>
+			<Box>
+				
 
 				<Box sx={{ p: { xs: 1, sm: 2 } }}>
 					{!localPost.comments?.length ? (
@@ -287,7 +234,7 @@ export default function PostCommentsModal({
 						</Box>
 					)}
 				</Box>
-			</DialogContent>
+			</Box>
 
 			{/* MAIN POST COMMENT INPUT */}
 			<Box
@@ -356,6 +303,6 @@ export default function PostCommentsModal({
 					Post
 				</Button>
 			</Box>
-		</Dialog>
+		</Box>
 	);
 }

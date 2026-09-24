@@ -14,11 +14,12 @@ import {
 	MenuItem,
 	TextField,
 	Dialog,
+	Collapse,
 } from "@mui/material";
 
 // Separated Sub-Components
 import LikesModal from "./LikesModal";
-import PostCommentsModal from "./PostCommentsModal";
+import PostCommentsInline from "./PostCommentsInline";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import {
 	ThumbUpOutline,
