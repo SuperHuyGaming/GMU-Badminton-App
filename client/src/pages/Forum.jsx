@@ -186,9 +186,9 @@ export default function Forum() {
 						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5
 					}}>
 					<Tab label="✨ For You" value="foryou" />
-					<Tab label="🔥 Top" value="top" />
-					<Tab label="🕒 Latest" value="latest" />
-				</Tabs>
+					<Tab label="? For You" value="foryou" />
+					<Tab label="?? Top" value="top" />
+					<Tab label="?? Latest" value="latest" />
 
 				{/* ACTION BAR (TRENDING TAGS + REFRESH) */}
 				<Box 
@@ -203,7 +203,7 @@ export default function Forum() {
                             msOverflowStyle: 'none', scrollbarWidth: 'none' 
                         }}
                     >
-                        <Chip label="dY" Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
+                        <Chip label="?? Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
                         {['#GMUTournament', '#RAC', '#Stringing', '#LookingForDoubles', '#Yonex', '#Skyline'].map((tag) => (
                             <Chip 
                                 key={tag} 
