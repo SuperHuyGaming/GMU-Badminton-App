@@ -73,7 +73,7 @@ export default function CommentBubble({
 					...clickableStyle,
 				}}
 			>
-				{!comment.authorPic && comment.authorName.charAt(0)}
+				{!comment.authorPic && comment.authorName?.charAt(0)}
 			</Avatar>
 
 			<Box sx={{ flexGrow: 1, minWidth: 0 }}>

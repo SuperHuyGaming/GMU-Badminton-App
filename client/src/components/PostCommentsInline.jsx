@@ -257,8 +257,8 @@ export default function PostCommentsInline({
 						mb: 0.5,
 					}}
 				>
-					{!currentUser?.profilePic && currentUser
-						? currentUser.name.charAt(0).toUpperCase()
+					{!currentUser?.profilePic && currentUser?.name
+						? currentUser.name?.charAt(0).toUpperCase()
 						: "?"}
 				</Avatar>
 				<TextField

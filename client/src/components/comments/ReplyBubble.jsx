@@ -87,7 +87,7 @@ export default function ReplyBubble({
 					...clickableStyle,
 				}}
 			>
-				{!reply.authorPic && reply.authorName.charAt(0)}
+				{!reply.authorPic && reply.authorName?.charAt(0)}
 			</Avatar>
 
 			<Box sx={{ flexGrow: 1, minWidth: 0 }}>

@@ -61,7 +61,7 @@ export default function LikesModal({ open, title, list, onClose }) {
 								}}
 							>
 								{!u.profilePic &&
-									u.name.charAt(0).toUpperCase()}
+									u.name?.charAt(0).toUpperCase()}
 							</Avatar>
 							<Typography fontWeight="bold">{u.name}</Typography>
 						</ListItemButton>

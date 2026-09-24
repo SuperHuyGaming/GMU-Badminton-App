@@ -378,7 +378,7 @@ export default function Navbar() {
 										}}
 									>
 										{!user.profilePic &&
-											user.name.charAt(0).toUpperCase()}
+											user.name?.charAt(0).toUpperCase()}
 									</Avatar>
 
 									<Menu

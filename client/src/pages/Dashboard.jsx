@@ -328,7 +328,7 @@ export default function Dashboard() {
 							}}
 						>
 							{!currentUser.profilePic &&
-								currentUser.name.charAt(0).toUpperCase()}
+								currentUser.name?.charAt(0).toUpperCase()}
 						</Avatar>
 					)}
 					<Box>

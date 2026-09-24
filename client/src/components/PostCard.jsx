@@ -271,7 +271,7 @@ export default function PostCard({ post }) {
 					>
 						{!localPost.authorPic &&
 							(localPost.authorName
-								? localPost.authorName.charAt(0).toUpperCase()
+								? localPost.authorName?.charAt(0).toUpperCase()
 								: "?")}
 					</Avatar>
 					<Box sx={{ flexGrow: 1 }}>

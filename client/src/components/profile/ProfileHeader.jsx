@@ -223,7 +223,7 @@ export default function ProfileHeader({
 							}}
 						>
 							{!displayProfilePic &&
-								profileData.name.charAt(0).toUpperCase()}
+								profileData.name?.charAt(0).toUpperCase()}
 						</Avatar>
 					</Badge>
 
