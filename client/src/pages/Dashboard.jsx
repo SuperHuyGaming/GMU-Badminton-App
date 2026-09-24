@@ -260,8 +260,14 @@ export default function Dashboard() {
 		<Box sx={{ pb: 10 }}>
 			<style>
 				{`
-					@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 204, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0); } }
-					.live-indicator { width: 12px; height: 12px; background-color: #FFCC33; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+					@keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0); } }
+					@keyframes pulseGreen { 0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } }
+					@keyframes pulseYellow { 0% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 204, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0); } }
+					
+					.live-indicator-red { width: 12px; height: 12px; background-color: #FF4444; border-radius: 50%; display: inline-block; animation: pulseRed 2s infinite; }
+					.live-indicator-green { width: 12px; height: 12px; background-color: #00E676; border-radius: 50%; display: inline-block; animation: pulseGreen 2s infinite; }
+					.live-indicator-yellow { width: 12px; height: 12px; background-color: #FFCC33; border-radius: 50%; display: inline-block; animation: pulseYellow 2s infinite; }
+					
 					.custom-scrollbar::-webkit-scrollbar { width: 6px; }
 					.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 					.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 10px; }
@@ -330,61 +336,63 @@ export default function Dashboard() {
 
 				<Box
 					sx={{
-						backgroundColor: "rgba(0,0,0,0.2)",
-						borderRadius: 3,
-						p: 2.5,
-						minWidth: { xs: "100%", md: "350px" },
+						backgroundColor: "rgba(0,0,0,0.3)",
+						borderRadius: 4,
+						p: 3,
+						minWidth: { xs: "100%", md: "380px" },
 						zIndex: 1,
 						border: "1px solid rgba(255,255,255,0.1)",
+						backdropFilter: "blur(10px)",
+						boxShadow: "0 8px 32px rgba(0,0,0,0.2)"
 					}}
 				>
-					<Box
-						sx={{
-							display: "flex",
-							alignItems: "center",
-							gap: 1.5,
-							mb: 1,
-						}}
-					>
-						<div className="live-indicator"></div>
-						<Typography
-							variant="caption"
-							fontWeight="bold"
-							sx={{
-								color: "#FFCC33",
-								letterSpacing: "1px",
-								textTransform: "uppercase",
-							}}
-						>
-							Live RAC Status
-						</Typography>
+					<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+						<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+							<div className={status?.includes('CLOSED') ? 'live-indicator-red' : status?.includes('Active') ? 'live-indicator-yellow' : 'live-indicator-green'}></div>
+							<Typography variant="caption" fontWeight="bold" sx={{ color: "rgba(255,255,255,0.9)", letterSpacing: "1px", textTransform: "uppercase" }}>
+								Live RAC Status
+							</Typography>
+						</Box>
+						<Chip 
+							size="small" 
+							label={status?.includes('CLOSED') ? "CLOSED" : status?.includes('Active') ? "HIGH TRAFFIC" : "OPEN PLAY"} 
+							sx={{ 
+								bgcolor: status?.includes('CLOSED') ? 'rgba(255,68,68,0.2)' : status?.includes('Active') ? 'rgba(255,204,51,0.2)' : 'rgba(0,230,118,0.2)', 
+								color: status?.includes('CLOSED') ? '#FF4444' : status?.includes('Active') ? '#FFCC33' : '#00E676', 
+								fontWeight: 'bold' 
+							}} 
+						/>
 					</Box>
-					<Typography
-						variant="h6"
-						fontWeight="bold"
-						sx={{ mb: 2, lineHeight: 1.2 }}
-					>
-						{loading ? (
-							<Skeleton variant="text" width="60%" sx={{ bgcolor: 'rgba(255, 204, 51, 0.2)' }} />
-						) : (
-							status || "Status currently unavailable."
-						)}
+					
+					<Typography variant="h5" fontWeight="900" sx={{ mb: 1, lineHeight: 1.3, color: 'white' }}>
+						{loading ? <Skeleton variant="text" width="60%" sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} /> : (status || "Status unavailable")}
 					</Typography>
+					
+					<Box sx={{ mt: 3, mb: 2 }}>
+						<Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+							<Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>Estimated Capacity</Typography>
+							<Typography variant="caption" fontWeight="bold" sx={{ color: 'white' }}>{status?.includes('CLOSED') ? '0%' : status?.includes('Active') ? '85%' : '40%'}</Typography>
+						</Box>
+						<Box sx={{ width: '100%', height: 6, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+							<Box sx={{ 
+								width: status?.includes('CLOSED') ? '0%' : status?.includes('Active') ? '85%' : '40%', 
+								height: '100%', 
+								bgcolor: status?.includes('CLOSED') ? '#FF4444' : status?.includes('Active') ? '#FFCC33' : '#00E676', 
+								borderRadius: 3, 
+								transition: 'width 1.5s cubic-bezier(0.16, 1, 0.3, 1)' 
+							}} />
+						</Box>
+					</Box>
+
 					<Button
-						size="small"
+						fullWidth
 						variant="contained"
 						color="secondary"
 						href="https://connect.recreation.gmu.edu/Facility/GetSchedule?facilityId=4434ce67-8efc-4c48-90e1-7add7f48ad24"
 						target="_blank"
-						sx={{
-							fontWeight: "bold",
-							borderRadius: 2,
-							color: "#006633",
-							textTransform: "none",
-							"&:hover": { backgroundColor: "white" },
-						}}
+						sx={{ fontWeight: "bold", borderRadius: 3, color: "#006633", py: 1, textTransform: 'none' }}
 					>
-						Check Official Capacity ➦
+						Check Official Connect Portal ➦
 					</Button>
 				</Box>
 			</Paper>
