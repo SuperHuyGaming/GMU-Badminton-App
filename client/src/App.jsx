@@ -21,19 +21,28 @@ import ReportMatchModal from "./components/ReportMatchModal";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
 
-// Initialize PostHog Analytics
-posthog.init('mock-posthog-api-key', {
-    api_host: 'https://app.posthog.com',
-    autocapture: true, // Automatically captures clicks, etc.
-    capture_pageview: false, // We will manually capture SPA page views
-    session_recording: {
-        maskAllInputs: false,
-        maskTextSelector: "password",
-    },
-    loaded: (posthog) => {
-        if (process.env.NODE_ENV === 'development') posthog.debug(false);
-    }
-});
+// Initialize PostHog Analytics only if a real key is provided
+const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY || 'mock-posthog-api-key';
+if (POSTHOG_KEY && POSTHOG_KEY !== 'mock-posthog-api-key') {
+    posthog.init(POSTHOG_KEY, {
+        api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com',
+        autocapture: true, // Automatically captures clicks, etc.
+        capture_pageview: false, // We will manually capture SPA page views
+        session_recording: {
+            maskAllInputs: false,
+            maskTextSelector: "password",
+        },
+        loaded: (ph) => {
+            if (process.env.NODE_ENV === 'development') ph.debug(false);
+        }
+    });
+} else {
+    // Stub PostHog methods to prevent 404/401 errors and crashes when called
+    posthog.init = () => {};
+    posthog.capture = () => {};
+    posthog.identify = () => {};
+    posthog.reset = () => {};
+}
 
 import {
 	BrowserRouter,

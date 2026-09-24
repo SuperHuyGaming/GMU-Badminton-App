@@ -190,41 +190,65 @@ export default function Forum() {
 					<Tab label="🕒 Latest" value="latest" />
 				</Tabs>
 
-				{/* TRENDING TAGS BAR (Item 5) */}
+				{/* ACTION BAR (TRENDING TAGS + REFRESH) */}
 				<Box 
 					sx={{ 
-						width: '100%', maxWidth: '800px',
-						display: 'flex', gap: 1, overflowX: 'auto', pb: 1,
-						'&::-webkit-scrollbar': { display: 'none' }, // Hide scrollbar for clean UI
-						msOverflowStyle: 'none', scrollbarWidth: 'none' 
+						width: '100%', maxWidth: '800px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 2
 					}}
 				>
-					<Chip label="🔥 Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
-					{['#GMUTournament', '#RAC', '#Stringing', '#LookingForDoubles', '#Yonex', '#Skyline'].map((tag) => (
-						<Chip 
-							key={tag} 
-							label={tag} 
-							size="small" 
-							variant={selectedTag === tag ? "filled" : "outlined"}
-                            color={selectedTag === tag ? "primary" : "default"}
-							onClick={() => {
-                                setSelectedTag(selectedTag === tag ? "" : tag);
-                                setPage(1);
-                            }}
-							sx={{ 
-								fontWeight: 'bold', cursor: 'pointer', 
-								'&:hover': { bgcolor: 'primary.main', color: 'white', borderColor: 'primary.main' } 
-							}} 
-						/>
-					))}
+                    <Box 
+                        sx={{ 
+                            display: 'flex', gap: 1, overflowX: 'auto', pb: 1, flex: 1,
+                            '&::-webkit-scrollbar': { display: 'none' }, // Hide scrollbar for clean UI
+                            msOverflowStyle: 'none', scrollbarWidth: 'none' 
+                        }}
+                    >
+                        <Chip label="dY" Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
+                        {['#GMUTournament', '#RAC', '#Stringing', '#LookingForDoubles', '#Yonex', '#Skyline'].map((tag) => (
+                            <Chip 
+                                key={tag} 
+                                label={tag} 
+                                size="small" 
+                                variant={selectedTag === tag ? "filled" : "outlined"}
+                                color={selectedTag === tag ? "primary" : "default"}
+                                onClick={() => {
+                                    setSelectedTag(selectedTag === tag ? "" : tag);
+                                    setPage(1);
+                                }}
+                                sx={{ 
+                                    fontWeight: 'bold', cursor: 'pointer', 
+                                    '&:hover': { bgcolor: 'primary.main', color: 'white', borderColor: 'primary.main' } 
+                                }} 
+                            />
+                        ))}
+                    </Box>
+
+                    <Button 
+                        variant="outlined" 
+                        size="small" 
+                        color="inherit"
+                        onClick={() => { setPage(1); setFeed([]); }}
+                        sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 26 }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.13 15.57a9 9 0 1 0 3.12-11.83l-4.75 4.76"/></svg>
+                        <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
+                    </Button>
 				</Box>
-			</Box>
 
 			{/* FEED */}
 			<Masonry columns={{ xs: 1, md: 2 }} spacing={{ xs: 2, md: 4 }}>
 				{isLoading ? (
 					[1, 2, 3, 4].map(n => (
-						<Box key={n}><Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} /></Box>
+						<Paper key={n} elevation={0} sx={{ p: 3, borderRadius: 4, border: "1px solid", borderColor: "divider", mb: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <Skeleton variant="circular" width={40} height={40} />
+                                <Box sx={{ ml: 2, width: '100%' }}>
+                                    <Skeleton variant="text" width="60%" height={24} />
+                                    <Skeleton variant="text" width="40%" height={20} />
+                                </Box>
+                            </Box>
+                            <Skeleton variant="rounded" height={100} sx={{ borderRadius: 2 }} />
+                        </Paper>
 					))
 				) : feed.length === 0 ? (
 					<Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -244,8 +268,8 @@ export default function Forum() {
 								authorBadges: item.authorBadges,
 								timestamp: item.createdAt,
                                 tags: item.tags || [],
-								likedBy: new Array(item.likes).fill('mock_id'), // PostCard only cares about length
-								comments: new Array(item.comments).fill({}), 
+								likedBy: new Array(Math.max(0, item.likes || 0)).fill('mock_id'), // PostCard only cares about length
+								comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
 							};
 							return (
 								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null}>
@@ -309,8 +333,13 @@ export default function Forum() {
 				)}
 			</Masonry>
 			
-			<Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, height: 40 }}>
+			<Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, height: 60, alignItems: 'center' }}>
 				{isFetchingMore && <CircularProgress size={24} color="primary" />}
+                {!isFetchingMore && !hasMore && feed.length > 0 && (
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                        You're all caught up! 🏸
+                    </Typography>
+                )}
 			</Box>
 
 			{/* Floating Action Button */}

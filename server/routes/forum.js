@@ -316,13 +316,6 @@ router.post("/:postId/comments", postLimiter, async (req, res) => {
 
 		post.comments.push({ authorId, authorName, content });
 		await post.save();
-        
-        // Increment comment count in ActivityFeed
-        const ActivityFeed = require("../models/ActivityFeed");
-        await ActivityFeed.updateOne(
-            { referenceId: post._id },
-            { $inc: { comments: 1, score: 3 } }
-        ).catch(() => {});
 
 		const updatedPost = await Post.findById(req.params.postId).lean();
 		const hydratedPost = await hydrateWithPictures(updatedPost);
@@ -514,12 +507,6 @@ router.put("/:postId/like", async (req, res) => {
 			post.likedBy.push(userId);
 		}
 		await post.save();
-
-        const ActivityFeed = require("../models/ActivityFeed");
-        await ActivityFeed.updateOne(
-            { referenceId: post._id },
-            { $inc: { likes: hasLiked ? -1 : 1, score: hasLiked ? -2 : 2 } }
-        ).catch(() => {});
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
