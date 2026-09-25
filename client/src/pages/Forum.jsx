@@ -185,10 +185,10 @@ export default function Forum() {
 						'& .MuiTab-root': { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'none', px: { xs: 2, sm: 4 } },
 						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5
 					}}>
-					<Tab label="✨ For You" value="foryou" />
 					<Tab label="? For You" value="foryou" />
 					<Tab label="?? Top" value="top" />
 					<Tab label="?? Latest" value="latest" />
+				</Tabs>
 
 				{/* ACTION BAR (TRENDING TAGS + REFRESH) */}
 				<Box 
@@ -235,6 +235,7 @@ export default function Forum() {
                     </Button>
 				</Box>
 
+			</Box>
 			{/* FEED */}
 			<Masonry columns={{ xs: 1, md: 2 }} spacing={{ xs: 2, md: 4 }}>
 				{isLoading ? (
