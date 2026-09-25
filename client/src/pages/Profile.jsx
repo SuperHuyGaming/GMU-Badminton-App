@@ -6,7 +6,6 @@ import { ProfileSkeleton } from "../components/Skeletons";
 import {
 	Typography,
 	Box,
-	CircularProgress,
 	Paper,
 	Skeleton,
 } from "@mui/material";

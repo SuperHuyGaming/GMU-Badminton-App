@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, DialogActions as MuiDialogActions, IconButton } from '@mui/material';
+import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import TournamentBracket from '../components/TournamentBracket';
 import EmptyTournaments from '../components/EmptyTournaments';
 import apiFetch from '../utils/api';
@@ -117,6 +117,7 @@ END:VCALENDAR`;
     }, []);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchTournaments();
     }, [fetchTournaments]);
 
