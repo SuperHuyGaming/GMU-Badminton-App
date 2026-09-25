@@ -31,7 +31,7 @@ import {
 	CloseIcon,
 } from "./Icons";
 
-export default function PostCard({ post }) {
+export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 	const navigate = useNavigate();
 	const currentUser = JSON.parse(localStorage.getItem("user"));
 
@@ -187,6 +187,25 @@ export default function PostCard({ post }) {
 				},
 			);
 			setIsCommentModalOpen(false);
+		} catch (err) {
+			console.error(err);
+		}
+	};
+
+	const toggleBookmark = async () => {
+		try {
+			const res = await fetch("/api/forum/" + localPost._id + "/bookmark", {
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: "Bearer " + localStorage.getItem("token")
+				},
+				body: JSON.stringify({ userId: currentUser.id }),
+			});
+			if (res.ok) {
+				const data = await res.json();
+				if (onBookmarkToggle) onBookmarkToggle(data.isBookmarked);
+			}
 		} catch (err) {
 			console.error(err);
 		}

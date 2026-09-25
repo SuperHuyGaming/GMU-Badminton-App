@@ -503,6 +503,50 @@ router.delete(
 );
 
 // ==========================================
+// BOOKMARKS
+// ==========================================
+
+router.put("/:postId/bookmark", async (req, res) => {
+	try {
+		const { userId } = req.body;
+		const user = await User.findById(userId);
+		if (!user) return res.status(404).json({ message: "User not found" });
+
+		if (!user.bookmarkedPosts) user.bookmarkedPosts = [];
+		const postIndex = user.bookmarkedPosts.indexOf(req.params.postId);
+		let isBookmarked = false;
+
+		if (postIndex === -1) {
+			user.bookmarkedPosts.push(req.params.postId);
+			isBookmarked = true;
+		} else {
+			user.bookmarkedPosts.splice(postIndex, 1);
+		}
+
+		await user.save();
+		res.json({ bookmarkedPosts: user.bookmarkedPosts, isBookmarked });
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: "Server error toggling bookmark" });
+	}
+});
+
+router.get("/bookmarks/:userId", async (req, res) => {
+	try {
+		const user = await User.findById(req.params.userId).populate('bookmarkedPosts');
+		if (!user) return res.status(404).json({ message: "User not found" });
+
+		// Filter out nulls in case a post was deleted but still bookmarked
+		const validPosts = user.bookmarkedPosts.filter(p => p !== null);
+		const hydratedPosts = await hydrateWithPictures(validPosts.map(p => typeof p.toObject === 'function' ? p.toObject() : p));
+		res.json(hydratedPosts);
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: "Server error fetching bookmarks" });
+	}
+});
+
+// ==========================================
 // LIKES
 // ==========================================
 router.put("/:postId/like", async (req, res) => {

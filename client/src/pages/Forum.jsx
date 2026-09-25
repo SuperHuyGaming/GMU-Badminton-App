@@ -21,6 +21,7 @@ export default function Forum() {
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
 	const [feed, setFeed] = useState([]);
+	const [bookmarkedPosts, setBookmarkedPosts] = useState(new Set());
 	const [page, setPage] = useState(1);
 	const [hasMore, setHasMore] = useState(true);
 	const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +63,7 @@ export default function Forum() {
 				if (res.ok) {
 					const data = await res.json();
 					setHasMore(data.hasMore);
+					if (data.bookmarkedPosts) setBookmarkedPosts(new Set(data.bookmarkedPosts));
 					if (page === 1) {
 						setFeed(data.feed);
 					} else {
@@ -285,7 +287,7 @@ export default function Forum() {
 							};
 							return (
 								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
-									<PostCard post={mockPost} currentUser={currentUser} onDelete={() => {}} />
+									<PostCard post={mockPost} currentUser={currentUser} isBookmarked={bookmarkedPosts.has(item.referenceId)} onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { const n = new Set(prev); if(isBookmarked) n.add(item.referenceId); else n.delete(item.referenceId); return n; })} onDelete={() => {}} />
 								</Box>
 							);
 						}

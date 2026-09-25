@@ -61,6 +61,9 @@ const userSchema = new mongoose.Schema({
 	// Web Push Subscriptions for Notifications
 	pushSubscriptions: { type: Array, default: [] },
 
+	// Bookmarks
+	bookmarkedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
+
 	// Calendar / RSVPs
 	rsvpedTournaments: [{ type: String }], // Array of Tournament IDs
 

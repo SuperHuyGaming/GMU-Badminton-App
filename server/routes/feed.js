@@ -15,13 +15,27 @@ router.get("/", authMiddleware, async (req, res, next) => {
         const skip = (page - 1) * limit;
 
         // Fetch current user to personalize feed
-        const currentUser = await User.findById(req.user.id).select("skillLevel");
+        const currentUser = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
         
         let matchStage = {}; // Fetch all
         
         // Tag filtering
         if (req.query.tag) {
             matchStage.tags = req.query.tag;
+        }
+
+        if (tab === "saved") {
+            matchStage.referenceId = { $in: currentUser.bookmarkedPosts || [] };
+            matchStage.type = "post";
+            const feedItems = await ActivityFeed.find(matchStage)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit + 1)
+                .lean();
+
+            const hasMore = feedItems.length > limit;
+            if (hasMore) feedItems.pop();
+            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
         if (tab === "top") {
@@ -33,7 +47,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
 
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
-            return res.json({ feed: feedItems, hasMore });
+            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
         if (tab === "latest") {
@@ -45,7 +59,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
 
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
-            return res.json({ feed: feedItems, hasMore });
+            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
         // Default to "foryou"
@@ -79,7 +93,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
 
-            return res.json({ feed: feedItems, hasMore });
+            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
         // Fallback to purely chronological if no user skill level
