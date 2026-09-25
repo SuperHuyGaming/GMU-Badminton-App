@@ -53,10 +53,12 @@ export default function Forum() {
 	}, [isLoading, isFetchingMore, hasMore]);
 
 	const cursorRef = useRef(null);
+	const sessionTimeRef = useRef(Date.now());
 
 	// Reset cursor when tab or tag changes
 	useEffect(() => {
 		cursorRef.current = null;
+		sessionTimeRef.current = Date.now();
 		setPage(1);
 	}, [tab, selectedTag]);
 
@@ -66,6 +68,8 @@ export default function Forum() {
 			if (isFirstPage) {
 				setIsLoading(true);
 				cursorRef.current = null;
+				// If refresh is manually triggered without tab change, update session time
+				if (page === 1 && !cursorRef.current) sessionTimeRef.current = Date.now();
 			} else {
 				setIsFetchingMore(true);
 			}
@@ -73,7 +77,8 @@ export default function Forum() {
 			try {
 				const tagQuery = selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : "";
 				const cursorQuery = cursorRef.current ? `&cursor=${cursorRef.current}` : "";
-				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${cursorQuery}`);
+				const sessionQuery = `&sessionTime=${sessionTimeRef.current}`;
+				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${cursorQuery}${sessionQuery}`);
 				if (res.ok) {
 					const data = await res.json();
 					cursorRef.current = data.nextCursor;
