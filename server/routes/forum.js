@@ -301,6 +301,20 @@ router.delete("/:postId", async (req, res) => {
 // ==========================================
 // COMMENTS & REPLIES (CREATE, EDIT, DELETE)
 // ==========================================
+
+router.get("/:postId/comments", async (req, res) => {
+	try {
+		const post = await Post.findById(req.params.postId).lean();
+		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		const hydratedPost = await hydrateWithPictures(post);
+		res.json({ comments: hydratedPost.comments || [] });
+	} catch (error) {
+		console.error("Error fetching comments:", error);
+		res.status(500).json({ message: "Server error fetching comments" });
+	}
+});
+
 router.post("/:postId/comments", postLimiter, async (req, res) => {
 	try {
 		const { content, authorName, authorId } = req.body;

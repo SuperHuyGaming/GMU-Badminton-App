@@ -75,6 +75,20 @@ export default function PostCard({ post }) {
 		}
 	}, [urlPostId, highlightId, localPost._id]);
 
+	useEffect(() => {
+		if (isCommentModalOpen) {
+			fetch(/api/forum/ + localPost._id + /comments, {
+				headers: { Authorization: "Bearer " + localStorage.getItem("token") }
+			})
+			.then(res => res.json())
+			.then(data => {
+				if (data.comments) {
+					setLocalPost(prev => ({ ...prev, comments: data.comments }));
+				}
+			})
+			.catch(err => console.error("Error fetching comments:", err));
+		}
+	}, [isCommentModalOpen, localPost._id]);
 	const totalCommentsCount =
 		localPost.comments?.reduce(
 			(acc, c) => acc + 1 + (c.replies?.length || 0),
