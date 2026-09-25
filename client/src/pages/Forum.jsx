@@ -224,9 +224,9 @@ export default function Forum() {
 						'& .MuiTab-root': { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'none', px: { xs: 2, sm: 4 } },
 						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5
 					}}>
-					<Tab label="? For You" value="foryou" />
-					<Tab label="?? Top" value="top" />
-					<Tab label="?? Latest" value="latest" />
+					<Tab label="For You" value="foryou" />
+					<Tab label="Trending" value="top" />
+					<Tab label="Latest" value="latest" />
 				</Tabs>
 
 				{/* ACTION BAR (TRENDING TAGS + REFRESH) */}
@@ -242,8 +242,8 @@ export default function Forum() {
                             msOverflowStyle: 'none', scrollbarWidth: 'none' 
                         }}
                     >
-                        <Chip label="?? Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
-                        {['#GMUTournament', '#RAC', '#Stringing', '#LookingForDoubles', '#Yonex', '#Skyline'].map((tag) => (
+                        <Chip label="Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
+                        {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment'].map((tag) => (
                             <Chip 
                                 key={tag} 
                                 label={tag} 
@@ -426,7 +426,7 @@ export default function Forum() {
                             Add Tags (Optional)
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {['#GMUTournament', '#RAC', '#Stringing', '#LookingForDoubles', '#Yonex', '#Skyline'].map(tag => {
+                            {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment'].map(tag => {
                                 const isSelected = newPost.tags.includes(tag);
                                 return (
                                     <Chip 
