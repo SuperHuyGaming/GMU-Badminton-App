@@ -57,7 +57,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 
 	const urlParams = new URLSearchParams(window.location.search);
 	const highlightId = urlParams.get("highlight");
-	const { postId: routePostId } = useParams();`n`tconst urlPostId = urlParams.get("postId") || routePostId;
+	const { postId: routePostId } = useParams();
+	const urlPostId = urlParams.get("postId") || routePostId;
 
 	useEffect(() => {
 		setLocalPost(post);
