@@ -26,26 +26,26 @@ export default function Marketplace() {
         imageFile: null
     });
     const [submitting, setSubmitting] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState(null);
-
-    const fetchListings = async () => {
-        try {
-            setLoading(true);
-            const res = await apiFetch(`/api/marketplace?category=${filterCategory}`);
-            const data = await res.json();
-            if (res.ok) {
-                setListings(data);
-            } else {
-                throw new Error(data.message || "Failed to fetch listings");
-            }
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     useEffect(() => {
+        const fetchListings = async () => {
+            try {
+                setLoading(true);
+                const res = await apiFetch(`/api/marketplace?category=${filterCategory}`);
+                const data = await res.json();
+                if (res.ok) {
+                    setListings(data);
+                } else {
+                    throw new Error(data.message || "Failed to fetch listings");
+                }
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchListings();
     }, [filterCategory]);
 
@@ -53,15 +53,6 @@ export default function Marketplace() {
     const handleClose = () => {
         setOpen(false);
         setFormData({ title: "", description: "", price: "", condition: "Good", category: "Racket", imageFile: null });
-        setPreviewUrl(null);
-    };
-
-    const handleImageChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setFormData({ ...formData, imageFile: file });
-            setPreviewUrl(URL.createObjectURL(file));
-        }
     };
 
     const handleSubmit = async () => {
@@ -119,6 +110,7 @@ export default function Marketplace() {
             await apiFetch(`/api/marketplace/${id}`, { method: 'DELETE' });
             setListings(listings.filter(l => l._id !== id));
         } catch (err) {
+            console.error(err);
             alert("Failed to delete listing.");
         }
     };

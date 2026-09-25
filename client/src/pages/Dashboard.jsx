@@ -117,31 +117,16 @@ const TrashIconLarge = () => (
 );
 
 export default function Dashboard() {
-	const navigate = useNavigate();
-	const currentUser = JSON.parse(localStorage.getItem("user"));
+		const currentUser = JSON.parse(localStorage.getItem("user"));
 
 	const [status, setStatus] = useState(null);
 	const [schedule, setSchedule] = useState(null);
 	const [announcements, setAnnouncements] = useState([]);
-	const [feed, setFeed] = useState([]);
-	const [loading, setLoading] = useState(true);
+		const [loading, setLoading] = useState(true);
 	
 	// Infinite Scroll State
-	const [page, setPage] = useState(1);
-	const [hasMore, setHasMore] = useState(true);
-	const [isFetchingMore, setIsFetchingMore] = useState(false);
-	const observer = useRef();
+	
 
-	const lastFeedElementRef = useCallback(node => {
-		if (loading || isFetchingMore) return;
-		if (observer.current) observer.current.disconnect();
-		observer.current = new IntersectionObserver(entries => {
-			if (entries[0].isIntersecting && hasMore) {
-				setPage(prevPage => prevPage + 1);
-			}
-		});
-		if (node) observer.current.observe(node);
-	}, [loading, isFetchingMore, hasMore]);
 
 	const [newUpdateText, setNewUpdateText] = useState("");
 	const [isPosting, setIsPosting] = useState(false);
@@ -177,6 +162,7 @@ export default function Dashboard() {
 							return;
 						}
 					} catch (e) {
+						console.error("Failed to fetch RAC schedule", e);
 						console.log("Java backend unreachable, using fallback...");
 					}
 				}

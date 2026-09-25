@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
     Container, Typography, Box, Paper, Tabs, Tab, 
     Avatar, Table, TableBody, TableCell, TableContainer, TableHead, 
-    TableRow, Chip, CircularProgress, TextField, Select, MenuItem, InputLabel, FormControl, Grid, InputAdornment
+    TableRow, Chip, TextField, Select, MenuItem, InputLabel, FormControl, Grid
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { LeaderboardRowSkeleton } from '../components/Skeletons';
