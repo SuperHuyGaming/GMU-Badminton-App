@@ -78,7 +78,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 
 	useEffect(() => {
 		if (isCommentModalOpen) {
-			fetch(/api/forum/ + localPost._id + /comments, {
+			fetch("/api/forum/" + localPost._id + "/comments", {
 				headers: { Authorization: "Bearer " + localStorage.getItem("token") }
 			})
 			.then(res => res.json())
