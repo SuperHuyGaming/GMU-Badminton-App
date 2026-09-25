@@ -280,13 +280,17 @@ export default function Forum() {
 						}
 						
 						if (item.type === 'match') {
+							const team1Wins = item.team1Score > item.team2Score;
+							const team2Wins = item.team2Score > item.team1Score;
+
 							return (
 								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 									<Paper 
 										elevation={0} 
 										sx={{ 
-											p: 3, borderRadius: 3, border: "1px solid", borderColor: "divider", 
+											p: 0, borderRadius: 4, overflow: 'hidden', border: "1px solid", borderColor: "divider", 
 											display: 'flex', flexDirection: 'column',
+											background: 'linear-gradient(135deg, rgba(0, 102, 51, 0.05) 0%, rgba(255, 204, 51, 0.05) 100%)',
 											transition: '0.3s cubic-bezier(0.16, 1, 0.3, 1)',
 											'&:hover': {
 												transform: 'scale(1.02) translateY(-4px)',
@@ -295,31 +299,46 @@ export default function Forum() {
 											}
 										}}
 									>
-										<Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
-											<Chip label="Match Result" size="small" color="secondary" variant="outlined" />
-											<Typography variant="caption" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
+										{/* HEADER BAR */}
+										<Box sx={{ display: 'flex', px: 3, py: 1.5, background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid rgba(0,0,0,0.05)', alignItems: 'center' }}>
+											<Chip label="🏆 Official Match" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: 'black' }} />
+											<Typography variant="caption" fontWeight="bold" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
 										</Box>
-										<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '40%' }}>
+
+										{/* SCOREBOARD */}
+										<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 3, position: 'relative' }}>
+											{/* TEAM 1 */}
+											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
+												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team1Avatars?.map((avatar, i) => (
-														<Avatar key={i} src={avatar} sx={{ width: 32, height: 32, ml: i > 0 ? -1.5 : 0, border: '2px solid', borderColor: 'background.paper', zIndex: 2 - i }} />
+														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
-												<Typography variant="caption" fontWeight="bold" textAlign="center" noWrap sx={{ width: '100%' }}>
+												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
 													{item.team1?.map(name => name.split(' ')[0]).join(' & ')}
 												</Typography>
 											</Box>
-											<Typography variant="h5" fontWeight="900" sx={{ color: item.team1Score > item.team2Score ? 'primary.main' : item.team2Score > item.team1Score ? 'secondary.main' : 'text.primary' }}>
-												{item.team1Score} - {item.team2Score}
-											</Typography>
-											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '40%' }}>
+
+											{/* HUGE SCORE */}
+											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '30%' }}>
+												<Typography variant="overline" color="text.secondary" fontWeight="bold" sx={{ mb: -1 }}>FINAL</Typography>
+												<Typography variant="h3" fontWeight="900" sx={{ letterSpacing: '-2px', color: 'text.primary' }}>
+													<span style={{ color: team1Wins ? '#006633' : 'inherit' }}>{item.team1Score}</span>
+													<span style={{ margin: '0 8px', color: '#ccc' }}>-</span>
+													<span style={{ color: team2Wins ? '#006633' : 'inherit' }}>{item.team2Score}</span>
+												</Typography>
+											</Box>
+
+											{/* TEAM 2 */}
+											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
+												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team2Avatars?.map((avatar, i) => (
-														<Avatar key={i} src={avatar} sx={{ width: 32, height: 32, ml: i > 0 ? -1.5 : 0, border: '2px solid', borderColor: 'background.paper', zIndex: 2 - i }} />
+														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
-												<Typography variant="caption" fontWeight="bold" textAlign="center" noWrap sx={{ width: '100%' }}>
+												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
 													{item.team2?.map(name => name.split(' ')[0]).join(' & ')}
 												</Typography>
 											</Box>
