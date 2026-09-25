@@ -237,10 +237,10 @@ export default function Forum() {
 
 			</Box>
 			{/* FEED */}
-			<Masonry columns={{ xs: 1, md: 2 }} spacing={{ xs: 2, md: 4 }}>
+			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', maxWidth: '680px', mx: 'auto' }}>
 				{isLoading ? (
 					[1, 2, 3, 4].map(n => (
-						<Paper key={n} elevation={0} sx={{ p: 3, borderRadius: 4, border: "1px solid", borderColor: "divider", mb: 2 }}>
+						<Paper key={n} elevation={0} sx={{ p: 3, borderRadius: 4, border: "1px solid", borderColor: "divider", mb: 2, width: '100%' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                 <Skeleton variant="circular" width={40} height={40} />
                                 <Box sx={{ ml: 2, width: '100%' }}>
@@ -273,7 +273,7 @@ export default function Forum() {
 								comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
 							};
 							return (
-								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null}>
+								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 									<PostCard post={mockPost} currentUser={currentUser} onDelete={() => {}} />
 								</Box>
 							);
@@ -281,7 +281,7 @@ export default function Forum() {
 						
 						if (item.type === 'match') {
 							return (
-								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null}>
+								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 									<Paper 
 										elevation={0} 
 										sx={{ 
@@ -332,7 +332,7 @@ export default function Forum() {
 						return null;
 					})
 				)}
-			</Masonry>
+			</Box>
 			
 			<Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, height: 60, alignItems: 'center' }}>
 				{isFetchingMore && <CircularProgress size={24} color="primary" />}
