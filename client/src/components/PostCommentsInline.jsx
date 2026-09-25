@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import CommentThread from "./CommentThread"; // FIX: Import the new separated component!
-import { apiCall } from "../utils/api";
+
 import socket from "../utils/socket";
 
 export default function PostCommentsInline({
