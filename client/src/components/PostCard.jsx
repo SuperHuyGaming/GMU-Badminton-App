@@ -1,5 +1,6 @@
 // client/src/components/PostCard.jsx
 import React, { useState, useEffect } from "react";
+import socket from "../utils/socket";
 import { useNavigate, useParams } from "react-router-dom";
 import {
 	Typography,
@@ -65,6 +66,29 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 		setEditTitle(post.title);
 		setEditContent(post.content);
 	}, [post]);
+
+	// INSTANT COMMENT INJECTION & REAL-TIME SYNC
+	useEffect(() => {
+		const handlePostUpdated = (updatedPost) => {
+			if (updatedPost._id === localPost._id) {
+				setLocalPost(prev => ({
+					...prev,
+					comments: updatedPost.comments,
+					likedBy: updatedPost.likedBy,
+					likedByDetails: updatedPost.likedByDetails,
+					recentLikerAvatars: updatedPost.recentLikerAvatars,
+					title: updatedPost.title,
+					content: updatedPost.content,
+					isEdited: updatedPost.isEdited
+				}));
+			}
+		};
+
+		socket.on("postUpdated", handlePostUpdated);
+		return () => {
+			socket.off("postUpdated", handlePostUpdated);
+		};
+	}, [localPost._id]);
 
 	useEffect(() => {
 		if (urlPostId === localPost._id) {

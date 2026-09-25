@@ -21,6 +21,7 @@ export default function Forum() {
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
 	const [feed, setFeed] = useState([]);
+	const [newPostsQueue, setNewPostsQueue] = useState([]);
 	const [bookmarkedPosts, setBookmarkedPosts] = useState(new Set());
 	const [page, setPage] = useState(1);
 	const [hasMore, setHasMore] = useState(true);
@@ -107,9 +108,16 @@ export default function Forum() {
 
 	// Listen for real-time updates
 	useEffect(() => {
-		const handleNewPost = () => {
-			// No-op: We intentionally DO NOT auto-refresh the feed. 
-			// We let the user click the Refresh button so their reading position isn't disrupted.
+		const handleNewPost = (post) => {
+			if (!post || !post._id) return;
+			setFeed(prev => {
+				if (prev.find(p => p._id === post._id || p.referenceId === post._id)) return prev;
+				setNewPostsQueue(q => {
+					if (q.find(p => p._id === post._id || p.referenceId === post._id)) return q;
+					return [post, ...q];
+				});
+				return prev;
+			});
 		};
 
 		const handlePostUpdated = (updatedPost) => {
@@ -275,8 +283,73 @@ export default function Forum() {
 				</Box>
 
 			</Box>
-			{/* FEED */}
+
 			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', maxWidth: '680px', mx: 'auto' }}>
+				{/* FACEBOOK STYLE COMPOSER */}
+				<Paper 
+					elevation={1} 
+					sx={{ 
+						p: 2, 
+						width: '100%', 
+						borderRadius: 4, 
+						display: 'flex', 
+						alignItems: 'center', 
+						gap: 2,
+						mb: -2 
+					}}
+				>
+					<Avatar src={currentUser?.avatarUrl} alt={currentUser?.name} />
+					<Box 
+						onClick={() => setIsModalOpen(true)}
+						sx={{ 
+							flex: 1, 
+							backgroundColor: 'action.hover', 
+							borderRadius: 10, 
+							py: 1.5, 
+							px: 3, 
+							cursor: 'pointer',
+							'&:hover': { backgroundColor: 'action.selected' }
+						}}
+					>
+						<Typography color="text.secondary" sx={{ fontSize: '0.95rem' }}>
+							What's on your mind{currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?
+						</Typography>
+					</Box>
+				</Paper>
+
+				{/* NEW POSTS PILL */}
+				{newPostsQueue.length > 0 && (
+					<Box 
+						onClick={() => {
+							setFeed(prev => [...newPostsQueue, ...prev]);
+							setNewPostsQueue([]);
+							window.scrollTo({ top: 0, behavior: 'smooth' });
+						}}
+						sx={{
+							position: 'sticky',
+							top: 80,
+							zIndex: 10,
+							backgroundColor: 'primary.main',
+							color: 'primary.contrastText',
+							px: 3,
+							py: 1,
+							borderRadius: 10,
+							cursor: 'pointer',
+							boxShadow: 3,
+							display: 'flex',
+							alignItems: 'center',
+							gap: 1,
+							transition: 'transform 0.2s',
+							'&:hover': { transform: 'scale(1.05)' }
+						}}
+					>
+						<Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+							↑ {newPostsQueue.length} New Post{newPostsQueue.length > 1 ? 's' : ''}
+						</Typography>
+					</Box>
+				)}
+
+				{/* FEED */}
 				{isLoading ? (
 					[1, 2, 3, 4].map(n => (
 						<Paper key={n} elevation={0} sx={{ p: 3, borderRadius: 4, border: "1px solid", borderColor: "divider", mb: 2, width: '100%' }}>
@@ -402,16 +475,6 @@ export default function Forum() {
                     </Typography>
                 )}
 			</Box>
-
-			{/* Floating Action Button */}
-			<Fab
-				color="primary"
-				aria-label="add"
-				sx={{ position: "fixed", bottom: { xs: 80, sm: 40 }, right: { xs: 20, sm: 40 }, zIndex: 1000 }}
-				onClick={() => setIsModalOpen(true)}
-			>
-				<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-			</Fab>
 
 			{/* Create Post Modal */}
 			<Dialog fullScreen={fullScreen} open={isModalOpen} onClose={() => setIsModalOpen(false)} PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
