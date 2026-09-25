@@ -80,25 +80,36 @@ export default function Forum() {
 
 	// Listen for real-time updates
 	useEffect(() => {
-		const handleNewActivity = () => {
-			setPage(1); // Refetch from top to pull in new items
-			// We could just refetch manually
-			apiFetch(`/api/feed?tab=${tab}&page=1`).then(res => res.json()).then(data => {
-				setFeed(data.feed);
-				setHasMore(data.hasMore);
-			});
+		const handleNewPost = () => {
+			// No-op: We intentionally DO NOT auto-refresh the feed. 
+			// We let the user click the Refresh button so their reading position isn't disrupted.
 		};
 
-		socket.on("postCreated", handleNewActivity);
-		socket.on("matchConfirmed", handleNewActivity);
-		socket.on("postUpdated", handleNewActivity); // For likes/comments
+		const handlePostUpdated = (updatedPost) => {
+			// Update likes/comments inline without changing the array order!
+			setFeed(prevFeed => prevFeed.map(item => {
+				if (item.type === 'post' && item.referenceId === updatedPost._id) {
+					const totalComments = updatedPost.comments?.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0) || 0;
+					return {
+						...item,
+						likes: updatedPost.likedBy?.length || 0,
+						comments: totalComments
+					};
+				}
+				return item;
+			}));
+		};
+
+		socket.on("postCreated", handleNewPost);
+		socket.on("matchConfirmed", handleNewPost);
+		socket.on("postUpdated", handlePostUpdated); // For likes/comments
 
 		return () => {
-			socket.off("postCreated", handleNewActivity);
-			socket.off("matchConfirmed", handleNewActivity);
-			socket.off("postUpdated", handleNewActivity);
+			socket.off("postCreated", handleNewPost);
+			socket.off("matchConfirmed", handleNewPost);
+			socket.off("postUpdated", handlePostUpdated);
 		};
-	}, [tab]);
+	}, []);
 
 	const handleTabChange = (event, newValue) => {
 		setTab(newValue);
