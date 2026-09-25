@@ -1,6 +1,6 @@
 // client/src/components/PostCard.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
 	Typography,
 	Button,
@@ -57,7 +57,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 
 	const urlParams = new URLSearchParams(window.location.search);
 	const highlightId = urlParams.get("highlight");
-	const urlPostId = urlParams.get("postId");
+	const { postId: routePostId } = useParams();`n`tconst urlPostId = urlParams.get("postId") || routePostId;
 
 	useEffect(() => {
 		setLocalPost(post);
@@ -746,11 +746,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						</Box>
 					</Button>
 					<Button
-						onClick={() => {
-							navigator.clipboard.writeText(
-								`${window.location.origin}/forum?postId=${localPost._id}`,
-							);
-							alert("Link Copied!");
+						onClick={(e) => {
+							e.stopPropagation();
+							const apiUrl = import.meta.env.VITE_API_URL 
+								? (import.meta.env.VITE_API_URL.startsWith("http") ? import.meta.env.VITE_API_URL : `https://${import.meta.env.VITE_API_URL}`)
+								: window.location.origin;
+							const shareUrl = `${apiUrl}/api/forum/share/${localPost._id}`;
+							navigator.clipboard.writeText(shareUrl);
+							alert("Share link copied to clipboard!");
 						}}
 						color="inherit"
 						sx={actionBtnStyle}

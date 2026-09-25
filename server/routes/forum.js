@@ -104,6 +104,45 @@ const hydrateWithPictures = async (data) => {
 // ==========================================
 // NOTIFICATIONS
 // ==========================================
+router.get("/share/:postId", async (req, res) => {
+    try {
+        const post = await Post.findById(req.params.postId);
+        if (!post) return res.status(404).send("Post not found");
+        
+        const frontendUrl = process.env.FRONTEND_URL || "https://gmu-badminton-app.onrender.com";
+        const title = post.authorName ? `${post.authorName} on GMU Badminton` : "GMU Badminton Post";
+        let description = post.content || "Check out this discussion on GMU Badminton!";
+        if (description.length > 150) description = description.substring(0, 150) + "...";
+        
+        const imageUrl = (post.imageUrls && post.imageUrls.length > 0) ? post.imageUrls[0] : (post.imageUrl || "https://res.cloudinary.com/dcb4ilgpy/image/upload/v1727221064/default-preview_h7xk6p.png");
+
+        const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta property="og:title" content="${title}" />
+            <meta property="og:description" content="${description}" />
+            <meta property="og:image" content="${imageUrl}" />
+            <meta property="og:url" content="${frontendUrl}/post/${post._id}" />
+            <meta name="twitter:card" content="summary_large_image" />
+            <title>${title}</title>
+            <script>
+                // Redirect immediately to the frontend deep link
+                window.location.href = "${frontendUrl}/post/${post._id}";
+            </script>
+        </head>
+        <body style="background:#111; color:white; font-family:sans-serif; text-align:center; padding-top:20vh;">
+            <h2>Redirecting you to the post...</h2>
+            <p>If you are not redirected automatically, <a href="${frontendUrl}/post/${post._id}" style="color:#00BFFF;">click here</a>.</p>
+        </body>
+        </html>
+        `;
+        res.send(html);
+    } catch (e) {
+        console.error("Error generating share link:", e);
+        res.status(500).send("Error generating preview");
+    }
+});
 router.get("/notifications/:userId", async (req, res) => {
 	try {
 		const notifs = await Notification.find({
@@ -667,3 +706,4 @@ router.put(
 );
 
 module.exports = router;
+
