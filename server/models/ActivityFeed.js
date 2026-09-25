@@ -25,6 +25,7 @@ const activityFeedSchema = new mongoose.Schema({
     
     // Engagement
     likes: { type: Number, default: 0 },
+    recentLikerAvatars: { type: [String], default: [] },
     comments: { type: Number, default: 0 },
     
     // Scoring for personalization

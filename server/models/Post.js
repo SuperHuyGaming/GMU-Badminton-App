@@ -48,6 +48,12 @@ PostSchema.post('save', async function(doc) {
 		const User = require('./User');
 		const author = await User.findById(doc.authorId).lean();
 		
+		let recentLikerAvatars = [];
+		if (doc.likedBy && doc.likedBy.length > 0) {
+			const recentLikers = await User.find({ _id: { $in: doc.likedBy.slice(-3) } }).select('profilePic').lean();
+			recentLikerAvatars = recentLikers.map(u => u.profilePic).filter(Boolean);
+		}
+
 		await ActivityFeed.findOneAndUpdate(
 			{ type: "post", referenceId: doc._id },
 			{
@@ -63,6 +69,7 @@ PostSchema.post('save', async function(doc) {
 				image: doc.imageUrl,
 				tags: doc.tags || [],
 				likes: doc.likedBy?.length || 0,
+				recentLikerAvatars: recentLikerAvatars,
 				comments: doc.comments?.length || 0,
 				createdAt: doc.timestamp,
 				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3

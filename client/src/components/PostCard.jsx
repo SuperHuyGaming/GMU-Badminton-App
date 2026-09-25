@@ -9,6 +9,7 @@ import {
 	Divider,
 	CardActions,
 	Avatar,
+	AvatarGroup,
 	IconButton,
 	Menu,
 	MenuItem,
@@ -613,6 +614,15 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 									"&:hover": { textDecoration: "underline" },
 								}}
 							>
+								{(localPost.recentLikerAvatars?.length > 0 || localPost.likedByDetails?.length > 0) && (
+									<AvatarGroup max={3} sx={{ mr: 0.5, '& .MuiAvatar-root': { width: 22, height: 22, fontSize: 10, border: '1px solid', borderColor: 'background.paper' } }}>
+										{(localPost.likedByDetails || localPost.recentLikerAvatars || []).slice(0, 3).map((liker, i) => {
+											const url = typeof liker === 'string' ? liker : liker.profilePic;
+											if (!url) return null;
+											return <Avatar key={i} src={url} />;
+										})}
+									</AvatarGroup>
+								)}
 								<Typography
 									variant="body2"
 									color="text.secondary"

@@ -283,7 +283,8 @@ export default function Forum() {
 								timestamp: item.createdAt,
                                 tags: item.tags || [],
 								likedBy: new Array(Math.max(0, item.likes || 0)).fill('mock_id'), // PostCard only cares about length
-								comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
+								recentLikerAvatars: item.recentLikerAvatars || [],
+																comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
 							};
 							return (
 								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
