@@ -12,7 +12,8 @@ router.get("/", authMiddleware, async (req, res, next) => {
         // Use the sessionTime passed from the client, or default to now if not provided
         const sessionTime = req.query.sessionTime ? new Date(parseInt(req.query.sessionTime)) : new Date();
 
-        const currentUser = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
+        const userDoc = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
+        const currentUser = userDoc || { skillLevel: "Beginner", bookmarkedPosts: [] };
         let matchStage = {};
 
         if (req.query.tag) matchStage.tags = req.query.tag;
