@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
 	Dialog,
 	DialogTitle,
@@ -13,6 +13,8 @@ import {
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import CommentThread from "./CommentThread"; // FIX: Import the new separated component!
+import { apiCall } from "../utils/api";
+import socket from "../utils/socket";
 
 export default function PostCommentsInline({
 	localPost,
@@ -27,12 +29,42 @@ export default function PostCommentsInline({
 
 	const [newReplyText, setNewReplyText] = useState("");
 	const [loadingItems, setLoadingItems] = useState({});
+	const [typingUsers, setTypingUsers] = useState(new Set());
+	const typingTimeoutRef = useRef(null);
 
 	const clickableStyle = {
 		cursor: "pointer",
 		"&:hover": { textDecoration: "underline", opacity: 0.8 },
 		"&:active": { transform: "scale(0.95)" },
 	};
+
+	useEffect(() => {
+		const onTyping = (data) => {
+			if (data.postId === localPost._id && data.userName !== currentUser?.name) {
+				setTypingUsers((prev) => {
+					const next = new Set(prev);
+					next.add(data.userName);
+					return next;
+				});
+			}
+		};
+		const onStopTyping = (data) => {
+			if (data.postId === localPost._id) {
+				setTypingUsers((prev) => {
+					const next = new Set(prev);
+					next.delete(data.userName);
+					return next;
+				});
+			}
+		};
+
+		socket.on("commentTyping", onTyping);
+		socket.on("commentStopTyping", onStopTyping);
+		return () => {
+			socket.off("commentTyping", onTyping);
+			socket.off("commentStopTyping", onStopTyping);
+		};
+	}, [localPost._id, currentUser]);
 
 	useEffect(() => {
 		if (open && highlightId) {
@@ -177,6 +209,18 @@ export default function PostCommentsInline({
 			content: newReplyText.trim(),
 		});
 		setNewReplyText("");
+		socket.emit("commentStopTyping", { postId: localPost._id, userName: currentUser.name });
+	};
+
+	const handleTyping = (e) => {
+		setNewReplyText(e.target.value);
+		if (currentUser) {
+			socket.emit("commentTyping", { postId: localPost._id, userName: currentUser.name });
+			clearTimeout(typingTimeoutRef.current);
+			typingTimeoutRef.current = setTimeout(() => {
+				socket.emit("commentStopTyping", { postId: localPost._id, userName: currentUser.name });
+			}, 2000);
+		}
 	};
 
 	const formatTime = (dateString) =>
@@ -236,6 +280,13 @@ export default function PostCommentsInline({
 				</Box>
 			</Box>
 
+			{/* TYPING INDICATOR */}
+			{typingUsers.size > 0 && (
+				<Typography variant="caption" color="text.secondary" sx={{ ml: 6, fontStyle: "italic", mb: 0.5, display: "block" }}>
+					{Array.from(typingUsers).join(", ")} {typingUsers.size === 1 ? "is" : "are"} typing...
+				</Typography>
+			)}
+
 			{/* MAIN POST COMMENT INPUT */}
 			<Box
 				sx={{
@@ -270,7 +321,7 @@ export default function PostCommentsInline({
 						currentUser ? "Write a comment..." : "Login to comment"
 					}
 					value={newReplyText}
-					onChange={(e) => setNewReplyText(e.target.value)}
+					onChange={handleTyping}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" && !e.shiftKey) {
 							e.preventDefault();

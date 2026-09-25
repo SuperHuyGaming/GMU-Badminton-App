@@ -158,6 +158,14 @@ io.on("connection", (socket) => {
 		}
 	});
 
+	socket.on("commentTyping", (data) => {
+		socket.broadcast.emit("commentTyping", { ...data, socketId: socket.id });
+	});
+
+	socket.on("commentStopTyping", (data) => {
+		socket.broadcast.emit("commentStopTyping", { ...data, socketId: socket.id });
+	});
+
 	socket.on("stopTyping", (receiverId) => {
 		if (socket.userId) {
 			socket.to(receiverId).emit("stopTyping", { senderId: socket.userId });
