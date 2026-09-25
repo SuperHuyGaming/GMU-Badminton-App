@@ -70,7 +70,7 @@ export default function ReportMatchModal({ open, onClose, opponentId }) {
             // Reset scores on open
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setTeam1Score(21);
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+             
             setTeam2Score(19);
         }
     }, [open, opponentId]);

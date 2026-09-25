@@ -5,9 +5,8 @@ import { toast } from "react-hot-toast";
 import {
 	Typography, Box, Paper, Chip, Fab, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
-	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, IconButton
+	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button
 } from "@mui/material";
-import Masonry from "@mui/lab/Masonry";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +14,6 @@ import { useNavigate } from "react-router-dom";
 export default function Forum() {
 	const { user: currentUser } = useAuth();
 	const theme = useTheme();
-	const navigate = useNavigate();
 	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
@@ -53,14 +51,7 @@ export default function Forum() {
 	}, [isLoading, isFetchingMore, hasMore]);
 
 	const cursorRef = useRef(null);
-	const sessionTimeRef = useRef(Date.now());
-
-	// Reset cursor when tab or tag changes
-	useEffect(() => {
-		cursorRef.current = null;
-		sessionTimeRef.current = Date.now();
-		setPage(1);
-	}, [tab, selectedTag]);
+	const sessionTimeRef = useRef(null);
 
 	useEffect(() => {
 		const fetchFeed = async () => {
