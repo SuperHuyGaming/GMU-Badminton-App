@@ -4,67 +4,66 @@ const ActivityFeed = require("../models/ActivityFeed");
 const { authMiddleware } = require("../middleware/auth");
 const User = require("../models/User");
 
-// GET /api/feed
-// Now uses the unified ActivityFeed collection (Item 8)
-// And implements Algorithmic Personalization (Item 10)
 router.get("/", authMiddleware, async (req, res, next) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const tab = req.query.tab || "foryou"; // "foryou", "top", "latest"
-        const limit = 20;
-        const skip = (page - 1) * limit;
+        const tab = req.query.tab || "foryou";
+        const limit = parseInt(req.query.limit) || 20;
+        const cursor = req.query.cursor; // The _id of the last item
 
-        // Fetch current user to personalize feed
         const currentUser = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
-        
-        let matchStage = {}; // Fetch all
-        
-        // Tag filtering
-        if (req.query.tag) {
-            matchStage.tags = req.query.tag;
+        let matchStage = {};
+
+        if (req.query.tag) matchStage.tags = req.query.tag;
+
+        let lastDoc = null;
+        if (cursor && cursor !== "null") {
+            lastDoc = await ActivityFeed.findById(cursor);
         }
+
+        const buildCursorQuery = (sortField, lastVal, tieBreakerField, tieBreakerVal) => {
+            if (!lastDoc) return {};
+            return {
+                $or: [
+                    { [sortField]: { $lt: lastVal } },
+                    { [sortField]: lastVal, [tieBreakerField]: { $lt: tieBreakerVal } }
+                ]
+            };
+        };
 
         if (tab === "saved") {
             matchStage.referenceId = { $in: currentUser.bookmarkedPosts || [] };
             matchStage.type = "post";
-            const feedItems = await ActivityFeed.find(matchStage)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit + 1)
-                .lean();
-
+            if (lastDoc) matchStage.createdAt = { $lt: lastDoc.createdAt };
+            
+            const feedItems = await ActivityFeed.find(matchStage).sort({ createdAt: -1 }).limit(limit + 1).lean();
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
-            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
+            const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
+            return res.json({ feed: feedItems, hasMore, nextCursor, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
         if (tab === "top") {
-            const feedItems = await ActivityFeed.find(matchStage)
-                .sort({ score: -1, createdAt: -1 }) // Sort purely by score (likes+comments)
-                .skip(skip)
-                .limit(limit + 1)
-                .lean();
-
+            if (lastDoc) {
+                Object.assign(matchStage, buildCursorQuery("score", lastDoc.score, "createdAt", lastDoc.createdAt));
+            }
+            const feedItems = await ActivityFeed.find(matchStage).sort({ score: -1, createdAt: -1 }).limit(limit + 1).lean();
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
-            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
+            const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
+            return res.json({ feed: feedItems, hasMore, nextCursor, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
         if (tab === "latest") {
-            const feedItems = await ActivityFeed.find(matchStage)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit + 1)
-                .lean();
-
+            if (lastDoc) matchStage.createdAt = { $lt: lastDoc.createdAt };
+            const feedItems = await ActivityFeed.find(matchStage).sort({ createdAt: -1 }).limit(limit + 1).lean();
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
-            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
+            const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
+            return res.json({ feed: feedItems, hasMore, nextCursor, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
-        // Default to "foryou"
+        // For You Tab
         if (currentUser && currentUser.skillLevel) {
-            // ALGORITHMIC PERSONALIZATION (Item 10)
             const pipeline = [
                 { $match: matchStage },
                 {
@@ -83,30 +82,42 @@ router.get("/", authMiddleware, async (req, res, next) => {
                     $addFields: {
                         finalScore: { $add: ["$score", "$timeScore", "$skillBoost"] }
                     }
-                },
-                { $sort: { finalScore: -1 } },
-                { $skip: skip },
-                { $limit: limit + 1 }
+                }
             ];
+
+            if (lastDoc) {
+                const lastDocTimeScore = new Date(lastDoc.createdAt).getTime();
+                const lastDocSkillBoost = (lastDoc.authorSkillLevel === currentUser.skillLevel) ? 500000000 : 0;
+                const lastDocFinalScore = (lastDoc.score || 0) + lastDocTimeScore + lastDocSkillBoost;
+                
+                pipeline.push({
+                    $match: {
+                        $or: [
+                            { finalScore: { $lt: lastDocFinalScore } },
+                            { finalScore: lastDocFinalScore, _id: { $lt: lastDoc._id } }
+                        ]
+                    }
+                });
+            }
+
+            pipeline.push({ $sort: { finalScore: -1, _id: -1 } });
+            pipeline.push({ $limit: limit + 1 });
 
             const feedItems = await ActivityFeed.aggregate(pipeline);
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
+            const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
 
-            return res.json({ feed: feedItems, hasMore, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
+            return res.json({ feed: feedItems, hasMore, nextCursor, bookmarkedPosts: currentUser.bookmarkedPosts || [] });
         }
 
-        // Fallback to purely chronological if no user skill level
-        const feedItems = await ActivityFeed.find(matchStage)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit + 1)
-            .lean();
-
+        if (lastDoc) matchStage.createdAt = { $lt: lastDoc.createdAt };
+        const feedItems = await ActivityFeed.find(matchStage).sort({ createdAt: -1 }).limit(limit + 1).lean();
         const hasMore = feedItems.length > limit;
         if (hasMore) feedItems.pop();
+        const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
 
-        res.json({ feed: feedItems, hasMore });
+        res.json({ feed: feedItems, hasMore, nextCursor });
     } catch (error) {
         next(error);
     }
