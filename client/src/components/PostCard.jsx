@@ -235,6 +235,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 		"&:hover": { backgroundColor: "rgba(0,0,0,0.04)" },
 		"&:active": { transform: "scale(0.95)" },
 	};
+	const images = localPost.imageUrls?.length > 0 ? localPost.imageUrls : (localPost.imageUrl ? [localPost.imageUrl] : []);
+	const [activeLightboxIndex, setActiveLightboxIndex] = useState(0);
 
 	return (
 		<>
@@ -502,10 +504,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
                             </Box>
                         )}
 
-						{localPost.imageUrl && (
+						{images.length === 1 && (
 							<>
 								<Box 
-									onClick={() => setIsLightboxOpen(true)}
+									onClick={() => { setActiveLightboxIndex(0); setIsLightboxOpen(true); }}
 									sx={{ 
 										mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 400, 
 										cursor: "pointer", position: "relative",
@@ -517,33 +519,66 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 									}}
 								>
 									<img 
-										src={localPost.imageUrl} 
+										src={images[0]} 
 										alt="Post attachment" 
 										style={{ width: "100%", height: "100%", objectFit: "cover" }} 
 									/>
 								</Box>
-								<Dialog 
-									open={isLightboxOpen} 
-									onClose={() => setIsLightboxOpen(false)}
-									maxWidth="lg"
-									fullWidth
-									PaperProps={{ sx: { background: 'transparent', boxShadow: 'none' } }}
-								>
-									<Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-										<IconButton 
-											onClick={() => setIsLightboxOpen(false)}
-											sx={{ position: 'absolute', top: 10, right: 10, color: 'white', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
-										>
-											<CloseIcon />
-										</IconButton>
+							</>
+						)}
+
+						{images.length > 1 && (
+							<Box sx={{
+								mt: 2, display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', gap: 1, pb: 1,
+								'&::-webkit-scrollbar': { height: 6 },
+								'&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 3 }
+							}}>
+								{images.map((url, i) => (
+									<Box 
+										key={i}
+										onClick={() => { setActiveLightboxIndex(i); setIsLightboxOpen(true); }}
+										sx={{ 
+											scrollSnapAlign: 'center', width: '85%', flexShrink: 0,
+											borderRadius: 3, overflow: "hidden", maxHeight: 400, cursor: "pointer", position: "relative",
+											'&::after': {
+												content: '""', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+												background: 'rgba(0,0,0,0)', transition: 'background 0.2s',
+											},
+											'&:hover::after': { background: 'rgba(0,0,0,0.1)' }
+										}}
+									>
 										<img 
-											src={localPost.imageUrl} 
-											alt="Post attachment fullscreen" 
-											style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} 
+											src={url} 
+											alt={`Post attachment ${i+1}`} 
+											style={{ width: "100%", height: "100%", objectFit: "cover" }} 
 										/>
 									</Box>
-								</Dialog>
-							</>
+								))}
+							</Box>
+						)}
+
+						{images.length > 0 && (
+							<Dialog 
+								open={isLightboxOpen} 
+								onClose={() => setIsLightboxOpen(false)}
+								maxWidth="lg"
+								fullWidth
+								PaperProps={{ sx: { background: 'transparent', boxShadow: 'none' } }}
+							>
+								<Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+									<IconButton 
+										onClick={() => setIsLightboxOpen(false)}
+										sx={{ position: 'absolute', top: 10, right: 10, color: 'white', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+									>
+										<CloseIcon />
+									</IconButton>
+									<img 
+										src={images[activeLightboxIndex]} 
+										alt="Post attachment fullscreen" 
+										style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} 
+									/>
+								</Box>
+							</Dialog>
 						)}
 
 						{/* Animated Heart Overlay */}

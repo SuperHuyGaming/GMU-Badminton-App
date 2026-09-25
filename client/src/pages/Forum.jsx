@@ -30,7 +30,7 @@ export default function Forum() {
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [newPost, setNewPost] = useState({ title: "", content: "", imageUrl: "", tags: [] });
-	const [postImage, setPostImage] = useState(null);
+	const [postImages, setPostImages] = useState([]);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
 
@@ -123,17 +123,17 @@ export default function Forum() {
 		if (!currentUser) return alert("You must be logged in to post!");
 		try {
 			setIsUploadingImage(true);
-			let finalImageUrl = "";
+			let finalImageUrls = [];
 
-			if (postImage) {
+			if (postImages.length > 0) {
 				const formData = new FormData();
-				formData.append("image", postImage);
+				postImages.forEach(file => formData.append("images", file));
 				formData.append("type", "postAttachment");
 				formData.append("userId", currentUser.id);
 
-				const uploadRes = await apiFetch("/api/upload/image", { method: "POST", body: formData });
+				const uploadRes = await apiFetch("/api/upload/images", { method: "POST", body: formData });
 				const uploadData = await uploadRes.json();
-				if (uploadRes.ok) finalImageUrl = uploadData.imageUrl;
+				if (uploadRes.ok) finalImageUrls = uploadData.imageUrls;
 				else {
 					setIsUploadingImage(false);
 					return toast.error("Failed to upload image. " + uploadData.message);
@@ -147,7 +147,8 @@ export default function Forum() {
 				body: JSON.stringify({
 					title: newPost.title,
 					content: newPost.content,
-					imageUrl: finalImageUrl,
+					imageUrl: finalImageUrls[0] || "",
+					imageUrls: finalImageUrls,
 					authorName: currentUser.name,
 					authorId: currentUser.id,
                     tags: newPost.tags,
@@ -160,7 +161,7 @@ export default function Forum() {
 			if (!res.ok) return toast.error(data.message || "Failed to post. Please try again.");
 
 			setNewPost({ title: "", content: "", imageUrl: "", tags: [] });
-			setPostImage(null);
+			setPostImages([]);
 			setIsModalOpen(false);
 			toast.success("Post created successfully!");
 		} catch (error) {
@@ -277,6 +278,7 @@ export default function Forum() {
 								title: item.title,
 								content: item.content,
 								imageUrl: item.image,
+								imageUrls: item.images || [],
 								authorId: item.authorId,
 								authorName: item.authorName,
 								authorBadges: item.authorBadges,
@@ -423,10 +425,14 @@ export default function Forum() {
                     </Box>
 
                     <Box>
-						<input accept="image/*" style={{ display: "none" }} id="post-image-upload" type="file" onChange={(e) => setPostImage(e.target.files[0])} />
+						<input accept="image/*" style={{ display: "none" }} id="post-image-upload" type="file" multiple onChange={(e) => {
+							const files = Array.from(e.target.files);
+							if (files.length > 4) return alert("Maximum 4 images allowed");
+							setPostImages(files);
+						}} />
 						<label htmlFor="post-image-upload">
-							<Button variant="outlined" component="span" fullWidth color={postImage ? "success" : "primary"}>
-								{postImage ? `Selected: ${postImage.name}` : "Attach Image (Optional)"}
+							<Button variant="outlined" component="span" fullWidth color={postImages.length > 0 ? "success" : "primary"}>
+								{postImages.length > 0 ? `Selected: ${postImages.length} image(s)` : "Attach Image(s) (Max 4)"}
 							</Button>
 						</label>
 					</Box>

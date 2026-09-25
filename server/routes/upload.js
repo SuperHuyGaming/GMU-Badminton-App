@@ -92,4 +92,40 @@ router.post(
 	},
 );
 
+router.post(
+	"/images",
+	authMiddleware,
+	upload.array("images", 4),
+	async (req, res) => {
+		try {
+			if (!req.files || req.files.length === 0)
+				return res.status(400).json({ message: "No images provided" });
+
+			const uploadPromises = req.files.map((file) => {
+				return new Promise((resolve, reject) => {
+					const stream = cloudinary.uploader.upload_stream(
+						{
+							folder:
+								process.env.NODE_ENV === "production"
+									? "gmu_badminton_live"
+									: "gmu_badminton_dev",
+						},
+						(error, result) => {
+							if (error) reject(error);
+							else resolve(result.secure_url);
+						}
+					);
+					stream.end(file.buffer);
+				});
+			});
+
+			const imageUrls = await Promise.all(uploadPromises);
+			res.json({ message: "Images uploaded successfully", imageUrls });
+		} catch (error) {
+			console.error("MULTIPLE UPLOAD ERROR:", error);
+			res.status(500).json({ message: "Server error during multiple upload" });
+		}
+	}
+);
+
 module.exports = router;

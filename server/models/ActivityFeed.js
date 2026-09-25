@@ -13,6 +13,7 @@ const activityFeedSchema = new mongoose.Schema({
     title: { type: String },
     content: { type: String },
     image: { type: String },
+    images: { type: [String], default: [] },
     tags: { type: [String], default: [] },
     
     // Match specific

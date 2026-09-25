@@ -12,7 +12,8 @@ const PostSchema = new mongoose.Schema({
 	isFlagged: { type: Boolean, default: false },
 	toxicityScore: { type: Number, default: 0 }, // NEW: Sentiment toxicity tracking
 	isEdited: { type: Boolean, default: false }, // NEW: Track post edits
-	imageUrl: { type: String, default: "" }, // NEW: Image attachment
+	imageUrl: { type: String, default: "" }, // Legacy
+	imageUrls: { type: [String], default: [] }, // NEW: Multiple images
 	tags: { type: [String], default: [] }, // NEW: Post categorization tags
 	comments: [
 		{
@@ -67,6 +68,7 @@ PostSchema.post('save', async function(doc) {
 				title: doc.title,
 				content: doc.content,
 				image: doc.imageUrl,
+				images: doc.imageUrls || [],
 				tags: doc.tags || [],
 				likes: doc.likedBy?.length || 0,
 				recentLikerAvatars: recentLikerAvatars,
