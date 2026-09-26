@@ -16,6 +16,7 @@ const Marketplace = React.lazy(() => import("./pages/Marketplace"));
 const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
 import ReportMatchModal from "./components/ReportMatchModal";
 import socket from "./utils/socket";
@@ -390,6 +391,7 @@ function App() {
                         {user && <PendingMatchesPrompt />}
 						<AnimatedRoutes />
 						{user && <PushNotificationPrompt />}
+						<PWAInstallPrompt />
 					</Container>
 				</BrowserRouter>
 			</ThemeProvider>
