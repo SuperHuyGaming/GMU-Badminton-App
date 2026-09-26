@@ -33,34 +33,6 @@ services:
           property: host
 
   # ============================================
-  # STAGING (deploys from 'develop' branch)
+  # STAGING: Create manually on Render (free tier)
+  # See docs/STAGING_SETUP.md for instructions
   # ============================================
-
-  # 3. Staging Backend (Node.js)
-  - type: web
-    name: gmu-social-api-staging
-    env: node
-    rootDir: server
-    branch: develop
-    buildCommand: npm install --legacy-peer-deps
-    startCommand: node server.js
-    envVars:
-      - key: MONGO_URI
-        sync: false
-      - key: NODE_ENV
-        value: staging
-
-  # 4. Staging Frontend (Static)
-  - type: web
-    name: gmu-frontend-staging
-    env: static
-    rootDir: client
-    branch: develop
-    buildCommand: npm install --legacy-peer-deps && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          name: gmu-social-api-staging
-          type: web
-          property: host
