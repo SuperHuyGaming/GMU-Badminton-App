@@ -1,6 +1,11 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const Tournament = require('../models/Tournament');
+const { ApifyClient } = require('apify-client');
+
+const client = new ApifyClient({
+    token: process.env.APIFY_API_TOKEN || 'placeholder_token',
+});
 
 // Target DMV collegiate clubs with their approximate coordinates
 const TARGET_CLUBS = [
@@ -51,17 +56,53 @@ async function runInstagramScraper() {
     console.log("[InstagramScraper] Finished daily scrape.");
 }
 
+
+
 /**
- * Placeholder for Instagram scraping logic
+ * Scrapes an Instagram profile using Apify's instagram-profile-scraper Actor
  */
 async function scrapeInstagramProfile(handle) {
-    // Implementing a reliable Instagram scraper in Node usually requires Apify
-    // We will return a simulated structure for the architecture.
-    return {
-        handle: handle,
-        linktreeUrl: `https://linktr.ee/${handle}`,
-        recentPosts: []
-    };
+    try {
+        console.log(`[Apify] Calling Apify Instagram Scraper for @${handle}...`);
+        
+        // Prepare Actor input
+        const input = {
+            usernames: [handle],
+            resultsLimit: 3, // Only get the 3 most recent posts to save compute
+        };
+
+        // Run the Actor: apify/instagram-profile-scraper
+        const run = await client.actor("apify/instagram-profile-scraper").call(input);
+
+        // Fetch and print Actor results from the run's dataset
+        const { items } = await client.dataset(run.defaultDatasetId).listItems();
+        
+        if (!items || items.length === 0) {
+            console.log(`[Apify] No data returned for @${handle}.`);
+            return null;
+        }
+
+        const profile = items[0];
+        
+        // Extract the latest posts
+        const recentPosts = profile.latestPosts ? profile.latestPosts.map(post => ({
+            caption: post.caption,
+            imageUrl: post.displayUrl,
+            postUrl: post.url,
+            timestamp: post.timestamp
+        })) : [];
+
+        console.log(`[Apify] Successfully scraped @${handle}. Found ${recentPosts.length} recent posts.`);
+
+        return {
+            handle: handle,
+            linktreeUrl: profile.externalUrl || `https://linktr.ee/${handle}`,
+            recentPosts: recentPosts
+        };
+    } catch (e) {
+        console.error(`[Apify] Failed to scrape @${handle}:`, e.message);
+        return null;
+    }
 }
 
 /**
