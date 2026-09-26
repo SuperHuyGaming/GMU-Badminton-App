@@ -2,10 +2,12 @@ import { useState, useContext } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../hooks/useNotifications';
 import { getOptimizedAvatar } from "../utils/image";
 import { formatNotificationTime } from "../utils/dateUtils";
 import { ColorModeContext } from '../App';
+import LanguageSwitcher from './LanguageSwitcher';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const HamburgerIcon = () => (
@@ -35,6 +37,7 @@ export default function Navbar() {
     const theme = useTheme();
     const colorMode = useContext(ColorModeContext);
     const { user, logout } = useAuth();
+    const { t } = useTranslation();
     const { notifications, unreadCount, unreadMessages, markAsRead, markSingleAsRead, clearNotifications } = useNotifications();
     const navigate = useNavigate();
     const location = useLocation();
@@ -189,6 +192,7 @@ export default function Navbar() {
 								gap: 2,
 							}}
 						>
+							<LanguageSwitcher />
 							<IconButton 
 								onClick={colorMode.toggleColorMode} 
 								color="inherit"
@@ -563,3 +567,4 @@ export default function Navbar() {
 		</>
 	);
 }
+
