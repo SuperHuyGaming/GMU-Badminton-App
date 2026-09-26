@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Tournament = require('../models/Tournament');
 const { ApifyClient } = require('apify-client');
+const { parseInstagramPost } = require('./aiParser');
 
 const client = new ApifyClient({
     token: process.env.APIFY_API_TOKEN || 'placeholder_token',
@@ -39,14 +40,63 @@ async function runInstagramScraper() {
     for (const club of TARGET_CLUBS) {
         try {
             console.log(`[InstagramScraper] Scraping @${club.handle}...`);
-            // Note: In production, we would use an Apify actor or official Graph API here.
-            // For now, this is the architectural stub for the scraper.
             const profileData = await scrapeInstagramProfile(club.handle);
             
+            let registrationUrl = "";
             if (profileData && profileData.linktreeUrl) {
-                // If they have a linktree, we scrape that too
                 const forms = await scrapeLinktree(profileData.linktreeUrl);
-                console.log(`[InstagramScraper] Found ${forms.length} potential registration links in Linktree for @${club.handle}`);
+                if (forms.length > 0) {
+                    registrationUrl = forms[0];
+                }
+            }
+
+            if (profileData && profileData.recentPosts) {
+                for (const post of profileData.recentPosts) {
+                    // Phase 3: Task 5 - LLM Integration
+                    const parsedData = await parseInstagramPost(post.caption);
+                    
+                    if (parsedData && parsedData.isTournamentPost) {
+                        console.log(`[InstagramScraper] Valid tournament found from @${club.handle}: ${parsedData.tournamentName || 'Unknown Name'}`);
+
+                        // Phase 3: Task 6 - Deduplication Engine
+                        // Check if we already have a tournament for this club with roughly the same dates or the exact same post URL
+                        const existingTournament = await Tournament.findOne({
+                            $or: [
+                                { instagramPostUrl: post.postUrl },
+                                { hostClubHandle: club.handle, startDate: parsedData.startDate ? new Date(parsedData.startDate) : { $exists: true } }
+                            ]
+                        });
+
+                        if (!existingTournament) {
+                            const newTourney = new Tournament({
+                                tournamentName: parsedData.tournamentName || `${club.name} Open Tournament`,
+                                hostUniversity: club.name,
+                                eventLocation: club.location, // Phase 3: Task 7 - Static Geo-Tagging
+                                registrationDeadline: parsedData.registrationDeadline ? new Date(parsedData.registrationDeadline) : null,
+                                isOpenTournament: true,
+                                registrationUrl: registrationUrl,
+                                instagramPostUrl: post.postUrl,
+                                flyerImageUrl: post.imageUrl,
+                                hostClubHandle: club.handle,
+                                originalCaption: post.caption,
+                                skillLevels: parsedData.skillLevels || [],
+                                startDate: parsedData.startDate ? new Date(parsedData.startDate) : null,
+                                endDate: parsedData.endDate ? new Date(parsedData.endDate) : null,
+                                scraperLastRun: new Date(),
+                                createdAt: new Date()
+                            });
+                            await newTourney.save();
+                            console.log(`[InstagramScraper] Saved new tournament: ${newTourney.tournamentName}`);
+                        } else {
+                            console.log(`[InstagramScraper] Duplicate found, updating existing tournament.`);
+                            // Upsert logic
+                            existingTournament.scraperLastRun = new Date();
+                            if (parsedData.registrationDeadline) existingTournament.registrationDeadline = new Date(parsedData.registrationDeadline);
+                            if (registrationUrl && !existingTournament.registrationUrl) existingTournament.registrationUrl = registrationUrl;
+                            await existingTournament.save();
+                        }
+                    }
+                }
             }
 
         } catch (error) {
