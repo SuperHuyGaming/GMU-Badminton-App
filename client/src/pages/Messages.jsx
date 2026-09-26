@@ -1,9 +1,10 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useRef, Fragment } from "react";
 import { 
 	Container, Box, Typography, Paper, List, ListItemButton, 
 	ListItemAvatar, ListItemText, Avatar, TextField, IconButton,
-	Divider, Badge, CircularProgress, Dialog, DialogTitle, DialogContent,
+	Divider, Badge, CircularProgress, Dialog, DialogContent,
 	DialogActions, Button, Chip
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";

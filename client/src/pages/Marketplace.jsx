@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
     Box, Typography, Button, Card, CardContent, CardMedia, CardActions, 
     Grid, CircularProgress, Alert, Chip, TextField, Dialog, DialogTitle, 
@@ -45,7 +45,7 @@ export default function Marketplace() {
             }
         };
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         fetchListings();
     }, [filterCategory]);
 

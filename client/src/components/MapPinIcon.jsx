@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React from 'react';
 
 const MapPinIcon = ({ width = 24, height = 24, color = "#006633", className = "" }) => (

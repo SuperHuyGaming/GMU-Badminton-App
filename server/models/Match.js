@@ -62,7 +62,9 @@ matchSchema.post('findOneAndDelete', async function(doc) {
 	try {
 		const ActivityFeed = require('./ActivityFeed');
 		await ActivityFeed.deleteOne({ type: "match", referenceId: doc._id });
-	} catch (e) {}
+	} catch (e) {
+		console.error("ActivityFeed sync error (Match delete):", e);
+	}
 });
 
 module.exports = mongoose.model("Match", matchSchema);

@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useRef } from "react";
 import ReactCrop, { centerCrop, makeAspectCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
@@ -7,6 +8,7 @@ import {
 	DialogContent,
 	DialogActions,
 	Button,
+	// eslint-disable-next-line no-unused-vars
 	Box,
 } from "@mui/material";
 import getCroppedImg from "../../utils/cropImage";

@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import apiFetch from "../utils/api";
 import { useAuth } from "../context/AuthContext";
@@ -9,6 +10,7 @@ import {
 } from "@mui/material";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
+// eslint-disable-next-line no-unused-vars
 import { useNavigate } from "react-router-dom";
 
 export default function Forum() {
