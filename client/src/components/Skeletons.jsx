@@ -39,3 +39,26 @@ export const ProfileSkeleton = () => (
 		</Box>
 	</Box>
 );
+
+export const DashboardSkeleton = () => (
+	<Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
+		{/* Stat Cards Row */}
+		<Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+			{[1, 2, 3].map(n => (
+				<Skeleton key={n} animation="wave" variant="rectangular" height={120} sx={{ flex: '1 1 30%', minWidth: 200, borderRadius: 4 }} />
+			))}
+		</Box>
+		{/* Main Content Area */}
+		<Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
+			<Box sx={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+				<Skeleton animation="wave" variant="text" width="40%" height={40} />
+				<Skeleton animation="wave" variant="rectangular" height={200} sx={{ borderRadius: 4 }} />
+			</Box>
+			<Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+				<Skeleton animation="wave" variant="text" width="60%" height={40} />
+				<Skeleton animation="wave" variant="rectangular" height={100} sx={{ borderRadius: 4 }} />
+				<Skeleton animation="wave" variant="rectangular" height={100} sx={{ borderRadius: 4 }} />
+			</Box>
+		</Box>
+	</Box>
+);

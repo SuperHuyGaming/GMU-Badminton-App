@@ -11,6 +11,21 @@ vi.mock('../utils/api', () => ({
     default: vi.fn()
 }));
 
+vi.mock('react-virtuoso', () => ({
+    TableVirtuoso: ({ data, itemContent }) => {
+        if (!data) return null;
+        return (
+            <table>
+                <tbody>
+                    {data.map((item, index) => (
+                        <tr key={index}>{itemContent(index, item)}</tr>
+                    ))}
+                </tbody>
+            </table>
+        );
+    }
+}));
+
 const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } }
 });
