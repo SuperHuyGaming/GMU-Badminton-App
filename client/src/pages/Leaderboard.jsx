@@ -7,6 +7,7 @@ import {
 import { motion } from 'framer-motion';
 import { LeaderboardRowSkeleton } from '../components/Skeletons';
 import { useQuery } from '@tanstack/react-query';
+import { TableVirtuoso } from 'react-virtuoso';
 import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
 
@@ -142,88 +143,80 @@ const Leaderboard = () => {
                         <Tab label="Doubles (2v2)" value="doubles" sx={{ fontWeight: '900', py: 2.5, textTransform: 'none', fontSize: '1rem' }} />
                     </Tabs>
 
-                    <TableContainer>
-                        <Table aria-label="leaderboard table">
-                            <TableHead sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
-                                <TableRow>
-                                    <TableCell align="center" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Rank</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Player</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Skill Level</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider' }}>Elo</TableCell>
+                    <TableContainer sx={{ height: 600 }}>
+                        <TableVirtuoso
+                            data={loading ? Array.from({ length: 15 }) : users}
+                            components={{
+                                Table: (props) => <Table {...props} aria-label="leaderboard table" style={{ borderCollapse: 'collapse' }} />,
+                                TableHead: TableHead,
+                                TableRow: TableRow,
+                                TableBody: React.forwardRef((props, ref) => <TableBody {...props} ref={ref} />),
+                            }}
+                            fixedHeaderContent={() => (
+                                <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
+                                    <TableCell align="center" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Rank</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Player</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Skill Level</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Elo</TableCell>
                                 </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {loading ? (
-                                    [1, 2, 3, 4, 5].map((n) => (
-                                        <TableRow key={n}>
-                                            <TableCell colSpan={4} sx={{ p: 0 }}>
-                                                <LeaderboardRowSkeleton />
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                ) : users.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={4} align="center" sx={{ py: 8, color: 'text.secondary', fontWeight: 'bold' }}>
-                                            No players found.
+                            )}
+                            itemContent={(index, user) => {
+                                if (loading) {
+                                    return (
+                                        <TableCell colSpan={4} sx={{ p: 0 }}>
+                                            <LeaderboardRowSkeleton />
                                         </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    users.map((user, index) => (
-                                        <TableRow 
-                                            key={user._id} 
-                                            hover
-                                            component={motion.tr}
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: index * 0.05 }}
-                                            sx={{ 
-                                                '&:last-child td, &:last-child th': { border: 0 },
-                                                transition: 'background-color 0.2s',
-                                                cursor: 'pointer'
-                                            }}
-                                            onClick={() => window.location.href = `/profile/${user._id}`}
-                                        >
-                                            <TableCell align="center" sx={{ py: 2.5 }}>
-                                                <Typography variant="h6" fontWeight="900" color={index < 3 ? 'text.primary' : 'text.secondary'}>
-                                                    #{index + 1}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell sx={{ py: 2.5 }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                    <Avatar 
-                                                        src={getOptimizedAvatar(user.profilePic, 40)}
-                                                        sx={{ 
-                                                            width: 44,
-                                                            height: 44,
-                                                            border: index < 3 ? `3px solid ${getRankColor(index)}` : 'none',
-                                                            boxShadow: index < 3 ? `0 0 10px ${getRankColor(index)}` : 'none'
-                                                        }}
-                                                    />
-                                                    <Typography fontWeight="bold">{user.name}</Typography>
-                                                </Box>
-                                            </TableCell>
-											<TableCell sx={{ py: 2.5 }}>
-												<Chip 
-													label={user.skillLevel || 'N/A'} 
-													size="small" 
-													sx={{ 
-														fontWeight: 800, 
-														bgcolor: 'rgba(0, 102, 51, 0.1)', 
-														color: 'primary.main',
-														borderRadius: 2
-													}} 
-												/>
-											</TableCell>
-											<TableCell align="right" sx={{ py: 2.5 }}>
-												<Typography variant="h5" fontWeight="900" color="primary.main">
-													{tab === 'singles' ? user.singlesElo : user.doublesElo}
-												</Typography>
-											</TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
+                                    );
+                                }
+                                if (!user) return null;
+                                
+                                return (
+                                    <React.Fragment>
+                                        <TableCell align="center" sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                            <Typography variant="h6" fontWeight="900" color={index < 3 ? 'text.primary' : 'text.secondary'}>
+                                                #{index + 1}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                <Avatar 
+                                                    src={getOptimizedAvatar(user.profilePic, 40)}
+                                                    sx={{ 
+                                                        width: 44,
+                                                        height: 44,
+                                                        border: index < 3 ? `3px solid ${getRankColor(index)}` : 'none',
+                                                        boxShadow: index < 3 ? `0 0 10px ${getRankColor(index)}` : 'none'
+                                                    }}
+                                                />
+                                                <Typography fontWeight="bold">{user.name}</Typography>
+                                            </Box>
+                                        </TableCell>
+                                        <TableCell sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                            <Chip 
+                                                label={user.skillLevel || 'N/A'} 
+                                                size="small" 
+                                                sx={{ 
+                                                    fontWeight: 800, 
+                                                    bgcolor: 'rgba(0, 102, 51, 0.1)', 
+                                                    color: 'primary.main',
+                                                    borderRadius: 2
+                                                }} 
+                                            />
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                            <Typography variant="h5" fontWeight="900" color="primary.main">
+                                                {tab === 'singles' ? user.singlesElo : user.doublesElo}
+                                            </Typography>
+                                        </TableCell>
+                                    </React.Fragment>
+                                );
+                            }}
+                        />
+                        {!loading && users.length === 0 && (
+                            <Box sx={{ py: 8, textAlign: 'center', color: 'text.secondary', fontWeight: 'bold' }}>
+                                No players found.
+                            </Box>
+                        )}
                     </TableContainer>
                 </Paper>
             </motion.div>
