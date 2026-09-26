@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.3.0](https://github.com/SuperHuyGaming/GMU-Badminton-App/compare/v1.2.0...v1.3.0) (2026-09-26)
+
+
+### Features
+
+* Activity Feed bug fixes, Tags & Filtering, Calendar ICS Sync ([ee35b15](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/ee35b15b6c328357d3fcb8de26fe6fcc12af9963))
+* Add Live Presence and Real-Time Typing Indicators ([d0ed361](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/d0ed361cf94a34528204369c419c7e93a4ebc89d))
+* Add Polished Avatar Stack to Likes ([0556d11](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/0556d1190557071a7d97540d2439d99679abfbed))
+* Add Rich Media Carousels for multiple images ([c783155](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/c7831553926bd5a07429ce8f5f5e21d2dafdcb9f))
+* Autonomous Tournament Discovery Engine ([db103c7](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/db103c7fba156bb134a74b450f6a6205b027d5a7))
+* Enhance Match UI in ActivityFeed to look like dynamic sports graphics ([bc69d45](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/bc69d45c25462e0092cfa8c36c305090c6c87d61))
+* **frontend:** implement visual flyer UI and direct registration button for tournaments ([3cc53f9](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/3cc53f92ca29c5717a26939ea307989b4167a408))
+* **hunter:** finish phase 3 and 4 with deduplication, processing, and scheduling ([f0f813a](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/f0f813a8e7fc95391eff9736f7bdaac314a4de50))
+* **hunter:** implement phase 1 and 2 of autonomous tournament hunter engine ([1967f2a](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/1967f2a4128b5af1c1555c487578ca6cfd112410))
+* Implement Bookmarks and Saved tab in Community ([66a1aba](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/66a1aba06be3865bbce0ec3fa18067dd3d51c537))
+* Implement Cursor-Based Infinite Pagination ([c1ef757](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/c1ef7574f643f78a4eb7d2cf3a35a443a6a5883e))
+* Implement HackerNews Algorithmic Velocity Ranking ([85a45fd](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/85a45fd9f565ca93433fcbf716c39c06701a2dd4))
+* Implement OpenGraph Deep Linking for Posts ([bd6a4f1](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/bd6a4f178150a9d0cb26b62d5813ab4d3aed3326))
+* Instagram & Linktree Scraper Architecture ([9ea69dd](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/9ea69ddcbf6857ed94f51d6e04c314e243be4390))
+* **privacy:** Granular visibility controls for posts ([#10](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/10)) ([de7bda8](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/de7bda8c948d17b4f37ca88a5c802163bad9a8a9))
+* Real-time inline comments fetching on PostCard ([a8606b3](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/a8606b321a68974bdb5501fedfea21262c1627ce))
+* Redesign Community feed to linear Facebook style layout ([a606e12](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/a606e12bd3c44b807b77e36c37d7bfc0f390a248))
+* **scraper:** build Instagram & Linktree scraper architecture and chron job ([8ccc5c8](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/8ccc5c818f610e277d95e090eb5b07591eec6378))
+* **scraper:** expand target college clubs to 20 across the greater DMV area ([0c27585](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/0c27585db73a660fe5a50ce6c4dba8f659c7e26d))
+* **scraper:** implement Task 3 Apify instagram scraper integration ([fb10798](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/fb107984d77b09711749ba21cdc099c336e2d5fe))
+* **scraper:** integrate Gemini AI for caption parsing and smart deduplication ([e1e04ea](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/e1e04ea6a66432e54bf81f70ee2c3f9a95e953b4))
+* **scraper:** task 10 - implement crowdsourced IG submission and auto-fill ([6066893](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/60668937ec8b219089a6c4e2399bdac43b60f798))
+* **scraper:** task 9 - implement 48-hour deadline push notifications ([78b7950](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/78b795010fdde97aab64855bd4fa2f81b7430df2))
+* **ui:** Facebook-style redesign of Community Hub (Composer, Live Comments, New Posts Pill) ([#8](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/8)) ([7a0666e](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/7a0666ed7efd0c29425b18e496052b0dd8229804))
+* **ui:** Front End Engineer Phase 1 (PWA & Offline) ([#12](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/12)) ([092a283](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/092a2837a8725bdaf4f1dd21cf0705e33dec96f2))
+* **ui:** Front End Engineer Phase 2 ([#13](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/13)) ([346e4ed](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/346e4edf2b80a80516c669ea6ed4f660f71e2cec))
+* **ui:** rip out manual submit modal and replace with pure discovery feed UI ([f5698c7](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/f5698c7224183f85de40e3a7ea45dc3d4f6ed7d8))
+* **ui:** rip out manual submit modal and replace with pure discovery feed UI ([#16](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/16)) ([c9948fd](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/c9948fdcd844126729095d84b09074a394dc2ebc))
+
+
+### Bug Fixes
+
+* Cleanup emoji parsing artifacts in Forum tabs and map missing images in ActivityFeed ([0c8a7a9](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/0c8a7a9835084f1e5871b7f413cc3757695fa99c))
+* **frontend:** restore TournamentSubmissionModal rendering ([f9f09ac](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/f9f09ac02b9d512635d3f84063e80846ea6da4a4))
+* handle null currentUser for deleted tokens ([31e3407](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/31e3407a25a340390fed7aadcbb85bc414530814))
+* JSX syntax error on Forum tab labels ([983fa83](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/983fa83f733ac9bcd91bac29e37f00a30b5f0a63))
+* JSX unexpected end of file on Forum ([3adbd3b](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/3adbd3b3ada6f02dfa032dbd87e25a09d370d59f))
+* PostHog 404s, Negative Array crash, and 3 UI improvements ([7740374](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/77403744f2a9bd0436fb5ec10a81085dff2e938f))
+* Prevent feed jumping when liking a post ([d498e7b](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/d498e7bb68e8596854af61c166eeb9f145c2abf3))
+* Remove unused named import causing missing export build error ([61a4871](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/61a4871d7bc0b66960b513bef1686152d8d4cac4))
+* Resolve unquoted string interpolation in fetch call in PostCard ([12913ce](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/12913ce58d1cd0fb3563c3e2128ce41f83046c4c))
+* Self-healing ActivityFeed migration and spam filtering ([fa5e8e4](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/fa5e8e4cc16fe5e87e58e857b3b32a2af5c6fab3))
+* Syntax error in PostCard.jsx ([eb7d809](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/eb7d8095418cfb0a7229a8e988bcb87df746e631))
+
 ## [1.2.0](https://github.com/SuperHuyGaming/GMU-Badminton-App/compare/v1.1.0...v1.2.0) (2026-09-24)
 
 
