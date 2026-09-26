@@ -20,7 +20,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
             $or: [
                 { visibility: 'PUBLIC' },
                 { visibility: { $exists: false } }, // backward compatibility
-                { authorId: new mongoose.Types.ObjectId(req.user.id) }
+                { authorId: mongoose.isValidObjectId(req.user.id) ? new mongoose.Types.ObjectId(req.user.id) : req.user.id }
             ]
         };
 
