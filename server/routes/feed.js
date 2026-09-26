@@ -14,7 +14,15 @@ router.get("/", authMiddleware, async (req, res, next) => {
 
         const userDoc = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
         const currentUser = userDoc || { skillLevel: "Beginner", bookmarkedPosts: [] };
-        let matchStage = {};
+        
+        const mongoose = require('mongoose');
+        let matchStage = {
+            $or: [
+                { visibility: 'PUBLIC' },
+                { visibility: { $exists: false } }, // backward compatibility
+                { authorId: new mongoose.Types.ObjectId(req.user.id) }
+            ]
+        };
 
         if (req.query.tag) matchStage.tags = req.query.tag;
 

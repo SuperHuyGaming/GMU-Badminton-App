@@ -8,6 +8,7 @@ const PostSchema = new mongoose.Schema({
 	authorId: { type: String, required: true },
 	targetDate: { type: String, required: true },
 	timestamp: { type: Date, default: Date.now },
+	visibility: { type: String, enum: ['PUBLIC', 'FRIENDS_ONLY', 'ONLY_ME'], default: 'PUBLIC' },
 	likedBy: { type: [String], default: [] },
 	isFlagged: { type: Boolean, default: false },
 	toxicityScore: { type: Number, default: 0 }, // NEW: Sentiment toxicity tracking
@@ -74,6 +75,7 @@ PostSchema.post('save', async function(doc) {
 				recentLikerAvatars: recentLikerAvatars,
 				comments: doc.comments?.length || 0,
 				createdAt: doc.timestamp,
+				visibility: doc.visibility,
 				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3
 			},
 			{ upsert: true, new: true }

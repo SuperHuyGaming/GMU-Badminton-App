@@ -33,6 +33,7 @@ const activityFeedSchema = new mongoose.Schema({
     score: { type: Number, default: 0 },
 
     createdAt: { type: Date, default: Date.now },
+    visibility: { type: String, enum: ['PUBLIC', 'FRIENDS_ONLY', 'ONLY_ME'], default: 'PUBLIC' },
 });
 
 // Index for fast chronological fetching

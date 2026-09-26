@@ -212,7 +212,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, authorName, targetDate, authorId, tags } = req.body;
+		const { title, content, imageUrl, authorName, targetDate, authorId, tags, visibility } = req.body;
 		
 		const cleanTitle = xss(title);
 		const cleanContent = xss(content);
@@ -227,6 +227,7 @@ router.post("/", postLimiter, async (req, res) => {
 			content: cleanContent,
 			imageUrl: cleanImageUrl,
 			tags: cleanTags,
+			visibility: visibility || 'PUBLIC',
 			authorName,
 			targetDate: targetDate || "General",
 			authorId: authorId || "000000000000000000000000",

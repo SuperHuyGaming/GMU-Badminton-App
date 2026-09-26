@@ -5,7 +5,7 @@ import { toast } from "react-hot-toast";
 import {
 	Typography, Box, Paper, Chip, Fab, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
-	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button
+	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem, FormControl, InputLabel
 } from "@mui/material";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
@@ -184,7 +184,7 @@ export default function Forum() {
 			setIsUploadingImage(false);
 			if (!res.ok) return toast.error(data.message || "Failed to post. Please try again.");
 
-			setNewPost({ title: "", content: "", imageUrl: "", tags: [] });
+			setNewPost({ title: "", content: "", imageUrl: "", tags: [], visibility: 'PUBLIC' });
 			setPostImages([]);
 			setIsModalOpen(false);
 			toast.success("Post created successfully!");
@@ -474,11 +474,29 @@ export default function Forum() {
 					<TextField label="Title" variant="outlined" fullWidth value={newPost.title} onChange={(e) => setNewPost({ ...newPost, title: e.target.value })} />
 					<TextField label="What's on your mind?" multiline rows={4} variant="outlined" fullWidth value={newPost.content} onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} />
 					
-                    {/* Tags Selection */}
-                    <Box>
-                        <Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
-                            Add Tags (Optional)
-                        </Typography>
+					<Box sx={{ display: 'flex', gap: 2 }}>
+						{/* Privacy Selection */}
+						<Box sx={{ flex: 1 }}>
+							<Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
+								Privacy
+							</Typography>
+							<Select
+								value={newPost.visibility || 'PUBLIC'}
+								onChange={(e) => setNewPost({ ...newPost, visibility: e.target.value })}
+								size="small"
+								fullWidth
+							>
+								<MenuItem value="PUBLIC">🌎 Public (Everyone)</MenuItem>
+								<MenuItem value="FRIENDS_ONLY">👥 Friends Only</MenuItem>
+								<MenuItem value="ONLY_ME">🔒 Only Me</MenuItem>
+							</Select>
+						</Box>
+
+						{/* Tags Selection */}
+						<Box sx={{ flex: 2 }}>
+							<Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
+								Add Tags (Optional)
+							</Typography>
                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                             {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment'].map(tag => {
                                 const isSelected = newPost.tags.includes(tag);
