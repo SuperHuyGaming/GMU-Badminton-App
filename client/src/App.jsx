@@ -15,6 +15,7 @@ const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 const Marketplace = React.lazy(() => import("./pages/Marketplace"));
 const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
+const OnboardingWizard = React.lazy(() => import("./components/OnboardingWizard"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
@@ -82,7 +83,11 @@ const AdminRoute = ({ children }) => {
 const AnimatedRoutes = () => {
 	const location = useLocation();
 	const { user } = useAuth();
-	
+
+	const [onboardingDone, setOnboardingDone] = useState(() => {
+		return localStorage.getItem("onboardingComplete") === "true";
+	});
+
     const searchParams = new URLSearchParams(location.search);
     const reportMatchId = searchParams.get("reportMatch");
     const [reportModalOpen, setReportModalOpen] = useState(!!reportMatchId);
@@ -113,6 +118,10 @@ const AnimatedRoutes = () => {
 					<CircularProgress color="primary" />
 				</Box>
 			}>
+				{/* Onboarding Wizard for new users */}
+				{user && !onboardingDone && (
+					<OnboardingWizard onComplete={() => setOnboardingDone(true)} />
+				)}
                 <ReportMatchModal 
                     open={reportModalOpen} 
                     onClose={handleCloseReportModal} 
@@ -349,7 +358,47 @@ function App() {
 						animation: 'dialogPop 350ms cubic-bezier(0.16, 1, 0.3, 1)',
 					}
 				}
-			}
+			},
+			MuiIconButton: {
+				styleOverrides: {
+					root: {
+						transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+						'&:hover': {
+							transform: 'scale(1.1)',
+						},
+						'&:active': {
+							transform: 'scale(0.9)',
+						}
+					}
+				}
+			},
+			MuiChip: {
+				styleOverrides: {
+					root: {
+						transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+						'&:hover': {
+							transform: 'translateY(-2px)',
+							boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+						},
+						'&:active': {
+							transform: 'scale(0.95)',
+						}
+					}
+				}
+			},
+			MuiFab: {
+				styleOverrides: {
+					root: {
+						transition: 'all 300ms cubic-bezier(0.68, -0.6, 0.32, 1.6)',
+						'&:hover': {
+							transform: 'scale(1.1) rotate(5deg)',
+						},
+						'&:active': {
+							transform: 'scale(0.95)',
+						}
+					}
+				}
+			},
 		}
 	}), [mode]);
 
