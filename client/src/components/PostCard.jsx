@@ -1,5 +1,6 @@
 // client/src/components/PostCard.jsx
 import React, { useState, useEffect } from "react";
+import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -36,6 +37,7 @@ import {
 export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 	const navigate = useNavigate();
 	const currentUser = JSON.parse(localStorage.getItem("user"));
+    const controls = useAnimation();
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -263,6 +265,18 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 	const images = localPost.imageUrls?.length > 0 ? localPost.imageUrls : (localPost.imageUrl ? [localPost.imageUrl] : []);
 	const [activeLightboxIndex, setActiveLightboxIndex] = useState(0);
 
+	const handleDragEnd = (event, info) => {
+		const threshold = 100;
+		if (info.offset.x > threshold) {
+			if (!localPost.likedBy?.includes(currentUser.id)) {
+				handleLike();
+			}
+		} else if (info.offset.x < -threshold) {
+			if (onBookmarkToggle) onBookmarkToggle();
+		}
+		controls.start({ x: 0 });
+	};
+
 	return (
 		<>
 			<style>
@@ -281,6 +295,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 			</style>
 
 			<Paper
+				component={motion.div}
+				drag="x"
+				dragConstraints={{ left: 0, right: 0 }}
+				dragElastic={0.2}
+				onDragEnd={handleDragEnd}
+				animate={controls}
 				id={`post-${localPost._id}`}
 				elevation={0}
 				className={
