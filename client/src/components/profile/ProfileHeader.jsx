@@ -1,6 +1,6 @@
-// client/src/components/profile/ProfileHeader.jsx
 import { useState, useRef } from "react";
 import { getOptimizedAvatar, getOptimizedCover } from "../../utils/image";
+import { QRCodeSVG } from "qrcode.react";
 import {
 	Box,
 	Paper,
@@ -11,9 +11,32 @@ import {
 	Menu,
 	MenuItem,
 	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions,
 	IconButton,
 	Badge
 } from "@mui/material";
+
+// Clean Icons
+const ShareIcon = () => (
+	<svg
+		width="18"
+		height="18"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+	>
+		<circle cx="18" cy="5" r="3"></circle>
+		<circle cx="6" cy="12" r="3"></circle>
+		<circle cx="18" cy="19" r="3"></circle>
+		<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+		<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+	</svg>
+);
 
 // Clean Icons
 const CameraIcon = () => (
@@ -61,10 +84,29 @@ export default function ProfileHeader({
 }) {
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
 	const [viewerImage, setViewerImage] = useState(null);
+	const [qrModalOpen, setQrModalOpen] = useState(false);
 
 	// Two separate refs for our hidden file inputs
 	const profileInputRef = useRef(null);
 	const coverInputRef = useRef(null);
+
+	const handleShare = async () => {
+		const shareData = {
+			title: `${profileData.name} on Mason Badminton Connect`,
+			text: `Check out ${profileData.name}'s profile on Mason Badminton Connect!`,
+			url: window.location.href,
+		};
+		try {
+			if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+				await navigator.share(shareData);
+			} else {
+				setQrModalOpen(true);
+			}
+		} catch (err) {
+			console.error("Error sharing:", err);
+			setQrModalOpen(true);
+		}
+	};
 
 	const handleAvatarClick = (e) => {
 		if (isOwnProfile) {
@@ -308,7 +350,10 @@ export default function ProfileHeader({
 					</Typography>
 				</Box>
 
-				<Box sx={{ pb: { sm: 2 }, pt: { xs: 2, sm: 0 }, display: 'flex', gap: 1 }}>
+				<Box sx={{ pb: { sm: 2 }, pt: { xs: 2, sm: 0 }, display: 'flex', gap: 1, alignItems: 'center' }}>
+					<IconButton onClick={handleShare} sx={{ bgcolor: '#e4e6eb', color: 'black', '&:hover': { bgcolor: '#d8dadf' } }}>
+						<ShareIcon />
+					</IconButton>
 					{isOwnProfile ? (
 						<Button
 							variant="contained"
@@ -421,6 +466,20 @@ export default function ProfileHeader({
 						}}
 					/>
 				</Box>
+			</Dialog>
+
+			{/* --- QR CODE MODAL --- */}
+			<Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)}>
+				<DialogTitle align="center" fontWeight="bold">Scan to Connect</DialogTitle>
+				<DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
+					<QRCodeSVG value={window.location.href} size={200} level="H" />
+					<Typography mt={3} variant="body2" color="text.secondary">
+						Have your friend scan this QR code to view your profile and send a friend request!
+					</Typography>
+				</DialogContent>
+				<DialogActions>
+					<Button onClick={() => setQrModalOpen(false)} sx={{ fontWeight: 'bold' }}>Close</Button>
+				</DialogActions>
 			</Dialog>
 		</Paper>
 	);

@@ -8,6 +8,44 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\/feed/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'feed-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 24 * 60 * 60 // 24 hours
+              }
+            }
+          },
+          {
+            urlPattern: /\/api\/users\/profile/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'user-profile-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 24 * 60 * 60
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/gmu-badminton-api\.onrender\.com\/api\/.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              networkTimeoutSeconds: 5,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 24 * 60 * 60
+              }
+            }
+          }
+        ]
+      },
       manifest: {
         name: 'Mason Badminton Connect',
         short_name: 'Mason Badminton',
