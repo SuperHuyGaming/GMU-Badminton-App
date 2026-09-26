@@ -4,6 +4,8 @@ import TournamentBracket from '../components/TournamentBracket';
 import EmptyTournaments from '../components/EmptyTournaments';
 import apiFetch from '../utils/api';
 import MapPinIcon from '../components/MapPinIcon';
+import TournamentSubmissionModal from '../components/TournamentSubmissionModal';
+
 
 export default function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
@@ -12,6 +14,9 @@ export default function Tournaments() {
     const [error, setError] = useState(null);
     const [nextCursor, setNextCursor] = useState(null);
     const [hasNext, setHasNext] = useState(false);
+
+    
+    const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
 
     // Bracket State
     const [bracketOpen, setBracketOpen] = useState(false);
