@@ -1,4 +1,3 @@
-import React from 'react';
 
 const MapPinIcon = ({ width = 24, height = 24, color = "#006633", className = "" }) => (
     <svg 

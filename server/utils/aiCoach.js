@@ -1,4 +1,4 @@
-﻿// server/utils/aiCoach.js
+// server/utils/aiCoach.js
 // The Badminton AI Coach powered by Google Gemini
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -30,7 +30,14 @@ SKILL LEVEL ADAPTATION:
 When you know the user's skill level, tailor your advice:
 - D Level (Beginner): Focus on basic grip, footwork fundamentals, and simple rally skills. Avoid advanced terminology.
 - C Level (Intermediate): Introduce tactical concepts, shot variety, and positioning strategies.
-- B Level (Advanced): Discuss advanced deception, tournament preparation, and high-level tactical analysis.`;
+- B Level (Advanced): Discuss advanced deception, tournament preparation, and high-level tactical analysis.
+
+RESPONSE STRUCTURE GUIDELINES:
+- Start with a brief, encouraging greeting.
+- Directly answer the question in 1-2 short paragraphs.
+- Provide a bulleted or numbered list of 2-3 actionable steps or drills.
+- End with an engaging sign-off or follow-up question.
+- Do NOT output large walls of text. Keep it strictly under 250 words total.`;
 
 let genAI = null;
 let model = null;

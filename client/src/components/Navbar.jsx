@@ -6,7 +6,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { getOptimizedAvatar } from "../utils/image";
 import { formatNotificationTime } from "../utils/dateUtils";
 import { ColorModeContext } from '../App';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion,  } from 'framer-motion';
 
 const HamburgerIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

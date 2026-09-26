@@ -1,4 +1,5 @@
 // client/src/hooks/useNotifications.js
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";

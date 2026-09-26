@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Skeleton, Card, CardContent, CardHeader } from "@mui/material";
 
 export const PostSkeleton = () => (

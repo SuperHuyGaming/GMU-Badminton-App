@@ -1,10 +1,8 @@
-import React from "react";
-import { Box, Typography, Button, Container, Grid, Paper, useTheme } from "@mui/material";
+import { Box, Typography, Button, Container,  Paper } from "@mui/material";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 
 export default function Landing() {
-	const theme = useTheme();
 	const navigate = useNavigate();
 
 	const containerVariants = {

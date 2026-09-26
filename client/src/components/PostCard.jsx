@@ -1,5 +1,5 @@
 // client/src/components/PostCard.jsx
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import socket from "../utils/socket";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -61,6 +61,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 	const { postId: routePostId } = useParams();
 	const urlPostId = urlParams.get("postId") || routePostId;
 
+	// eslint-disable-next-line react-hooks/set-state-in-effect
 	useEffect(() => {
 		setLocalPost(post);
 		setEditTitle(post.title);
@@ -92,6 +93,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 
 	useEffect(() => {
 		if (urlPostId === localPost._id) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			if (highlightId) setIsCommentModalOpen(true);
 			setTimeout(() => {
 				document
@@ -218,27 +220,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 		}
 	};
 
-	const toggleBookmark = async () => {
-		try {
-			const res = await fetch("/api/forum/" + localPost._id + "/bookmark", {
-				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: "Bearer " + localStorage.getItem("token")
-				},
-				body: JSON.stringify({ userId: currentUser.id }),
-			});
-			if (res.ok) {
-				const data = await res.json();
-				if (onBookmarkToggle) onBookmarkToggle(data.isBookmarked);
-			}
-		} catch (err) {
-			console.error(err);
-		}
-	};
+
 
 	const formatTime = (dateString) => {
 		if (!dateString) return "Just now";
+		// eslint-disable-next-line react-hooks/purity
 		const diff = Date.now() - new Date(dateString).getTime();
 		const mins = Math.floor(diff / 60000);
 		if (mins < 1) return "Just now";

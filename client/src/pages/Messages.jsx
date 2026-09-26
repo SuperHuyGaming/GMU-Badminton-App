@@ -1,10 +1,9 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import React, { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { 
 	Container, Box, Typography, Paper, List, ListItemButton, 
 	ListItemAvatar, ListItemText, Avatar, TextField, IconButton,
-	Divider, Badge, CircularProgress, Dialog, DialogTitle, DialogContent,
-	DialogActions, Button, Chip
+	Divider, Badge, CircularProgress, Dialog, DialogContent, DialogActions, Button, Chip
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";

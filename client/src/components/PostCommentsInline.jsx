@@ -1,15 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-	Dialog,
-	DialogTitle,
-	DialogContent,
 	Box,
 	Typography,
 	Button,
 	TextField,
 	Avatar,
-	useTheme,
-	useMediaQuery,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import CommentThread from "./CommentThread"; // FIX: Import the new separated component!
@@ -24,8 +19,6 @@ export default function PostCommentsInline({
 	openLikes,
 }) {
 	const navigate = useNavigate();
-	const theme = useTheme();
-	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 
 	const [newReplyText, setNewReplyText] = useState("");
 	const [loadingItems, setLoadingItems] = useState({});
@@ -67,7 +60,7 @@ export default function PostCommentsInline({
 	}, [localPost._id, currentUser]);
 
 	useEffect(() => {
-		if (open && highlightId) {
+		if (highlightId) {
 			setTimeout(() => {
 				const targetElement = document.getElementById(
 					`comment-${highlightId}`,
@@ -79,7 +72,7 @@ export default function PostCommentsInline({
 					});
 			}, 300);
 		}
-	}, [open, highlightId]);
+	}, [highlightId]);
 
 	// Shared utility to handle @mentions and breaking long strings
 	const renderContentWithTags = (content) => {

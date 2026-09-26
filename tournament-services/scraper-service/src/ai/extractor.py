@@ -59,6 +59,8 @@ class TournamentExtractor:
         - Check the caption for registration deadlines and carpool/ride-share deadlines.
         - If an exact year is omitted on the flyer, assume the upcoming season (2026).
         - Determine if the tournament allows external/non-collegiate players ('is_open_tournament').
+        - IMPORTANT: If data is missing or contradictory, prioritize information found on the flyer itself over the caption for dates and locations.
+        - Do not hallucinate or guess locations; if no location is provided anywhere, output 'TBD'.
         """
 
         logger.info(f"Dispatching GPT-4o Vision extraction for handle: {source_handle}")

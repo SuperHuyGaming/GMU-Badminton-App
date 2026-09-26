@@ -12,7 +12,7 @@ test.describe('Authentication & Core Flow', () => {
         await expect(page.getByRole('button', { name: /join the club/i })).toBeVisible();
     });
 
-    test('Should display Forum after bypassing auth', async ({ page, context }) => {
+    test('Should display Forum after bypassing auth', async ({ page }) => {
         // Mock the user auth state by setting a fake token in localStorage
         await page.goto('http://localhost:5173');
         await page.evaluate(() => {

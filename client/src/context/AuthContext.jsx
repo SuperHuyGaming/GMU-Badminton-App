@@ -1,4 +1,5 @@
 // client/src/context/AuthContext.jsx
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from "react";
 import apiFetch from "../utils/api";
 import { toast } from "react-hot-toast";
@@ -29,7 +30,7 @@ export const AuthProvider = ({ children }) => {
 			setToastMessage("You have been successfully logged out.");
 			localStorage.removeItem("justLoggedOut");
 		}
-	}, []);
+	}, [setToastMessage]);
 
 	const login = React.useCallback((userData, accessToken, refreshToken, customMessage = null) => {
 		localStorage.setItem("accessToken", accessToken);

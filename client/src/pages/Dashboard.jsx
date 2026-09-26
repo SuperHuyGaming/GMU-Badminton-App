@@ -1,6 +1,5 @@
 // client/src/pages/Dashboard.jsx
-import { DashboardSkeleton } from '../components/Skeletons';
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
 	Typography,
 	Box,
@@ -19,7 +18,7 @@ import {
 	DialogActions as MuiDialogActions,
 	Skeleton,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+
 import apiFetch from "../utils/api";
 import { getOptimizedAvatar } from "../utils/image";
 import { io } from "socket.io-client";
@@ -27,6 +26,7 @@ import { io } from "socket.io-client";
 const socket = io(`${import.meta.env.VITE_API_URL}`);
 
 // Sleek SVG Icons
+// eslint-disable-next-line no-unused-vars
 const ActivityIcon = () => (
 	<svg
 		width="24"
@@ -56,6 +56,7 @@ const MegaphoneIcon = () => (
 		<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
 	</svg>
 );
+// eslint-disable-next-line no-unused-vars
 const ClockIcon = () => (
 	<svg
 		width="16"
