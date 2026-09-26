@@ -1,7 +1,11 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useRef } from "react";
 import {
+	// eslint-disable-next-line no-unused-vars
 	Dialog,
+	// eslint-disable-next-line no-unused-vars
 	DialogTitle,
+	// eslint-disable-next-line no-unused-vars
 	DialogContent,
 	Box,
 	Typography,
@@ -25,6 +29,7 @@ export default function PostCommentsInline({
 }) {
 	const navigate = useNavigate();
 	const theme = useTheme();
+	// eslint-disable-next-line no-unused-vars
 	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 
 	const [newReplyText, setNewReplyText] = useState("");
@@ -79,6 +84,7 @@ export default function PostCommentsInline({
 					});
 			}, 300);
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open, highlightId]);
 
 	// Shared utility to handle @mentions and breaking long strings

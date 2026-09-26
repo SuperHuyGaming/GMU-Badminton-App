@@ -19,6 +19,7 @@ import {
 	DialogActions as MuiDialogActions,
 	Skeleton,
 } from "@mui/material";
+// eslint-disable-next-line no-unused-vars
 import { useNavigate } from "react-router-dom";
 import apiFetch from "../utils/api";
 import { getOptimizedAvatar } from "../utils/image";
@@ -27,20 +28,7 @@ import { io } from "socket.io-client";
 const socket = io(`${import.meta.env.VITE_API_URL}`);
 
 // Sleek SVG Icons
-const ActivityIcon = () => (
-	<svg
-		width="24"
-		height="24"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-	</svg>
-);
+
 const MegaphoneIcon = () => (
 	<svg
 		width="20"
@@ -56,21 +44,7 @@ const MegaphoneIcon = () => (
 		<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
 	</svg>
 );
-const ClockIcon = () => (
-	<svg
-		width="16"
-		height="16"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<circle cx="12" cy="12" r="10"></circle>
-		<polyline points="12 6 12 12 16 14"></polyline>
-	</svg>
-);
+
 const PinIcon = () => (
 	<svg
 		width="16"

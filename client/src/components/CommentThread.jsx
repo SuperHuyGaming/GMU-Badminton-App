@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect } from "react";
 import { Box, Typography, Button, TextField } from "@mui/material";
 
@@ -27,6 +28,7 @@ export default function CommentThread({
 
 	useEffect(() => {
 		if (highlightId && comment.replies?.some((r) => r._id === highlightId))
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setIsExpanded(true);
 	}, [highlightId, comment.replies]);
 

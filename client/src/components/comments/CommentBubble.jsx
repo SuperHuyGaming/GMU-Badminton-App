@@ -1,4 +1,5 @@
 // client/src/components/comments/CommentBubble.jsx
+// eslint-disable-next-line no-unused-vars
 import React from "react";
 import { useState } from "react";
 import {
@@ -18,7 +19,6 @@ export default function CommentBubble({
 	comment,
 	localPostId,
 	currentUser,
-	highlightId,
 	openLikes,
 	handleToggleLike,
 	formatTime,

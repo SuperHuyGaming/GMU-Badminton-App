@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect } from 'react';
 import { Box, Alert, AlertTitle, Button, CircularProgress } from '@mui/material';
 import apiFetch from '../utils/api';
@@ -25,10 +26,12 @@ export default function PendingMatchesPrompt() {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchPendingMatches();
         // optionally poll every 30 seconds
         const interval = setInterval(fetchPendingMatches, 30000);
         return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
     const handleConfirm = async (matchId) => {

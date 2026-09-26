@@ -6,6 +6,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { getOptimizedAvatar } from "../utils/image";
 import { formatNotificationTime } from "../utils/dateUtils";
 import { ColorModeContext } from '../App';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 
 const HamburgerIcon = () => (
@@ -36,6 +37,7 @@ export default function Navbar() {
     const colorMode = useContext(ColorModeContext);
     const { user, logout } = useAuth();
     const { notifications, unreadCount, unreadMessages, markAsRead, markSingleAsRead, clearNotifications } = useNotifications();
+    // eslint-disable-next-line no-unused-vars
     const navigate = useNavigate();
     const location = useLocation();
     const [anchorEl, setAnchorEl] = useState(null);

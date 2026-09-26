@@ -90,7 +90,9 @@ PostSchema.post('findOneAndDelete', async function(doc) {
 	try {
 		const ActivityFeed = require('./ActivityFeed');
 		await ActivityFeed.deleteOne({ type: "post", referenceId: doc._id });
-	} catch (e) {}
+	} catch (e) {
+		console.error("ActivityFeed sync error (Post delete):", e);
+	}
 });
 
 module.exports = mongoose.model("Post", PostSchema);
