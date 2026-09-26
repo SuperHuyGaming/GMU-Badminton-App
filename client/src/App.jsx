@@ -15,6 +15,7 @@ const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 const Marketplace = React.lazy(() => import("./pages/Marketplace"));
 const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
+const OnboardingWizard = React.lazy(() => import("./components/OnboardingWizard"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
@@ -82,7 +83,11 @@ const AdminRoute = ({ children }) => {
 const AnimatedRoutes = () => {
 	const location = useLocation();
 	const { user } = useAuth();
-	
+
+	const [onboardingDone, setOnboardingDone] = useState(() => {
+		return localStorage.getItem("onboardingComplete") === "true";
+	});
+
     const searchParams = new URLSearchParams(location.search);
     const reportMatchId = searchParams.get("reportMatch");
     const [reportModalOpen, setReportModalOpen] = useState(!!reportMatchId);
@@ -113,6 +118,10 @@ const AnimatedRoutes = () => {
 					<CircularProgress color="primary" />
 				</Box>
 			}>
+				{/* Onboarding Wizard for new users */}
+				{user && !onboardingDone && (
+					<OnboardingWizard onComplete={() => setOnboardingDone(true)} />
+				)}
                 <ReportMatchModal 
                     open={reportModalOpen} 
                     onClose={handleCloseReportModal} 
