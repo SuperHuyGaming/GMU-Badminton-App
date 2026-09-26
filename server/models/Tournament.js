@@ -12,6 +12,14 @@ const tournamentSchema = new mongoose.Schema({
     sourceUrl: String,
     flyerImageUrl: String,
     rsvpCount: Number,
+    skillLevels: [String],
+    startDate: Date,
+    endDate: Date,
+    scraperLastRun: Date,
+    instagramPostUrl: String,
+    hostClubHandle: String,
+    linktreeUrl: String,
+    originalCaption: String,
     createdAt: Date
 }, { collection: "tournaments" }); // Match the Java service collection
 

@@ -84,6 +84,9 @@ async function createMatchOfTheWeek() {
     }
 }
 
+const cron = require('node-cron');
+const { runInstagramScraper } = require('./instagramScraper');
+
 function startCronJobs() {
     // Run immediately on boot
     assignTopContributorBadges();
@@ -94,6 +97,14 @@ function startCronJobs() {
         assignTopContributorBadges();
         createMatchOfTheWeek();
     }, 1000 * 60 * 60);
+
+    // Run Instagram Scraper every night at 3:00 AM EST
+    cron.schedule('0 3 * * *', () => {
+        console.log("Running scheduled DMV Instagram Scraper...");
+        runInstagramScraper();
+    }, {
+        timezone: "America/New_York"
+    });
 }
 
 module.exports = startCronJobs;
