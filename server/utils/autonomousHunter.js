@@ -1,6 +1,96 @@
 const { ApifyClient } = require('apify-client');
 const DiscoveryQueue = require('../models/DiscoveryQueue');
 
+const axios = require('axios');
+const cheerio = require('cheerio');
+const Tournament = require('../models/Tournament');
+const { parseDiscoveredWebpage } = require('./aiParser');
+
+// Utility for basic string similarity (Levenshtein distance simplified for titles)
+function isDuplicateTournament(newName, existingTournaments) {
+    if (!newName) return false;
+    const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const n1 = normalize(newName);
+    
+    for (const t of existingTournaments) {
+        const n2 = normalize(t.tournamentName);
+        if (n1 === n2 || n1.includes(n2) || n2.includes(n1)) return true;
+    }
+    return false;
+}
+
+async function processDiscoveryQueue() {
+    console.log("🧠 [Hunter] Starting AI Evaluation of Discovery Queue...");
+    
+    const pendingItems = await DiscoveryQueue.find({ status: 'PENDING_AI_REVIEW' }).limit(5);
+    if (pendingItems.length === 0) {
+        console.log("🧠 [Hunter] Queue is empty. Nothing to process.");
+        return;
+    }
+
+    const existingTournaments = await Tournament.find({}, 'tournamentName');
+
+    for (const item of pendingItems) {
+        try {
+            // 1. Fetch Webpage Content
+            console.log(`[Hunter] Fetching URL: ${item.sourceUrl}`);
+            let rawText = item.rawSnippet;
+            
+            // Only try to scrape if it's not facebook (which blocks axios)
+            if (item.sourceType !== 'FACEBOOK') {
+                try {
+                    const { data } = await axios.get(item.sourceUrl, { timeout: 5000 });
+                    const $ = cheerio.load(data);
+                    rawText = $('body').text().replace(/\s+/g, ' ').trim();
+                } catch (e) {
+                    console.log(`[Hunter] Axios failed for ${item.sourceUrl}. Falling back to search snippet.`);
+                }
+            }
+
+            // 2. AI Evaluation
+            const extracted = await parseDiscoveredWebpage(rawText, item.sourceUrl);
+            
+            if (!extracted || !extracted.isValidDmvTournament) {
+                console.log(`[Hunter] AI Rejected: ${item.sourceUrl}`);
+                item.status = 'REJECTED_BY_AI';
+                await item.save();
+                continue;
+            }
+
+            // 3. Deduplication (Fuzzy Match)
+            if (isDuplicateTournament(extracted.tournamentName, existingTournaments)) {
+                console.log(`[Hunter] Duplicate found, skipping: ${extracted.tournamentName}`);
+                item.status = 'REJECTED_BY_AI'; // Or DUPLICATE
+                await item.save();
+                continue;
+            }
+
+            // 4. Send to Admin Quarantine (isOpenTournament = false)
+            console.log(`[Hunter] ✨ AI APPROVED: ${extracted.tournamentName}! Sending to Admin Queue.`);
+            
+            await Tournament.create({
+                tournamentName: extracted.tournamentName,
+                eventLocation: extracted.hostLocation || "DMV Area",
+                startDate: extracted.startDate ? new Date(extracted.startDate) : null,
+                endDate: extracted.endDate ? new Date(extracted.endDate) : null,
+                registrationDeadline: extracted.registrationDeadline ? new Date(extracted.registrationDeadline) : null,
+                registrationUrl: item.sourceUrl,
+                sourceUrl: item.sourceUrl,
+                originalCaption: rawText.substring(0, 500), // Snippet for admin review
+                isOpenTournament: false, // Requires Admin Approval!
+                createdAt: new Date()
+            });
+
+            item.status = 'PROCESSED';
+            await item.save();
+
+        } catch (err) {
+            console.error(`[Hunter] Failed to process ${item.sourceUrl}:`, err.message);
+        }
+    }
+}
+
+
 const client = new ApifyClient({
     token: process.env.APIFY_API_TOKEN || 'placeholder_token',
 });
@@ -81,5 +171,6 @@ async function huntGoogleForTournaments() {
 }
 
 module.exports = {
+    processDiscoveryQueue,
     huntGoogleForTournaments
 };
