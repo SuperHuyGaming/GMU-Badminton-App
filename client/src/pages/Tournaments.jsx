@@ -189,36 +189,39 @@ END:VCALENDAR`;
                                     {tournament.originalCaption ? tournament.originalCaption.substring(0, 150) + "..." : ""}
                                 </Typography>
                             </CardContent>
-                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'stretch' }}>
-                                <Button 
-                                    variant="outlined" 
-                                    size="small" 
-                                    color="primary"
-                                    onClick={() => handleExportICS(tournament)}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
-                                >
-                                    📅 Add to Calendar
-                                </Button>
-                                {tournament.registrationUrl && (
+                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {tournament.registrationUrl ? (
                                     <Button 
                                         variant="contained" 
-                                        size="small" 
-                                        color="primary"
+                                        size="large" 
+                                        color="secondary"
                                         href={tournament.registrationUrl}
                                         target="_blank"
-                                        sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
+                                        fullWidth
+                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem' }}
                                     >
-                                        Register Now
+                                        SIGN UP HERE
+                                    </Button>
+                                ) : (
+                                    <Button 
+                                        variant="contained" 
+                                        size="large" 
+                                        disabled
+                                        fullWidth
+                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem' }}
+                                    >
+                                        Registration Missing
                                     </Button>
                                 )}
                                 <Button 
-                                    variant="contained" 
-                                    size="small" 
+                                    variant="outlined" 
+                                    size="medium" 
                                     color="primary"
-                                    onClick={handleViewBracket}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
+                                    onClick={() => handleExportICS(tournament)}
+                                    fullWidth
+                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
                                 >
-                                    🏆 Bracket
+                                    📅 Add to Calendar
                                 </Button>
                             </CardActions>
                         </Card>
