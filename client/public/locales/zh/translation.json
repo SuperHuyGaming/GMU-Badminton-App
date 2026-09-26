@@ -1,0 +1,17 @@
+{
+  "menu": {
+    "dashboard": "???",
+    "forum": "??",
+    "leaderboard": "???",
+    "tournaments": "??",
+    "marketplace": "??",
+    "profile": "????"
+  },
+  "common": {
+    "loading": "???...",
+    "error": "????",
+    "save": "??",
+    "cancel": "??",
+    "language": "??"
+  }
+}

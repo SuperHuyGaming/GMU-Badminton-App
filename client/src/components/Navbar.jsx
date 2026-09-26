@@ -2,12 +2,13 @@ import { useState, useContext } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../hooks/useNotifications';
 import { getOptimizedAvatar } from "../utils/image";
 import { formatNotificationTime } from "../utils/dateUtils";
 import { ColorModeContext } from '../App';
-// eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence } from 'framer-motion';
+import LanguageSwitcher from './LanguageSwitcher';
+import { motion } from 'framer-motion';
 
 const HamburgerIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,6 +37,7 @@ export default function Navbar() {
     const theme = useTheme();
     const colorMode = useContext(ColorModeContext);
     const { user, logout } = useAuth();
+    useTranslation();
     const { notifications, unreadCount, unreadMessages, markAsRead, markSingleAsRead, clearNotifications } = useNotifications();
     // eslint-disable-next-line no-unused-vars
     const navigate = useNavigate();
@@ -191,6 +193,7 @@ export default function Navbar() {
 								gap: 2,
 							}}
 						>
+							<LanguageSwitcher />
 							<IconButton 
 								onClick={colorMode.toggleColorMode} 
 								color="inherit"
@@ -565,3 +568,4 @@ export default function Navbar() {
 		</>
 	);
 }
+

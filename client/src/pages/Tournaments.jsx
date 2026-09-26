@@ -4,7 +4,6 @@ import TournamentBracket from '../components/TournamentBracket';
 import EmptyTournaments from '../components/EmptyTournaments';
 import apiFetch from '../utils/api';
 import MapPinIcon from '../components/MapPinIcon';
-import TournamentSubmissionModal from '../components/TournamentSubmissionModal';
 
 
 export default function Tournaments() {
@@ -16,13 +15,13 @@ export default function Tournaments() {
     const [hasNext, setHasNext] = useState(false);
 
     
-    const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
 
     // Bracket State
     const [bracketOpen, setBracketOpen] = useState(false);
     const [bracketData, setBracketData] = useState(null);
     const [bracketLoading, setBracketLoading] = useState(false);
 
+    // eslint-disable-next-line no-unused-vars
     const handleViewBracket = async () => {
         setBracketOpen(true);
         if (bracketData) return; // already loaded
@@ -138,17 +137,7 @@ END:VCALENDAR`;
                 Upcoming Tournaments
             </Typography>
 
-            <Box sx={{ display: 'flex', justifyContent: { xs: 'center', sm: 'flex-end' }, mb: 3 }}>
-                <Button variant="contained" color="secondary" onClick={() => setSubmissionModalOpen(true)} sx={{ fontWeight: 'bold', width: { xs: '100%', sm: 'auto' } }}>
-                    + Submit a Tournament
-                </Button>
-            </Box>
-            
-            <TournamentSubmissionModal 
-                open={submissionModalOpen} 
-                onClose={() => setSubmissionModalOpen(false)} 
-                onSubmitSuccess={() => fetchTournaments()} 
-            />
+
 
             <Typography color="text.primary" sx={{ mb: 4 }}>
                 Find local badminton tournaments scraped from across the web.
