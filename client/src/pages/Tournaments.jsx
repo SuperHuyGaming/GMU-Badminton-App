@@ -23,6 +23,7 @@ export default function Tournaments() {
     const [bracketData, setBracketData] = useState(null);
     const [bracketLoading, setBracketLoading] = useState(false);
 
+    // eslint-disable-next-line no-unused-vars
     const handleViewBracket = async () => {
         setBracketOpen(true);
         if (bracketData) return; // already loaded
