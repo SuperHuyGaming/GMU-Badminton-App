@@ -391,6 +391,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						currentUser?.role === "admin") && (
 						<Box>
 							<IconButton
+								aria-label="More options"
 								onClick={(e) => setAnchorEl(e.currentTarget)}
 								size="small"
 								sx={{ color: "text.secondary" }}
@@ -598,6 +599,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 							>
 								<Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
 									<IconButton 
+										aria-label="Close fullscreen image"
 										onClick={() => setIsLightboxOpen(false)}
 										sx={{ position: 'absolute', top: 10, right: 10, color: 'white', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
 									>

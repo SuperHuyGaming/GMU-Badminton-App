@@ -4,9 +4,9 @@ import apiFetch from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-hot-toast";
 import {
-	Typography, Box, Paper, Chip, Fab, Dialog, DialogTitle,
+	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
-	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem, FormControl, InputLabel
+	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem
 } from "@mui/material";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";

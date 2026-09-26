@@ -80,6 +80,7 @@ export default function ProfileIntro({
 					</Box>
 					{isOwnProfile && (
 						<IconButton
+							aria-label="Edit profile info"
 							className="edit-btn"
 							onClick={onEditClick}
 							size="small"

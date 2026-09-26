@@ -59,10 +59,10 @@ export default function EmptyTournaments() {
         }}>
             <EmptyStateGraphic />
             <Typography variant="h5" fontWeight="900" sx={{ mt: 3, mb: 1, color: 'text.primary' }}>
-                No Tournaments Found
+                Our AI is Hunting...
             </Typography>
             <Typography variant="body1" sx={{ color: 'text.secondary', maxWidth: 450, lineHeight: 1.6 }}>
-                It's quiet on the courts... We couldn't find any upcoming badminton tournaments right now. Check back later!
+                Our autonomous AI engine is currently scouring the web for upcoming DMV tournaments. Check back soon!
             </Typography>
         </Box>
     );
