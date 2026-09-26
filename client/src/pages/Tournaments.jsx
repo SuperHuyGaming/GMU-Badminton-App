@@ -48,16 +48,16 @@ UID:${tournament.id}@masonbadminton.com
 DTSTAMP:${formatDateForICS(new Date().toISOString())}
 DTSTART:${formatDateForICS(tournament.startDate)}
 DTEND:${formatDateForICS(tournament.endDate)}
-SUMMARY:${tournament.name || "Badminton Tournament"}
-LOCATION:${tournament.location || ""}
-DESCRIPTION:${(tournament.description || "").replace(/\n/g, '\\n')}
+SUMMARY:${tournament.tournamentName || "Badminton Tournament"}
+LOCATION:${tournament.eventLocation || ""}
+DESCRIPTION:${(tournament.originalCaption || "").replace(/\n/g, '\\n')}
 END:VEVENT
 END:VCALENDAR`;
 
         const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
         const link = document.createElement('a');
         link.href = window.URL.createObjectURL(blob);
-        link.setAttribute('download', `${(tournament.name || "Tournament").replace(/\s+/g, '_')}.ics`);
+        link.setAttribute('download', `${(tournament.tournamentName || "Tournament").replace(/\s+/g, '_')}.ics`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -152,18 +152,23 @@ END:VCALENDAR`;
                 {tournaments.map((tournament) => (
                     <Grid size={{'xs': 12, 'md': 6}} key={tournament.id}>
                         <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3 }}>
+                            {tournament.flyerImageUrl && (
+                                <Box sx={{ width: '100%', height: 200, overflow: 'hidden' }}>
+                                    <img src={tournament.flyerImageUrl} alt="Tournament Flyer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </Box>
+                            )}
                             <CardContent sx={{ flexGrow: 1 }}>
                                 <Typography variant="h6" fontWeight="bold" gutterBottom>
-                                    {tournament.name}
+                                    {tournament.tournamentName}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <MapPinIcon width={16} height={16} /> {tournament.location}
+                                    <MapPinIcon width={16} height={16} /> {tournament.eventLocation}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                    📅 {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
+                                    📅 {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString() : 'TBD'}
                                 </Typography>
                                 <Typography variant="body1">
-                                    {tournament.description}
+                                    {tournament.originalCaption ? tournament.originalCaption.substring(0, 150) + "..." : ""}
                                 </Typography>
                             </CardContent>
                             <CardActions sx={{ px: 2, pb: 2, display: 'flex', gap: 1 }}>
@@ -174,16 +179,28 @@ END:VCALENDAR`;
                                     onClick={() => handleExportICS(tournament)}
                                     sx={{ borderRadius: 2, fontWeight: 'bold' }}
                                 >
-                                    🗓️ Add to Calendar
+                                    📅 Add to Calendar
                                 </Button>
+                                {tournament.registrationUrl && (
+                                    <Button 
+                                        variant="contained" 
+                                        size="small" 
+                                        color="primary"
+                                        href={tournament.registrationUrl}
+                                        target="_blank"
+                                        sx={{ borderRadius: 2, fontWeight: 'bold', ml: 'auto' }}
+                                    >
+                                        Register Now
+                                    </Button>
+                                )}
                                 <Button 
                                     variant="contained" 
                                     size="small" 
                                     color="primary"
                                     onClick={handleViewBracket}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold', ml: 'auto' }}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
                                 >
-                                    View Bracket
+                                    🏆 Bracket
                                 </Button>
                             </CardActions>
                         </Card>
