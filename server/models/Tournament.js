@@ -20,6 +20,7 @@ const tournamentSchema = new mongoose.Schema({
     hostClubHandle: String,
     linktreeUrl: String,
     originalCaption: String,
+    hasSentDeadlineWarning: { type: Boolean, default: false },
     createdAt: Date
 }, { collection: "tournaments" }); // Match the Java service collection
 

@@ -86,6 +86,37 @@ async function createMatchOfTheWeek() {
 
 const cron = require('node-cron');
 const { runInstagramScraper } = require('./instagramScraper');
+const Tournament = require('../models/Tournament');
+const { sendPushToAllUsers } = require('./pushNotifications');
+
+async function checkTournamentDeadlines() {
+    try {
+        console.log("[Cron] Checking for approaching tournament registration deadlines...");
+        const now = new Date();
+        const in48Hours = new Date(now.getTime() + (48 * 60 * 60 * 1000));
+
+        // Find tournaments whose registration deadline is between now and 48 hours from now
+        // and we haven't warned about them yet.
+        const approachingTournaments = await Tournament.find({
+            registrationDeadline: { $gte: now, $lte: in48Hours },
+            hasSentDeadlineWarning: { $ne: true }
+        });
+
+        for (const tourney of approachingTournaments) {
+            console.log(`[Cron] Sending 48-hour deadline warning for ${tourney.tournamentName}`);
+            await sendPushToAllUsers(
+                "🚨 Registration Closing Soon!",
+                `Registration for ${tourney.tournamentName} at ${tourney.hostUniversity || 'local courts'} closes in less than 48 hours!`,
+                "/tournaments"
+            );
+            
+            tourney.hasSentDeadlineWarning = true;
+            await tourney.save();
+        }
+    } catch (e) {
+        console.error("[Cron] Failed to check tournament deadlines:", e);
+    }
+}
 
 function startCronJobs() {
     // Run immediately on boot
@@ -96,12 +127,21 @@ function startCronJobs() {
     setInterval(() => {
         assignTopContributorBadges();
         createMatchOfTheWeek();
+        checkTournamentDeadlines();
     }, 1000 * 60 * 60);
 
     // Run Instagram Scraper every night at 3:00 AM EST
     cron.schedule('0 3 * * *', () => {
         console.log("Running scheduled DMV Instagram Scraper...");
         runInstagramScraper();
+    }, {
+        timezone: "America/New_York"
+    });
+
+    // Run Deadline Checker every morning at 9:00 AM EST
+    cron.schedule('0 9 * * *', () => {
+        console.log("Running scheduled Tournament Deadline checker...");
+        checkTournamentDeadlines();
     }, {
         timezone: "America/New_York"
     });
