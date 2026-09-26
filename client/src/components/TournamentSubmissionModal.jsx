@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, CircularProgress, Typography, Box } from '@mui/material';
 import apiFetch from '../utils/api';
 
@@ -56,11 +57,11 @@ export default function TournamentSubmissionModal({ open, onClose, onSubmitSucce
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle>Submit a Tournament</DialogTitle>
             <DialogContent>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
                     Found an Instagram post for an upcoming college tournament? Paste the link below and our AI will automatically read the flyer and extract the dates!
                 </Typography>
                 
-                <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, mb: 3 }}>
                     <TextField 
                         fullWidth 
                         label="Instagram Post URL" 
@@ -82,8 +83,8 @@ export default function TournamentSubmissionModal({ open, onClose, onSubmitSucce
                 {error && <Typography color="error" variant="body2" sx={{ mb: 2 }}>{error}</Typography>}
 
                 {scrapedData && (
-                    <Box sx={{ bgcolor: 'background.default', p: 2, borderRadius: 2 }}>
-                        <Typography variant="subtitle2" color="primary" gutterBottom>dY"& AI Successfully Extracted Data:</Typography>
+                    <Box sx={{ bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', p: 2, borderRadius: 2 }}>
+                        <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 'bold' }} gutterBottom>✨ AI Successfully Extracted Data:</Typography>
                         <Typography variant="body2"><strong>Name:</strong> {scrapedData.tournamentName}</Typography>
                         <Typography variant="body2"><strong>Start Date:</strong> {new Date(scrapedData.startDate).toLocaleDateString()}</Typography>
                         {scrapedData.registrationDeadline && (

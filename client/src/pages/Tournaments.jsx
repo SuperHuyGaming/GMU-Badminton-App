@@ -138,8 +138,8 @@ END:VCALENDAR`;
                 Upcoming Tournaments
             </Typography>
 
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
-                <Button variant="contained" color="secondary" onClick={() => setSubmissionModalOpen(true)} sx={{ fontWeight: 'bold' }}>
+            <Box sx={{ display: 'flex', justifyContent: { xs: 'center', sm: 'flex-end' }, mb: 3 }}>
+                <Button variant="contained" color="secondary" onClick={() => setSubmissionModalOpen(true)} sx={{ fontWeight: 'bold', width: { xs: '100%', sm: 'auto' } }}>
                     + Submit a Tournament
                 </Button>
             </Box>
@@ -150,7 +150,7 @@ END:VCALENDAR`;
                 onSubmitSuccess={() => fetchTournaments()} 
             />
 
-            <Typography color="text.secondary" sx={{ mb: 4 }}>
+            <Typography color="text.primary" sx={{ mb: 4 }}>
                 Find local badminton tournaments scraped from across the web.
             </Typography>
 
@@ -179,23 +179,23 @@ END:VCALENDAR`;
                                 <Typography variant="h6" fontWeight="bold" gutterBottom>
                                     {tournament.tournamentName}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Typography variant="body2" color="text.primary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                     <MapPinIcon width={16} height={16} /> {tournament.eventLocation}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
                                     📅 {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString() : 'TBD'}
                                 </Typography>
                                 <Typography variant="body1">
                                     {tournament.originalCaption ? tournament.originalCaption.substring(0, 150) + "..." : ""}
                                 </Typography>
                             </CardContent>
-                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', gap: 1 }}>
+                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'stretch' }}>
                                 <Button 
                                     variant="outlined" 
                                     size="small" 
                                     color="primary"
                                     onClick={() => handleExportICS(tournament)}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
                                 >
                                     📅 Add to Calendar
                                 </Button>
@@ -206,7 +206,7 @@ END:VCALENDAR`;
                                         color="primary"
                                         href={tournament.registrationUrl}
                                         target="_blank"
-                                        sx={{ borderRadius: 2, fontWeight: 'bold', ml: 'auto' }}
+                                        sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
                                     >
                                         Register Now
                                     </Button>
@@ -216,7 +216,7 @@ END:VCALENDAR`;
                                     size="small" 
                                     color="primary"
                                     onClick={handleViewBracket}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
                                 >
                                     🏆 Bracket
                                 </Button>
