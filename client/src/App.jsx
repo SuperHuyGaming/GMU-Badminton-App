@@ -358,7 +358,47 @@ function App() {
 						animation: 'dialogPop 350ms cubic-bezier(0.16, 1, 0.3, 1)',
 					}
 				}
-			}
+			},
+			MuiIconButton: {
+				styleOverrides: {
+					root: {
+						transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+						'&:hover': {
+							transform: 'scale(1.1)',
+						},
+						'&:active': {
+							transform: 'scale(0.9)',
+						}
+					}
+				}
+			},
+			MuiChip: {
+				styleOverrides: {
+					root: {
+						transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+						'&:hover': {
+							transform: 'translateY(-2px)',
+							boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+						},
+						'&:active': {
+							transform: 'scale(0.95)',
+						}
+					}
+				}
+			},
+			MuiFab: {
+				styleOverrides: {
+					root: {
+						transition: 'all 300ms cubic-bezier(0.68, -0.6, 0.32, 1.6)',
+						'&:hover': {
+							transform: 'scale(1.1) rotate(5deg)',
+						},
+						'&:active': {
+							transform: 'scale(0.95)',
+						}
+					}
+				}
+			},
 		}
 	}), [mode]);
 
