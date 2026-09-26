@@ -520,6 +520,7 @@ export default function Forum() {
                             })}
                         </Box>
                     </Box>
+					</Box>
 
                     <Box>
 						<input accept="image/*" style={{ display: "none" }} id="post-image-upload" type="file" multiple onChange={(e) => {
