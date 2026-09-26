@@ -4,6 +4,8 @@ import TournamentBracket from '../components/TournamentBracket';
 import EmptyTournaments from '../components/EmptyTournaments';
 import apiFetch from '../utils/api';
 import MapPinIcon from '../components/MapPinIcon';
+import TournamentSubmissionModal from '../components/TournamentSubmissionModal';
+
 
 export default function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
@@ -12,6 +14,9 @@ export default function Tournaments() {
     const [error, setError] = useState(null);
     const [nextCursor, setNextCursor] = useState(null);
     const [hasNext, setHasNext] = useState(false);
+
+    
+    const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
 
     // Bracket State
     const [bracketOpen, setBracketOpen] = useState(false);
@@ -48,16 +53,16 @@ UID:${tournament.id}@masonbadminton.com
 DTSTAMP:${formatDateForICS(new Date().toISOString())}
 DTSTART:${formatDateForICS(tournament.startDate)}
 DTEND:${formatDateForICS(tournament.endDate)}
-SUMMARY:${tournament.name || "Badminton Tournament"}
-LOCATION:${tournament.location || ""}
-DESCRIPTION:${(tournament.description || "").replace(/\n/g, '\\n')}
+SUMMARY:${tournament.tournamentName || "Badminton Tournament"}
+LOCATION:${tournament.eventLocation || ""}
+DESCRIPTION:${(tournament.originalCaption || "").replace(/\n/g, '\\n')}
 END:VEVENT
 END:VCALENDAR`;
 
         const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
         const link = document.createElement('a');
         link.href = window.URL.createObjectURL(blob);
-        link.setAttribute('download', `${(tournament.name || "Tournament").replace(/\s+/g, '_')}.ics`);
+        link.setAttribute('download', `${(tournament.tournamentName || "Tournament").replace(/\s+/g, '_')}.ics`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -132,7 +137,20 @@ END:VCALENDAR`;
             <Typography variant="h3" sx={{ mb: 1, fontWeight: 'bold' }}>
                 Upcoming Tournaments
             </Typography>
-            <Typography color="text.secondary" sx={{ mb: 4 }}>
+
+            <Box sx={{ display: 'flex', justifyContent: { xs: 'center', sm: 'flex-end' }, mb: 3 }}>
+                <Button variant="contained" color="secondary" onClick={() => setSubmissionModalOpen(true)} sx={{ fontWeight: 'bold', width: { xs: '100%', sm: 'auto' } }}>
+                    + Submit a Tournament
+                </Button>
+            </Box>
+            
+            <TournamentSubmissionModal 
+                open={submissionModalOpen} 
+                onClose={() => setSubmissionModalOpen(false)} 
+                onSubmitSuccess={() => fetchTournaments()} 
+            />
+
+            <Typography color="text.primary" sx={{ mb: 4 }}>
                 Find local badminton tournaments scraped from across the web.
             </Typography>
 
@@ -152,38 +170,55 @@ END:VCALENDAR`;
                 {tournaments.map((tournament) => (
                     <Grid size={{'xs': 12, 'md': 6}} key={tournament.id}>
                         <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3 }}>
+                            {tournament.flyerImageUrl && (
+                                <Box sx={{ width: '100%', height: 200, overflow: 'hidden' }}>
+                                    <img src={tournament.flyerImageUrl} alt="Tournament Flyer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </Box>
+                            )}
                             <CardContent sx={{ flexGrow: 1 }}>
                                 <Typography variant="h6" fontWeight="bold" gutterBottom>
-                                    {tournament.name}
+                                    {tournament.tournamentName}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <MapPinIcon width={16} height={16} /> {tournament.location}
+                                <Typography variant="body2" color="text.primary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <MapPinIcon width={16} height={16} /> {tournament.eventLocation}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                    📅 {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
+                                <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
+                                    📅 {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString() : 'TBD'}
                                 </Typography>
                                 <Typography variant="body1">
-                                    {tournament.description}
+                                    {tournament.originalCaption ? tournament.originalCaption.substring(0, 150) + "..." : ""}
                                 </Typography>
                             </CardContent>
-                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', gap: 1 }}>
+                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'stretch' }}>
                                 <Button 
                                     variant="outlined" 
                                     size="small" 
                                     color="primary"
                                     onClick={() => handleExportICS(tournament)}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
                                 >
-                                    🗓️ Add to Calendar
+                                    📅 Add to Calendar
                                 </Button>
+                                {tournament.registrationUrl && (
+                                    <Button 
+                                        variant="contained" 
+                                        size="small" 
+                                        color="primary"
+                                        href={tournament.registrationUrl}
+                                        target="_blank"
+                                        sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
+                                    >
+                                        Register Now
+                                    </Button>
+                                )}
                                 <Button 
                                     variant="contained" 
                                     size="small" 
                                     color="primary"
                                     onClick={handleViewBracket}
-                                    sx={{ borderRadius: 2, fontWeight: 'bold', ml: 'auto' }}
+                                    sx={{ borderRadius: 2, fontWeight: 'bold', flex: 1 }}
                                 >
-                                    View Bracket
+                                    🏆 Bracket
                                 </Button>
                             </CardActions>
                         </Card>
