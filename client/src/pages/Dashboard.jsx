@@ -1,6 +1,5 @@
 // client/src/pages/Dashboard.jsx
-import { DashboardSkeleton } from '../components/Skeletons';
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
 	Typography,
 	Box,

@@ -6,14 +6,12 @@ import {
 	DialogActions,
 	Button,
 	Typography,
-	Box,
-	useTheme
+	Box
 } from "@mui/material";
 
 export default function PWAInstallPrompt() {
 	const [deferredPrompt, setDeferredPrompt] = useState(null);
 	const [open, setOpen] = useState(false);
-	const theme = useTheme();
 
 	useEffect(() => {
 		const handleBeforeInstallPrompt = (e) => {
