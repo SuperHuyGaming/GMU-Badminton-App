@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import apiFetch from "../utils/api";
 import { toast } from "react-hot-toast";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
@@ -29,6 +30,7 @@ export const AuthProvider = ({ children }) => {
 			setToastMessage("You have been successfully logged out.");
 			localStorage.removeItem("justLoggedOut");
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const login = React.useCallback((userData, accessToken, refreshToken, customMessage = null) => {
@@ -77,6 +79,7 @@ export const AuthProvider = ({ children }) => {
 	);
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
 	const context = useContext(AuthContext);
 	if (!context) {

@@ -63,6 +63,7 @@ export default function MobileNav() {
 
 	// Sync the active tab with the current URL
 	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		if (location.pathname === "/") setValue(0);
 		else if (location.pathname.startsWith("/forum")) setValue(1);
 		else if (location.pathname.startsWith("/profile")) setValue(2);

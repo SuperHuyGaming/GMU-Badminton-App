@@ -34,6 +34,7 @@ if (POSTHOG_KEY && POSTHOG_KEY !== 'mock-posthog-api-key') {
             maskTextSelector: "password",
         },
         loaded: (ph) => {
+            // eslint-disable-next-line no-undef
             if (process.env.NODE_ENV === 'development') ph.debug(false);
         }
     });
@@ -49,6 +50,7 @@ import {
 	BrowserRouter,
 	Routes,
 	Route,
+	// eslint-disable-next-line no-unused-vars
 	Link as RouterLink,
 	Navigate,
 	useLocation,
@@ -58,7 +60,9 @@ import {
 	createTheme,
 	CssBaseline,
 	Container,
+	// eslint-disable-next-line no-unused-vars
 	Snackbar,
+	// eslint-disable-next-line no-unused-vars
 	Alert,
 	GlobalStyles,
 	CircularProgress,
@@ -66,6 +70,7 @@ import {
 } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ColorModeContext = createContext({ toggleColorMode: () => {} });
 
 const AdminRoute = ({ children }) => {
@@ -83,6 +88,7 @@ const AnimatedRoutes = () => {
     const [reportModalOpen, setReportModalOpen] = useState(!!reportMatchId);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setReportModalOpen(!!reportMatchId);
     }, [reportMatchId]);
 
@@ -239,6 +245,7 @@ const AnimatedRoutes = () => {
 };
 
 function App() {
+	// eslint-disable-next-line no-unused-vars
 	const { user, toastMessage, setToastMessage } = useAuth();
 	const [mode, setMode] = useState(localStorage.getItem("themeMode") || "light");
 

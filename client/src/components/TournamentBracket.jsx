@@ -1,4 +1,3 @@
-import React from 'react';
 import { Box, Typography, Paper, useTheme } from '@mui/material';
 
 // Recursive Bracket Node component
