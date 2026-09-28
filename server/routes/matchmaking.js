@@ -9,7 +9,9 @@ const router = express.Router();
 router.get("/discover", authMiddleware, async (req, res) => {
     try {
         const { search, skill } = req.query;
-        const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, "\\const { search, skill } = req.query;");
+        const escapeRegex = (string) => {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        };
         
         const currentUser = await User.findById(req.user.userId).lean();
         
