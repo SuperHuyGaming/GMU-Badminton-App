@@ -345,7 +345,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 				>
 					<Avatar
 						src={localPost.authorPic}
-						onClick={() = alt="User Avatar" >
+						onClick={() =>
 							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 						}
 						sx={{
