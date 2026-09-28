@@ -250,7 +250,7 @@ export default function PostCommentsInline({
 					{!localPost.comments?.length ? (
 						<Typography
 							variant="body2"
-							color="text.secondary"
+							color="text.primary"
 							sx={{ textAlign: "center", mt: 2 }}
 						>
 							No comments yet. Be the first to reply!
@@ -288,7 +288,7 @@ export default function PostCommentsInline({
 
 			{/* TYPING INDICATOR */}
 			{typingUsers.size > 0 && (
-				<Typography variant="caption" color="text.secondary" sx={{ ml: 6, fontStyle: "italic", mb: 0.5, display: "block" }}>
+				<Typography variant="caption" color="text.primary" sx={{ ml: 6, fontStyle: "italic", mb: 0.5, display: "block" }}>
 					{Array.from(typingUsers).join(", ")} {typingUsers.size === 1 ? "is" : "are"} typing...
 				</Typography>
 			)}

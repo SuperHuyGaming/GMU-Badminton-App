@@ -91,12 +91,12 @@ export default function Matchmaking() {
                     {player.preferredPlay && <Chip label={player.preferredPlay} size="small" color="secondary" variant="outlined" />}
                 </Stack>
                 {player.homeUniversity && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    <Typography variant="body2" color="text.primary" sx={{ mb: 1 }}>
                         🏫 {player.homeUniversity}
                     </Typography>
                 )}
                 {player.racket && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
                         🏸 {player.racket}
                     </Typography>
                 )}
@@ -130,7 +130,7 @@ export default function Matchmaking() {
             <Typography variant="h3" sx={{ mb: 1, fontWeight: 'bold' }}>
                 Community Directory
             </Typography>
-            <Typography color="text.secondary" sx={{ mb: 4 }}>
+            <Typography color="text.primary" sx={{ mb: 4 }}>
                 Find players, connect, and hit the courts.
             </Typography>
 
@@ -147,7 +147,7 @@ export default function Matchmaking() {
             />
 
             <Stack direction="row" spacing={1} sx={{ mb: 4, overflowX: 'auto', pb: 1 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center', mr: 1, fontWeight: 'bold' }}>
+                <Typography variant="body2" color="text.primary" sx={{ alignSelf: 'center', mr: 1, fontWeight: 'bold' }}>
                     Filter Skill:
                 </Typography>
                 {skillLevels.map(level => (

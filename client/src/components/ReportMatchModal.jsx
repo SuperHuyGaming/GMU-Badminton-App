@@ -140,7 +140,7 @@ export default function ReportMatchModal({ open, onClose, opponentId }) {
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 4 } }}>
             <DialogTitle sx={{ fontWeight: '900', textAlign: 'center', pt: 4, fontSize: '1.5rem' }}>Report Match Score</DialogTitle>
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, px: { xs: 2, sm: 4 } }}>
-                <Typography color="text.secondary" textAlign="center" sx={{ mb: 2 }}>
+                <Typography color="text.primary" textAlign="center" sx={{ mb: 2 }}>
                     Did you play a match against <strong>{opponent?.name || "Player"}</strong>? 
                     Enter the final score below. They will need to confirm it.
                 </Typography>
@@ -154,7 +154,7 @@ export default function ReportMatchModal({ open, onClose, opponentId }) {
                         handleIncrement={handleIncrement}
                         handleDecrement={handleDecrement}
                     />
-                    <Typography variant="h5" fontWeight="bold" color="text.secondary">VS</Typography>
+                    <Typography variant="h5" fontWeight="bold" color="text.primary">VS</Typography>
                     <ScoreAdjuster 
                         label="Opponent" 
                         score={team2Score} 

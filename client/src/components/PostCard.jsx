@@ -345,7 +345,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 				>
 					<Avatar
 						src={localPost.authorPic}
-						onClick={() = alt="User Avatar" >
+						onClick={() =>
 							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 						}
 						sx={{
@@ -370,7 +370,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						>
 							{localPost.title}
 						</Typography>
-						<Typography variant="caption" color="text.secondary">
+						<Typography variant="caption" color="text.primary">
 							<span
 								role="button"
 								tabIndex={0}
@@ -422,7 +422,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								aria-label="More options"
 								onClick={(e) => setAnchorEl(e.currentTarget)}
 								size="small"
-								sx={{ color: "text.secondary" }}
+								sx={{ color: "text.primary" }}
 							>
 								<MoreVertIcon />
 							</IconButton>
@@ -680,7 +680,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						{totalCommentsCount > 0 && (
 							<Typography
 								variant="body2"
-								color="text.secondary"
+								color="text.primary"
 								sx={{
 									cursor: "pointer",
 									"&:hover": { textDecoration: "underline" },
@@ -721,7 +721,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								)}
 								<Typography
 									variant="body2"
-									color="text.secondary"
+									color="text.primary"
 								>
 									{localPost.likedBy.length}
 								</Typography>
@@ -749,7 +749,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					sx={{
 						p: 0,
 						justifyContent: "space-between",
-						color: "text.secondary",
+						color: "text.primary",
 					}}
 				>
 					<Box 

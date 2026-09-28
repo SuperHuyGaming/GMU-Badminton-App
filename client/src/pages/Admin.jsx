@@ -141,7 +141,7 @@ export default function Admin() {
 				>
 					Admin Tab
 				</Typography>
-				<Typography variant="h6" color="text.secondary">
+				<Typography variant="h6" color="text.primary">
 					Platform Administration Hub
 				</Typography>
 			</Box>
@@ -167,7 +167,7 @@ export default function Admin() {
 						border: "1px solid", borderColor: "divider",
 					}}
 				>
-					<Typography variant="h6" color="text.secondary">
+					<Typography variant="h6" color="text.primary">
 						No spam detected! The forum is clean.
 					</Typography>
 				</Paper>
@@ -288,7 +288,7 @@ export default function Admin() {
 						border: "1px solid", borderColor: "divider",
 					}}
 				>
-					<Typography variant="h6" color="text.secondary">
+					<Typography variant="h6" color="text.primary">
 						No reported messages! Chats are safe.
 					</Typography>
 				</Paper>

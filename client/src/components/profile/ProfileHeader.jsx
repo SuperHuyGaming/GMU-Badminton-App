@@ -330,7 +330,7 @@ export default function ProfileHeader({
 					</Typography>
 					<Typography
 						variant="body1"
-						color="text.secondary"
+						color="text.primary"
 						sx={{
 							mt: 0.5,
 							fontStyle: "italic",
@@ -406,7 +406,7 @@ export default function ProfileHeader({
 						key={tab}
 						onClick={() => setActiveTab(tab)}
 						fontWeight="bold"
-						color={activeTab === tab ? "primary" : "text.secondary"}
+						color={activeTab === tab ? "primary" : "text.primary"}
 						sx={{
 							borderBottom:
 								activeTab === tab
@@ -474,7 +474,7 @@ export default function ProfileHeader({
 				<DialogTitle align="center" fontWeight="bold">Scan to Connect</DialogTitle>
 				<DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
 					<QRCodeSVG value={window.location.href} size={200} level="H" />
-					<Typography mt={3} variant="body2" color="text.secondary">
+					<Typography mt={3} variant="body2" color="text.primary">
 						Have your friend scan this QR code to view your profile and send a friend request!
 					</Typography>
 				</DialogContent>

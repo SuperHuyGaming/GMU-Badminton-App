@@ -44,7 +44,7 @@ export default function EmptyState({ type = "default", actionLabel, onAction }) 
 				</Typography>
 				<Typography
 					variant="body1"
-					color="text.secondary"
+					color="text.primary"
 					sx={{ maxWidth: 360, mb: actionLabel ? 3 : 0, lineHeight: 1.6 }}
 				>
 					{config.subtitle}

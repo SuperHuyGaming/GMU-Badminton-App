@@ -304,7 +304,7 @@ export default function Forum() {
 							'&:hover': { backgroundColor: 'action.selected' }
 						}}
 					>
-						<Typography color="text.secondary" sx={{ fontSize: '0.95rem' }}>
+						<Typography color="text.primary" sx={{ fontSize: '0.95rem' }}>
 							What's on your mind{currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?
 						</Typography>
 					</Box>
@@ -358,7 +358,7 @@ export default function Forum() {
 					))
 				) : feed.length === 0 ? (
 					<Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', p: 4 }}>
-						<Typography color="text.secondary">No activity found.</Typography>
+						<Typography color="text.primary">No activity found.</Typography>
 					</Box>
 				) : (
 					feed.map((item, idx) => {
@@ -409,7 +409,7 @@ export default function Forum() {
 										{/* HEADER BAR */}
 										<Box sx={{ display: 'flex', px: 3, py: 1.5, background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid rgba(0,0,0,0.05)', alignItems: 'center' }}>
 											<Chip label="🏆 Official Match" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: 'black' }} />
-											<Typography variant="caption" fontWeight="bold" color="text.secondary" ml="auto">{formatTime(item.createdAt)}</Typography>
+											<Typography variant="caption" fontWeight="bold" color="text.primary" ml="auto">{formatTime(item.createdAt)}</Typography>
 										</Box>
 
 										{/* SCOREBOARD */}
@@ -419,7 +419,7 @@ export default function Forum() {
 												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team1Avatars?.map((avatar, i) => (
-														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i  alt="User Avatar" > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
+														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
 												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
@@ -429,7 +429,7 @@ export default function Forum() {
 
 											{/* HUGE SCORE */}
 											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '30%' }}>
-												<Typography variant="overline" color="text.secondary" fontWeight="bold" sx={{ mb: -1 }}>FINAL</Typography>
+												<Typography variant="overline" color="text.primary" fontWeight="bold" sx={{ mb: -1 }}>FINAL</Typography>
 												<Typography variant="h3" fontWeight="900" sx={{ letterSpacing: '-2px', color: 'text.primary' }}>
 													<span style={{ color: team1Wins ? '#006633' : 'inherit' }}>{item.team1Score}</span>
 													<span style={{ margin: '0 8px', color: '#757575' }}>-</span>
@@ -442,7 +442,7 @@ export default function Forum() {
 												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team2Avatars?.map((avatar, i) => (
-														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i  alt="User Avatar" > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
+														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
 												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
@@ -463,7 +463,7 @@ export default function Forum() {
 			<Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, height: 60, alignItems: 'center' }}>
 				{isFetchingMore && <CircularProgress size={24} color="primary" />}
                 {!isFetchingMore && !hasMore && feed.length > 0 && (
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                    <Typography variant="body2" color="text.primary" sx={{ fontWeight: 'bold' }}>
                         You're all caught up! 🏸
                     </Typography>
                 )}
@@ -479,7 +479,7 @@ export default function Forum() {
 					<Box sx={{ display: 'flex', gap: 2 }}>
 						{/* Privacy Selection */}
 						<Box sx={{ flex: 1 }}>
-							<Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
+							<Typography variant="caption" color="text.primary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
 								Privacy
 							</Typography>
 							<Select
@@ -496,7 +496,7 @@ export default function Forum() {
 
 						{/* Tags Selection */}
 						<Box sx={{ flex: 2 }}>
-							<Typography variant="caption" color="text.secondary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
+							<Typography variant="caption" color="text.primary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
 								Add Tags (Optional)
 							</Typography>
                         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>

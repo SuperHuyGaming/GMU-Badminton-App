@@ -91,7 +91,7 @@ export default function OnboardingWizard({ onComplete }) {
 						<Typography variant="h5" fontWeight="bold" gutterBottom>
 							Welcome to Mason Badminton Connect!
 						</Typography>
-						<Typography color="text.secondary" sx={{ maxWidth: 400, mx: "auto" }}>
+						<Typography color="text.primary" sx={{ maxWidth: 400, mx: "auto" }}>
 							Let&apos;s set up your player profile in 3 quick steps so other
 							players can find and challenge you.
 						</Typography>
@@ -190,11 +190,11 @@ export default function OnboardingWizard({ onComplete }) {
 						<Typography variant="h5" fontWeight="bold" gutterBottom>
 							You&apos;re all set, {formData.name || "Player"}!
 						</Typography>
-						<Typography color="text.secondary">
+						<Typography color="text.primary">
 							Skill: {formData.skillLevel} · Plays: {formData.preferredPlay}
 						</Typography>
 						{formData.racket && (
-							<Typography color="text.secondary" sx={{ mt: 0.5 }}>
+							<Typography color="text.primary" sx={{ mt: 0.5 }}>
 								Racket: {formData.racket}
 							</Typography>
 						)}
