@@ -61,7 +61,7 @@ const allowedOrigins = [
 
 const corsOptions = {
 	origin: function (origin, callback) {
-		if (!origin || allowedOrigins.includes(origin) || origin.includes("gmu-badminton")) {
+		if (!origin || allowedOrigins.includes(origin) || origin.includes("gmu-badminton") || origin.includes("gmu-frontend")) {
 			callback(null, true);
 		} else {
 			callback(new Error('Not allowed by CORS'));
