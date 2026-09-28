@@ -363,10 +363,7 @@ export default function Navbar() {
 										role="button"
 										tabIndex={0}
 										aria-label="User menu"
-<<<<<<< Updated upstream
 										alt="User Avatar"
-=======
->>>>>>> Stashed changes
 										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
 										sx={{
 											width: 40,
