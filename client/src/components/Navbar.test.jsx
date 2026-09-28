@@ -143,5 +143,23 @@ describe('Navbar Component & Global Search UI', () => {
 
         expect(mockNavigate).not.toHaveBeenCalled();
     });
+
+    it('renders with accessible ARIA attributes and responsive mobile search button', () => {
+        renderNavbar();
+
+        // Search input has accessible aria-label
+        const searchInput = screen.getByLabelText('Search players');
+        expect(searchInput).toBeInTheDocument();
+
+        // Hamburger button has accessible open navigation menu label and controls
+        const hamburgerBtn = screen.getByLabelText('Open navigation menu');
+        expect(hamburgerBtn).toHaveAttribute('aria-expanded', 'false');
+        expect(hamburgerBtn).toHaveAttribute('aria-controls', 'mobile-navigation-drawer');
+
+        // Responsive mobile search button is available
+        const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });
+        expect(mobileSearchBtn).toBeInTheDocument();
+        expect(mobileSearchBtn).toHaveAttribute('href', '/search');
+    });
 });
 

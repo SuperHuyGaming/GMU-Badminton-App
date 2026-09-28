@@ -64,4 +64,59 @@ describe('Kafka Producer Utility', () => {
 
         expect(producer.send).not.toHaveBeenCalled();
     });
+
+    it('should validate topic and reject invalid topic without calling producer.send', async () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        await publishEvent('', { type: 'test' });
+        await publishEvent(null, { type: 'test' });
+        await publishEvent(123, { type: 'test' });
+
+        expect(producer.send).not.toHaveBeenCalled();
+        expect(consoleSpy).toHaveBeenCalledTimes(3);
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should validate message and reject null or undefined message without calling producer.send', async () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        await publishEvent('valid-topic', undefined);
+        await publishEvent('valid-topic', null);
+
+        expect(producer.send).not.toHaveBeenCalled();
+        expect(consoleSpy).toHaveBeenCalledTimes(2);
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should sanitize sensitive fields like password and pushSubscriptions from payload', async () => {
+        const messageWithSecrets = {
+            type: 'user.updated',
+            payload: {
+                _id: 'user123',
+                name: 'John Doe',
+                password: 'superSecretHashedPassword',
+                pushSubscriptions: [{ endpoint: 'https://push.example.com', keys: { auth: 'secret' } }],
+                token: 'jwt-token-value',
+                skillLevel: 'B Level'
+            }
+        };
+
+        await publishEvent('user-events', messageWithSecrets);
+
+        expect(producer.send).toHaveBeenCalledWith({
+            topic: 'user-events',
+            messages: [{
+                value: JSON.stringify({
+                    type: 'user.updated',
+                    payload: {
+                        _id: 'user123',
+                        name: 'John Doe',
+                        skillLevel: 'B Level'
+                    }
+                })
+            }]
+        });
+    });
 });

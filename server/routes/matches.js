@@ -7,6 +7,11 @@ const { authMiddleware } = require("../middleware/auth");
 
 const { redisClient, redisEnabled } = require("../config/redis");
 
+const escapeRegex = (string) => {
+    if (typeof string !== "string") return "";
+    return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
 // GET: Leaderboard
 router.get("/leaderboard", async (req, res, next) => {
     try {
@@ -14,7 +19,7 @@ router.get("/leaderboard", async (req, res, next) => {
         const { university, skillLevel, minMatches, search } = req.query;
 
         // Generate dynamic cache key based on all filters
-        const cacheKey = `leaderboard:${type}:${university || 'any'}:${skillLevel || 'any'}:${minMatches || 0}:${search || 'none'}`;
+        const cacheKey = `leaderboard:${type}:${university || 'any'}:${skillLevel || 'any'}:${minMatches || 0}:${typeof search === 'string' ? search.trim().slice(0, 100) : 'none'}`;
 
         if (redisEnabled) {
             const cachedLeaderboard = await redisClient.get(cacheKey);
@@ -34,7 +39,12 @@ router.get("/leaderboard", async (req, res, next) => {
         if (university) matchStage.homeUniversity = university;
         if (skillLevel) matchStage.skillLevel = skillLevel;
         if (minMatches) matchStage['stats.totalMatches'] = { $gte: parseInt(minMatches, 10) };
-        if (search) matchStage.name = { $regex: search, $options: "i" };
+        if (search) {
+            const sanitizedSearch = escapeRegex(search);
+            if (sanitizedSearch) {
+                matchStage.name = { $regex: sanitizedSearch, $options: "i" };
+            }
+        }
 
         if (Object.keys(matchStage).length > 0) {
             pipeline.push({ $match: matchStage });

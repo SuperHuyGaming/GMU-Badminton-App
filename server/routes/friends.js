@@ -169,12 +169,21 @@ router.post("/remove", authMiddleware, async (req, res, next) => {
 	}
 });
 
+const escapeRegex = (string) => {
+	if (typeof string !== "string") return "";
+	return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
 // GET: search users
 router.get("/search/:query", authMiddleware, async (req, res, next) => {
 	try {
+		const sanitizedQuery = escapeRegex(req.params.query);
+		if (!sanitizedQuery) {
+			return res.json([]);
+		}
 		const users = await User.find({
-			name: { $regex: req.params.query, $options: "i" }
-		}).select("_id name profilePic skillLevel").limit(10);
+			name: { $regex: sanitizedQuery, $options: "i" }
+		}).select("_id name profilePic skillLevel").limit(10).lean();
 		res.json(users);
 	} catch (error) {
 		next(error);

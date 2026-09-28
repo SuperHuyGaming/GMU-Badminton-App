@@ -10,7 +10,8 @@ router.get("/discover", authMiddleware, async (req, res) => {
     try {
         const { search, skill } = req.query;
         const escapeRegex = (string) => {
-            return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (typeof string !== "string") return "";
+            return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         };
         
         const currentUser = await User.findById(req.user.userId).lean();
@@ -28,10 +29,12 @@ router.get("/discover", authMiddleware, async (req, res) => {
         // Add search filtering if provided
         if (search) {
             const sanitizedSearch = escapeRegex(search);
-            query.$or = [
-                { name: { $regex: sanitizedSearch, $options: "i" } },
-                { homeUniversity: { $regex: sanitizedSearch, $options: "i" } }
-            ];
+            if (sanitizedSearch) {
+                query.$or = [
+                    { name: { $regex: sanitizedSearch, $options: "i" } },
+                    { homeUniversity: { $regex: sanitizedSearch, $options: "i" } }
+                ];
+            }
         }
 
         // Fetch up to 50 users, sorted by most recently active
