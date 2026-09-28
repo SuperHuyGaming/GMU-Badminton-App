@@ -371,11 +371,19 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 							{localPost.title}
 						</Typography>
 						<Typography variant="caption" color="text.secondary">
-							<strong
+							<span
+								role="button"
+								tabIndex={0}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										if (localPost.authorId) navigate(`/profile/${localPost.authorId}`);
+									}
+								}}
 								onClick={() =>
 									localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 								}
-								style={{ cursor: "pointer", display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+								style={{ cursor: "pointer", display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 'bold' }}
 							>
 								{localPost.authorName || "Unknown"}
 								{localPost.authorBadges?.includes("top_contributor") && (
@@ -390,7 +398,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 										}} 
 									/>
 								)}
-							</strong>{" "}
+							</span>{" "}
 							• {formatTime(localPost.timestamp)}
 							{localPost.isEdited && (
 								<span

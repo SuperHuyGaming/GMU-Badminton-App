@@ -39,6 +39,10 @@ export default function Auth() {
 				setError("Email and password are required.");
 				return;
 			}
+			if (formData.password.length < 6) {
+				setError("Password must be at least 6 characters long.");
+				return;
+			}
 		} else if (activeStep === 1) {
 			if (!formData.name) {
 				setError("Name is required.");
@@ -121,7 +125,7 @@ export default function Auth() {
 						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
 							What should we call you on the court?
 						</Typography>
-						<TextField fullWidth label="Full Name or Nickname" name="name" value={formData.name} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required autoFocus />
+						<TextField fullWidth label="Full Name or Nickname" name="name" value={formData.name} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
 					</motion.div>
 				);
 			case 2:
