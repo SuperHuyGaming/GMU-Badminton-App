@@ -40,6 +40,13 @@ const PostSchema = new mongoose.Schema({
 
 PostSchema.post('save', async function(doc) {
 	try {
+		const { publishEvent } = require('../utils/kafkaProducer');
+		await publishEvent("post-events", { type: "post.updated", payload: doc });
+	} catch (err) {
+		console.error("Kafka publish error (Post):", err);
+	}
+
+	try {
 		const ActivityFeed = require('./ActivityFeed');
         
         if (doc.isFlagged) {

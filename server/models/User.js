@@ -81,4 +81,23 @@ userSchema.index({ name: 1 });
 userSchema.index({ homeUniversity: 1, lastActive: -1 });
 userSchema.index({ skillLevel: 1, lastActive: -1 });
 
+const { publishEvent } = require("../utils/kafkaProducer");
+
+userSchema.post("save", async function (doc) {
+	try {
+		await publishEvent("user-events", { type: "user.updated", payload: doc });
+	} catch (error) {
+		console.error("Kafka publish error (User save):", error);
+	}
+});
+
+userSchema.post("findOneAndDelete", async function (doc) {
+	if (!doc) return;
+	try {
+		await publishEvent("user-events", { type: "user.deleted", payload: doc });
+	} catch (error) {
+		console.error("Kafka publish error (User delete):", error);
+	}
+});
+
 module.exports = mongoose.model("User", userSchema);
