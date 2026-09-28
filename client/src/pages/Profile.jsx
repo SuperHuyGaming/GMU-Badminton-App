@@ -253,6 +253,7 @@ export default function Profile() {
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
+		if (!formData.firstName?.trim() || !formData.lastName?.trim()) return;
 		if (!isOwnProfile) return;
 
 		setIsSaving(true);
