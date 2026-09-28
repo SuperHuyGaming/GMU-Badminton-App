@@ -1,0 +1,17 @@
+{
+  "menu": {
+    "dashboard": "Dashboard",
+    "forum": "Forum",
+    "leaderboard": "Leaderboard",
+    "tournaments": "Tournaments",
+    "marketplace": "Marketplace",
+    "profile": "Profile"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "language": "Language"
+  }
+}

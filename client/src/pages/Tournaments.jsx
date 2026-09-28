@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid } from '@mui/material';
+import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import TournamentBracket from '../components/TournamentBracket';
 import EmptyTournaments from '../components/EmptyTournaments';
+import apiFetch from '../utils/api';
 import MapPinIcon from '../components/MapPinIcon';
 
 
@@ -12,7 +14,28 @@ export default function Tournaments() {
     const [nextCursor, setNextCursor] = useState(null);
     const [hasNext, setHasNext] = useState(false);
 
-    // handleViewBracket removed to pass lint
+    
+
+    // Bracket State
+    const [bracketOpen, setBracketOpen] = useState(false);
+    const [bracketData, setBracketData] = useState(null);
+    const [bracketLoading, setBracketLoading] = useState(false);
+
+    // eslint-disable-next-line no-unused-vars
+    const handleViewBracket = async () => {
+        setBracketOpen(true);
+        if (bracketData) return; // already loaded
+        setBracketLoading(true);
+        try {
+            const res = await apiFetch('/api/matchmaking/generate-bracket');
+            const data = await res.json();
+            setBracketData(data);
+        } catch (err) {
+            console.error("Failed to fetch bracket", err);
+        } finally {
+            setBracketLoading(false);
+        }
+    };
 
     const handleExportICS = (tournament) => {
         const formatDateForICS = (dateString) => {
@@ -114,6 +137,8 @@ END:VCALENDAR`;
                 Upcoming Tournaments
             </Typography>
 
+
+
             <Typography color="text.primary" sx={{ mb: 4 }}>
                 Find local badminton tournaments scraped from across the web.
             </Typography>
@@ -206,6 +231,22 @@ END:VCALENDAR`;
                     </Button>
                 </Box>
             )}
+
+            <Dialog open={bracketOpen} onClose={() => setBracketOpen(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 4, height: '80vh' } }}>
+                <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    16-Player Knockout Bracket
+                    <Button onClick={() => setBracketOpen(false)} color="inherit" sx={{ fontWeight: 'bold' }}>Close</Button>
+                </DialogTitle>
+                <DialogContent dividers sx={{ backgroundColor: '#f9f9f9' }}>
+                    {bracketLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <TournamentBracket rootMatch={bracketData} />
+                    )}
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }

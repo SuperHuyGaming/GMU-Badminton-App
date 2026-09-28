@@ -1,0 +1,17 @@
+{
+  "menu": {
+    "dashboard": "B?ng di?u khi?n",
+    "forum": "Di?n dàn",
+    "leaderboard": "B?ng x?p h?ng",
+    "tournaments": "Gi?i d?u",
+    "marketplace": "Ch? mua bán",
+    "profile": "H? so"
+  },
+  "common": {
+    "loading": "Ðang t?i...",
+    "error": "Ðã x?y ra l?i",
+    "save": "Luu",
+    "cancel": "H?y",
+    "language": "Ngôn ng?"
+  }
+}
