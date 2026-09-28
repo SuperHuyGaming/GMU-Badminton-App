@@ -29,7 +29,7 @@ export default function Landing() {
 				{/* Hero Section */}
 				<Box sx={{ textAlign: "center", mb: 8 }}>
 					<motion.img
-						src="/icon.jpg"
+						src="/favicon.svg"
 						alt="GMU Badminton"
 						style={{ width: 120, height: 120, borderRadius: 24, marginBottom: 24, boxShadow: "0px 12px 24px rgba(0,0,0,0.2)" }}
 						initial={{ scale: 0.8, opacity: 0 }}
@@ -37,7 +37,7 @@ export default function Landing() {
 						transition={{ type: "spring", bounce: 0.5 }}
 					/>
 					<motion.div variants={itemVariants}>
-						<Typography variant="h2" fontWeight="900" sx={{ mb: 2, background: "linear-gradient(45deg, #006633, #FFCC33)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+						<Typography variant="h2" fontWeight="900" sx={{ mb: 2, color: "primary.main" }}>
 							Mason Badminton Connect
 						</Typography>
 					</motion.div>

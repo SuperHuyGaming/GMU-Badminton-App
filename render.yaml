@@ -1,20 +1,28 @@
 services:
-  # 1. GMU Social Backend (Node.js)
+  # ============================================
+  # PRODUCTION (deploys from 'main' branch)
+  # ============================================
+
+  # 1. Production Backend (Node.js)
   - type: web
     name: gmu-social-api
     env: node
     rootDir: server
+    branch: main
     buildCommand: npm install --legacy-peer-deps
     startCommand: node server.js
     envVars:
       - key: MONGO_URI
         sync: false
+      - key: NODE_ENV
+        value: production
 
-  # 2. GMU React Frontend
+  # 2. Production Frontend (Static)
   - type: web
     name: gmu-frontend
     env: static
     rootDir: client
+    branch: main
     buildCommand: npm install --legacy-peer-deps && npm run build
     staticPublishPath: dist
     envVars:
@@ -23,3 +31,8 @@ services:
           name: gmu-social-api
           type: web
           property: host
+
+  # ============================================
+  # STAGING: Create manually on Render (free tier)
+  # See docs/STAGING_SETUP.md for instructions
+  # ============================================

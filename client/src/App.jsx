@@ -306,6 +306,28 @@ function App() {
 			}
 		},
 		components: {
+
+			MuiInputBase: {
+				styleOverrides: {
+					input: {
+						'&:-webkit-autofill': {
+							WebkitBoxShadow: mode === 'dark' ? '0 0 0 100px #121212 inset !important' : '0 0 0 100px #ffffff inset !important',
+							WebkitTextFillColor: mode === 'dark' ? '#ffffff !important' : '#000000 !important',
+							caretColor: mode === 'dark' ? '#ffffff' : '#000000',
+							borderRadius: 'inherit'
+						}
+					}
+				}
+			},
+			MuiOutlinedInput: {
+				styleOverrides: {
+					root: {
+						'&:-webkit-autofill': {
+							borderRadius: 'inherit'
+						}
+					}
+				}
+			},
 			MuiPaper: {
 				styleOverrides: {
 					root: {

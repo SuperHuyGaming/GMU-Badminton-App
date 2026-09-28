@@ -296,7 +296,10 @@ router.put("/:postId", async (req, res) => {
 		if (post.authorId.toString() !== userId.toString())
 			return res.status(403).json({ message: "Unauthorized" });
 
-		if (await checkSpam(title) || await checkSpam(content)) {
+		const cleanTitle = xss(title);
+		const cleanContent = xss(content);
+
+		if (await checkSpam(cleanTitle) || await checkSpam(cleanContent)) {
 			post.isFlagged = true;
 			await post.save();
 			if (req.io) req.io.emit("postDeleted", post._id);
@@ -305,8 +308,8 @@ router.put("/:postId", async (req, res) => {
 				.json({ message: "Post submitted for review." });
 		}
 
-		post.title = title;
-		post.content = content;
+		post.title = cleanTitle;
+		post.content = cleanContent;
 		post.isEdited = true; // NEW: Set edited flag
 		await post.save();
 
@@ -358,17 +361,19 @@ router.get("/:postId/comments", async (req, res) => {
 router.post("/:postId/comments", postLimiter, async (req, res) => {
 	try {
 		const { content, authorName, authorId } = req.body;
+		const cleanContent = xss(content);
+		const cleanAuthorName = xss(authorName);
 		const post = await Post.findById(req.params.postId);
 
-		const isSpam = await checkSpam(content);
-		const aiAnalysis = await analyzeContent(content);
+		const isSpam = await checkSpam(cleanContent);
+		const aiAnalysis = await analyzeContent(cleanContent);
 
 		if (isSpam || aiAnalysis.isFlagged)
 			return res
 				.status(400)
 				.json({ message: "Comment rejected: Spam or toxicity detected." });
 
-		post.comments.push({ authorId, authorName, content });
+		post.comments.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
 		await post.save();
 
 		const updatedPost = await Post.findById(req.params.postId).lean();
@@ -396,15 +401,16 @@ router.post("/:postId/comments", postLimiter, async (req, res) => {
 router.put("/:postId/comments/:commentId", async (req, res) => {
 	try {
 		const { userId, content } = req.body;
+		const cleanContent = xss(content);
 		const post = await Post.findById(req.params.postId);
 		const comment = post.comments.id(req.params.commentId);
 
 		if (comment.authorId.toString() !== userId.toString())
 			return res.status(403).json({ message: "Unauthorized" });
-		if (await checkSpam(content))
+		if (await checkSpam(cleanContent))
 			return res.json(await hydrateWithPictures(post.toObject()));
 
-		comment.content = content;
+		comment.content = cleanContent;
 		comment.isEdited = true; // NEW: Set edited flag
 		await post.save();
 		const hydratedPost = await hydrateWithPictures(post.toObject());
@@ -443,18 +449,20 @@ router.post(
 	async (req, res) => {
 		try {
 			const { authorId, authorName, content } = req.body;
+			const cleanContent = xss(content);
+			const cleanAuthorName = xss(authorName);
 			const post = await Post.findById(req.params.postId);
 			const comment = post.comments.id(req.params.commentId);
 
-			const isSpam = await checkSpam(content);
-			const aiAnalysis = await analyzeContent(content);
+			const isSpam = await checkSpam(cleanContent);
+			const aiAnalysis = await analyzeContent(cleanContent);
 
 			if (isSpam || aiAnalysis.isFlagged)
 				return res
 					.status(400)
 					.json({ message: "Reply rejected: Spam or toxicity detected." });
 
-			comment.replies.push({ authorId, authorName, content });
+			comment.replies.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
 			await post.save();
 
 			const updatedPost = await Post.findById(req.params.postId).lean();
@@ -493,6 +501,7 @@ router.put(
 	async (req, res) => {
 		try {
 			const { userId, content } = req.body;
+			const cleanContent = xss(content);
 			const post = await Post.findById(req.params.postId);
 			const reply = post.comments
 				.id(req.params.commentId)
@@ -500,10 +509,10 @@ router.put(
 
 			if (reply.authorId.toString() !== userId.toString())
 				return res.status(403).json({ message: "Unauthorized" });
-			if (await checkSpam(content))
+			if (await checkSpam(cleanContent))
 				return res.json(await hydrateWithPictures(post.toObject()));
 
-			reply.content = content;
+			reply.content = cleanContent;
 			reply.isEdited = true; // NEW: Set edited flag
 			await post.save();
 			const hydratedPost = await hydrateWithPictures(post.toObject());

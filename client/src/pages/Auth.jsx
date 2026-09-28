@@ -53,6 +53,22 @@ export default function Auth() {
 		setActiveStep((prev) => prev - 1);
 	};
 
+	
+	const handleKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			if (isLogin) {
+				handleSubmit();
+			} else {
+				if (activeStep === steps.length - 1) {
+					handleSubmit();
+				} else {
+					handleNext();
+				}
+			}
+		}
+	};
+
 	const handleSubmit = async (e) => {
 		if (e) e.preventDefault();
 		if (isSubmitting) return;
@@ -63,7 +79,7 @@ export default function Auth() {
 
 		try {
 			const response = await fetch(
-				`${import.meta.env.VITE_API_URL}${endpoint}`,
+				`${(import.meta.env.VITE_API_URL || "").replace(/\/+$/, "")}${endpoint}`,
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -95,8 +111,8 @@ export default function Auth() {
 						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
 							Let's start with the basics.
 						</Typography>
-						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} margin="normal" required />
-						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} margin="normal" required />
+						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
+						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
 					</motion.div>
 				);
 			case 1:
@@ -105,7 +121,7 @@ export default function Auth() {
 						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
 							What should we call you on the court?
 						</Typography>
-						<TextField fullWidth label="Full Name or Nickname" name="name" value={formData.name} onChange={handleChange} margin="normal" required autoFocus />
+						<TextField fullWidth label="Full Name or Nickname" name="name" value={formData.name} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required autoFocus />
 					</motion.div>
 				);
 			case 2:
@@ -191,8 +207,8 @@ export default function Auth() {
 
 				{isLogin ? (
 					<form onSubmit={handleSubmit}>
-						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} margin="normal" required />
-						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} margin="normal" required />
+						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
+						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
 						<Button type="submit" fullWidth variant="contained" color="primary" size="large" disabled={isSubmitting} sx={{ mt: 4, mb: 2, fontWeight: "bold", py: 1.5, borderRadius: 2 }}>
 							{isSubmitting ? <CircularProgress size={24} color="inherit" /> : "Login"}
 						</Button>

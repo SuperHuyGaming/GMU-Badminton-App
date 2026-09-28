@@ -631,6 +631,7 @@ export default function Dashboard() {
 												{currentUser?.role ===
 													"admin" && (
 													<IconButton
+														aria-label="Delete update"
 														size="small"
 														color="error"
 														onClick={() =>
