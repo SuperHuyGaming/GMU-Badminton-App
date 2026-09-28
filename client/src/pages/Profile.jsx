@@ -79,8 +79,11 @@ export default function Profile() {
 		if (profileQueryData) {
 			setProfileData(profileQueryData);
 			if (isOwnProfile) {
+				const nameParts = (profileQueryData.name || "").split(" ");
 				setFormData({
 					name: profileQueryData.name || "",
+					firstName: profileQueryData.firstName || nameParts[0] || "",
+					lastName: profileQueryData.lastName || nameParts.slice(1).join(" ") || "",
 					skillLevel: profileQueryData.skillLevel || "D Level",
 					bio: profileQueryData.bio || "",
 					preferredPlay: profileQueryData.preferredPlay || "Any",
@@ -253,10 +256,14 @@ export default function Profile() {
 		if (!isOwnProfile) return;
 
 		setIsSaving(true);
+		const payload = {
+			...formData,
+			name: formData.firstName && formData.lastName ? `${formData.firstName} ${formData.lastName}` : formData.name,
+		};
 		try {
 			const res = await apiFetch("/api/profile", {
 				method: "PUT",
-				body: JSON.stringify(formData),
+				body: JSON.stringify(payload),
 			});
 			const updatedUser = await res.json();
 

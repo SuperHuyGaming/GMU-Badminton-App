@@ -32,7 +32,7 @@ const generateAccessToken = (user) => {
 // POST: Register a new user
 router.post("/register", authLimiter, validateRegistration, async (req, res, next) => {
 	try {
-		const { name, email, password } = req.body;
+		const { firstName, lastName, email, password } = req.body;
 
 		let user = await User.findOne({ email });
 		if (user) {
@@ -44,8 +44,14 @@ router.post("/register", authLimiter, validateRegistration, async (req, res, nex
 		const salt = await bcrypt.genSalt(10);
 		const hashedPassword = await bcrypt.hash(password, salt);
 
+		const name = firstName && lastName ? `${firstName} ${lastName}` : (req.body.name || "Unknown");
+		const internalId = `UID-${Math.floor(10000 + Math.random() * 90000)}`;
+
 		user = new User({
 			name,
+			firstName,
+			lastName,
+			internalId,
 			email,
 			password: hashedPassword,
 		});
@@ -60,6 +66,9 @@ router.post("/register", authLimiter, validateRegistration, async (req, res, nex
 			user: {
 				id: user._id,
 				name: user.name,
+				firstName: user.firstName,
+				lastName: user.lastName,
+				internalId: user.internalId,
 				email: user.email,
 				skillLevel: user.skillLevel,
 				role: user.role,
@@ -99,6 +108,9 @@ router.post("/login", authLimiter, validateLogin, async (req, res, next) => {
 			user: {
 				id: user._id,
 				name: user.name,
+				firstName: user.firstName,
+				lastName: user.lastName,
+				internalId: user.internalId,
 				email: user.email,
 				skillLevel: user.skillLevel,
 				role: user.role,

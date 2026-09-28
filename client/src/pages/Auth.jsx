@@ -15,7 +15,8 @@ export default function Auth() {
 	const [error, setError] = useState(null);
 
 	const [formData, setFormData] = useState({
-		name: "",
+		firstName: "",
+		lastName: "",
 		email: "",
 		password: "",
 		skillLevel: "D Level",
@@ -49,8 +50,8 @@ export default function Auth() {
 				return;
 			}
 		} else if (activeStep === 1) {
-			if (!formData.name) {
-				setError("Name is required.");
+			if (!formData.firstName || !formData.lastName) {
+				setError("First Name and Last Name are required.");
 				return;
 			}
 		}
@@ -130,7 +131,10 @@ export default function Auth() {
 						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
 							What should we call you on the court?
 						</Typography>
-						<TextField fullWidth label="Full Name or Nickname" name="name" value={formData.name} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
+						<Box sx={{ display: 'flex', gap: 2 }}>
+							<TextField fullWidth label="First Name" name="firstName" value={formData.firstName} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
+							<TextField fullWidth label="Last Name" name="lastName" value={formData.lastName} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
+						</Box>
 					</motion.div>
 				);
 			case 2:

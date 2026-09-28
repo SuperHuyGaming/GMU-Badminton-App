@@ -207,18 +207,32 @@ export default function ProfileEditForm({
 									mt: 2,
 								}}
 							>
-								<TextField
-									fullWidth
-									label="Display Name"
-									name="name"
-									value={formData.name}
-									onChange={handleChange}
-									required
-									variant="outlined"
-									InputProps={{
-										sx: { borderRadius: 2 }
-									}}
-								/>
+								<Box sx={{ display: 'flex', gap: 2 }}>
+									<TextField
+										fullWidth
+										label="First Name"
+										name="firstName"
+										value={formData.firstName || formData.name?.split(' ')[0] || ''}
+										onChange={handleChange}
+										required
+										variant="outlined"
+										InputProps={{
+											sx: { borderRadius: 2 }
+										}}
+									/>
+									<TextField
+										fullWidth
+										label="Last Name"
+										name="lastName"
+										value={formData.lastName || formData.name?.split(' ').slice(1).join(' ') || ''}
+										onChange={handleChange}
+										required
+										variant="outlined"
+										InputProps={{
+											sx: { borderRadius: 2 }
+										}}
+									/>
+								</Box>
 								<TextField
 									fullWidth
 									multiline

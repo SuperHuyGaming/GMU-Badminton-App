@@ -94,6 +94,8 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 		// NEW: Destructure profilePic and coverPic from the incoming request
 		const {
 			name,
+			firstName,
+			lastName,
 			skillLevel,
 			bio,
 			preferredPlay,
@@ -109,6 +111,8 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 		}
 
 		const cleanName = name ? xss(name) : undefined;
+		const cleanFirstName = firstName ? xss(firstName) : undefined;
+		const cleanLastName = lastName ? xss(lastName) : undefined;
 		const cleanBio = bio ? xss(bio) : undefined;
 		const cleanPreferredPlay = preferredPlay ? xss(preferredPlay) : undefined;
 		const cleanRacket = racket ? xss(racket) : undefined;
@@ -119,6 +123,8 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 			// NEW: Tell MongoDB to update the image fields
 			{
 				name: cleanName,
+				firstName: cleanFirstName,
+				lastName: cleanLastName,
 				skillLevel,
 				bio: cleanBio,
 				preferredPlay: cleanPreferredPlay,
