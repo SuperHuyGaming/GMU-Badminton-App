@@ -128,6 +128,7 @@ app.use("/api/marketplace", require("./routes/marketplace"));
 app.use("/api/feed", require("./routes/feed"));
 app.use("/api/calendar", require("./routes/calendar"));
 app.use("/api/scrape", require("./routes/scrape"));
+app.use("/api/search", require("./routes/search"));
 
 // Make io accessible globally
 app.set("io", io);

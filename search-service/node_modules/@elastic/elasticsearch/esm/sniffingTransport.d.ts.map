@@ -1,0 +1,1 @@
+{"version":3,"file":"sniffingTransport.d.ts","sourceRoot":"","sources":["../src/sniffingTransport.ts"],"names":[],"mappings":"AAMA,OAAO,EAAE,SAAS,EAAE,YAAY,EAAE,MAAM,oBAAoB,CAAA;AAE5D,MAAM,CAAC,OAAO,OAAO,iBAAkB,SAAQ,SAAS;IACtD,KAAK,CAAE,IAAI,EAAE,YAAY,GAAG,IAAI;CA0BjC"}

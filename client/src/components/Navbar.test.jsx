@@ -78,7 +78,7 @@ describe('Navbar Component & Global Search UI', () => {
         ];
         apiFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ matches: mockMatches }),
+            json: async () => ({ results: mockMatches }),
         });
 
         renderNavbar();
@@ -86,7 +86,7 @@ describe('Navbar Component & Global Search UI', () => {
         fireEvent.change(searchInput, { target: { value: 'Alice' } });
 
         await waitFor(() => {
-            expect(apiFetch).toHaveBeenCalledWith('/api/matchmaking/discover?search=Alice');
+            expect(apiFetch).toHaveBeenCalledWith('/api/search?q=Alice');
         }, { timeout: 1500 });
 
         await waitFor(() => {
@@ -110,7 +110,7 @@ describe('Navbar Component & Global Search UI', () => {
         ];
         apiFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ matches: mockMatches }),
+            json: async () => ({ results: mockMatches }),
         });
 
         renderNavbar();

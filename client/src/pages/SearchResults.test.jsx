@@ -40,7 +40,7 @@ describe('SearchResults Page Component', () => {
     it('renders the search results header and filter controls', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ matches: [] }),
+            json: async () => ({ results: [] }),
         });
 
         renderSearchResults('Alice');
@@ -60,7 +60,7 @@ describe('SearchResults Page Component', () => {
     it('captures PostHog search_executed event', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ matches: [] }),
+            json: async () => ({ results: [] }),
         });
 
         renderSearchResults('Alice');
@@ -87,7 +87,7 @@ describe('SearchResults Page Component', () => {
 
         apiFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ matches: mockPlayers }),
+            json: async () => ({ results: mockPlayers }),
         });
 
         renderSearchResults('Alice');
@@ -102,7 +102,7 @@ describe('SearchResults Page Component', () => {
     it('displays no results found message when result set is empty', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
-            json: async () => ({ matches: [] }),
+            json: async () => ({ results: [] }),
         });
 
         renderSearchResults('NonExistentUser');
@@ -113,12 +113,29 @@ describe('SearchResults Page Component', () => {
     });
 
     it('switches search type to posts and renders post results', async () => {
-        apiFetch.mockResolvedValue({
+        // First call for players
+        apiFetch.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ matches: [] }),
+            json: async () => ({ results: [] }),
         });
 
         renderSearchResults('Tournament');
+
+        // Setup mock for posts
+        const mockPosts = [
+            {
+                _id: 'post-1',
+                title: 'Mock post result 1 for "Tournament"',
+                content: 'Some content',
+                authorName: 'User',
+                timestamp: new Date().toISOString()
+            }
+        ];
+        
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ results: mockPosts }),
+        });
 
         const postsRadio = screen.getByLabelText('Posts');
         fireEvent.click(postsRadio);

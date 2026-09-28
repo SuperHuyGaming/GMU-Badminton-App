@@ -88,28 +88,20 @@ export default function SearchResults() {
                 // For Posts, we just mock.
                 let newResults = [];
                 
-                if (searchType === 'players') {
-                    const res = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(searchQuery)}&page=${page}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        newResults = data.matches || [];
-                        
+                const typeParam = searchType === 'players' ? 'user' : 'post';
+                const res = await apiFetch(`/api/search?q=${encodeURIComponent(searchQuery)}&type=${typeParam}`);
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    newResults = data.results || [];
+                    
+                    if (searchType === 'players') {
                         // Apply filters client-side since API might not support all these filters yet
                         const selectedSkills = Object.keys(skillLevel).filter(k => skillLevel[k]);
                         if (selectedSkills.length > 0) {
                             newResults = newResults.filter(r => selectedSkills.includes(r.skillLevel));
                         }
                     }
-                } else {
-                    // Mock Posts fetching
-                    await new Promise(r => setTimeout(r, 800)); // fake delay
-                    newResults = Array.from({ length: 5 }).map((_, i) => ({
-                        _id: `post-${page}-${i}`,
-                        type: 'post',
-                        content: `Mock post result ${i + 1} for "${searchQuery}" on page ${page}.`,
-                        author: 'User',
-                        createdAt: new Date().toISOString()
-                    }));
                 }
 
                 if (active) {
@@ -274,10 +266,11 @@ export default function SearchResults() {
                                         ref={isLast ? lastResultElementRef : null}
                                         sx={{ p: 3, borderRadius: 2 }}
                                     >
-                                        <Typography variant="subtitle2" color="primary" fontWeight="bold" mb={1}>{result.author}</Typography>
+                                        <Typography variant="h6" fontWeight="bold" mb={1}>{result.title}</Typography>
+                                        <Typography variant="subtitle2" color="primary" fontWeight="bold" mb={1}>{result.authorName}</Typography>
                                         <Typography variant="body1">{result.content}</Typography>
                                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-                                            {new Date(result.createdAt).toLocaleDateString()}
+                                            {new Date(result.timestamp).toLocaleDateString()}
                                         </Typography>
                                     </Paper>
                                 );
