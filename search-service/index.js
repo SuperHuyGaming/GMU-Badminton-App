@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { Client } = require('@elastic/elasticsearch');
 
 dotenv.config();
 
@@ -24,17 +25,14 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));
 
-// Placeholder for Elasticsearch and Redis clients
-// const Redis = require('ioredis');
-// const { Client } = require('@elastic/elasticsearch');
-// const redis = new Redis(process.env.REDIS_URL);
-// const elasticClient = new Client({ node: process.env.ELASTICSEARCH_NODE });
+// const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const elasticClient = new Client({ node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200' });
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'search-service' });
 });
 
-const searchHandler = (req, res) => {
+const searchHandler = async (req, res) => {
   const { q, type = 'all', page = 1, limit = 20 } = req.query;
 
   if (!q || typeof q !== 'string' || q.trim() === '') {
@@ -52,7 +50,7 @@ const searchHandler = (req, res) => {
     });
   }
 
-  const validTypes = ['all', 'players', 'posts'];
+  const validTypes = ['all', 'users', 'posts', 'user', 'post'];
   if (!validTypes.includes(type)) {
     return res.status(400).json({
       error: 'Validation Error',
@@ -63,14 +61,44 @@ const searchHandler = (req, res) => {
   const parsedPage = Math.max(1, parseInt(page, 10) || 1);
   const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-  return res.json({
-    query: trimmedQuery,
-    type,
-    page: parsedPage,
-    limit: parsedLimit,
-    total: 0,
-    results: [],
-  });
+  try {
+      let indices = ['users', 'posts'];
+      if (type === 'user' || type === 'users') indices = ['users'];
+      if (type === 'post' || type === 'posts') indices = ['posts'];
+
+      const result = await elasticClient.search({
+          index: indices.join(','),
+          from: (parsedPage - 1) * parsedLimit,
+          size: parsedLimit,
+          body: {
+              query: {
+                  multi_match: {
+                      query: trimmedQuery,
+                      fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
+                      fuzziness: 'AUTO'
+                  }
+              }
+          }
+      });
+
+      const hits = result.hits.hits.map(hit => ({
+          _id: hit._id,
+          _index: hit._index,
+          ...hit._source
+      }));
+
+      res.json({ 
+        query: trimmedQuery,
+        type,
+        page: parsedPage,
+        limit: parsedLimit,
+        total: result.hits.total?.value || 0,
+        results: hits 
+      });
+  } catch (err) {
+      console.error('Search error:', err);
+      res.status(500).json({ error: 'Search failed' });
+  }
 };
 
 app.get('/search', searchHandler);
@@ -90,7 +118,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 5001;
 
 let server;
 if (require.main === module) {

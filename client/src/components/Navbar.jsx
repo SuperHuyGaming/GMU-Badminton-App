@@ -52,10 +52,10 @@ const GlobalSearch = () => {
         const timer = setTimeout(async () => {
             setLoading(true);
             try {
-                const res = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(inputValue)}`);
+                const res = await apiFetch(`/api/search?q=${encodeURIComponent(inputValue)}`);
                 if (res.ok && active) {
                     const data = await res.json();
-                    setOptions(data.matches || []);
+                    setOptions(data.results || []);
                 }
             } catch (err) {
                 console.error("Search error", err);

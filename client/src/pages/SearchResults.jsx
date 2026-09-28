@@ -88,28 +88,24 @@ export default function SearchResults() {
                 // For Posts, we just mock.
                 let newResults = [];
                 
-                if (searchType === 'players') {
-                    const res = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(searchQuery)}&page=${page}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        newResults = data.matches || [];
-                        
+                const typeParam = searchType === 'players' ? 'user' : 'post';
+                const res = await apiFetch(`/api/search?q=${encodeURIComponent(searchQuery)}&type=${typeParam}`);
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    newResults = data.results || [];
+                    
+                    if (searchType === 'players') {
                         // Apply filters client-side since API might not support all these filters yet
                         const selectedSkills = Object.keys(skillLevel).filter(k => skillLevel[k]);
                         if (selectedSkills.length > 0) {
                             newResults = newResults.filter(r => selectedSkills.includes(r.skillLevel));
                         }
+                        const selectedUnis = Object.keys(homeUniversity).filter(k => homeUniversity[k]);
+                        if (selectedUnis.length > 0) {
+                            newResults = newResults.filter(r => selectedUnis.includes(r.university));
+                        }
                     }
-                } else {
-                    // Mock Posts fetching
-                    await new Promise(r => setTimeout(r, 800)); // fake delay
-                    newResults = Array.from({ length: 5 }).map((_, i) => ({
-                        _id: `post-${page}-${i}`,
-                        type: 'post',
-                        content: `Mock post result ${i + 1} for "${searchQuery}" on page ${page}.`,
-                        author: 'User',
-                        createdAt: new Date().toISOString()
-                    }));
                 }
 
                 if (active) {
@@ -528,15 +524,25 @@ export default function SearchResults() {
                                         }}
                                     >
                                         <Typography 
-                                            variant="subtitle2" 
+                                            variant="h6" 
                                             component="h3" 
+                                            fontWeight="bold" 
+                                            mb={1}
+                                            sx={{
+                                                color: (theme) => theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
+                                            }}
+                                        >
+                                            {result.title}
+                                        </Typography>
+                                        <Typography 
+                                            variant="subtitle2" 
                                             fontWeight="bold" 
                                             mb={1}
                                             sx={{
                                                 color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
                                             }}
                                         >
-                                            {result.author}
+                                            {result.authorName}
                                         </Typography>
                                         <Typography 
                                             variant="body1"
@@ -557,7 +563,7 @@ export default function SearchResults() {
                                                 fontWeight: 500,
                                             }}
                                         >
-                                            {new Date(result.createdAt).toLocaleDateString()}
+                                            {new Date(result.timestamp || result.createdAt).toLocaleDateString()}
                                         </Typography>
                                     </Paper>
                                 );
