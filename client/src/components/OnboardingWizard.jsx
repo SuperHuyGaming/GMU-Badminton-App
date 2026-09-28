@@ -1,5 +1,5 @@
 // client/src/components/OnboardingWizard.jsx
-import React, { useState } from "react";
+import { useState } from "react";
 import {
 	Box,
 	Typography,

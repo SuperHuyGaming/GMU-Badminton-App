@@ -735,6 +735,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								{['🏸', '🔥', '💯', '👏'].map(emoji => (
 									<IconButton 
 										key={emoji} 
+										aria-label={`React with ${emoji}`}
 										onClick={(e) => { e.stopPropagation(); handleLike(); setShowReactions(false); }}
 										sx={{ transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.3)' } }}
 									>

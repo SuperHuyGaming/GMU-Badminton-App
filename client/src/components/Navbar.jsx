@@ -367,6 +367,10 @@ export default function Navbar() {
 									<Avatar
 										src={getOptimizedAvatar(user.profilePic, 40)}
 										onClick={handleAvatarClick}
+										role="button"
+										tabIndex={0}
+										aria-label="User menu"
+										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
 										sx={{
 											width: 40,
 											height: 40,

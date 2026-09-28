@@ -79,8 +79,17 @@ router.get("/:id", authMiddleware, async (req, res) => {
 	}
 });
 
+const xss = require("xss");
+const rateLimit = require("express-rate-limit");
+
+const profileLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 20,
+	message: { message: "Too many profile updates, please try again later." },
+});
+
 // PUT: Update the user's profile
-router.put("/", authMiddleware, async (req, res) => {
+router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 	try {
 		// NEW: Destructure profilePic and coverPic from the incoming request
 		const {
@@ -95,18 +104,24 @@ router.put("/", authMiddleware, async (req, res) => {
 			searchRadius,
 		} = req.body;
 
+		const cleanName = name ? xss(name) : undefined;
+		const cleanBio = bio ? xss(bio) : undefined;
+		const cleanPreferredPlay = preferredPlay ? xss(preferredPlay) : undefined;
+		const cleanRacket = racket ? xss(racket) : undefined;
+		const cleanHomeUniversity = homeUniversity ? xss(homeUniversity) : undefined;
+
 		const updatedUser = await User.findByIdAndUpdate(
 			req.user.userId,
 			// NEW: Tell MongoDB to update the image fields
 			{
-				name,
+				name: cleanName,
 				skillLevel,
-				bio,
-				preferredPlay,
-				racket,
+				bio: cleanBio,
+				preferredPlay: cleanPreferredPlay,
+				racket: cleanRacket,
 				profilePic,
 				coverPic,
-				homeUniversity,
+				homeUniversity: cleanHomeUniversity,
 				searchRadius,
 			},
 			{ new: true, runValidators: true },

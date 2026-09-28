@@ -37,7 +37,7 @@ export default function Landing() {
 						transition={{ type: "spring", bounce: 0.5 }}
 					/>
 					<motion.div variants={itemVariants}>
-						<Typography variant="h2" fontWeight="900" sx={{ mb: 2, background: "linear-gradient(45deg, #006633, #FFCC33)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+						<Typography variant="h2" fontWeight="900" sx={{ mb: 2, color: "primary.main" }}>
 							Mason Badminton Connect
 						</Typography>
 					</motion.div>

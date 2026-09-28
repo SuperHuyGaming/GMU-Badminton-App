@@ -34,14 +34,26 @@ router.get("/:id", async (req, res, next) => {
     }
 });
 
+const xss = require("xss");
+const rateLimit = require("express-rate-limit");
+
+const listingLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { message: "Too many listings created, please try again later." }
+});
+
 // POST create a new listing
-router.post("/", authMiddleware, async (req, res, next) => {
+router.post("/", authMiddleware, listingLimiter, async (req, res, next) => {
     try {
         const { title, description, price, condition, category, images } = req.body;
         
+        const cleanTitle = xss(title);
+        const cleanDescription = xss(description);
+
         const listing = new EquipmentListing({
-            title,
-            description,
+            title: cleanTitle,
+            description: cleanDescription,
             price,
             condition,
             category,
@@ -77,8 +89,8 @@ router.put("/:id", authMiddleware, async (req, res, next) => {
 
         const { title, description, price, condition, category, status } = req.body;
         
-        if (title) listing.title = title;
-        if (description) listing.description = description;
+        if (title) listing.title = xss(title);
+        if (description) listing.description = xss(description);
         if (price !== undefined) listing.price = price;
         if (condition) listing.condition = condition;
         if (category) listing.category = category;

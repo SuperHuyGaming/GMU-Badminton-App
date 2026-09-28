@@ -28,6 +28,7 @@ export default function LikesModal({ open, title, list, onClose }) {
 			>
 				{title}
 				<IconButton
+					aria-label="Close"
 					onClick={onClose}
 					sx={{
 						position: "absolute",

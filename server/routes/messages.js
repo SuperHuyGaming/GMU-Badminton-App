@@ -91,16 +91,26 @@ router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
 
 
 // POST: send message
-router.post("/", authMiddleware, async (req, res, next) => {
+const xss = require("xss");
+const rateLimit = require("express-rate-limit");
+
+const messageLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 100,
+	message: { message: "Too many messages sent, please slow down." }
+});
+
+router.post("/", authMiddleware, messageLimiter, async (req, res, next) => {
 	try {
 		const { senderId, receiverId, content } = req.body;
+		const cleanContent = xss(content);
 		
-		const mlResult = await analyzeContent(content);
+		const mlResult = await analyzeContent(cleanContent);
 		
 		const msg = new Message({
 			sender: senderId,
 			receiver: receiverId,
-			content,
+			content: cleanContent,
 			isFlagged: mlResult.isFlagged,
 			flagReason: mlResult.reason,
 			toxicityScore: mlResult.score || 0
