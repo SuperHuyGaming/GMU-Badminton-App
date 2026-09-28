@@ -79,24 +79,27 @@ const GlobalSearch = () => {
                     sx={{
                         '& .MuiOutlinedInput-root': {
                             borderRadius: '20px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                            backgroundColor: 'rgba(0, 0, 0, 0.25)',
                             padding: '2px 14px',
-                            color: 'inherit',
+                            color: '#ffffff',
+                            border: '1px solid rgba(255, 255, 255, 0.35)',
                             transition: 'all 0.2s',
                             '&:hover': {
-                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.35)',
+                                borderColor: 'rgba(255, 255, 255, 0.6)',
                             },
                             '&.Mui-focused': {
-                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                                boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.5)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                                boxShadow: '0 0 0 2px #FFCC33',
+                                borderColor: '#FFCC33',
                             },
                             '& fieldset': { border: 'none' },
                         },
                         '& .MuiInputBase-input': {
-                            color: 'inherit',
+                            color: '#ffffff',
                             '&::placeholder': {
-                                color: 'inherit',
-                                opacity: 0.7,
+                                color: '#ffffff',
+                                opacity: 0.9,
                             },
                         },
                     }}
@@ -143,16 +146,20 @@ const GlobalSearch = () => {
                                 }}
                                 slotProps={{
                                     ...params.slotProps,
+                                    htmlInput: {
+                                        ...params.inputProps,
+                                        'aria-label': 'Search players',
+                                    },
                                     input: {
                                         ...inputSlot,
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <SearchIcon sx={{ color: 'inherit' }} />
+                                                <SearchIcon sx={{ color: '#ffffff' }} aria-hidden="true" />
                                             </InputAdornment>
                                         ),
                                         endAdornment: (
                                             <>
-                                                {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                                                {loading ? <CircularProgress color="inherit" size={20} aria-label="Loading search results" /> : null}
                                                 {inputSlot.endAdornment}
                                             </>
                                         ),
@@ -164,20 +171,47 @@ const GlobalSearch = () => {
                     renderOption={(props, option) => {
                         const { key, ...otherProps } = props;
                         return (
-                            <Box component="li" key={option._id || key} {...otherProps} sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                                <Avatar src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} sx={{ width: 32, height: 32 }}>
+                            <Box 
+                                component="li" 
+                                key={option._id || key} 
+                                {...otherProps} 
+                                sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: 2, 
+                                    p: 1.5, 
+                                    borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                        backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 92, 46, 0.08)',
+                                    }
+                                }}
+                            >
+                                <Avatar 
+                                    src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} 
+                                    alt={option.name || "Player avatar"}
+                                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main', color: 'primary.dark', fontWeight: 'bold' }}
+                                >
                                     {!option.profilePic && option.name?.charAt(0)}
                                 </Avatar>
                                 <Box>
                                     <Typography variant="body2" fontWeight="bold" color="text.primary">{option.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">Player</Typography>
+                                    <Typography 
+                                        variant="caption" 
+                                        sx={{ 
+                                            color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#404040',
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        Player
+                                    </Typography>
                                 </Box>
                             </Box>
                         );
                     }}
                     slotProps={{
                         paper: {
-                            sx: { mt: 1, borderRadius: 2, overflow: 'hidden', boxShadow: 4 },
+                            sx: { mt: 1, borderRadius: 2, overflow: 'hidden', boxShadow: 4, border: (theme) => `1px solid ${theme.palette.divider}` },
                         },
                     }}
                 />

@@ -297,6 +297,10 @@ function App() {
 			mode,
 			primary: { main: "#005c2e", dark: "#004d26", light: "#33855c" },
 			secondary: { main: "#FFCC33" },
+			text: {
+				primary: mode === "light" ? "#1a202c" : "#ffffff",
+				secondary: mode === "light" ? "#404040" : "rgba(255, 255, 255, 0.8)",
+			},
 			background: { 
 				default: mode === "light" ? "#f4f6f8" : "#02120a", // Ultra deep forest green
 				paper: mode === "light" ? "rgba(255, 255, 255, 0.75)" : "rgba(8, 33, 20, 0.75)", // Translucent for glassmorphism
