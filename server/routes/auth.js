@@ -32,7 +32,7 @@ const generateAccessToken = (user) => {
 // POST: Register a new user
 router.post("/register", authLimiter, validateRegistration, async (req, res, next) => {
 	try {
-		const { firstName, lastName, email, password } = req.body;
+		const { firstName, lastName, email, password, skillLevel } = req.body;
 
 		let user = await User.findOne({ email });
 		if (user) {
@@ -54,6 +54,7 @@ router.post("/register", authLimiter, validateRegistration, async (req, res, nex
 			internalId,
 			email,
 			password: hashedPassword,
+			skillLevel: skillLevel || "D Level",
 		});
 		await user.save();
 
