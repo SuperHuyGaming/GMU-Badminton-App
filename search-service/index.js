@@ -25,6 +25,13 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));
 
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
 // const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const elasticClient = new Client({ node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200' });
 
@@ -81,18 +88,31 @@ const searchHandler = async (req, res) => {
           }
       });
 
-      const hits = result.hits.hits.map(hit => ({
-          _id: hit._id,
-          _index: hit._index,
-          ...hit._source
-      }));
+      const hits = (result.hits?.hits || []).map(hit => {
+          const source = { ...(hit._source || {}) };
+          delete source.password;
+          delete source.email;
+          delete source.pushSubscriptions;
+          delete source.token;
+          delete source.secret;
+          delete source.jwt;
+          return {
+              _id: hit._id,
+              _index: hit._index,
+              ...source
+          };
+      });
+
+      const totalHits = typeof result.hits?.total === 'number'
+          ? result.hits.total
+          : (result.hits?.total?.value || 0);
 
       res.json({ 
         query: trimmedQuery,
         type,
         page: parsedPage,
         limit: parsedLimit,
-        total: result.hits.total?.value || 0,
+        total: totalHits,
         results: hits 
       });
   } catch (err) {

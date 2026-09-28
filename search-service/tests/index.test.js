@@ -108,6 +108,48 @@ describe('Search Service Express Server', () => {
       });
     });
 
+    it('strips sensitive fields (email, password, pushSubscriptions) from search hits', async () => {
+      mockSearch.mockResolvedValueOnce({
+        hits: {
+          total: { value: 1 },
+          hits: [
+            {
+              _id: 'user_secure_1',
+              _index: 'users',
+              _source: {
+                name: 'Secure Player',
+                email: 'secret_leak@gmu.edu',
+                password: 'hashed-password-never-leak',
+                pushSubscriptions: [{ endpoint: 'https://push.example.com' }],
+                token: 'jwt-token',
+                secret: 'sensitive',
+                jwt: 'token-val',
+                skillLevel: 'A Level',
+                bio: 'Love badminton',
+              },
+            },
+          ],
+        },
+      });
+
+      const res = await request(app).get('/api/search?q=Secure&type=players');
+      expect(res.status).toBe(200);
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['x-frame-options']).toBe('DENY');
+      expect(res.body.results).toHaveLength(1);
+      const hit = res.body.results[0];
+      expect(hit._id).toBe('user_secure_1');
+      expect(hit.name).toBe('Secure Player');
+      expect(hit.skillLevel).toBe('A Level');
+      expect(hit.bio).toBe('Love badminton');
+      expect(hit.email).toBeUndefined();
+      expect(hit.password).toBeUndefined();
+      expect(hit.pushSubscriptions).toBeUndefined();
+      expect(hit.token).toBeUndefined();
+      expect(hit.secret).toBeUndefined();
+      expect(hit.jwt).toBeUndefined();
+    });
+
     it('handles /search alias route with default type (all)', async () => {
       const res = await request(app).get('/search?q=badminton');
       expect(res.status).toBe(200);
