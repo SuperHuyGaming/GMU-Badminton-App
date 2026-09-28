@@ -1,5 +1,5 @@
 import { Paper, Typography, Box, IconButton } from "@mui/material";
-import RacketViewer from "./RacketViewer";
+// import RacketViewer from "./RacketViewer";
 
 const PenIcon = () => (
 	<svg
@@ -158,9 +158,11 @@ export default function ProfileIntro({
 				</Box>
 			</Box>
 
+			{/* 
 			<Box sx={{ mt: 3 }}>
 				<RacketViewer />
 			</Box>
+			*/}
 		</Paper>
 	);
 }
