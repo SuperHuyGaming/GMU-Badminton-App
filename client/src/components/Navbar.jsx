@@ -1,6 +1,7 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener, Paper } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../hooks/useNotifications';
@@ -9,6 +10,7 @@ import { formatNotificationTime } from "../utils/dateUtils";
 import { ColorModeContext } from '../App';
 import LanguageSwitcher from './LanguageSwitcher';
 import { motion } from 'framer-motion';
+import apiFetch from '../utils/api';
 
 const HamburgerIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -32,6 +34,139 @@ const MoonIcon = () => (
 const SunIcon = () => (
 	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
 );
+
+const GlobalSearch = () => {
+    const [open, setOpen] = useState(false);
+    const [options, setOptions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [inputValue, setInputValue] = useState("");
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!inputValue.trim()) {
+            setOptions([]);
+            return;
+        }
+        
+        let active = true;
+        setLoading(true);
+
+        const timer = setTimeout(async () => {
+            try {
+                const res = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(inputValue)}`);
+                if (res.ok && active) {
+                    const data = await res.json();
+                    setOptions(data.matches || []);
+                }
+            } catch (err) {
+                console.error("Search error", err);
+            } finally {
+                if (active) setLoading(false);
+            }
+        }, 300);
+
+        return () => {
+            active = false;
+            clearTimeout(timer);
+        };
+    }, [inputValue]);
+
+    return (
+        <ClickAwayListener onClickAway={() => setOpen(false)}>
+            <Box sx={{ position: 'relative', width: '100%', maxWidth: 400 }}>
+                <Autocomplete
+                    id="global-search"
+                    freeSolo
+                    sx={{
+                        '& .MuiOutlinedInput-root': {
+                            borderRadius: '20px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                            padding: '2px 14px',
+                            color: 'inherit',
+                            transition: 'all 0.2s',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                            },
+                            '&.Mui-focused': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.5)',
+                            },
+                            '& fieldset': { border: 'none' },
+                        },
+                        '& .MuiInputBase-input': {
+                            color: 'inherit',
+                            '&::placeholder': {
+                                color: 'inherit',
+                                opacity: 0.7,
+                            },
+                        },
+                    }}
+                    open={open && inputValue.trim().length > 0}
+                    onOpen={() => setOpen(true)}
+                    onClose={() => setOpen(false)}
+                    isOptionEqualToValue={(option, value) => option._id === value._id}
+                    getOptionLabel={(option) => {
+                        if (typeof option === 'string') return option;
+                        return option.name || "";
+                    }}
+                    options={options}
+                    loading={loading}
+                    onInputChange={(event, newInputValue) => {
+                        setInputValue(newInputValue);
+                    }}
+                    onChange={(event, newValue) => {
+                        if (newValue && newValue._id) {
+                            navigate(`/profile/${newValue._id}`);
+                            setInputValue("");
+                            setOpen(false);
+                        }
+                    }}
+                    filterOptions={(x) => x}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            placeholder="Search players..."
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setOpen(true)}
+                            InputProps={{
+                                ...params.InputProps,
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon sx={{ color: 'inherit' }} />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: (
+                                    <>
+                                        {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                                        {params.InputProps.endAdornment}
+                                    </>
+                                ),
+                            }}
+                        />
+                    )}
+                    renderOption={(props, option) => {
+                        const { key, ...otherProps } = props;
+                        return (
+                            <Box component="li" key={option._id || key} {...otherProps} sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                                <Avatar src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} sx={{ width: 32, height: 32 }}>
+                                    {!option.profilePic && option.name?.charAt(0)}
+                                </Avatar>
+                                <Box>
+                                    <Typography variant="body2" fontWeight="bold" color="text.primary">{option.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary">Player</Typography>
+                                </Box>
+                            </Box>
+                        );
+                    }}
+                    PaperComponent={(props) => (
+                        <Paper {...props} sx={{ ...props.sx, mt: 1, borderRadius: 2, overflow: 'hidden', boxShadow: 4 }} />
+                    )}
+                />
+            </Box>
+        </ClickAwayListener>
+    );
+};
 
 export default function Navbar() {
     const theme = useTheme();
@@ -184,6 +319,17 @@ export default function Navbar() {
 									</Button>
 								)}
 							</Box>
+						</Box>
+
+						<Box
+							sx={{
+								display: { xs: "none", lg: "flex" },
+								flex: 1,
+								justifyContent: "center",
+								mx: 2,
+							}}
+						>
+							<GlobalSearch />
 						</Box>
 
 						<Box
