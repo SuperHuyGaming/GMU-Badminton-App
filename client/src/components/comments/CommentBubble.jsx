@@ -65,7 +65,7 @@ export default function CommentBubble({
 		<Box sx={{ display: "flex", gap: 1 }}>
 			<Avatar
 				src={comment.authorPic}
-				onClick={() = alt="User Avatar" > navigate(`/profile/${comment.authorId}`)}
+				onClick={() => navigate(`/profile/${comment.authorId}`)}
 				sx={{
 					width: 32,
 					height: 32,

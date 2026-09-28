@@ -278,7 +278,7 @@ export default function Forum() {
 			</Box>
 
 			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', maxWidth: '680px', mx: 'auto' }}>
-				{/* FACEBOOK STYLE COMPOSER */}
+				{/* NEW POST INPUT BOX */}
 				<Paper 
 					elevation={1} 
 					sx={{ 
@@ -292,22 +292,38 @@ export default function Forum() {
 					}}
 				>
 					<Avatar src={currentUser?.avatarUrl} alt={currentUser?.name} />
-					<Box 
-						onClick={() => setIsModalOpen(true)}
-						sx={{ 
-							flex: 1, 
-							backgroundColor: 'action.hover', 
-							borderRadius: 10, 
-							py: 1.5, 
-							px: 3, 
-							cursor: 'pointer',
-							'&:hover': { backgroundColor: 'action.selected' }
+					<TextField
+						fullWidth
+						size="small"
+						placeholder={`What's on your mind${currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?`}
+						value={newPost.content}
+						onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+					/>
+					<Button
+						variant="contained"
+						disabled={!newPost.content.trim()}
+						onClick={async () => {
+							if (!currentUser) return alert("You must be logged in to post!");
+							try {
+								const res = await apiFetch("/api/posts", {
+									method: "POST",
+									body: JSON.stringify({ content: newPost.content })
+								});
+								if (res.ok) {
+									setNewPost({ ...newPost, content: "" });
+									toast.success("Post created successfully!");
+									setPage(1);
+									setFeed([]);
+								} else {
+									toast.error("Failed to create post.");
+								}
+							} catch (e) {
+								toast.error("Error creating post.");
+							}
 						}}
 					>
-						<Typography color="text.secondary" sx={{ fontSize: '0.95rem' }}>
-							What's on your mind{currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?
-						</Typography>
-					</Box>
+						Post
+					</Button>
 				</Paper>
 
 				{/* NEW POSTS PILL */}

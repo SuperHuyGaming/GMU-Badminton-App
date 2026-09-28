@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import {
 	Typography,
 	Button,
@@ -764,7 +765,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 									<IconButton 
 										key={emoji} 
 										aria-label={`React with ${emoji}`}
-										onClick={(e) => { e.stopPropagation(); handleLike(); setShowReactions(false); }}
+										onClick={(e) => { e.stopPropagation(); toast('Coming Soon'); setShowReactions(false); }}
 										sx={{ transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.3)' } }}
 									>
 										<Typography fontSize="1.2rem">{emoji}</Typography>
@@ -774,9 +775,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						</Collapse>
 
 						<Button
-							onClick={handleLike}
-							disabled={isLiking}
-							color={hasLiked ? "secondary" : "inherit"}
+							onClick={() => toast('Coming Soon')}
+							color="inherit"
 							sx={actionBtnStyle}
 						>
 							<Box sx={{ mr: { xs: 0.5, sm: 1 }, display: "flex", alignItems: "center" }}>
@@ -788,7 +788,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						</Button>
 					</Box>
 					<Button
-						onClick={() => setIsCommentModalOpen(true)}
+						onClick={() => toast('Coming Soon')}
 						color="inherit"
 						sx={actionBtnStyle}
 					>
@@ -810,12 +810,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					<Button
 						onClick={(e) => {
 							e.stopPropagation();
-							const apiUrl = import.meta.env.VITE_API_URL 
-								? (import.meta.env.VITE_API_URL.startsWith("http") ? import.meta.env.VITE_API_URL : `https://${import.meta.env.VITE_API_URL}`)
-								: window.location.origin;
-							const shareUrl = `${apiUrl}/api/forum/share/${localPost._id}`;
-							navigator.clipboard.writeText(shareUrl);
-							alert("Share link copied to clipboard!");
+							toast('Coming Soon');
 						}}
 						color="inherit"
 						sx={actionBtnStyle}

@@ -79,7 +79,7 @@ export default function ReplyBubble({
 		>
 			<Avatar
 				src={reply.authorPic}
-				onClick={() = alt="User Avatar" > navigate(`/profile/${reply.authorId}`)}
+				onClick={() => navigate(`/profile/${reply.authorId}`)}
 				sx={{
 					width: 24,
 					height: 24,

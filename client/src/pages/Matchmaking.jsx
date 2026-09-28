@@ -22,7 +22,8 @@ export default function Matchmaking() {
                 if (searchQuery) url += `search=${encodeURIComponent(searchQuery)}&`;
                 if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
                 
-                const data = await apiFetch(url);
+                const response = await apiFetch(url);
+                const data = await response.json();
                 setMatches(data.matches || []);
                 setRecommended(data.recommended || []);
             } catch (err) {
