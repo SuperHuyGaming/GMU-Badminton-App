@@ -79,8 +79,11 @@ export default function Profile() {
 		if (profileQueryData) {
 			setProfileData(profileQueryData);
 			if (isOwnProfile) {
+				const nameParts = (profileQueryData.name || "").split(" ");
 				setFormData({
 					name: profileQueryData.name || "",
+					firstName: profileQueryData.firstName || nameParts[0] || "",
+					lastName: profileQueryData.lastName || nameParts.slice(1).join(" ") || "",
 					skillLevel: profileQueryData.skillLevel || "D Level",
 					bio: profileQueryData.bio || "",
 					preferredPlay: profileQueryData.preferredPlay || "Any",
@@ -250,13 +253,18 @@ export default function Profile() {
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
+		if (!formData.firstName?.trim() || !formData.lastName?.trim()) return;
 		if (!isOwnProfile) return;
 
 		setIsSaving(true);
+		const payload = {
+			...formData,
+			name: formData.firstName && formData.lastName ? `${formData.firstName} ${formData.lastName}` : formData.name,
+		};
 		try {
 			const res = await apiFetch("/api/profile", {
 				method: "PUT",
-				body: JSON.stringify(formData),
+				body: JSON.stringify(payload),
 			});
 			const updatedUser = await res.json();
 
@@ -417,12 +425,12 @@ export default function Profile() {
 							>
 								<Typography
 									variant="h6"
-									color="text.secondary"
+									color="text.primary"
 									fontWeight="bold"
 								>
 									No Recent Posts
 								</Typography>
-								<Typography color="text.secondary">
+								<Typography color="text.primary">
 									When {profileData.name} posts in the forum,
 									they'll show up here.
 								</Typography>
@@ -454,12 +462,12 @@ export default function Profile() {
 							>
 								<Typography
 									variant="h6"
-									color="text.secondary"
+									color="text.primary"
 									fontWeight="bold"
 								>
 									About {profileData.name}
 								</Typography>
-								<Typography color="text.secondary" mt={2}>
+								<Typography color="text.primary" mt={2}>
 									Plays: {profileData.preferredPlay || "Any"}{" "}
 									| Weapon: {profileData.racket || "N/A"}
 								</Typography>

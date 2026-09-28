@@ -122,7 +122,7 @@ export default function ImageCropModal({
 						borderRadius: 3, 
 						textTransform: "none",
 						fontWeight: "bold",
-						color: "text.secondary",
+						color: "text.primary",
 						px: 3
 					}}
 				>

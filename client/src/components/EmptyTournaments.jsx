@@ -61,7 +61,7 @@ export default function EmptyTournaments() {
             <Typography variant="h5" fontWeight="900" sx={{ mt: 3, mb: 1, color: 'text.primary' }}>
                 Our AI is Hunting...
             </Typography>
-            <Typography variant="body1" sx={{ color: 'text.secondary', maxWidth: 450, lineHeight: 1.6 }}>
+            <Typography variant="body1" sx={{ color: 'text.primary', maxWidth: 450, lineHeight: 1.6 }}>
                 Our autonomous AI engine is currently scouring the web for upcoming DMV tournaments. Check back soon!
             </Typography>
         </Box>

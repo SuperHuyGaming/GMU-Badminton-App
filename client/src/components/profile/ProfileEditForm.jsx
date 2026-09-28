@@ -84,7 +84,7 @@ export default function ProfileEditForm({
 							justifyContent: "center",
 							transition: "all 0.2s",
 							bgcolor: activeSection === "general" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
-							color: activeSection === "general" ? "text.primary" : "text.secondary",
+							color: activeSection === "general" ? "text.primary" : "text.primary",
 							"&:hover": {
 								bgcolor: "rgba(0, 102, 51, 0.05)",
 							}
@@ -107,7 +107,7 @@ export default function ProfileEditForm({
 							justifyContent: "center",
 							transition: "all 0.2s",
 							bgcolor: activeSection === "badminton" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
-							color: activeSection === "badminton" ? "text.primary" : "text.secondary",
+							color: activeSection === "badminton" ? "text.primary" : "text.primary",
 							"&:hover": {
 								bgcolor: "rgba(0, 102, 51, 0.05)",
 							}
@@ -130,7 +130,7 @@ export default function ProfileEditForm({
 							justifyContent: "center",
 							transition: "all 0.2s",
 							bgcolor: activeSection === "preferences" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
-							color: activeSection === "preferences" ? "text.primary" : "text.secondary",
+							color: activeSection === "preferences" ? "text.primary" : "text.primary",
 							"&:hover": {
 								bgcolor: "rgba(0, 102, 51, 0.05)",
 							}
@@ -153,7 +153,7 @@ export default function ProfileEditForm({
 							justifyContent: "center",
 							transition: "all 0.2s",
 							bgcolor: activeSection === "privacy" ? "rgba(0, 102, 51, 0.1) !important" : "transparent",
-							color: activeSection === "privacy" ? "text.primary" : "text.secondary",
+							color: activeSection === "privacy" ? "text.primary" : "text.primary",
 							"&:hover": {
 								bgcolor: "rgba(0, 102, 51, 0.05)",
 							}
@@ -196,7 +196,7 @@ export default function ProfileEditForm({
 							<Typography variant="h5" fontWeight="800" mb={1.5}>
 								General Information
 							</Typography>
-							<Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+							<Typography variant="body1" color="text.primary" sx={{ mb: 4 }}>
 								Update your personal details and how they appear to the community.
 							</Typography>
 							<Box
@@ -207,18 +207,32 @@ export default function ProfileEditForm({
 									mt: 2,
 								}}
 							>
-								<TextField
-									fullWidth
-									label="Display Name"
-									name="name"
-									value={formData.name}
-									onChange={handleChange}
-									required
-									variant="outlined"
-									InputProps={{
-										sx: { borderRadius: 2 }
-									}}
-								/>
+								<Box sx={{ display: 'flex', gap: 2 }}>
+									<TextField
+										fullWidth
+										label="First Name"
+										name="firstName"
+										value={formData.firstName}
+										onChange={handleChange}
+										required
+										variant="outlined"
+										InputProps={{
+											sx: { borderRadius: 2 }
+										}}
+									/>
+									<TextField
+										fullWidth
+										label="Last Name"
+										name="lastName"
+										value={formData.lastName}
+										onChange={handleChange}
+										required
+										variant="outlined"
+										InputProps={{
+											sx: { borderRadius: 2 }
+										}}
+									/>
+								</Box>
 								<TextField
 									fullWidth
 									multiline
@@ -242,7 +256,7 @@ export default function ProfileEditForm({
 							<Typography variant="h5" fontWeight="800" mb={1.5}>
 								Player Profile
 							</Typography>
-							<Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+							<Typography variant="body1" color="text.primary" sx={{ mb: 4 }}>
 								Let others know your play style to find the best match-ups!
 							</Typography>
 							<Box
@@ -320,7 +334,7 @@ export default function ProfileEditForm({
 							<Typography variant="h5" fontWeight="800" mb={1.5}>
 								Preferences
 							</Typography>
-							<Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+							<Typography variant="body1" color="text.primary" sx={{ mb: 4 }}>
 								Customize your tournament discovery radius and home university.
 							</Typography>
 							<Box
@@ -358,8 +372,13 @@ export default function ProfileEditForm({
 									name="searchRadius"
 									placeholder="50"
 									value={formData.searchRadius}
-									onChange={handleChange}
+									onChange={(e) => {
+										const val = e.target.value;
+										handleChange({ target: { name: "searchRadius", value: val === "" ? "" : Number(val) } });
+									}}
+									onFocus={(e) => e.target.select()}
 									variant="outlined"
+									inputProps={{ min: 1, max: 500 }}
 									InputProps={{ sx: { borderRadius: 2 } }}
 								/>
 							</Box>
@@ -376,7 +395,7 @@ export default function ProfileEditForm({
 								<Typography variant="h6" fontWeight="bold" gutterBottom>
 									Download Your Data
 								</Typography>
-								<Typography variant="body2" color="text.secondary" paragraph>
+								<Typography variant="body2" color="text.primary" paragraph>
 									Get a copy of your GMU Badminton data. This includes your profile information, match history, and forum posts. The file will be formatted as a downloadable ZIP archive containing JSON files.
 								</Typography>
 								<Button
@@ -385,14 +404,14 @@ export default function ProfileEditForm({
 									onClick={async () => {
 										try {
 											const token = localStorage.getItem("accessToken");
-											let API_URL = import.meta.env.VITE_API_URL || "";
+											let API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 											if (API_URL && !API_URL.startsWith("http")) API_URL = "https://" + API_URL;
 											
 											const response = await fetch(`${API_URL}/api/profile/export`, {
 												headers: { 'Authorization': `Bearer ${token}` }
 											});
 											
-											if (!response.ok) throw new Error("Failed to export data");
+											if (!response.ok) throw new Error("The server could not generate your data export. Please try again later.");
 											
 											const blob = await response.blob();
 											const url = window.URL.createObjectURL(blob);
@@ -404,13 +423,20 @@ export default function ProfileEditForm({
 											window.URL.revokeObjectURL(url);
 											document.body.removeChild(a);
 										} catch (err) {
-											alert("Failed to export data: " + err.message);
+											console.error("Export failed:", err);
+											// Show inline error instead of raw browser alert
+											const exportBox = document.getElementById("export-error");
+											if (exportBox) {
+												exportBox.textContent = err.message;
+												exportBox.style.display = "block";
+											}
 										}
 									}}
 									sx={{ mt: 1, borderRadius: 2, fontWeight: 'bold' }}
 								>
 									Request Data Export
 								</Button>
+								<Typography id="export-error" variant="body2" color="error" sx={{ mt: 1, display: "none" }} />
 							</Box>
 						</Box>
 					)}
@@ -432,7 +458,11 @@ export default function ProfileEditForm({
 										py: 1.2,
 										borderRadius: 2,
 									}}
-									disabled={isSaving}
+									disabled={
+										isSaving || 
+										!formData.firstName?.trim() || 
+										!formData.lastName?.trim()
+									}
 								>
 									{isSaving ? "Saving..." : "Save Changes"}
 								</Button>

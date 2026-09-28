@@ -135,8 +135,11 @@ const Leaderboard = () => {
                         value={tab} 
                         onChange={(e, v) => setTab(v)} 
                         centered 
-                        sx={{ bgcolor: 'rgba(0, 102, 51, 0.4)', color: 'white' }}
-                        TabIndicatorProps={{ style: { backgroundColor: '#FFCC33', height: 4, borderTopLeftRadius: 4, borderTopRightRadius: 4 } }}
+                        sx={{ 
+                            bgcolor: 'rgba(0, 102, 51, 0.4)', 
+                            color: 'white',
+                            '& .MuiTabs-indicator': { backgroundColor: '#FFCC33', height: 4, borderTopLeftRadius: 4, borderTopRightRadius: 4 }
+                        }}
                         textColor="inherit"
                     >
                         <Tab label="Singles (1v1)" value="singles" sx={{ fontWeight: '900', py: 2.5, textTransform: 'none', fontSize: '1rem' }} />
@@ -154,10 +157,10 @@ const Leaderboard = () => {
                             }}
                             fixedHeaderContent={() => (
                                 <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
-                                    <TableCell align="center" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Rank</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Player</TableCell>
-                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Skill Level</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.secondary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Elo</TableCell>
+                                    <TableCell align="center" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.primary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Rank</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.primary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Player</TableCell>
+                                    <TableCell sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.primary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Skill Level</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1, color: 'text.primary', borderBottom: '2px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>Elo</TableCell>
                                 </TableRow>
                             )}
                             itemContent={(index, user) => {
@@ -173,7 +176,7 @@ const Leaderboard = () => {
                                 return (
                                     <React.Fragment>
                                         <TableCell align="center" sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
-                                            <Typography variant="h6" fontWeight="900" color={index < 3 ? 'text.primary' : 'text.secondary'}>
+                                            <Typography variant="h6" fontWeight="900" color={index < 3 ? 'text.primary' : 'text.primary'}>
                                                 #{index + 1}
                                             </Typography>
                                         </TableCell>
@@ -187,7 +190,7 @@ const Leaderboard = () => {
                                                         border: index < 3 ? `3px solid ${getRankColor(index)}` : 'none',
                                                         boxShadow: index < 3 ? `0 0 10px ${getRankColor(index)}` : 'none'
                                                     }}
-                                                />
+                                                 alt="User Avatar" />
                                                 <Typography fontWeight="bold">{user.name}</Typography>
                                             </Box>
                                         </TableCell>
@@ -213,7 +216,7 @@ const Leaderboard = () => {
                             }}
                         />
                         {!loading && users.length === 0 && (
-                            <Box sx={{ py: 8, textAlign: 'center', color: 'text.secondary', fontWeight: 'bold' }}>
+                            <Box sx={{ py: 8, textAlign: 'center', color: 'text.primary', fontWeight: 'bold' }}>
                                 No players found.
                             </Box>
                         )}

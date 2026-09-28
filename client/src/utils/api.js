@@ -1,4 +1,4 @@
-let API_URL = import.meta.env.VITE_API_URL || "";
+let API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 if (API_URL && !API_URL.startsWith("http")) {
     API_URL = "https://" + API_URL;
 }

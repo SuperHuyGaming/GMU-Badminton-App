@@ -52,10 +52,10 @@ export default function NotFound() {
             <Typography variant="h1" fontWeight="900" sx={{ mt: 2, mb: 1, color: 'text.primary', fontSize: { xs: '4rem', md: '6rem' } }}>
                 404
             </Typography>
-            <Typography variant="h5" fontWeight="bold" sx={{ mb: 2, color: 'text.secondary' }}>
+            <Typography variant="h5" fontWeight="bold" sx={{ mb: 2, color: 'text.primary' }}>
                 Shuttlecock out of bounds!
             </Typography>
-            <Typography variant="body1" sx={{ mb: 4, color: 'text.secondary', maxWidth: 450, lineHeight: 1.6 }}>
+            <Typography variant="body1" sx={{ mb: 4, color: 'text.primary', maxWidth: 450, lineHeight: 1.6 }}>
                 It looks like the page you are looking for landed outside the court lines. 
                 Don't worry, even the pros miss sometimes!
             </Typography>

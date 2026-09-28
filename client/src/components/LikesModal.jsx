@@ -61,7 +61,7 @@ export default function LikesModal({ open, title, list, onClose }) {
 									bgcolor: "secondary.main",
 									color: "primary.main",
 								}}
-							>
+							 alt="User Avatar" >
 								{!u.profilePic &&
 									u.name?.charAt(0).toUpperCase()}
 							</Avatar>
@@ -73,7 +73,7 @@ export default function LikesModal({ open, title, list, onClose }) {
 							sx={{
 								p: 4,
 								textAlign: "center",
-								color: "text.secondary",
+								color: "text.primary",
 							}}
 						>
 							No likes yet.

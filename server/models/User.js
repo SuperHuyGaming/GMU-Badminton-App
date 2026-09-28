@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
 	name: { type: String, required: true },
+	firstName: { type: String },
+	lastName: { type: String },
+	internalId: { type: String, unique: true, sparse: true },
 	email: { type: String, required: true, unique: true },
 	password: { type: String, required: true },
 
@@ -73,5 +76,9 @@ const userSchema = new mongoose.Schema({
 
 // Create geospatial index for sub-millisecond location discovery
 userSchema.index({ location: "2dsphere" });
+
+userSchema.index({ name: 1 });
+userSchema.index({ homeUniversity: 1, lastActive: -1 });
+userSchema.index({ skillLevel: 1, lastActive: -1 });
 
 module.exports = mongoose.model("User", userSchema);

@@ -122,7 +122,7 @@ export default function Marketplace() {
                     <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
                         Marketplace
                     </Typography>
-                    <Typography color="text.secondary">
+                    <Typography color="text.primary">
                         Buy, sell, and trade badminton gear with the local community.
                     </Typography>
                 </Box>
@@ -179,12 +179,12 @@ export default function Marketplace() {
                                         <Chip label={listing.condition} size="small" variant="outlined" />
                                     </Box>
 
-                                    <Typography variant="body2" color="text.secondary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', mb: 2 }}>
+                                    <Typography variant="body2" color="text.primary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', mb: 2 }}>
                                         {listing.description}
                                     </Typography>
                                     
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 'auto', p: 1, bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 2 }}>
-                                        <Avatar src={listing.sellerId?.profilePic} sx={{ width: 24, height: 24 }} />
+                                        <Avatar src={listing.sellerId?.profilePic} sx={{ width: 24, height: 24 }}  alt="User Avatar" />
                                         <Typography variant="caption" fontWeight="bold" noWrap>
                                             {listing.sellerId?.name}
                                         </Typography>

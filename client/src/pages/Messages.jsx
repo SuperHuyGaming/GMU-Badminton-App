@@ -453,10 +453,10 @@ const Messages = () => {
 					{searchQuery && (
 						<>
 							<Box sx={{ p: 2, pb: 0 }}>
-								<Typography variant="caption" color="text.secondary" fontWeight="bold">SEARCH RESULTS</Typography>
+								<Typography variant="caption" color="text.primary" fontWeight="bold">SEARCH RESULTS</Typography>
 							</Box>
 							{searchResults.length === 0 ? (
-								<Box sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
+								<Box sx={{ p: 3, textAlign: "center", color: "text.primary" }}>
 									<Typography variant="body2">No users found.</Typography>
 								</Box>
 							) : (
@@ -473,7 +473,7 @@ const Messages = () => {
 										}}
 									>
 										<ListItemAvatar>
-											<Avatar src={getOptimizedAvatar(resultUser.profilePic || "", 50)} />
+											<Avatar src={getOptimizedAvatar(resultUser.profilePic || "", 50)}  alt="User Avatar" />
 										</ListItemAvatar>
 										<ListItemText primary={resultUser.name} secondary={resultUser.skillLevel} />
 									</ListItemButton>
@@ -483,7 +483,7 @@ const Messages = () => {
 						</>
 					)}
 					{!searchQuery && recentChats.length === 0 && (
-						<Box sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
+						<Box sx={{ p: 3, textAlign: "center", color: "text.primary" }}>
 							<Typography variant="body2">No recent chats.</Typography>
 						</Box>
 					)}
@@ -512,7 +512,7 @@ const Messages = () => {
 									invisible={!onlineUsers.includes(chat.friend._id)}
 									anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 								>
-									<Avatar src={getOptimizedAvatar(chat.friend.profilePic || "", 50)} />
+									<Avatar src={getOptimizedAvatar(chat.friend.profilePic || "", 50)}  alt="User Avatar" />
 								</Badge>
 							</ListItemAvatar>
 							<ListItemText 
@@ -522,7 +522,7 @@ const Messages = () => {
 											{chat.friend.name}
 										</Typography>
 										{chat.lastMessage?.timestamp && (
-											<Typography variant="caption" color="text.secondary">
+											<Typography variant="caption" color="text.primary">
 												{formatShortTime(chat.lastMessage.timestamp)}
 											</Typography>
 										)}
@@ -535,7 +535,7 @@ const Messages = () => {
 								}
 								secondaryTypographyProps={{ 
 									noWrap: true, 
-									color: chat.unreadCount > 0 ? 'text.primary' : 'text.secondary',
+									color: chat.unreadCount > 0 ? 'text.primary' : 'text.primary',
 									fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal',
 									sx: { pr: 2 } // padding right to avoid unread badge overlap
 								}}
@@ -550,11 +550,11 @@ const Messages = () => {
 						<>
 							<Divider />
 							<Box sx={{ p: 2 }}>
-								<Typography variant="caption" color="text.secondary" fontWeight="bold">ALL FRIENDS</Typography>
+								<Typography variant="caption" color="text.primary" fontWeight="bold">ALL FRIENDS</Typography>
 							</Box>
 							
 							{friends.length === 0 && (
-								<Box sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
+								<Box sx={{ p: 3, textAlign: "center", color: "text.primary" }}>
 									<Typography variant="body2">You have no friends yet.</Typography>
 								</Box>
 							)}
@@ -577,7 +577,7 @@ const Messages = () => {
 											invisible={!onlineUsers.includes(friend._id)}
 											anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 										>
-											<Avatar src={getOptimizedAvatar(friend.profilePic || "", 50)} />
+											<Avatar src={getOptimizedAvatar(friend.profilePic || "", 50)}  alt="User Avatar" />
 										</Badge>
 									</ListItemAvatar>
 									<ListItemText primary={friend.name} />
@@ -611,17 +611,17 @@ const Messages = () => {
 								flexShrink: 0
 							}}
 						>
-							<IconButton 
+							<IconButton aria-label="icon button" 
 								sx={{ display: { md: "none" } }} 
 								onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}
 								aria-label="Back to conversations"
 							>
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
 							</IconButton>
-							<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 50)} />
+							<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 50)}  alt="User Avatar" />
 							<Box>
 								<Typography variant="h6" fontWeight="bold">{activeChat.name}</Typography>
-								<Typography variant="caption" color="text.secondary">
+								<Typography variant="caption" color="text.primary">
 									{onlineUsers.includes(activeChat._id) ? "Online" : formatLastActive(activeChat.lastActive)}
 								</Typography>
 							</Box>
@@ -644,7 +644,7 @@ const Messages = () => {
 									<CircularProgress color="primary" />
 								</Box>
 							) : messages.length === 0 ? (
-								<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary', gap: 2 }}>
+								<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.primary', gap: 2 }}>
 									<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 									<Typography>Say hi to {activeChat.name}!</Typography>
 								</Box>
@@ -686,13 +686,13 @@ const Messages = () => {
 											return (
 												<Fragment key={idx}>
 													{showTopTimestamp && (
-														<Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", width: "100%", display: "block", mb: 2, mt: 1, fontWeight: 'medium' }}>
+														<Typography variant="caption" color="text.primary" sx={{ textAlign: "center", width: "100%", display: "block", mb: 2, mt: 1, fontWeight: 'medium' }}>
 															{formatTime(msg.timestamp)}
 														</Typography>
 													)}
 													<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
 														{!isMe && !msg.isDeletedByAdmin && (
-															<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
+															<IconButton aria-label="icon button" className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
 																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 															</IconButton>
 														)}
@@ -726,7 +726,7 @@ const Messages = () => {
 																		</Typography>
 																	)}
 																	{isMe && idx === lastReadMsgIndex && (
-																		<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 20)} sx={{ width: 14, height: 14 }} />
+																		<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 20)} sx={{ width: 14, height: 14 }}  alt="User Avatar" />
 																	)}
 																</Box>
 															)}
@@ -738,7 +738,7 @@ const Messages = () => {
 									})()}
 									{typingUserIds.has(activeChat._id) && (
 										<Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2, alignItems: 'flex-end', gap: 1 }}>
-											<Avatar src={getOptimizedAvatar(activeChat.profilePic, 30)} sx={{ width: 24, height: 24, mb: 2 }} />
+											<Avatar src={getOptimizedAvatar(activeChat.profilePic, 30)} sx={{ width: 24, height: 24, mb: 2 }}  alt="User Avatar" />
 											<Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
 												<Box sx={{
 													px: 2,
@@ -755,14 +755,14 @@ const Messages = () => {
 													height: 36,
 													width: "fit-content"
 												}}>
-													<Box sx={{ width: 5, height: 5, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.32s' }} />
-													<Box sx={{ width: 5, height: 5, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.16s' }} />
-													<Box sx={{ width: 5, height: 5, bgcolor: 'text.secondary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' }} />
+													<Box sx={{ width: 5, height: 5, bgcolor: 'text.primary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.32s' }} />
+													<Box sx={{ width: 5, height: 5, bgcolor: 'text.primary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.16s' }} />
+													<Box sx={{ width: 5, height: 5, bgcolor: 'text.primary', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' }} />
 													<style>
 														{`@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }`}
 													</style>
 												</Box>
-												<Typography variant="caption" color="text.secondary" sx={{ ml: 1, fontSize: '0.7rem' }}>
+												<Typography variant="caption" color="text.primary" sx={{ ml: 1, fontSize: '0.7rem' }}>
 													{activeChat.name.split(' ')[0]} is typing...
 												</Typography>
 											</Box>
@@ -826,7 +826,7 @@ const Messages = () => {
 						</Box>
 					</>
 				) : (
-					<Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "text.secondary" }}>
+					<Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "text.primary" }}>
 						<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
 						<Typography variant="h6" sx={{ mt: 2 }}>Select a friend to start chatting</Typography>
 					</Box>
@@ -859,7 +859,7 @@ const Messages = () => {
 						backgroundPosition: 'center',
 						position: 'relative' 
 					}}>
-						<IconButton 
+						<IconButton aria-label="icon button" 
 							onClick={() => setProfileDialogOpen(false)} 
 							aria-label="Close profile dialog" 
 							sx={{ 
@@ -889,7 +889,7 @@ const Messages = () => {
 									boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
 									bgcolor: 'background.default'
 								}} 
-							/>
+							 alt="User Avatar" />
 							
 							<Box sx={{ mt: 1.5, textAlign: 'center' }}>
 								<Typography variant="h5" fontWeight="900" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
@@ -941,7 +941,7 @@ const Messages = () => {
 							<Box sx={{ width: "100%", mt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
 								{profileData.bio && (
 									<Box>
-										<Typography variant="overline" sx={{ color: "text.secondary", fontWeight: 800, letterSpacing: 1 }}>About</Typography>
+										<Typography variant="overline" sx={{ color: "text.primary", fontWeight: 800, letterSpacing: 1 }}>About</Typography>
 										<Typography variant="body2" sx={{ color: 'text.primary', lineHeight: 1.6, mt: 0.5 }}>{profileData.bio}</Typography>
 									</Box>
 								)}
@@ -950,7 +950,7 @@ const Messages = () => {
 									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
 										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-											<Typography variant="caption" color="text.secondary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Play Style</Typography>
+											<Typography variant="caption" color="text.primary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Play Style</Typography>
 										</Box>
 										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.preferredPlay || "Any"}</Typography>
 									</Box>
@@ -958,7 +958,7 @@ const Messages = () => {
 									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
 										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-											<Typography variant="caption" color="text.secondary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Racket</Typography>
+											<Typography variant="caption" color="text.primary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Racket</Typography>
 										</Box>
 										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.racket || "N/A"}</Typography>
 									</Box>

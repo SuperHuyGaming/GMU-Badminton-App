@@ -282,7 +282,7 @@ function App() {
 	const theme = useMemo(() => createTheme({
 		palette: {
 			mode,
-			primary: { main: "#006633", dark: "#004d26", light: "#33855c" },
+			primary: { main: "#005c2e", dark: "#004d26", light: "#33855c" },
 			secondary: { main: "#FFCC33" },
 			background: { 
 				default: mode === "light" ? "#f4f6f8" : "#02120a", // Ultra deep forest green

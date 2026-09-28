@@ -241,11 +241,11 @@ export default function Dashboard() {
 					@keyframes pulseGreen { 0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } }
 					@keyframes pulseYellow { 0% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 204, 51, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 204, 51, 0); } }
 					
-					.live-indicator-red { width: 12px; height: 12px; background-color: #FF4444; border-radius: 50%; display: inline-block; animation: pulseRed 2s infinite; }
-					.live-indicator-green { width: 12px; height: 12px; background-color: #00E676; border-radius: 50%; display: inline-block; animation: pulseGreen 2s infinite; }
-					.live-indicator-yellow { width: 12px; height: 12px; background-color: #FFCC33; border-radius: 50%; display: inline-block; animation: pulseYellow 2s infinite; }
+					.live-indicator-red { width: 0.75rem; height: 0.75rem; background-color: #FF4444; border-radius: 50%; display: inline-block; animation: pulseRed 2s infinite; }
+					.live-indicator-green { width: 0.75rem; height: 0.75rem; background-color: #00E676; border-radius: 50%; display: inline-block; animation: pulseGreen 2s infinite; }
+					.live-indicator-yellow { width: 0.75rem; height: 0.75rem; background-color: #FFCC33; border-radius: 50%; display: inline-block; animation: pulseYellow 2s infinite; }
 					
-					.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+					.custom-scrollbar::-webkit-scrollbar { width: 0.375rem; }
 					.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 					.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 10px; }
 				`}
@@ -286,7 +286,7 @@ export default function Dashboard() {
 								height: 60,
 								border: "2px solid #FFCC33",
 							}}
-						>
+						 alt="User Avatar" >
 							{!currentUser.profilePic &&
 								currentUser.name?.charAt(0).toUpperCase()}
 						</Avatar>
@@ -514,7 +514,7 @@ export default function Dashboard() {
 								<Typography variant="h6" fontWeight="bold" sx={{ color: 'text.primary' }}>
 									No New Updates
 								</Typography>
-								<Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 250, mx: 'auto' }}>
+								<Typography variant="body2" sx={{ color: 'text.primary', maxWidth: 250, mx: 'auto' }}>
 									The court is clear. Check back later for
 									official club announcements!
 								</Typography>
@@ -613,7 +613,7 @@ export default function Dashboard() {
 														</Box>
 														<Typography
 															variant="caption"
-															color="text.secondary"
+															color="text.primary"
 															sx={{
 																display:
 																	"block",
@@ -723,7 +723,7 @@ export default function Dashboard() {
 										case 'CLUB_ONLY': return 'info.main';
 										case 'OPEN_REQ': return 'warning.main';
 										case 'UNAVAILABLE': return 'error.main';
-										default: return 'text.secondary';
+										default: return 'text.primary';
 									}
 								};
 								
@@ -821,7 +821,7 @@ export default function Dashboard() {
 													display: "flex",
 													flexWrap: "wrap",
 													gap: { xs: 1.5, sm: 3 },
-													color: "text.secondary",
+													color: "text.primary",
 													mt: 0.5,
 												}}
 											>
@@ -831,7 +831,7 @@ export default function Dashboard() {
 														display: "flex",
 														alignItems: "center",
 														gap: 0.5,
-														color: "text.secondary",
+														color: "text.primary",
 													}}
 												>
 													<PinIcon /> {schedule.facilityName}
@@ -851,7 +851,7 @@ export default function Dashboard() {
 									textAlign: "center",
 								}}
 							>
-								<Typography color="text.secondary">
+								<Typography color="text.primary">
 									No live court schedule available right now.
 								</Typography>
 							</Paper>

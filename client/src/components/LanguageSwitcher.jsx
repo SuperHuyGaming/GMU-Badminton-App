@@ -33,7 +33,7 @@ export default function LanguageSwitcher() {
 
     return (
         <>
-            <IconButton color="inherit" onClick={handleOpen} sx={{ display: 'flex', gap: 0.5 }}>
+            <IconButton aria-label="Change language" color="inherit" onClick={handleOpen} sx={{ display: 'flex', gap: 0.5 }}>
                 <GlobeIcon />
                 <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
                     {currentLang.short}

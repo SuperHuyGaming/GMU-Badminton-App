@@ -172,8 +172,10 @@ router.post("/remove", authMiddleware, async (req, res, next) => {
 // GET: search users
 router.get("/search/:query", authMiddleware, async (req, res, next) => {
 	try {
+		const escapeRegex = (text) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+		const safeQuery = escapeRegex(req.params.query);
 		const users = await User.find({
-			name: { $regex: req.params.query, $options: "i" }
+			name: { $regex: safeQuery, $options: "i" }
 		}).select("_id name profilePic skillLevel").limit(10);
 		res.json(users);
 	} catch (error) {

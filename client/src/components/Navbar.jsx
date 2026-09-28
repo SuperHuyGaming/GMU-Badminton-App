@@ -134,17 +134,7 @@ export default function Navbar() {
 								>
 									Community
 								</Button>
-								<Button
-									color={location.pathname === "/leaderboard" ? "secondary" : "inherit"}
-									component={RouterLink}
-									to="/leaderboard"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
-								>
-									Leaderboard
-								</Button>
+
 								<Button
 									color={location.pathname === "/matchmaking" ? "secondary" : "inherit"}
 									component={RouterLink}
@@ -305,7 +295,7 @@ export default function Navbar() {
 												sx={{
 													py: 3,
 													justifyContent: "center",
-													color: "text.secondary",
+													color: "text.primary",
 												}}
 												disableRipple
 											>
@@ -351,7 +341,7 @@ export default function Navbar() {
 														</Typography>
 														<Typography
 															variant="caption"
-															color="text.secondary"
+															color="text.primary"
 															sx={{
 																mt: 0.5,
 																display:
@@ -373,6 +363,7 @@ export default function Navbar() {
 										role="button"
 										tabIndex={0}
 										aria-label="User menu"
+										alt="User Avatar"
 										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
 										sx={{
 											width: 40,
@@ -512,18 +503,7 @@ export default function Navbar() {
 									primary="Community"
 								/>
 							</ListItemButton>
-							<ListItemButton
-								component={RouterLink}
-								to="/leaderboard"
-								sx={{ textAlign: "center" }}
-							>
-								<ListItemText
-									primaryTypographyProps={{
-										fontWeight: "bold",
-									}}
-									primary="Leaderboard"
-								/>
-							</ListItemButton>
+
 							<ListItemButton
 								component={RouterLink}
 								to="/matchmaking"
