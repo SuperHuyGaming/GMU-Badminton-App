@@ -171,7 +171,17 @@ export default function SearchResults() {
 
     return (
         <Box sx={{ flexGrow: 1, pt: { xs: 1, sm: 2 }, pb: 4 }}>
-            <Typography variant="h4" component="h1" fontWeight="bold" mb={3} sx={{ color: 'text.primary' }}>
+            <Typography 
+                variant="h4" 
+                component="h1" 
+                fontWeight="bold" 
+                mb={3} 
+                sx={{ 
+                    color: 'text.primary',
+                    fontSize: { xs: '1.5rem', sm: '1.875rem', md: '2.125rem' },
+                    wordBreak: 'break-word'
+                }}
+            >
                 Search Results for "{searchQuery}"
             </Typography>
 
@@ -193,6 +203,7 @@ export default function SearchResults() {
 
                         <FormControl component="fieldset" sx={{ mb: { xs: 2, md: 3 }, width: '100%' }}>
                             <FormLabel 
+                                id="filter-type-label"
                                 component="legend" 
                                 sx={{ 
                                     fontWeight: 'bold', 
@@ -204,6 +215,7 @@ export default function SearchResults() {
                                 Type
                             </FormLabel>
                             <RadioGroup
+                                aria-labelledby="filter-type-label"
                                 value={searchType}
                                 onChange={(e) => handleTypeChange(e.target.value)}
                                 row
@@ -220,7 +232,7 @@ export default function SearchResults() {
                                                     color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
                                                 },
                                                 '&:focus-visible': {
-                                                    outline: '2px solid #FFCC33',
+                                                    outline: (theme) => theme.palette.mode === 'dark' ? '2px solid #FFCC33' : '2px solid #005c2e',
                                                     outlineOffset: '2px',
                                                 }
                                             }}
@@ -239,7 +251,7 @@ export default function SearchResults() {
                                                     color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
                                                 },
                                                 '&:focus-visible': {
-                                                    outline: '2px solid #FFCC33',
+                                                    outline: (theme) => theme.palette.mode === 'dark' ? '2px solid #FFCC33' : '2px solid #005c2e',
                                                     outlineOffset: '2px',
                                                 }
                                             }}
@@ -255,6 +267,7 @@ export default function SearchResults() {
 
                         <FormControl component="fieldset" sx={{ mb: { xs: 2, md: 3 }, width: '100%' }}>
                             <FormLabel 
+                                id="filter-skill-label"
                                 component="legend" 
                                 sx={{ 
                                     fontWeight: 'bold', 
@@ -266,6 +279,7 @@ export default function SearchResults() {
                                 Skill Level
                             </FormLabel>
                             <FormGroup 
+                                aria-labelledby="filter-skill-label"
                                 aria-label="Filter by skill level"
                                 sx={{ 
                                     flexDirection: { xs: 'row', md: 'column' },
@@ -287,7 +301,7 @@ export default function SearchResults() {
                                                         color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
                                                     },
                                                     '&:focus-visible': {
-                                                        outline: '2px solid #FFCC33',
+                                                        outline: (theme) => theme.palette.mode === 'dark' ? '2px solid #FFCC33' : '2px solid #005c2e',
                                                         outlineOffset: '2px',
                                                     }
                                                 }}
@@ -304,6 +318,7 @@ export default function SearchResults() {
 
                         <FormControl component="fieldset" sx={{ mb: { xs: 1, md: 3 }, width: '100%' }}>
                             <FormLabel 
+                                id="filter-uni-label"
                                 component="legend" 
                                 sx={{ 
                                     fontWeight: 'bold', 
@@ -315,6 +330,7 @@ export default function SearchResults() {
                                 Home University
                             </FormLabel>
                             <FormGroup 
+                                aria-labelledby="filter-uni-label"
                                 aria-label="Filter by home university"
                                 sx={{ 
                                     flexDirection: { xs: 'row', md: 'column' },
@@ -336,7 +352,7 @@ export default function SearchResults() {
                                                         color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
                                                     },
                                                     '&:focus-visible': {
-                                                        outline: '2px solid #FFCC33',
+                                                        outline: (theme) => theme.palette.mode === 'dark' ? '2px solid #FFCC33' : '2px solid #005c2e',
                                                         outlineOffset: '2px',
                                                     }
                                                 }}
@@ -370,6 +386,7 @@ export default function SearchResults() {
                                     sx={{ 
                                         color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#404040',
                                         fontWeight: 600,
+                                        wordBreak: 'break-word',
                                     }}
                                 >
                                     No results found for "{searchQuery}".
@@ -386,15 +403,7 @@ export default function SearchResults() {
                                         key={result._id} 
                                         ref={isLast ? lastResultElementRef : null}
                                         component="article"
-                                        tabIndex={0}
-                                        role="button"
                                         aria-label={`Player: ${result.name}, ${result.skillLevel || 'Unrated'}, ${result.university || 'GMU'}`}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                navigate(`/profile/${result._id}`);
-                                            }
-                                        }}
                                         onClick={() => navigate(`/profile/${result._id}`)}
                                         sx={{ 
                                             p: { xs: 2, sm: 2.5 }, 
@@ -407,17 +416,12 @@ export default function SearchResults() {
                                             cursor: 'pointer', 
                                             transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
                                             border: (theme) => `1px solid ${theme.palette.divider}`,
-                                            outline: 'none',
                                             '&:hover': { 
                                                 transform: 'translateY(-2px)', 
                                                 boxShadow: (theme) => theme.palette.mode === 'dark' 
                                                     ? '0 8px 24px rgba(0,0,0,0.5)' 
                                                     : '0 8px 24px rgba(0, 92, 46, 0.12)',
                                             },
-                                            '&:focus-visible': {
-                                                outline: '2px solid #FFCC33',
-                                                outlineOffset: '2px',
-                                            }
                                         }}
                                     >
                                         <Avatar 
@@ -427,7 +431,7 @@ export default function SearchResults() {
                                                 width: { xs: 48, sm: 64 }, 
                                                 height: { xs: 48, sm: 64 },
                                                 bgcolor: 'secondary.main',
-                                                color: 'primary.dark',
+                                                color: '#002f17',
                                                 fontWeight: 'bold',
                                                 fontSize: { xs: '1.2rem', sm: '1.5rem' },
                                                 border: '2px solid #FFCC33',
@@ -437,7 +441,16 @@ export default function SearchResults() {
                                             {!result.profilePic && result.name?.charAt(0)}
                                         </Avatar>
                                         <Box sx={{ flex: '1 1 180px', minWidth: 0 }}>
-                                            <Typography variant="h6" component="h3" fontWeight="bold" sx={{ color: 'text.primary', lineHeight: 1.25 }}>
+                                            <Typography 
+                                                variant="h6" 
+                                                component="h3" 
+                                                fontWeight="bold" 
+                                                sx={{ 
+                                                    color: 'text.primary', 
+                                                    lineHeight: 1.25,
+                                                    wordBreak: 'break-word',
+                                                }}
+                                            >
                                                 {result.name}
                                             </Typography>
                                             <Typography 
@@ -460,7 +473,8 @@ export default function SearchResults() {
                                                         WebkitBoxOrient: 'vertical', 
                                                         overflow: 'hidden',
                                                         color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : '#2d3748',
-                                                        lineHeight: 1.5
+                                                        lineHeight: 1.5,
+                                                        wordBreak: 'break-word',
                                                     }}
                                                 >
                                                     {result.bio}
@@ -478,7 +492,7 @@ export default function SearchResults() {
                                                 borderRadius: 8,
                                                 whiteSpace: 'nowrap',
                                                 fontWeight: 'bold',
-                                                minHeight: '36px',
+                                                minHeight: { xs: '44px', sm: '38px' },
                                                 minWidth: { xs: '100%', sm: 'auto' },
                                                 borderWidth: '1.5px',
                                                 color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
@@ -489,7 +503,7 @@ export default function SearchResults() {
                                                     backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.08)' : 'rgba(0, 92, 46, 0.08)',
                                                 },
                                                 '&:focus-visible': {
-                                                    outline: '2px solid #FFCC33',
+                                                    outline: (theme) => theme.palette.mode === 'dark' ? '2px solid #FFCC33' : '2px solid #005c2e',
                                                     outlineOffset: '2px',
                                                 }
                                             }}
@@ -505,7 +519,7 @@ export default function SearchResults() {
                                         ref={isLast ? lastResultElementRef : null}
                                         component="article"
                                         tabIndex={0}
-                                        aria-label={`Post by ${result.author}`}
+                                        aria-label={`Post: ${result.title} by ${result.authorName || (typeof result.author === 'string' ? result.author : result.author?.name) || 'Anonymous'}`}
                                         sx={{ 
                                             p: { xs: 2, sm: 3 }, 
                                             borderRadius: 2,
@@ -518,7 +532,7 @@ export default function SearchResults() {
                                                     : '0 8px 24px rgba(0, 102, 51, 0.08)',
                                             },
                                             '&:focus-visible': {
-                                                outline: '2px solid #FFCC33',
+                                                outline: (theme) => theme.palette.mode === 'dark' ? '2px solid #FFCC33' : '2px solid #005c2e',
                                                 outlineOffset: '2px',
                                             }
                                         }}
@@ -530,6 +544,7 @@ export default function SearchResults() {
                                             mb={1}
                                             sx={{
                                                 color: (theme) => theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
+                                                wordBreak: 'break-word',
                                             }}
                                         >
                                             {result.title}
@@ -542,7 +557,7 @@ export default function SearchResults() {
                                                 color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
                                             }}
                                         >
-                                            {result.authorName}
+                                            {result.authorName || (typeof result.author === 'string' ? result.author : result.author?.name) || 'Anonymous'}
                                         </Typography>
                                         <Typography 
                                             variant="body1"
@@ -559,11 +574,11 @@ export default function SearchResults() {
                                             sx={{ 
                                                 display: 'block', 
                                                 mt: 2,
-                                                color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.75)' : '#495057',
+                                                color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#374151',
                                                 fontWeight: 500,
                                             }}
                                         >
-                                            {new Date(result.timestamp || result.createdAt).toLocaleDateString()}
+                                            {(result.timestamp || result.createdAt) ? new Date(result.timestamp || result.createdAt).toLocaleDateString() : ''}
                                         </Typography>
                                     </Paper>
                                 );
@@ -577,7 +592,12 @@ export default function SearchResults() {
                                 aria-live="polite"
                                 aria-label="Loading search results"
                             >
-                                <CircularProgress aria-label="Loading search results" />
+                                <CircularProgress 
+                                    aria-label="Loading search results"
+                                    sx={{
+                                        color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
+                                    }}
+                                />
                             </Box>
                         )}
                         
@@ -587,7 +607,7 @@ export default function SearchResults() {
                                 textAlign="center" 
                                 sx={{ 
                                     py: 3,
-                                    color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#495057',
+                                    color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#374151',
                                     fontWeight: 500,
                                 }}
                             >

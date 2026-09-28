@@ -190,7 +190,7 @@ const GlobalSearch = () => {
                                 <Avatar 
                                     src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} 
                                     alt={option.name || "Player avatar"}
-                                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main', color: 'primary.dark', fontWeight: 'bold' }}
+                                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main', color: '#002f17', fontWeight: 'bold' }}
                                 >
                                     {!option.profilePic && option.name?.charAt(0)}
                                 </Avatar>
@@ -643,7 +643,7 @@ export default function Navbar() {
 											width: 40,
 											height: 40,
 											bgcolor: "secondary.main",
-											color: "primary.dark",
+											color: "#002f17",
 											fontWeight: "bold",
 											border: "2px solid #FFCC33",
 											cursor: "pointer",

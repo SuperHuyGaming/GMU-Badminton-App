@@ -50,7 +50,7 @@ const searchHandler = async (req, res) => {
     });
   }
 
-  const validTypes = ['all', 'users', 'posts', 'user', 'post'];
+  const validTypes = ['all', 'players', 'users', 'posts', 'user', 'post'];
   if (!validTypes.includes(type)) {
     return res.status(400).json({
       error: 'Validation Error',
@@ -63,7 +63,7 @@ const searchHandler = async (req, res) => {
 
   try {
       let indices = ['users', 'posts'];
-      if (type === 'user' || type === 'users') indices = ['users'];
+      if (type === 'user' || type === 'users' || type === 'players') indices = ['users'];
       if (type === 'post' || type === 'posts') indices = ['posts'];
 
       const result = await elasticClient.search({
@@ -127,4 +127,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, server };
+module.exports = { app, server, elasticClient };

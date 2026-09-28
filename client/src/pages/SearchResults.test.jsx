@@ -205,4 +205,74 @@ describe('SearchResults Page Component', () => {
             expect(screen.getByText('No results found for "Player".')).toBeInTheDocument();
         });
     });
+
+    it('verifies player card accessible article semantics and View Profile button', async () => {
+        const mockPlayers = [
+            {
+                _id: 'p99',
+                name: 'Elena Rostova',
+                skillLevel: 'Advanced',
+                university: 'GMU',
+                bio: 'Competitive doubles player',
+            },
+        ];
+
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: mockPlayers }),
         });
+
+        renderSearchResults('Elena');
+
+        await waitFor(() => {
+            expect(screen.getByText('Elena Rostova')).toBeInTheDocument();
+        });
+
+        // Player article landmark
+        const playerArticle = screen.getByRole('article', { name: 'Player: Elena Rostova, Advanced, GMU' });
+        expect(playerArticle).toBeInTheDocument();
+
+        // Action button for keyboard users
+        const viewProfileBtn = screen.getByRole('link', { name: 'View profile for Elena Rostova' });
+        expect(viewProfileBtn).toBeInTheDocument();
+        expect(viewProfileBtn).toHaveAttribute('href', '/profile/p99');
+    });
+
+    it('verifies post card accessible article label without undefined values', async () => {
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Smash');
+
+        const mockPosts = [
+            {
+                _id: 'post-99',
+                title: 'Mastering the Backhand Smash',
+                content: 'Keep your elbow high and snap the wrist.',
+                authorName: 'Coach Carter',
+                timestamp: '2026-09-28T12:00:00Z',
+            },
+        ];
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ results: mockPosts }),
+        });
+
+        const postsRadio = screen.getByLabelText('Posts');
+        fireEvent.click(postsRadio);
+
+        await waitFor(() => {
+            expect(screen.getByText('Mastering the Backhand Smash')).toBeInTheDocument();
+        });
+
+        // Verify post article accessible name has no 'undefined'
+        const postArticle = screen.getByRole('article', {
+            name: 'Post: Mastering the Backhand Smash by Coach Carter',
+        });
+        expect(postArticle).toBeInTheDocument();
+        expect(postArticle.getAttribute('aria-label')).not.toContain('undefined');
+    });
+});
