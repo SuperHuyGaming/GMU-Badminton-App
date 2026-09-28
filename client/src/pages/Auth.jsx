@@ -118,17 +118,17 @@ export default function Auth() {
 			case 0:
 				return (
 					<motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
-						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
+						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.primary', fontWeight: 'bold' }}>
 							Let's start with the basics.
 						</Typography>
-						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
-						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
+						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required autoComplete="email" />
+						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required autoComplete="new-password" />
 					</motion.div>
 				);
 			case 1:
 				return (
 					<motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
-						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
+						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.primary', fontWeight: 'bold' }}>
 							What should we call you on the court?
 						</Typography>
 						<Box sx={{ display: 'flex', gap: 2 }}>
@@ -140,7 +140,7 @@ export default function Auth() {
 			case 2:
 				return (
 					<motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
-						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.secondary', fontWeight: 'bold' }}>
+						<Typography variant="subtitle1" sx={{ mb: 2, textAlign: 'left', color: 'text.primary', fontWeight: 'bold' }}>
 							Select your badminton skill level.
 						</Typography>
 						<Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
@@ -166,9 +166,9 @@ export default function Auth() {
 									>
 										<CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, textAlign: 'left' }}>
 											<Typography variant="h6" fontWeight="bold" color={formData.skillLevel === item.level ? 'primary.main' : 'text.primary'}>
-												{item.level} <Typography component="span" variant="subtitle1" color="text.secondary">({item.title})</Typography>
+												{item.level} <Typography component="span" variant="subtitle1" color="text.primary">({item.title})</Typography>
 											</Typography>
-											<Typography variant="body2" color="text.secondary">
+											<Typography variant="body2" color="text.primary">
 												{item.desc}
 											</Typography>
 										</CardContent>
@@ -189,7 +189,7 @@ export default function Auth() {
 				<Typography variant="h4" color="primary" sx={{ fontWeight: "900", mb: 1, fontSize: { xs: "1.75rem", sm: "2.125rem" } }}>
 					{isLogin ? "Welcome Back" : "Join the Community"}
 				</Typography>
-				<Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+				<Typography variant="body1" color="text.primary" sx={{ mb: 3 }}>
 					{isLogin ? "Log in to view the schedule and forum." : "Create an account to start playing."}
 				</Typography>
 
@@ -220,8 +220,8 @@ export default function Auth() {
 
 				{isLogin ? (
 					<form onSubmit={handleSubmit}>
-						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
-						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required />
+						<TextField fullWidth label="Email Address" type="email" name="email" value={formData.email} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required autoComplete="email" />
+						<TextField fullWidth label="Password" type="password" name="password" value={formData.password} onChange={handleChange} onKeyDown={handleKeyDown} margin="normal" required autoComplete="current-password" />
 						<Button type="submit" fullWidth variant="contained" color="primary" size="large" disabled={isSubmitting} sx={{ mt: 4, mb: 2, fontWeight: "bold", py: 1.5, borderRadius: 2 }}>
 							{isSubmitting ? <CircularProgress size={24} color="inherit" /> : "Login"}
 						</Button>

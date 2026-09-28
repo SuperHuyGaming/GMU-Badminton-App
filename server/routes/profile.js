@@ -19,7 +19,7 @@ router.get("/", authMiddleware, async (req, res) => {
 // GET: Export all user data (GDPR Compliance - Task 10)
 router.get("/export", authMiddleware, async (req, res, next) => {
     try {
-        const archiver = require("archiver");
+        const { ZipArchive } = require("archiver");
         const Match = require("../models/Match");
         const Post = require("../models/Post");
         
@@ -36,11 +36,12 @@ router.get("/export", authMiddleware, async (req, res, next) => {
         const userPosts = await Post.find({ author: userId }).lean();
 
         // 2. Set headers for file download
+        const safeName = (userProfile.name || "user").replace(/\s+/g, '_');
         res.setHeader("Content-Type", "application/zip");
-        res.setHeader("Content-Disposition", `attachment; filename=GMU_Badminton_Export_${userProfile.name.replace(/\s+/g, '_')}.zip`);
+        res.setHeader("Content-Disposition", `attachment; filename=GMU_Badminton_Export_${safeName}.zip`);
 
-        // 3. Create zip archive stream
-        const archive = archiver("zip", {
+        // 3. Create zip archive stream (archiver v8 uses named class exports)
+        const archive = new ZipArchive({
             zlib: { level: 9 } // Maximum compression
         });
 
