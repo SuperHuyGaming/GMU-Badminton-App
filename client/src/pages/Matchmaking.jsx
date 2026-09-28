@@ -1,26 +1,35 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Card, CardContent, CircularProgress, Alert, Grid, Avatar, Button, Chip, Stack } from '@mui/material';
+import { Box, Typography, Card, CardContent, CircularProgress, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import apiFetch from '../utils/api';
 
 export default function Matchmaking() {
     const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         const fetchMatches = async () => {
+            setLoading(true);
             try {
-                const data = await apiFetch('/api/matchmaking/discover');
+                const url = searchQuery ? `/api/matchmaking/discover?search=${encodeURIComponent(searchQuery)}` : '/api/matchmaking/discover';
+                const data = await apiFetch(url);
                 setMatches(data.matches || []);
             } catch (err) {
-                setError(err.message || 'Failed to fetch potential matches');
+                setError(err.message || 'Failed to fetch players');
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchMatches();
-    }, []);
+        // Debounce search by 300ms
+        const timeoutId = setTimeout(() => {
+            fetchMatches();
+        }, 300);
+
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery]);
 
     if (loading) {
         return (
@@ -41,15 +50,31 @@ export default function Matchmaking() {
     return (
         <Box sx={{ maxWidth: 1000, mx: 'auto', p: 3, mt: 4 }}>
             <Typography variant="h3" sx={{ mb: 1, fontWeight: 'bold' }}>
-                Player Discovery
+                Player Directory
             </Typography>
             <Typography color="text.secondary" sx={{ mb: 4 }}>
-                Find local players based on your University and preferred play style.
+                Find players in the community, search by name or university.
             </Typography>
+
+            <TextField
+                fullWidth
+                variant="outlined"
+                placeholder="Search for players..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{ mb: 4, backgroundColor: 'white', borderRadius: 2 }}
+                InputProps={{
+                    startAdornment: (
+                        <InputAdornment position="start">
+                            <SearchIcon />
+                        </InputAdornment>
+                    ),
+                }}
+            />
 
             {matches.length === 0 ? (
                 <Alert severity="info" sx={{ borderRadius: 2 }}>
-                    We couldn't find any exact matches right now. Try expanding your search preferences!
+                    We couldn't find any players matching your search.
                 </Alert>
             ) : (
                 <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>

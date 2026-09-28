@@ -134,17 +134,7 @@ export default function Navbar() {
 								>
 									Community
 								</Button>
-								<Button
-									color={location.pathname === "/leaderboard" ? "secondary" : "inherit"}
-									component={RouterLink}
-									to="/leaderboard"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
-								>
-									Leaderboard
-								</Button>
+
 								<Button
 									color={location.pathname === "/matchmaking" ? "secondary" : "inherit"}
 									component={RouterLink}
@@ -512,18 +502,7 @@ export default function Navbar() {
 									primary="Community"
 								/>
 							</ListItemButton>
-							<ListItemButton
-								component={RouterLink}
-								to="/leaderboard"
-								sx={{ textAlign: "center" }}
-							>
-								<ListItemText
-									primaryTypographyProps={{
-										fontWeight: "bold",
-									}}
-									primary="Leaderboard"
-								/>
-							</ListItemButton>
+
 							<ListItemButton
 								component={RouterLink}
 								to="/matchmaking"

@@ -5,56 +5,35 @@ const { authMiddleware } = require("../middleware/auth");
 const router = express.Router();
 
 // GET: /api/matchmaking/discover
-// Discover players matching the logged-in user's preferences
+// Discover players and search for users
 router.get("/discover", authMiddleware, async (req, res) => {
     try {
-        const currentUser = await User.findById(req.user.userId);
-        if (!currentUser) return res.status(404).json({ message: "User not found" });
-
-        // We will build a dynamic MongoDB query based on the user's preferences
+        const { search } = req.query;
+        
+        // Build base query (exclude self)
         const query = {
-            _id: { $ne: currentUser._id }, // Don't match with yourself
+            _id: { $ne: req.user.userId },
         };
 
-        // 1. Filter by Home University if they have one set
-        if (currentUser.homeUniversity && currentUser.homeUniversity !== "Other") {
-            query.homeUniversity = currentUser.homeUniversity;
+        // Add search filtering if provided
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: "i" } },
+                { homeUniversity: { $regex: search, $options: "i" } }
+            ];
         }
 
-        // 2. Filter by Skill Level
-        if (currentUser.preferredPlay && currentUser.preferredPlay !== "Any") {
-            query.preferredPlay = { $in: [currentUser.preferredPlay, "Any"] };
-        }
-
-        // 3. Geolocation Proximity ($near query)
-        // Check if the user has a valid geolocation set (not default 0,0)
-        const hasLocation = currentUser.location && 
-                            currentUser.location.coordinates && 
-                            (currentUser.location.coordinates[0] !== 0 || currentUser.location.coordinates[1] !== 0);
-
-        if (hasLocation) {
-            const maxDistanceMeters = (currentUser.searchRadius || 50) * 1609.34; // Convert miles to meters
-            query.location = {
-                $near: {
-                    $geometry: {
-                        type: "Point",
-                        coordinates: currentUser.location.coordinates
-                    },
-                    $maxDistance: maxDistanceMeters
-                }
-            };
-        }
-
-        // To add some randomness and limit payload size, we limit to 20 users
+        // Fetch up to 50 users, sorted by most recently active
         const potentialMatches = await User.find(query)
             .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location")
-            .limit(20)
+            .sort({ lastActive: -1 })
+            .limit(50)
             .lean();
 
         res.json({ matches: potentialMatches });
     } catch (err) {
-        console.error("Matchmaking error:", err);
-        res.status(500).json({ message: "Server error during matchmaking discovery" });
+        console.error("Discovery error:", err);
+        res.status(500).json({ message: "Server error during player discovery" });
     }
 });
 
