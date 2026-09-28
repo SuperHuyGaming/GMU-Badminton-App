@@ -29,7 +29,7 @@ export default function Landing() {
 				{/* Hero Section */}
 				<Box sx={{ textAlign: "center", mb: 8 }}>
 					<motion.img
-						src="/icon.jpg"
+						src="/favicon.svg"
 						alt="GMU Badminton"
 						style={{ width: 120, height: 120, borderRadius: 24, marginBottom: 24, boxShadow: "0px 12px 24px rgba(0,0,0,0.2)" }}
 						initial={{ scale: 0.8, opacity: 0 }}
