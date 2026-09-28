@@ -106,6 +106,14 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 			searchRadius,
 		} = req.body;
 
+		if (firstName !== undefined && firstName.trim() === "") {
+			return res.status(400).json({ message: "First name cannot be empty or just whitespace." });
+		}
+
+		if (lastName !== undefined && lastName.trim() === "") {
+			return res.status(400).json({ message: "Last name cannot be empty or just whitespace." });
+		}
+
 		if (name !== undefined && name.trim() === "") {
 			return res.status(400).json({ message: "Display name cannot be empty or just whitespace." });
 		}

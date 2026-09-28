@@ -212,7 +212,7 @@ export default function ProfileEditForm({
 										fullWidth
 										label="First Name"
 										name="firstName"
-										value={formData.firstName || formData.name?.split(' ')[0] || ''}
+										value={formData.firstName}
 										onChange={handleChange}
 										required
 										variant="outlined"
@@ -224,7 +224,7 @@ export default function ProfileEditForm({
 										fullWidth
 										label="Last Name"
 										name="lastName"
-										value={formData.lastName || formData.name?.split(' ').slice(1).join(' ') || ''}
+										value={formData.lastName}
 										onChange={handleChange}
 										required
 										variant="outlined"
@@ -446,7 +446,11 @@ export default function ProfileEditForm({
 										py: 1.2,
 										borderRadius: 2,
 									}}
-									disabled={isSaving || !formData.name.trim()}
+									disabled={
+										isSaving || 
+										!formData.firstName?.trim() || 
+										!formData.lastName?.trim()
+									}
 								>
 									{isSaving ? "Saving..." : "Save Changes"}
 								</Button>
