@@ -1,6 +1,6 @@
 import { useState, useContext, useEffect } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener, Paper } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -44,14 +44,13 @@ const GlobalSearch = () => {
 
     useEffect(() => {
         if (!inputValue.trim()) {
-            setOptions([]);
             return;
         }
         
         let active = true;
-        setLoading(true);
 
         const timer = setTimeout(async () => {
+            setLoading(true);
             try {
                 const res = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(inputValue)}`);
                 if (res.ok && active) {
@@ -109,42 +108,52 @@ const GlobalSearch = () => {
                         if (typeof option === 'string') return option;
                         return option.name || "";
                     }}
-                    options={options}
+                    options={inputValue.trim() ? options : []}
                     loading={loading}
                     onInputChange={(event, newInputValue) => {
                         setInputValue(newInputValue);
+                        if (!newInputValue.trim()) {
+                            setOptions([]);
+                        }
                     }}
                     onChange={(event, newValue) => {
                         if (newValue && newValue._id) {
                             navigate(`/profile/${newValue._id}`);
                             setInputValue("");
+                            setOptions([]);
                             setOpen(false);
                         }
                     }}
                     filterOptions={(x) => x}
-                    renderInput={(params) => (
-                        <TextField
-                            {...params}
-                            placeholder="Search players..."
-                            variant="outlined"
-                            size="small"
-                            onClick={() => setOpen(true)}
-                            InputProps={{
-                                ...params.InputProps,
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon sx={{ color: 'inherit' }} />
-                                    </InputAdornment>
-                                ),
-                                endAdornment: (
-                                    <>
-                                        {loading ? <CircularProgress color="inherit" size={20} /> : null}
-                                        {params.InputProps.endAdornment}
-                                    </>
-                                ),
-                            }}
-                        />
-                    )}
+                    renderInput={(params) => {
+                        const inputSlot = params.slotProps?.input || params.InputProps || {};
+                        return (
+                            <TextField
+                                {...params}
+                                placeholder="Search players..."
+                                variant="outlined"
+                                size="small"
+                                onClick={() => setOpen(true)}
+                                slotProps={{
+                                    ...params.slotProps,
+                                    input: {
+                                        ...inputSlot,
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon sx={{ color: 'inherit' }} />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: (
+                                            <>
+                                                {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                                                {inputSlot.endAdornment}
+                                            </>
+                                        ),
+                                    },
+                                }}
+                            />
+                        );
+                    }}
                     renderOption={(props, option) => {
                         const { key, ...otherProps } = props;
                         return (
@@ -159,9 +168,11 @@ const GlobalSearch = () => {
                             </Box>
                         );
                     }}
-                    PaperComponent={(props) => (
-                        <Paper {...props} sx={{ ...props.sx, mt: 1, borderRadius: 2, overflow: 'hidden', boxShadow: 4 }} />
-                    )}
+                    slotProps={{
+                        paper: {
+                            sx: { mt: 1, borderRadius: 2, overflow: 'hidden', boxShadow: 4 },
+                        },
+                    }}
                 />
             </Box>
         </ClickAwayListener>
