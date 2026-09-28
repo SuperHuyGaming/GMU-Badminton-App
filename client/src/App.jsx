@@ -127,7 +127,7 @@ const AnimatedRoutes = () => {
                     onClose={handleCloseReportModal} 
                     opponentId={reportMatchId} 
                 />
-				<Routes key={location.pathname}>
+				<Routes location={location} key={location.pathname}>
 					<Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
 					<Route
 						path="/leaderboard"
