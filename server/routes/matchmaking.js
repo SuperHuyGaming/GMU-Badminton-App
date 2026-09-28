@@ -8,12 +8,20 @@ const router = express.Router();
 // Discover players and search for users
 router.get("/discover", authMiddleware, async (req, res) => {
     try {
-        const { search } = req.query;
+        const { search, skill } = req.query;
+        const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, "\\const { search, skill } = req.query;");
+        
+        const currentUser = await User.findById(req.user.userId).lean();
         
         // Build base query (exclude self)
         const query = {
             _id: { $ne: req.user.userId },
         };
+
+        // Add skill filter
+        if (skill && skill !== 'All') {
+            query.skillLevel = skill;
+        }
 
         // Add search filtering if provided
         if (search) {
@@ -30,7 +38,19 @@ router.get("/discover", authMiddleware, async (req, res) => {
             .limit(50)
             .lean();
 
-        res.json({ matches: potentialMatches });
+        // Fetch "People You May Know" (same university, if exists)
+        let recommended = [];
+        if (currentUser && currentUser.homeUniversity) {
+            recommended = await User.find({
+                _id: { $ne: req.user.userId },
+                homeUniversity: currentUser.homeUniversity
+            })
+            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location")
+            .limit(4)
+            .lean();
+        }
+
+        res.json({ matches: potentialMatches, recommended });
     } catch (err) {
         console.error("Discovery error:", err);
         res.status(500).json({ message: "Server error during player discovery" });
