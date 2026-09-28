@@ -134,7 +134,17 @@ export default function Navbar() {
 								>
 									Community
 								</Button>
-
+								<Button
+									color={location.pathname === "/leaderboard" ? "secondary" : "inherit"}
+									component={RouterLink}
+									to="/leaderboard"
+									sx={{
+										textTransform: "none",
+										fontWeight: 600,
+									}}
+								>
+									Leaderboard
+								</Button>
 								<Button
 									color={location.pathname === "/matchmaking" ? "secondary" : "inherit"}
 									component={RouterLink}
@@ -363,7 +373,7 @@ export default function Navbar() {
 										role="button"
 										tabIndex={0}
 										aria-label="User menu"
-										onKeyDown={(e) = alt="User Avatar" > { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
+										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
 										sx={{
 											width: 40,
 											height: 40,
@@ -502,7 +512,18 @@ export default function Navbar() {
 									primary="Community"
 								/>
 							</ListItemButton>
-
+							<ListItemButton
+								component={RouterLink}
+								to="/leaderboard"
+								sx={{ textAlign: "center" }}
+							>
+								<ListItemText
+									primaryTypographyProps={{
+										fontWeight: "bold",
+									}}
+									primary="Leaderboard"
+								/>
+							</ListItemButton>
 							<ListItemButton
 								component={RouterLink}
 								to="/matchmaking"
