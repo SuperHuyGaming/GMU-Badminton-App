@@ -144,4 +144,42 @@ describe('SearchResults Page Component', () => {
             expect(screen.getByText(/Mock post result 1 for "Tournament"/i)).toBeInTheDocument();
         }, { timeout: 2000 });
     });
+
+    it('filters player results by skill level and home university', async () => {
+        const mockPlayers = [
+            { _id: 'p1', name: 'Alice Beginner', skillLevel: 'Beginner', university: 'GMU' },
+            { _id: 'p2', name: 'Bob Advanced', skillLevel: 'Advanced', university: 'VT' },
+        ];
+
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: mockPlayers }),
+        });
+
+        renderSearchResults('Player');
+
+        await waitFor(() => {
+            expect(screen.getByText('Alice Beginner')).toBeInTheDocument();
+            expect(screen.getByText('Bob Advanced')).toBeInTheDocument();
+        });
+
+        // Filter by Beginner skill
+        const beginnerCheckbox = screen.getByLabelText('Beginner');
+        fireEvent.click(beginnerCheckbox);
+
+        await waitFor(() => {
+            expect(screen.getByText('Alice Beginner')).toBeInTheDocument();
+            expect(screen.queryByText('Bob Advanced')).not.toBeInTheDocument();
+        });
+
+        // Also filter by VT university (should result in 0 matches because Alice is GMU)
+        const vtCheckbox = screen.getByLabelText('VT');
+        fireEvent.click(vtCheckbox);
+
+        await waitFor(() => {
+            expect(screen.queryByText('Alice Beginner')).not.toBeInTheDocument();
+            expect(screen.queryByText('Bob Advanced')).not.toBeInTheDocument();
+            expect(screen.getByText('No results found for "Player".')).toBeInTheDocument();
+        });
+    });
 });

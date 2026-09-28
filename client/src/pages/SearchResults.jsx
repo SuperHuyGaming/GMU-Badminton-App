@@ -101,6 +101,10 @@ export default function SearchResults() {
                         if (selectedSkills.length > 0) {
                             newResults = newResults.filter(r => selectedSkills.includes(r.skillLevel));
                         }
+                        const selectedUnis = Object.keys(homeUniversity).filter(k => homeUniversity[k]);
+                        if (selectedUnis.length > 0) {
+                            newResults = newResults.filter(r => selectedUnis.includes(r.university));
+                        }
                     }
                 }
 
