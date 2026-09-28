@@ -432,7 +432,7 @@ export default function ProfileEditForm({
 										py: 1.2,
 										borderRadius: 2,
 									}}
-									disabled={isSaving}
+									disabled={isSaving || !formData.name.trim()}
 								>
 									{isSaving ? "Saving..." : "Save Changes"}
 								</Button>
