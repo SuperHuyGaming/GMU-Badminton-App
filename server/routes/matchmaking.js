@@ -27,9 +27,10 @@ router.get("/discover", authMiddleware, async (req, res) => {
 
         // Add search filtering if provided
         if (search) {
+            const sanitizedSearch = escapeRegex(search);
             query.$or = [
-                { name: { $regex: search, $options: "i" } },
-                { homeUniversity: { $regex: search, $options: "i" } }
+                { name: { $regex: sanitizedSearch, $options: "i" } },
+                { homeUniversity: { $regex: sanitizedSearch, $options: "i" } }
             ];
         }
 
