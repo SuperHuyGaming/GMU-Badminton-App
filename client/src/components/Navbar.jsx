@@ -134,6 +134,13 @@ const GlobalSearch = () => {
                                 variant="outlined"
                                 size="small"
                                 onClick={() => setOpen(true)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && inputValue.trim()) {
+                                        e.preventDefault();
+                                        navigate(`/search?q=${encodeURIComponent(inputValue.trim())}`);
+                                        setOpen(false);
+                                    }
+                                }}
                                 slotProps={{
                                     ...params.slotProps,
                                     input: {

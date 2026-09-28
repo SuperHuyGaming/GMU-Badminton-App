@@ -14,6 +14,7 @@ const Landing = React.lazy(() => import("./pages/Landing"));
 const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 const Marketplace = React.lazy(() => import("./pages/Marketplace"));
 const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
+const SearchResults = React.lazy(() => import("./pages/SearchResults"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 const OnboardingWizard = React.lazy(() => import("./components/OnboardingWizard"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
@@ -239,6 +240,18 @@ const AnimatedRoutes = () => {
 							<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
 								<Tournaments />
 							</motion.div>
+						}
+					/>
+					<Route
+						path="/search"
+						element={
+							user ? (
+								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
+									<SearchResults />
+								</motion.div>
+							) : (
+								<Navigate to="/auth" />
+							)
 						}
 					/>
 					{/* Catch all */}
