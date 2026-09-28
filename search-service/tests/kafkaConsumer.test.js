@@ -1,11 +1,13 @@
 const mockConnect = jest.fn().mockResolvedValue();
 const mockSubscribe = jest.fn().mockResolvedValue();
 const mockRun = jest.fn().mockResolvedValue();
+const mockDisconnect = jest.fn().mockResolvedValue();
 
 const mockConsumer = {
   connect: mockConnect,
   subscribe: mockSubscribe,
   run: mockRun,
+  disconnect: mockDisconnect,
 };
 
 jest.mock('kafkajs', () => {
@@ -18,6 +20,7 @@ jest.mock('kafkajs', () => {
 
 const {
   runConsumer,
+  disconnectConsumer,
   handleMessage,
 } = require('../kafkaConsumer');
 
@@ -100,6 +103,26 @@ describe('Search Service Kafka Consumer', () => {
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         'Error in Kafka Consumer:',
+        expect.any(Error)
+      );
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('disconnectConsumer', () => {
+    it('disconnects the kafka consumer safely', async () => {
+      await disconnectConsumer();
+      expect(mockDisconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles consumer disconnection error gracefully', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockDisconnect.mockRejectedValueOnce(new Error('Disconnect failed'));
+
+      await disconnectConsumer();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error disconnecting Kafka Consumer:',
         expect.any(Error)
       );
       consoleErrorSpy.mockRestore();

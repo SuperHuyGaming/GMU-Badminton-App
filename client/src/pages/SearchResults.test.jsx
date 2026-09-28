@@ -145,5 +145,9 @@ describe('SearchResults Page Component', () => {
 
         // Verify main landmark for results
         expect(screen.getByRole('main', { name: 'Search results list' })).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalled();
+        });
     });
 });

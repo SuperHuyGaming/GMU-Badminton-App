@@ -147,8 +147,8 @@ describe('Navbar Component & Global Search UI', () => {
     it('renders with accessible ARIA attributes and responsive mobile search button', () => {
         renderNavbar();
 
-        // Search input has accessible aria-label
-        const searchInput = screen.getByLabelText('Search players');
+        // Search input is rendered with accessible placeholder
+        const searchInput = screen.getByPlaceholderText('Search players...');
         expect(searchInput).toBeInTheDocument();
 
         // Hamburger button has accessible open navigation menu label and controls

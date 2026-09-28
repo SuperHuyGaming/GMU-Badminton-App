@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { Kafka } = require('kafkajs');
 
 const brokers = process.env.KAFKA_BROKERS
@@ -5,11 +6,13 @@ const brokers = process.env.KAFKA_BROKERS
   : ['localhost:9092'];
 
 const kafka = new Kafka({
-  clientId: 'gmu-badminton-search-service',
+  clientId: process.env.KAFKA_CLIENT_ID || 'gmu-badminton-search-service',
   brokers,
 });
 
-const consumer = kafka.consumer({ groupId: 'search-service-group' });
+const consumer = kafka.consumer({
+  groupId: process.env.KAFKA_GROUP_ID || 'search-service-group',
+});
 
 const handleMessage = async ({ topic, partition, message }) => {
   try {
@@ -39,13 +42,32 @@ const runConsumer = async () => {
   }
 };
 
+const disconnectConsumer = async () => {
+  try {
+    await consumer.disconnect();
+    console.log('Search Service Kafka Consumer disconnected');
+  } catch (error) {
+    console.error('Error disconnecting Kafka Consumer:', error);
+  }
+};
+
 if (require.main === module) {
   runConsumer().catch(console.error);
+
+  const handleShutdown = async (signal) => {
+    console.log(`Received ${signal}, shutting down Kafka consumer...`);
+    await disconnectConsumer();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 }
 
 module.exports = {
   kafka,
   consumer,
   runConsumer,
+  disconnectConsumer,
   handleMessage,
 };

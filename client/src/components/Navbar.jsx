@@ -129,14 +129,10 @@ const GlobalSearch = () => {
                     }}
                     filterOptions={(x) => x}
                     renderInput={(params) => {
-                        const { InputProps: paramsInputProps, ...restParams } = params;
-                        const inputSlot = params.slotProps?.input || paramsInputProps || {};
-                        if (restParams.inputProps) {
-                            restParams.inputProps['aria-label'] = 'Search players';
-                        }
+                        const inputSlot = params.slotProps?.input || params.InputProps || {};
                         return (
                             <TextField
-                                {...restParams}
+                                {...params}
                                 placeholder="Search players..."
                                 variant="outlined"
                                 size="small"
@@ -150,6 +146,10 @@ const GlobalSearch = () => {
                                 }}
                                 slotProps={{
                                     ...params.slotProps,
+                                    htmlInput: {
+                                        ...params.slotProps?.htmlInput,
+                                        'aria-label': 'Search players',
+                                    },
                                     input: {
                                         ...inputSlot,
                                         startAdornment: (
