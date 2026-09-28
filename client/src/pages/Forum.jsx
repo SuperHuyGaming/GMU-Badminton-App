@@ -317,7 +317,7 @@ export default function Forum() {
 								} else {
 									toast.error("Failed to create post.");
 								}
-							} catch (e) {
+							} catch {
 								toast.error("Error creating post.");
 							}
 						}}
