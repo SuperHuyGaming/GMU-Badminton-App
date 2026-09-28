@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { Box, Typography, IconButton, Skeleton } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -12,7 +12,7 @@ function isWebGLAvailable() {
     try {
         const canvas = document.createElement('canvas');
         return !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
-    } catch (e) {
+    } catch {
         return false;
     }
 }
@@ -20,15 +20,13 @@ function isWebGLAvailable() {
 export default function RacketViewer({ primaryColor = '#006633', secondaryColor = '#FFCC33' }) {
     const [isPlaying, setIsPlaying] = useState(true);
     const [resetTrigger, setResetTrigger] = useState(0);
-    const [webGLSupported, setWebGLSupported] = useState(true);
+    const [webGLSupported] = useState(isWebGLAvailable);
     const [isTabVisible, setIsTabVisible] = useState(true);
     
     // Throttling via viewport visibility
     const { ref, inView } = useInView({ threshold: 0.1, triggerOnce: false });
 
     useEffect(() => {
-        setWebGLSupported(isWebGLAvailable());
-        
         const handleVisibilityChange = () => {
             setIsTabVisible(!document.hidden);
         };
@@ -59,10 +57,10 @@ export default function RacketViewer({ primaryColor = '#006633', secondaryColor 
             </Typography>
             
             <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 1 }}>
-                <IconButton size="small" onClick={togglePlay} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
+                <IconButton aria-label="icon button" size="small" onClick={togglePlay} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
                     {isPlaying ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
                 </IconButton>
-                <IconButton size="small" onClick={handleReset} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
+                <IconButton aria-label="icon button" size="small" onClick={handleReset} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
                     <RestartAltIcon fontSize="small" />
                 </IconButton>
             </Box>

@@ -286,7 +286,7 @@ export default function Dashboard() {
 								height: 60,
 								border: "2px solid #FFCC33",
 							}}
-						>
+						 alt="User Avatar" >
 							{!currentUser.profilePic &&
 								currentUser.name?.charAt(0).toUpperCase()}
 						</Avatar>

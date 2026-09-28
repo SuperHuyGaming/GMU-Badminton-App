@@ -80,7 +80,7 @@ export default function Matchmaking() {
                 <Avatar 
                     src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} 
                     sx={{ width: 80, height: 80, mb: 2 }}
-                />
+                 alt="User Avatar" />
             </Badge>
             <CardContent sx={{ flexGrow: 1, p: 0, width: '100%' }}>
                 <Typography variant="h6" fontWeight="bold" gutterBottom>

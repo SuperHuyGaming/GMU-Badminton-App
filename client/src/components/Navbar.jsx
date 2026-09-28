@@ -363,7 +363,7 @@ export default function Navbar() {
 										role="button"
 										tabIndex={0}
 										aria-label="User menu"
-										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
+										onKeyDown={(e) = alt="User Avatar" > { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
 										sx={{
 											width: 40,
 											height: 40,

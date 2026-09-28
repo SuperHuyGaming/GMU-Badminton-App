@@ -184,7 +184,7 @@ export default function Marketplace() {
                                     </Typography>
                                     
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 'auto', p: 1, bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 2 }}>
-                                        <Avatar src={listing.sellerId?.profilePic} sx={{ width: 24, height: 24 }} />
+                                        <Avatar src={listing.sellerId?.profilePic} sx={{ width: 24, height: 24 }}  alt="User Avatar" />
                                         <Typography variant="caption" fontWeight="bold" noWrap>
                                             {listing.sellerId?.name}
                                         </Typography>

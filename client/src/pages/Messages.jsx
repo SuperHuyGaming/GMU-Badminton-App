@@ -473,7 +473,7 @@ const Messages = () => {
 										}}
 									>
 										<ListItemAvatar>
-											<Avatar src={getOptimizedAvatar(resultUser.profilePic || "", 50)} />
+											<Avatar src={getOptimizedAvatar(resultUser.profilePic || "", 50)}  alt="User Avatar" />
 										</ListItemAvatar>
 										<ListItemText primary={resultUser.name} secondary={resultUser.skillLevel} />
 									</ListItemButton>
@@ -512,7 +512,7 @@ const Messages = () => {
 									invisible={!onlineUsers.includes(chat.friend._id)}
 									anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 								>
-									<Avatar src={getOptimizedAvatar(chat.friend.profilePic || "", 50)} />
+									<Avatar src={getOptimizedAvatar(chat.friend.profilePic || "", 50)}  alt="User Avatar" />
 								</Badge>
 							</ListItemAvatar>
 							<ListItemText 
@@ -577,7 +577,7 @@ const Messages = () => {
 											invisible={!onlineUsers.includes(friend._id)}
 											anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 										>
-											<Avatar src={getOptimizedAvatar(friend.profilePic || "", 50)} />
+											<Avatar src={getOptimizedAvatar(friend.profilePic || "", 50)}  alt="User Avatar" />
 										</Badge>
 									</ListItemAvatar>
 									<ListItemText primary={friend.name} />
@@ -611,14 +611,14 @@ const Messages = () => {
 								flexShrink: 0
 							}}
 						>
-							<IconButton 
+							<IconButton aria-label="icon button" 
 								sx={{ display: { md: "none" } }} 
 								onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}
 								aria-label="Back to conversations"
 							>
 								<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
 							</IconButton>
-							<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 50)} />
+							<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 50)}  alt="User Avatar" />
 							<Box>
 								<Typography variant="h6" fontWeight="bold">{activeChat.name}</Typography>
 								<Typography variant="caption" color="text.secondary">
@@ -692,7 +692,7 @@ const Messages = () => {
 													)}
 													<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
 														{!isMe && !msg.isDeletedByAdmin && (
-															<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
+															<IconButton aria-label="icon button" className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
 																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 															</IconButton>
 														)}
@@ -726,7 +726,7 @@ const Messages = () => {
 																		</Typography>
 																	)}
 																	{isMe && idx === lastReadMsgIndex && (
-																		<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 20)} sx={{ width: 14, height: 14 }} />
+																		<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 20)} sx={{ width: 14, height: 14 }}  alt="User Avatar" />
 																	)}
 																</Box>
 															)}
@@ -738,7 +738,7 @@ const Messages = () => {
 									})()}
 									{typingUserIds.has(activeChat._id) && (
 										<Box sx={{ display: "flex", justifyContent: "flex-start", mb: 2, alignItems: 'flex-end', gap: 1 }}>
-											<Avatar src={getOptimizedAvatar(activeChat.profilePic, 30)} sx={{ width: 24, height: 24, mb: 2 }} />
+											<Avatar src={getOptimizedAvatar(activeChat.profilePic, 30)} sx={{ width: 24, height: 24, mb: 2 }}  alt="User Avatar" />
 											<Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
 												<Box sx={{
 													px: 2,
@@ -859,7 +859,7 @@ const Messages = () => {
 						backgroundPosition: 'center',
 						position: 'relative' 
 					}}>
-						<IconButton 
+						<IconButton aria-label="icon button" 
 							onClick={() => setProfileDialogOpen(false)} 
 							aria-label="Close profile dialog" 
 							sx={{ 
@@ -889,7 +889,7 @@ const Messages = () => {
 									boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
 									bgcolor: 'background.default'
 								}} 
-							/>
+							 alt="User Avatar" />
 							
 							<Box sx={{ mt: 1.5, textAlign: 'center' }}>
 								<Typography variant="h5" fontWeight="900" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>

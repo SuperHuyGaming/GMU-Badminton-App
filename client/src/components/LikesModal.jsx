@@ -61,7 +61,7 @@ export default function LikesModal({ open, title, list, onClose }) {
 									bgcolor: "secondary.main",
 									color: "primary.main",
 								}}
-							>
+							 alt="User Avatar" >
 								{!u.profilePic &&
 									u.name?.charAt(0).toUpperCase()}
 							</Avatar>

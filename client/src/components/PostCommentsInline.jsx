@@ -313,7 +313,7 @@ export default function PostCommentsInline({
 						bgcolor: "primary.main",
 						mb: 0.5,
 					}}
-				>
+				 alt="User Avatar" >
 					{!currentUser?.profilePic && currentUser?.name
 						? currentUser.name?.charAt(0).toUpperCase()
 						: "?"}

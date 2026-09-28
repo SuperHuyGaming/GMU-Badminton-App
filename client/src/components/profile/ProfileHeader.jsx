@@ -263,7 +263,7 @@ export default function ProfileHeader({
 										? "pointer"
 										: "default",
 							}}
-						>
+						 alt="User Avatar" >
 							{!displayProfilePic &&
 								profileData.name?.charAt(0).toUpperCase()}
 						</Avatar>

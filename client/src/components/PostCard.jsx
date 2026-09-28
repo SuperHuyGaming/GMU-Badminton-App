@@ -345,7 +345,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 				>
 					<Avatar
 						src={localPost.authorPic}
-						onClick={() =>
+						onClick={() = alt="User Avatar" >
 							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 						}
 						sx={{
@@ -715,7 +715,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 										{(localPost.likedByDetails || localPost.recentLikerAvatars || []).slice(0, 3).map((liker, i) => {
 											const url = typeof liker === 'string' ? liker : liker.profilePic;
 											if (!url) return null;
-											return <Avatar key={i} src={url} />;
+											return <Avatar key={i} src={url}  alt="User Avatar" />;
 										})}
 									</AvatarGroup>
 								)}
