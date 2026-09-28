@@ -125,4 +125,23 @@ describe('Navbar Component & Global Search UI', () => {
 
         expect(mockNavigate).toHaveBeenCalledWith('/profile/player-1');
     });
+
+    it('navigates to search page when Enter is pressed with a valid query', () => {
+        renderNavbar();
+        const searchInput = screen.getByPlaceholderText('Search players...');
+        fireEvent.change(searchInput, { target: { value: 'Alice' } });
+        fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+        expect(mockNavigate).toHaveBeenCalledWith('/search?q=Alice');
+    });
+
+    it('does not navigate when Enter is pressed with whitespace or empty query', () => {
+        renderNavbar();
+        const searchInput = screen.getByPlaceholderText('Search players...');
+        fireEvent.change(searchInput, { target: { value: '   ' } });
+        fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+        expect(mockNavigate).not.toHaveBeenCalled();
+    });
 });
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
     Box, 
@@ -49,6 +49,14 @@ export default function SearchResults() {
         UVA: false
     });
 
+    const [prevQuery, setPrevQuery] = useState(searchQuery);
+    if (searchQuery !== prevQuery) {
+        setPrevQuery(searchQuery);
+        setResults([]);
+        setPage(1);
+        setHasMore(true);
+    }
+
     const observer = useRef();
     const lastResultElementRef = useCallback(node => {
         if (loading) return;
@@ -61,15 +69,12 @@ export default function SearchResults() {
         if (node) observer.current.observe(node);
     }, [loading, hasMore]);
 
-    // Fetch data whenever query, type, or filters change
+    // Track search execution when query or type changes
     useEffect(() => {
-        setResults([]);
-        setPage(1);
-        setHasMore(true);
         if (searchQuery) {
             posthog.capture("search_executed", { query: searchQuery, type: searchType });
         }
-    }, [searchQuery, searchType, skillLevel, homeUniversity]);
+    }, [searchQuery, searchType]);
 
     useEffect(() => {
         if (!searchQuery) return;
@@ -109,6 +114,9 @@ export default function SearchResults() {
 
                 if (active) {
                     setResults(prev => {
+                        if (page === 1) {
+                            return newResults;
+                        }
                         // Avoid duplicates if using simple mock
                         const uniqueResults = [...prev, ...newResults].reduce((acc, curr) => {
                             if (!acc.find(item => item._id === curr._id)) {
@@ -138,18 +146,31 @@ export default function SearchResults() {
         };
     }, [searchQuery, searchType, skillLevel, homeUniversity, page]);
 
+    const handleTypeChange = (newType) => {
+        setSearchType(newType);
+        setResults([]);
+        setPage(1);
+        setHasMore(true);
+    };
+
     const handleSkillChange = (event) => {
-        setSkillLevel({
-            ...skillLevel,
+        setSkillLevel(prev => ({
+            ...prev,
             [event.target.name]: event.target.checked,
-        });
+        }));
+        setResults([]);
+        setPage(1);
+        setHasMore(true);
     };
 
     const handleUniChange = (event) => {
-        setHomeUniversity({
-            ...homeUniversity,
+        setHomeUniversity(prev => ({
+            ...prev,
             [event.target.name]: event.target.checked,
-        });
+        }));
+        setResults([]);
+        setPage(1);
+        setHasMore(true);
     };
 
     return (
@@ -160,7 +181,7 @@ export default function SearchResults() {
 
             <Grid container spacing={4}>
                 {/* Left Sidebar - Faceted Filtering */}
-                <Grid item xs={12} md={3}>
+                <Grid size={{ xs: 12, md: 3 }}>
                     <Paper sx={{ p: 3, borderRadius: 2, position: 'sticky', top: '100px' }}>
                         <Typography variant="h6" fontWeight="bold" mb={2}>Filters</Typography>
 
@@ -168,7 +189,7 @@ export default function SearchResults() {
                             <FormLabel component="legend" sx={{ fontWeight: 'bold', color: 'text.primary', mb: 1 }}>Type</FormLabel>
                             <RadioGroup
                                 value={searchType}
-                                onChange={(e) => setSearchType(e.target.value)}
+                                onChange={(e) => handleTypeChange(e.target.value)}
                             >
                                 <FormControlLabel value="players" control={<Radio />} label="Players" />
                                 <FormControlLabel value="posts" control={<Radio />} label="Posts" />
@@ -208,7 +229,7 @@ export default function SearchResults() {
                 </Grid>
 
                 {/* Main Central Column - Results */}
-                <Grid item xs={12} md={9}>
+                <Grid size={{ xs: 12, md: 9 }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {results.length === 0 && !loading && (
                             <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
