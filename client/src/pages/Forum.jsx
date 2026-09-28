@@ -432,7 +432,7 @@ export default function Forum() {
 												<Typography variant="overline" color="text.secondary" fontWeight="bold" sx={{ mb: -1 }}>FINAL</Typography>
 												<Typography variant="h3" fontWeight="900" sx={{ letterSpacing: '-2px', color: 'text.primary' }}>
 													<span style={{ color: team1Wins ? '#006633' : 'inherit' }}>{item.team1Score}</span>
-													<span style={{ margin: '0 8px', color: '#ccc' }}>-</span>
+													<span style={{ margin: '0 8px', color: '#757575' }}>-</span>
 													<span style={{ color: team2Wins ? '#006633' : 'inherit' }}>{item.team2Score}</span>
 												</Typography>
 											</Box>

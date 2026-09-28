@@ -136,6 +136,7 @@ export default function ReplyBubble({
 						{(currentUser?.id === reply.authorId ||
 							currentUser?.role === "admin") && (
 							<IconButton
+								aria-label="Reply options"
 								size="small"
 								onClick={(e) => setMenuAnchor(e.currentTarget)}
 								sx={{ p: 0.2, ml: 1, color: "text.secondary" }}

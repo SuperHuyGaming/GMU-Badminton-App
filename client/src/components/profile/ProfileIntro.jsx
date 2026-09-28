@@ -127,6 +127,7 @@ export default function ProfileIntro({
 					</Box>
 					{isOwnProfile && (
 						<IconButton
+							aria-label="Edit weapon info"
 							className="edit-btn"
 							onClick={onEditClick}
 							size="small"

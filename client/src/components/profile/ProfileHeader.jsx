@@ -351,7 +351,7 @@ export default function ProfileHeader({
 				</Box>
 
 				<Box sx={{ pb: { sm: 2 }, pt: { xs: 2, sm: 0 }, display: 'flex', gap: 1, alignItems: 'center' }}>
-					<IconButton onClick={handleShare} sx={{ bgcolor: '#e4e6eb', color: 'black', '&:hover': { bgcolor: '#d8dadf' } }}>
+					<IconButton aria-label="Share profile" onClick={handleShare} sx={{ bgcolor: '#e4e6eb', color: 'black', '&:hover': { bgcolor: '#d8dadf' } }}>
 						<ShareIcon />
 					</IconButton>
 					{isOwnProfile ? (
@@ -445,6 +445,7 @@ export default function ProfileHeader({
 			>
 				<Box sx={{ position: "relative" }}>
 					<IconButton
+						aria-label="Close image viewer"
 						onClick={() => setViewerImage(null)}
 						sx={{
 							position: "absolute",
