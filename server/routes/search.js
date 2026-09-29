@@ -20,7 +20,19 @@ const sanitizeResults = (data) => {
     return data;
 };
 
-router.get('/', async (req, res) => {
+const rateLimit = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize');
+
+const searchLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: { error: 'Too many search requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+router.get('/', searchLimiter, async (req, res) => {
+    mongoSanitize.sanitize(req.query, { replaceWith: '_' });
     try {
         const searchServiceUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:5001/search';
         // Proxy to search-service with 5s timeout to prevent thread starvation

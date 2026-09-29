@@ -106,6 +106,7 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 			coverPic,
 			homeUniversity,
 			searchRadius,
+			hideFromSearch,
 		} = req.body;
 
 		if (firstName !== undefined && (typeof firstName !== "string" || firstName.trim() === "")) {
@@ -180,6 +181,7 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 				coverPic,
 				homeUniversity: cleanHomeUniversity,
 				searchRadius,
+				hideFromSearch,
 			},
 			{ new: true, runValidators: true },
 		).select("-password -pushSubscriptions");

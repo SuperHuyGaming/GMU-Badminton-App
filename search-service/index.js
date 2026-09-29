@@ -110,35 +110,35 @@ const searchHandler = async (req, res) => {
           }
       };
 
-      let queryBody = { query: baseQuery };
+      let boolQuery = {
+          must: [baseQuery],
+          must_not: [
+              { term: { hideFromSearch: true } }
+          ]
+      };
 
       if (safeHomeUniversity && (type === 'user' || type === 'users' || type === 'players' || type === 'all')) {
-          queryBody = {
-              query: {
-                  bool: {
-                      must: baseQuery,
-                      should: [
-                          {
-                              match: {
-                                  homeUniversity: {
-                                      query: safeHomeUniversity,
-                                      boost: 2.0
-                                  }
-                              }
-                          },
-                          {
-                              match: {
-                                  university: {
-                                      query: safeHomeUniversity,
-                                      boost: 2.0
-                                  }
-                              }
-                          }
-                      ]
+          boolQuery.should = [
+              {
+                  match: {
+                      homeUniversity: {
+                          query: safeHomeUniversity,
+                          boost: 2.0
+                      }
+                  }
+              },
+              {
+                  match: {
+                      university: {
+                          query: safeHomeUniversity,
+                          boost: 2.0
+                      }
                   }
               }
-          };
+          ];
       }
+
+      let queryBody = { query: { bool: boolQuery } };
 
       const result = await elasticClient.search({
           index: indices.join(','),
