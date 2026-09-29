@@ -343,15 +343,18 @@ export default function ProfileHeader({
 					</Typography>
 					<Typography
 						variant="subtitle1"
-						color="secondary.main"
-						sx={{ fontWeight: 800, mt: 0.5 }}
+						sx={{ 
+							fontWeight: 800, 
+							mt: 0.5,
+							color: (theme) => theme.palette.mode === 'dark' ? 'secondary.main' : 'primary.main'
+						}}
 					>
 						{profileData.skillLevel || "D Level"}
 					</Typography>
 				</Box>
 
 				<Box sx={{ pb: { sm: 2 }, pt: { xs: 2, sm: 0 }, display: 'flex', gap: 1, alignItems: 'center' }}>
-					<IconButton aria-label="Share profile" onClick={handleShare} sx={{ bgcolor: '#e4e6eb', color: 'black', '&:hover': { bgcolor: '#d8dadf' } }}>
+					<IconButton aria-label="Share profile" onClick={handleShare} sx={{ bgcolor: 'action.hover', color: 'text.primary', '&:hover': { bgcolor: 'action.selected' } }}>
 						<ShareIcon />
 					</IconButton>
 					{isOwnProfile ? (
@@ -359,14 +362,14 @@ export default function ProfileHeader({
 							variant="contained"
 							onClick={() => setActiveTab("about")}
 							sx={{
-								backgroundColor: "#e4e6eb",
-								color: "#050505",
+								backgroundColor: "action.hover",
+								color: "text.primary",
 								fontWeight: "bold",
 								textTransform: "none",
 								borderRadius: 2,
 								px: 2,
 								py: 1,
-								"&:hover": { backgroundColor: "#d8dadf" },
+								"&:hover": { backgroundColor: "action.selected" },
 							}}
 						>
 							Edit profile
@@ -387,7 +390,7 @@ export default function ProfileHeader({
 							{friendStatus === "friends" && (
 								<Button
 									variant="contained"
-									sx={{ bgcolor: '#e4e6eb', color: 'black', fontWeight: "bold", borderRadius: 2, textTransform: "none", "&:hover": { bgcolor: '#d8dadf' } }}
+									sx={{ bgcolor: 'action.hover', color: 'text.primary', fontWeight: "bold", borderRadius: 2, textTransform: "none", "&:hover": { bgcolor: 'action.selected' } }}
 									onClick={() => window.location.href = '/messages'}
 								>
 									Message
@@ -434,6 +437,7 @@ export default function ProfileHeader({
 			<Dialog
 				open={!!viewerImage}
 				onClose={() => setViewerImage(null)}
+				aria-label="Profile image preview"
 				maxWidth="lg"
 				PaperProps={{
 					sx: {
@@ -470,8 +474,8 @@ export default function ProfileHeader({
 			</Dialog>
 
 			{/* --- QR CODE MODAL --- */}
-			<Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)}>
-				<DialogTitle align="center" fontWeight="bold">Scan to Connect</DialogTitle>
+			<Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)} aria-labelledby="qr-modal-title">
+				<DialogTitle id="qr-modal-title" align="center" fontWeight="bold">Scan to Connect</DialogTitle>
 				<DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
 					<QRCodeSVG value={window.location.href} size={200} level="H" />
 					<Typography mt={3} variant="body2" color="text.primary">

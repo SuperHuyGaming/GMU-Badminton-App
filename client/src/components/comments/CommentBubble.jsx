@@ -65,6 +65,7 @@ export default function CommentBubble({
 		<Box sx={{ display: "flex", gap: 1 }}>
 			<Avatar
 				src={comment.authorPic}
+				alt={comment.authorName || "Comment author"}
 				onClick={() => navigate(`/profile/${comment.authorId}`)}
 				sx={{
 					width: 32,
@@ -137,6 +138,8 @@ export default function CommentBubble({
 								fullWidth
 								size="small"
 								multiline
+								aria-label="Edit comment"
+								inputProps={{ 'aria-label': 'Edit comment' }}
 								value={editContent}
 								onChange={(e) => setEditContent(e.target.value)}
 								sx={{

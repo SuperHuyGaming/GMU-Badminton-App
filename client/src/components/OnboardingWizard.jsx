@@ -181,7 +181,7 @@ export default function OnboardingWizard({ onComplete }) {
 								height: 80,
 								mx: "auto",
 								mb: 2,
-								bgcolor: "#006633",
+								bgcolor: "primary.main",
 								fontSize: "2rem",
 							}}
 						>
@@ -230,7 +230,7 @@ export default function OnboardingWizard({ onComplete }) {
 				{/* Green header bar */}
 				<Box
 					sx={{
-						bgcolor: "#006633",
+						bgcolor: "primary.main",
 						py: 2,
 						px: 3,
 					}}
@@ -294,8 +294,8 @@ export default function OnboardingWizard({ onComplete }) {
 							onClick={handleNext}
 							disabled={activeStep === 1 && !formData.name.trim()}
 							sx={{
-								bgcolor: "#006633",
-								"&:hover": { bgcolor: "#005528" },
+								bgcolor: "primary.main",
+								"&:hover": { bgcolor: "primary.dark" },
 								borderRadius: 3,
 								px: 4,
 							}}
@@ -308,8 +308,8 @@ export default function OnboardingWizard({ onComplete }) {
 							onClick={handleFinish}
 							disabled={saving}
 							sx={{
-								bgcolor: "#006633",
-								"&:hover": { bgcolor: "#005528" },
+								bgcolor: "primary.main",
+								"&:hover": { bgcolor: "primary.dark" },
 								borderRadius: 3,
 								px: 4,
 							}}

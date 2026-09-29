@@ -61,11 +61,12 @@ export default function PWAInstallPrompt() {
 		<Dialog
 			open={open}
 			onClose={handleDismiss}
+			aria-labelledby="pwa-install-title"
 			PaperProps={{
 				sx: { borderRadius: 3, p: 1, maxWidth: 400 }
 			}}
 		>
-			<DialogTitle sx={{ fontWeight: "bold", textAlign: "center" }}>
+			<DialogTitle id="pwa-install-title" sx={{ fontWeight: "bold", textAlign: "center" }}>
 				Install Mason Badminton Connect
 			</DialogTitle>
 			<DialogContent sx={{ textAlign: "center", pb: 1 }}>

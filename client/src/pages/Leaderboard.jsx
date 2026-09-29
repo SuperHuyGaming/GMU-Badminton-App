@@ -135,6 +135,7 @@ const Leaderboard = () => {
                         value={tab} 
                         onChange={(e, v) => setTab(v)} 
                         centered 
+                        aria-label="Leaderboard match format tabs"
                         sx={{ 
                             bgcolor: 'rgba(0, 102, 51, 0.4)', 
                             color: 'white',

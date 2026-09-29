@@ -346,6 +346,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 				>
 					<Avatar
 						src={localPost.authorPic}
+						alt={localPost.authorName || "Post author"}
 						onClick={() =>
 							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 						}
@@ -476,9 +477,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						sx={{
 							mb: 3,
 							p: 2,
-							bgcolor: "#f9fafb",
+							bgcolor: "action.hover",
 							borderRadius: 3,
-							border: "1px dashed #ccc",
+							border: "1px dashed",
+							borderColor: "divider",
 						}}
 					>
 						<TextField
@@ -622,6 +624,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 							<Dialog 
 								open={isLightboxOpen} 
 								onClose={() => setIsLightboxOpen(false)}
+								aria-label="Post image preview"
 								maxWidth="lg"
 								fullWidth
 								PaperProps={{ sx: { background: 'transparent', boxShadow: 'none' } }}

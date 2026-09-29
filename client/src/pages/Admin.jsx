@@ -388,11 +388,11 @@ export default function Admin() {
 				<Table stickyHeader sx={{ minWidth: 600 }}>
 					<TableHead>
 						<TableRow>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Date</TableCell>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Sender</TableCell>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Receiver</TableCell>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Message</TableCell>
-							<TableCell align="right" sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Actions</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Date</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Sender</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Receiver</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Message</TableCell>
+							<TableCell align="right" sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Actions</TableCell>
 						</TableRow>
 					</TableHead>
 					<TableBody>
@@ -449,7 +449,7 @@ export default function Admin() {
 				}}
 			>
 				<Table sx={{ minWidth: 500 }}>
-					<TableHead sx={{ backgroundColor: "#f4f6f8" }}>
+					<TableHead sx={{ bgcolor: "background.default" }}>
 						<TableRow>
 							<TableCell
 								sx={{
@@ -553,7 +553,7 @@ export default function Admin() {
 				}}
 			>
 				<Table sx={{ minWidth: 600 }}>
-					<TableHead sx={{ backgroundColor: "#f4f6f8" }}>
+					<TableHead sx={{ bgcolor: "background.default" }}>
 						<TableRow>
 							<TableCell
 								sx={{
@@ -640,9 +640,12 @@ export default function Admin() {
 				onClose={() =>
 					setDeleteConfirm({ open: false, type: "", id: null })
 				}
+				aria-labelledby="admin-delete-title"
+				aria-describedby="admin-delete-desc"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 			>
 				<DialogTitle
+					id="admin-delete-title"
 					sx={{
 						fontWeight: "bold",
 						display: "flex",
@@ -654,7 +657,7 @@ export default function Admin() {
 					<TrashIcon /> Confirm Deletion
 				</DialogTitle>
 				<DialogContent>
-					<Typography>
+					<Typography id="admin-delete-desc">
 						Are you sure you want to permanently delete this{" "}
 						{deleteConfirm.type === "user"
 							? "user"

@@ -87,9 +87,9 @@ export default function ProfileIntro({
 							size="small"
 							sx={{
 								opacity: { xs: 1, sm: 0 }, // Always visible on mobile, hidden on desktop until hover
-								backgroundColor: "#e4e6eb",
+								backgroundColor: "action.hover",
 								transition: "opacity 0.2s",
-								"&:hover": { backgroundColor: "#d8dadf" },
+								"&:hover": { backgroundColor: "action.selected" },
 							}}
 						>
 							<PenIcon />
@@ -133,9 +133,9 @@ export default function ProfileIntro({
 							size="small"
 							sx={{
 								opacity: { xs: 1, sm: 0 },
-								backgroundColor: "#e4e6eb",
+								backgroundColor: "action.hover",
 								transition: "opacity 0.2s",
-								"&:hover": { backgroundColor: "#d8dadf" },
+								"&:hover": { backgroundColor: "action.selected" },
 							}}
 						>
 							<PenIcon />

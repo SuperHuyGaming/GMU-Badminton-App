@@ -296,7 +296,7 @@ function App() {
 		palette: {
 			mode,
 			primary: { main: "#005c2e", dark: "#004d26", light: "#33855c" },
-			secondary: { main: "#FFCC33" },
+			secondary: { main: "#FFCC33", contrastText: "#002f17" },
 			text: {
 				primary: mode === "light" ? "#1a202c" : "#ffffff",
 				secondary: mode === "light" ? "#404040" : "rgba(255, 255, 255, 0.8)",

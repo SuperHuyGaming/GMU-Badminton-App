@@ -611,7 +611,7 @@ const Messages = () => {
 								flexShrink: 0
 							}}
 						>
-							<IconButton aria-label="icon button" 
+							<IconButton 
 								sx={{ display: { md: "none" } }} 
 								onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}
 								aria-label="Back to conversations"
@@ -692,7 +692,7 @@ const Messages = () => {
 													)}
 													<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
 														{!isMe && !msg.isDeletedByAdmin && (
-															<IconButton aria-label="icon button" className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
+															<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
 																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 															</IconButton>
 														)}
@@ -835,9 +835,11 @@ const Messages = () => {
 			</Paper>
 		</Container>	
 			{/* Profile Dialog */}
+			{/* Profile Dialog */}
 			<Dialog 
 				open={profileDialogOpen} 
 				onClose={() => setProfileDialogOpen(false)} 
+				aria-labelledby="messages-profile-dialog-name"
 				maxWidth="xs" 
 				fullWidth
 				PaperProps={{ 
@@ -854,12 +856,12 @@ const Messages = () => {
 					<Box sx={{ 
 						height: 120, 
 						bgcolor: 'primary.main', 
-						backgroundImage: profileData?.coverPic ? `url(${profileData.coverPic})` : 'linear-gradient(135deg, #006633 0%, #00b359 100%)',
+						backgroundImage: profileData?.coverPic ? `url(${profileData.coverPic})` : 'linear-gradient(135deg, #005c2e 0%, #00b359 100%)',
 						backgroundSize: 'cover',
 						backgroundPosition: 'center',
 						position: 'relative' 
 					}}>
-						<IconButton aria-label="icon button" 
+						<IconButton 
 							onClick={() => setProfileDialogOpen(false)} 
 							aria-label="Close profile dialog" 
 							sx={{ 
@@ -881,6 +883,7 @@ const Messages = () => {
 						<Box sx={{ px: 3, pb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', mt: -6, position: 'relative' }}>
 							<Avatar 
 								src={getOptimizedAvatar(profileData.profilePic || "", 150)} 
+								alt={profileData.name || "User profile photo"}
 								sx={{ 
 									width: 104, 
 									height: 104, 
@@ -889,10 +892,10 @@ const Messages = () => {
 									boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
 									bgcolor: 'background.default'
 								}} 
-							 alt="User Avatar" />
+							/>
 							
 							<Box sx={{ mt: 1.5, textAlign: 'center' }}>
-								<Typography variant="h5" fontWeight="900" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+								<Typography id="messages-profile-dialog-name" variant="h5" fontWeight="900" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
 									{profileData.name}
 								</Typography>
 								<Chip 
@@ -900,8 +903,8 @@ const Messages = () => {
 									label={profileData.skillLevel || "N/A"} 
 									sx={{ 
 										mt: 0.5, 
-										bgcolor: 'rgba(0, 102, 51, 0.1)', 
-										color: '#006633', 
+										bgcolor: 'rgba(0, 92, 46, 0.1)', 
+										color: 'primary.main', 
 										fontWeight: '800',
 										px: 1,
 										fontSize: '0.75rem'
@@ -915,25 +918,25 @@ const Messages = () => {
 									flex: 1, 
 									textAlign: "center", 
 									p: 1.5, 
-									bgcolor: "rgba(0, 102, 51, 0.06)", 
+									bgcolor: "rgba(0, 92, 46, 0.06)", 
 									borderRadius: 3, 
 									border: '1px solid', 
-									borderColor: 'rgba(0, 102, 51, 0.1)' 
+									borderColor: 'rgba(0, 92, 46, 0.15)' 
 								}}>
-									<Typography variant="h5" color="#006633" fontWeight="900">{profileData.singlesElo || 1200}</Typography>
-									<Typography variant="caption" sx={{ color: '#006633', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.8 }}>Singles</Typography>
+									<Typography variant="h5" color="primary.main" fontWeight="900">{profileData.singlesElo || 1200}</Typography>
+									<Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.85 }}>Singles</Typography>
 								</Box>
 								<Box sx={{ 
 									flex: 1, 
 									textAlign: "center", 
 									p: 1.5, 
-									bgcolor: "rgba(170, 59, 255, 0.06)", 
+									bgcolor: "rgba(123, 31, 162, 0.06)", 
 									borderRadius: 3, 
 									border: '1px solid', 
-									borderColor: 'rgba(170, 59, 255, 0.1)' 
+									borderColor: 'rgba(123, 31, 162, 0.15)' 
 								}}>
-									<Typography variant="h5" color="#aa3bff" fontWeight="900">{profileData.doublesElo || 1200}</Typography>
-									<Typography variant="caption" sx={{ color: '#aa3bff', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.8 }}>Doubles</Typography>
+									<Typography variant="h5" sx={{ color: '#7b1fa2' }} fontWeight="900">{profileData.doublesElo || 1200}</Typography>
+									<Typography variant="caption" sx={{ color: '#7b1fa2', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.85 }}>Doubles</Typography>
 								</Box>
 							</Box>
 

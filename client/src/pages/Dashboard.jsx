@@ -367,7 +367,9 @@ export default function Dashboard() {
 						color="secondary"
 						href="https://connect.recreation.gmu.edu/Facility/GetSchedule?facilityId=4434ce67-8efc-4c48-90e1-7add7f48ad24"
 						target="_blank"
-						sx={{ fontWeight: "bold", borderRadius: 3, color: "#006633", py: 1, textTransform: 'none' }}
+						rel="noopener noreferrer"
+						aria-label="Check Official Connect Portal (opens in a new window)"
+						sx={{ fontWeight: "bold", borderRadius: 3, color: "#002f17", py: 1, textTransform: 'none' }}
 					>
 						Check Official Connect Portal ➦
 					</Button>
@@ -865,9 +867,12 @@ export default function Dashboard() {
 			<Dialog
 				open={!!deleteUpdateId}
 				onClose={() => setDeleteUpdateId(null)}
+				aria-labelledby="delete-announcement-title"
+				aria-describedby="delete-announcement-desc"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 			>
 				<DialogTitle
+					id="delete-announcement-title"
 					sx={{
 						fontWeight: "bold",
 						display: "flex",
@@ -879,7 +884,7 @@ export default function Dashboard() {
 					<TrashIconLarge /> Confirm Deletion
 				</DialogTitle>
 				<DialogContent>
-					<Typography>
+					<Typography id="delete-announcement-desc">
 						Are you sure you want to permanently delete this
 						official announcement? This action cannot be undone.
 					</Typography>

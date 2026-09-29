@@ -79,6 +79,7 @@ export default function ReplyBubble({
 		>
 			<Avatar
 				src={reply.authorPic}
+				alt={reply.authorName || "Reply author"}
 				onClick={() => navigate(`/profile/${reply.authorId}`)}
 				sx={{
 					width: 24,
@@ -152,6 +153,8 @@ export default function ReplyBubble({
 								fullWidth
 								size="small"
 								multiline
+								aria-label="Edit reply"
+								inputProps={{ 'aria-label': 'Edit reply' }}
 								value={editContent}
 								onChange={(e) => setEditContent(e.target.value)}
 								sx={{

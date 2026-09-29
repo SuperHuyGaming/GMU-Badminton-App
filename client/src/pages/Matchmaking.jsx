@@ -139,9 +139,11 @@ export default function Matchmaking() {
                 fullWidth
                 variant="outlined"
                 placeholder="Search by name or university..."
+                aria-label="Search by name or university"
+                inputProps={{ 'aria-label': 'Search by name or university' }}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ mb: 3, backgroundColor: 'white', borderRadius: 2 }}
+                sx={{ mb: 3, bgcolor: 'background.paper', borderRadius: 2 }}
                 InputProps={{
                     startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
                 }}
