@@ -145,6 +145,29 @@ describe('SearchResults Page Component', () => {
         }, { timeout: 2000 });
     });
 
+    it('renders with semantic h1 and accessible landmarks', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ matches: [] }),
+        });
+
+        renderSearchResults('Badminton');
+
+        // Verify primary h1 heading for screen readers
+        const heading = screen.getByRole('heading', { level: 1 });
+        expect(heading).toHaveTextContent('Search Results for "Badminton"');
+
+        // Verify aside landmark for filters
+        expect(screen.getByRole('complementary', { name: 'Search filters' })).toBeInTheDocument();
+
+        // Verify main landmark for results
+        expect(screen.getByRole('main', { name: 'Search results list' })).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalled();
+        });
+    });
+
     it('filters player results by skill level and home university', async () => {
         const mockPlayers = [
             { _id: 'p1', name: 'Alice Beginner', skillLevel: 'Beginner', university: 'GMU' },
@@ -182,4 +205,4 @@ describe('SearchResults Page Component', () => {
             expect(screen.getByText('No results found for "Player".')).toBeInTheDocument();
         });
     });
-});
+        });

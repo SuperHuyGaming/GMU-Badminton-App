@@ -83,9 +83,17 @@ userSchema.index({ skillLevel: 1, lastActive: -1 });
 
 const { publishEvent } = require("../utils/kafkaProducer");
 
+const sanitizeUserForEvent = (doc) => {
+	if (!doc) return null;
+	const userObj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
+	delete userObj.password;
+	delete userObj.pushSubscriptions;
+	return userObj;
+};
+
 userSchema.post("save", async function (doc) {
 	try {
-		await publishEvent("user-events", { type: "user.updated", payload: doc });
+		await publishEvent("user-events", { type: "user.updated", payload: sanitizeUserForEvent(doc) });
 	} catch (error) {
 		console.error("Kafka publish error (User save):", error);
 	}
@@ -94,7 +102,7 @@ userSchema.post("save", async function (doc) {
 userSchema.post("findOneAndDelete", async function (doc) {
 	if (!doc) return;
 	try {
-		await publishEvent("user-events", { type: "user.deleted", payload: doc });
+		await publishEvent("user-events", { type: "user.deleted", payload: sanitizeUserForEvent(doc) });
 	} catch (error) {
 		console.error("Kafka publish error (User delete):", error);
 	}

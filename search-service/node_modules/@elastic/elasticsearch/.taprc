@@ -1,4 +1,0 @@
-files:
-  - test/unit/
-  - test/esm/
-jobs: 1

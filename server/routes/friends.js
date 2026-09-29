@@ -169,6 +169,11 @@ router.post("/remove", authMiddleware, async (req, res, next) => {
 	}
 });
 
+const escapeRegex = (string) => {
+	if (typeof string !== "string") return "";
+	return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
 // GET: search users
 router.get("/search/:query", authMiddleware, async (req, res, next) => {
 	try {

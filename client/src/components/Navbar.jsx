@@ -79,24 +79,27 @@ const GlobalSearch = () => {
                     sx={{
                         '& .MuiOutlinedInput-root': {
                             borderRadius: '20px',
-                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                            backgroundColor: 'rgba(0, 0, 0, 0.25)',
                             padding: '2px 14px',
-                            color: 'inherit',
+                            color: '#ffffff',
+                            border: '1px solid rgba(255, 255, 255, 0.35)',
                             transition: 'all 0.2s',
                             '&:hover': {
-                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.35)',
+                                borderColor: 'rgba(255, 255, 255, 0.6)',
                             },
                             '&.Mui-focused': {
-                                backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                                boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.5)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                                boxShadow: '0 0 0 2px #FFCC33',
+                                borderColor: '#FFCC33',
                             },
                             '& fieldset': { border: 'none' },
                         },
                         '& .MuiInputBase-input': {
-                            color: 'inherit',
+                            color: '#ffffff',
                             '&::placeholder': {
-                                color: 'inherit',
-                                opacity: 0.7,
+                                color: '#ffffff',
+                                opacity: 0.9,
                             },
                         },
                     }}
@@ -143,16 +146,20 @@ const GlobalSearch = () => {
                                 }}
                                 slotProps={{
                                     ...params.slotProps,
+                                    htmlInput: {
+                                        ...params.slotProps?.htmlInput,
+                                        'aria-label': 'Search players',
+                                    },
                                     input: {
                                         ...inputSlot,
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <SearchIcon sx={{ color: 'inherit' }} />
+                                                <SearchIcon sx={{ color: '#ffffff' }} aria-hidden="true" />
                                             </InputAdornment>
                                         ),
                                         endAdornment: (
                                             <>
-                                                {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                                                {loading ? <CircularProgress color="inherit" size={20} aria-label="Loading search results" /> : null}
                                                 {inputSlot.endAdornment}
                                             </>
                                         ),
@@ -164,20 +171,47 @@ const GlobalSearch = () => {
                     renderOption={(props, option) => {
                         const { key, ...otherProps } = props;
                         return (
-                            <Box component="li" key={option._id || key} {...otherProps} sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                                <Avatar src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} sx={{ width: 32, height: 32 }}>
+                            <Box 
+                                component="li" 
+                                key={option._id || key} 
+                                {...otherProps} 
+                                sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: 2, 
+                                    p: 1.5, 
+                                    borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                        backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 92, 46, 0.08)',
+                                    }
+                                }}
+                            >
+                                <Avatar 
+                                    src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} 
+                                    alt={option.name || "Player avatar"}
+                                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main', color: 'primary.dark', fontWeight: 'bold' }}
+                                >
                                     {!option.profilePic && option.name?.charAt(0)}
                                 </Avatar>
                                 <Box>
                                     <Typography variant="body2" fontWeight="bold" color="text.primary">{option.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">Player</Typography>
+                                    <Typography 
+                                        variant="caption" 
+                                        sx={{ 
+                                            color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#404040',
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        Player
+                                    </Typography>
                                 </Box>
                             </Box>
                         );
                     }}
                     slotProps={{
                         paper: {
-                            sx: { mt: 1, borderRadius: 2, overflow: 'hidden', boxShadow: 4 },
+                            sx: { mt: 1, borderRadius: 2, overflow: 'hidden', boxShadow: 4, border: (theme) => `1px solid ${theme.palette.divider}` },
                         },
                     }}
                 />
@@ -226,12 +260,12 @@ export default function Navbar() {
 						backgroundColor: "primary.main",
 					}}
 				>
-					<Toolbar sx={{ justifyContent: "space-between" }}>
+					<Toolbar sx={{ justifyContent: "space-between", px: { xs: 1, sm: 2, md: 3 } }}>
 						<Box
 							sx={{
 								display: "flex",
 								alignItems: "center",
-								gap: { xs: 1, md: 4 },
+								gap: { xs: 1, md: 3 },
 							}}
 						>
 							<IconButton
@@ -240,6 +274,8 @@ export default function Navbar() {
 								onClick={handleDrawerToggle}
 								sx={{ display: { md: "none" } }}
 								aria-label="Open navigation menu"
+								aria-expanded={mobileOpen}
+								aria-controls="mobile-navigation-drawer"
 							>
 								<HamburgerIcon />
 							</IconButton>
@@ -250,87 +286,84 @@ export default function Navbar() {
 								to="/"
 								sx={{
 									textDecoration: "none",
-									color: "secondary.main",
+									color: "#FFF275",
 									fontWeight: 900,
-									fontSize: "1.1rem",
+									fontSize: { xs: "1rem", sm: "1.1rem" },
 									letterSpacing: "-0.5px",
+									"&:focus-visible": {
+										outline: "2px solid #ffffff",
+										outlineOffset: "2px",
+										borderRadius: "2px",
+									},
 								}}
 							>
 								GMU Badminton
 							</Typography>
 
 							<Box
+								component="nav"
+								aria-label="Main navigation"
 								sx={{
 									display: { xs: "none", md: "flex" },
 									gap: 1,
 								}}
 							>
-								<Button
-									color={location.pathname === "/" ? "secondary" : "inherit"}
-									component={RouterLink}
-									to="/"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
-								>
-									Dashboard
-								</Button>
-								<Button
-									color={location.pathname === "/community" ? "secondary" : "inherit"}
-									component={RouterLink}
-									to="/community"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
-								>
-									Community
-								</Button>
-								<Button
-									color={location.pathname === "/leaderboard" ? "secondary" : "inherit"}
-									component={RouterLink}
-									to="/leaderboard"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
-								>
-									Leaderboard
-								</Button>
-								<Button
-									color={location.pathname === "/matchmaking" ? "secondary" : "inherit"}
-									component={RouterLink}
-									to="/matchmaking"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
-								>
-									Players
-								</Button>
-								<Button
-									color={location.pathname === "/tournaments" ? "secondary" : "inherit"}
-									component={RouterLink}
-									to="/tournaments"
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-									}}
-								>
-									Tournaments
-								</Button>
+								{[
+									{ label: "Dashboard", path: "/" },
+									{ label: "Community", path: "/community" },
+									{ label: "Leaderboard", path: "/leaderboard" },
+									{ label: "Players", path: "/matchmaking" },
+									{ label: "Tournaments", path: "/tournaments" },
+								].map((item) => {
+									const isActive = location.pathname === item.path;
+									return (
+										<Button
+											key={item.path}
+											component={RouterLink}
+											to={item.path}
+											aria-current={isActive ? "page" : undefined}
+											sx={{
+												textTransform: "none",
+												fontWeight: isActive ? 700 : 600,
+												color: "#ffffff",
+												backgroundColor: isActive ? "rgba(255, 255, 255, 0.18)" : "transparent",
+												borderBottom: isActive ? "2px solid #FFCC33" : "2px solid transparent",
+												borderRadius: "4px 4px 0 0",
+												px: 1.5,
+												"&:hover": {
+													backgroundColor: "rgba(255, 255, 255, 0.22)",
+												},
+												"&:focus-visible": {
+													outline: "2px solid #FFCC33",
+													outlineOffset: "2px",
+												},
+											}}
+										>
+											{item.label}
+										</Button>
+									);
+								})}
 								{user && user.role === "admin" && (
 									<Button
-										color="warning"
 										variant="contained"
 										component={RouterLink}
 										to="/admin"
+										aria-current={location.pathname === "/admin" ? "page" : undefined}
 										sx={{
 											textTransform: "none",
 											fontWeight: "bold",
 											ml: 2,
+											backgroundColor: "#FFCC33",
+											color: "#1a202c",
 											boxShadow: "none",
+											"&:hover": {
+												backgroundColor: "#e6b800",
+												boxShadow: "none",
+											},
+											"&:focus-visible": {
+												outline: "2px solid #ffffff",
+												outlineOffset: "2px",
+											},
 										}}
 									>
 										Admin Panel
@@ -354,17 +387,40 @@ export default function Navbar() {
 							sx={{
 								display: "flex",
 								alignItems: "center",
-								gap: 2,
+								gap: { xs: 0.5, sm: 1, md: 2 },
 							}}
 						>
+							<IconButton
+								color="inherit"
+								component={RouterLink}
+								to="/search"
+								aria-label="Search"
+								sx={{
+									display: { xs: "inline-flex", lg: "none" },
+									transition: "all 0.2s",
+									"&:hover": { color: "#FFF275" },
+									"&:focus-visible": {
+										outline: "2px solid #FFCC33",
+										outlineOffset: "2px",
+									},
+								}}
+							>
+								<SearchIcon />
+							</IconButton>
+
 							<LanguageSwitcher />
+
 							<IconButton 
 								onClick={colorMode.toggleColorMode} 
 								color="inherit"
 								aria-label="Toggle dark mode"
 								sx={{
 									transition: "all 0.2s",
-									"&:hover": { color: "secondary.main", transform: "rotate(15deg)" },
+									"&:hover": { color: "#FFF275", transform: "rotate(15deg)" },
+									"&:focus-visible": {
+										outline: "2px solid #FFCC33",
+										outlineOffset: "2px",
+									},
 								}}
 							>
 								{theme.palette.mode === 'dark' ? <SunIcon /> : <MoonIcon />}
@@ -378,7 +434,11 @@ export default function Navbar() {
 										aria-label="View messages"
 										sx={{
 											transition: "all 0.2s",
-											"&:hover": { color: "secondary.main" },
+											"&:hover": { color: "#FFF275" },
+											"&:focus-visible": {
+												outline: "2px solid #FFCC33",
+												outlineOffset: "2px",
+											},
 										}}
 									>
 										<Badge badgeContent={unreadMessages} color="error">
@@ -390,10 +450,17 @@ export default function Navbar() {
 										color="inherit"
 										onClick={handleNotifClick}
 										aria-label="View notifications"
+										aria-haspopup="true"
+										aria-expanded={notifOpen}
+										aria-controls={notifOpen ? "notifications-menu" : undefined}
 										sx={{
 											transition: "all 0.2s",
 											"&:hover": {
-												color: "secondary.main",
+												color: "#FFF275",
+											},
+											"&:focus-visible": {
+												outline: "2px solid #FFCC33",
+												outlineOffset: "2px",
 											},
 										}}
 									>
@@ -406,6 +473,8 @@ export default function Navbar() {
 									</IconButton>
 
 									<Menu
+										id="notifications-menu"
+										aria-label="Notifications"
 										anchorEl={notifAnchorEl}
 										open={notifOpen}
 										onClose={handleNotifClose}
@@ -419,12 +488,14 @@ export default function Navbar() {
 										}}
 										slotProps={{
 											paper: {
-												elevation: 3,
+												elevation: 4,
 												sx: {
 													mt: 1.5,
-													width: 320,
+													width: { xs: 300, sm: 340 },
+													maxWidth: "90vw",
 													borderRadius: 3,
 													maxHeight: 400,
+													border: (theme) => `1px solid ${theme.palette.divider}`,
 												},
 											},
 										}}
@@ -436,27 +507,47 @@ export default function Navbar() {
 												display: "flex",
 												justifyContent: "space-between",
 												alignItems: "center",
-												borderBottom: "1px solid #eee",
+												borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
 											}}
 										>
-											<Typography fontWeight="bold">
+											<Typography fontWeight="bold" color="text.primary">
 												Notifications
 											</Typography>
 											{notifications.length > 0 && (
 												<Box sx={{ display: 'flex', gap: 2 }}>
 													<Typography
 														variant="caption"
-														color="primary"
-														sx={{ cursor: "pointer", fontWeight: "bold", "&:hover": { textDecoration: "underline" } }}
+														component="button"
+														sx={{ 
+															background: 'none',
+															border: 'none',
+															padding: 0,
+															cursor: "pointer", 
+															fontWeight: "bold", 
+															color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
+															"&:hover": { textDecoration: "underline" },
+															"&:focus-visible": { outline: '2px solid #FFCC33', borderRadius: '2px' }
+														}}
 														onClick={markAsRead}
+														aria-label="Mark all notifications as read"
 													>
 														Mark all as read
 													</Typography>
 													<Typography
 														variant="caption"
-														color="error"
-														sx={{ cursor: "pointer", fontWeight: "bold", "&:hover": { textDecoration: "underline" } }}
+														component="button"
+														sx={{ 
+															background: 'none',
+															border: 'none',
+															padding: 0,
+															cursor: "pointer", 
+															fontWeight: "bold", 
+															color: (theme) => theme.palette.mode === 'dark' ? '#ff8a80' : '#b91c1c',
+															"&:hover": { textDecoration: "underline" },
+															"&:focus-visible": { outline: '2px solid #b91c1c', borderRadius: '2px' }
+														}}
 														onClick={clearNotifications}
+														aria-label="Clear all notifications"
 													>
 														Clear All
 													</Typography>
@@ -483,23 +574,30 @@ export default function Navbar() {
 													animate={{ opacity: 1, x: 0 }}
 													transition={{ delay: index * 0.05 }}
 												>
-											<MenuItem
+													<MenuItem
 														component={RouterLink}
 														to={notif.link}
 														onClick={() => {
 															handleNotifClose();
 															if (!notif.read) markSingleAsRead(notif._id || notif.id);
 														}}
+														aria-label={`${notif.read ? "Read" : "Unread"}: ${notif.message}`}
 														sx={{
 															whiteSpace: "normal",
 															py: 1.5,
-															backgroundColor: notif.read ? "transparent" : "rgba(0, 102, 51, 0.05)",
-															borderBottom: "1px solid #f5f5f5",
-															"&:active": {
-																transform: "scale(0.98)",
-															},
+															px: 2,
+															backgroundColor: notif.read 
+																? "transparent" 
+																: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.08)' : 'rgba(0, 92, 46, 0.06)',
+															borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
 															"&:hover": {
-																backgroundColor: notif.read ? "rgba(0,0,0,0.02)" : "rgba(0, 102, 51, 0.1)",
+																backgroundColor: notif.read 
+																	? (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'
+																	: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.15)' : 'rgba(0, 92, 46, 0.12)',
+															},
+															"&:focus-visible": {
+																outline: '2px solid #FFCC33',
+																outlineOffset: '-2px',
 															}
 														}}
 													>
@@ -543,12 +641,16 @@ alt="User Avatar"
 											width: 40,
 											height: 40,
 											bgcolor: "secondary.main",
-											color: "primary.main",
+											color: "primary.dark",
 											fontWeight: "bold",
 											border: "2px solid #FFCC33",
 											cursor: "pointer",
 											transition: "transform 0.2s ease-in-out",
 											"&:hover": { transform: "scale(1.08)" },
+											"&:focus-visible": {
+												outline: "2px solid #ffffff",
+												outlineOffset: "2px",
+											}
 										}}
 									>
 										{!user.profilePic &&
@@ -556,6 +658,8 @@ alt="User Avatar"
 									</Avatar>
 
 									<Menu
+										id="user-menu"
+										aria-label="User account menu"
 										anchorEl={anchorEl}
 										open={open}
 										onClose={handleMenuClose}
@@ -569,11 +673,12 @@ alt="User Avatar"
 										}}
 										slotProps={{
 											paper: {
-												elevation: 3,
+												elevation: 4,
 												sx: {
 													mt: 1.5,
-													minWidth: 150,
+													minWidth: 160,
 													borderRadius: 2,
+													border: (theme) => `1px solid ${theme.palette.divider}`,
 												},
 											},
 										}}
@@ -586,7 +691,14 @@ alt="User Avatar"
 													e.currentTarget.blur();
 												handleMenuClose();
 											}}
-											sx={{ fontWeight: "bold" }}
+											sx={{ 
+												fontWeight: "bold",
+												color: "text.primary",
+												"&:focus-visible": {
+													outline: '2px solid #FFCC33',
+													outlineOffset: '-2px',
+												}
+											}}
 										>
 											View Profile
 										</MenuItem>
@@ -598,8 +710,12 @@ alt="User Avatar"
 												handleLogout();
 											}}
 											sx={{
-												color: "error.main",
+												color: (theme) => theme.palette.mode === 'dark' ? '#ff8a80' : '#b91c1c',
 												fontWeight: "bold",
+												"&:focus-visible": {
+													outline: '2px solid #b91c1c',
+													outlineOffset: '-2px',
+												}
 											}}
 										>
 											Log Out
@@ -613,9 +729,18 @@ alt="User Avatar"
 									component={RouterLink}
 									to="/auth"
 									sx={{
-										borderColor: "rgba(255,255,255,0.4)",
+										color: "#ffffff",
+										borderColor: "rgba(255,255,255,0.7)",
 										textTransform: "none",
 										fontWeight: "bold",
+										"&:hover": {
+											borderColor: "#ffffff",
+											backgroundColor: "rgba(255,255,255,0.1)",
+										},
+										"&:focus-visible": {
+											outline: "2px solid #FFCC33",
+											outlineOffset: "2px",
+										}
 									}}
 								>
 									Login
@@ -626,6 +751,8 @@ alt="User Avatar"
 				</AppBar>
 
 				<Drawer
+					id="mobile-navigation-drawer"
+					aria-label="Mobile navigation drawer"
 					anchor="left"
 					open={mobileOpen}
 					onClose={handleDrawerToggle}
@@ -633,99 +760,81 @@ alt="User Avatar"
 						display: { xs: "block", md: "none" },
 						"& .MuiDrawer-paper": {
 							boxSizing: "border-box",
-							width: 250,
-							backgroundColor: "#006633",
-							color: "white",
+							width: 270,
+							backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#041d10' : '#004d26',
+							color: "#ffffff",
 						},
 					}}
 				>
-					<Box
-						onClick={handleDrawerToggle}
-						sx={{ textAlign: "center", py: 3 }}
-					>
+					<Box sx={{ textAlign: "center", py: 3 }}>
 						<Typography
 							variant="h6"
-							sx={{ fontWeight: 900, color: "#FFCC33" }}
+							component="div"
+							sx={{ fontWeight: 900, color: "#FFF275" }}
 						>
 							GMU Badminton
 						</Typography>
 						<Divider
 							sx={{ my: 2, borderColor: "rgba(255,255,255,0.2)" }}
 						/>
-						<List>
-							<ListItemButton
-								component={RouterLink}
-								to="/"
-								sx={{ textAlign: "center" }}
-							>
-								<ListItemText
-									primaryTypographyProps={{
-										fontWeight: "bold",
-									}}
-									primary="Dashboard"
-								/>
-							</ListItemButton>
-							<ListItemButton
-								component={RouterLink}
-								to="/community"
-								sx={{ textAlign: "center" }}
-							>
-								<ListItemText
-									primaryTypographyProps={{
-										fontWeight: "bold",
-									}}
-									primary="Community"
-								/>
-							</ListItemButton>
-							<ListItemButton
-								component={RouterLink}
-								to="/leaderboard"
-								sx={{ textAlign: "center" }}
-							>
-								<ListItemText
-									primaryTypographyProps={{
-										fontWeight: "bold",
-									}}
-									primary="Leaderboard"
-								/>
-							</ListItemButton>
-							<ListItemButton
-								component={RouterLink}
-								to="/matchmaking"
-								sx={{ textAlign: "center" }}
-							>
-								<ListItemText
-									primaryTypographyProps={{
-										fontWeight: "bold",
-									}}
-									primary="Players"
-								/>
-							</ListItemButton>
-							<ListItemButton
-								component={RouterLink}
-								to="/tournaments"
-								sx={{ textAlign: "center" }}
-							>
-								<ListItemText
-									primaryTypographyProps={{
-										fontWeight: "bold",
-									}}
-									primary="Tournaments"
-								/>
-							</ListItemButton>
+						<List component="nav" aria-label="Mobile navigation links">
+							{[
+								{ label: "Search", path: "/search" },
+								{ label: "Dashboard", path: "/" },
+								{ label: "Community", path: "/community" },
+								{ label: "Leaderboard", path: "/leaderboard" },
+								{ label: "Players", path: "/matchmaking" },
+								{ label: "Tournaments", path: "/tournaments" },
+							].map((item) => {
+								const isActive = location.pathname === item.path;
+								return (
+									<ListItemButton
+										key={item.path}
+										component={RouterLink}
+										to={item.path}
+										onClick={handleDrawerToggle}
+										aria-current={isActive ? "page" : undefined}
+										sx={{
+											textAlign: "center",
+											color: "#ffffff",
+											backgroundColor: isActive ? "rgba(255, 255, 255, 0.18)" : "transparent",
+											borderLeft: isActive ? "4px solid #FFCC33" : "4px solid transparent",
+											"&:focus-visible": {
+												outline: "2px solid #FFCC33",
+												outlineOffset: "-2px",
+											},
+										}}
+									>
+										<ListItemText
+											primaryTypographyProps={{
+												fontWeight: "bold",
+												color: "#ffffff",
+											}}
+											primary={item.label}
+										/>
+									</ListItemButton>
+								);
+							})}
 							{user && user.role === "admin" && (
 								<ListItemButton
 									component={RouterLink}
 									to="/admin"
+									onClick={handleDrawerToggle}
+									aria-current={location.pathname === "/admin" ? "page" : undefined}
 									sx={{
 										textAlign: "center",
-										backgroundColor: "rgba(255,204,51,0.1)",
+										backgroundColor: location.pathname === "/admin" ? "rgba(255, 255, 255, 0.2)" : "rgba(255, 204, 51, 0.12)",
+										borderLeft: "4px solid #FFCC33",
+										"&:focus-visible": {
+											outline: "2px solid #FFCC33",
+											outlineOffset: "-2px",
+										},
 									}}
 								>
 									<ListItemText
 										primaryTypographyProps={{
 											fontWeight: "bold",
-											color: "#FFCC33",
+											color: "#ffffff",
 										}}
 										primary="Admin Panel"
 									/>

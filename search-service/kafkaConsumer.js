@@ -1,11 +1,30 @@
+require('dotenv').config();
 const { Kafka } = require('kafkajs');
 
+const brokers = process.env.KAFKA_BROKERS
+  ? process.env.KAFKA_BROKERS.split(',').map((b) => b.trim())
+  : ['localhost:9092'];
+
 const kafka = new Kafka({
-  clientId: 'gmu-badminton-search-service',
-  brokers: ['localhost:9092']
+  clientId: process.env.KAFKA_CLIENT_ID || 'gmu-badminton-search-service',
+  brokers,
 });
 
-const consumer = kafka.consumer({ groupId: 'search-service-group' });
+const consumer = kafka.consumer({
+  groupId: process.env.KAFKA_GROUP_ID || 'search-service-group',
+});
+
+const handleMessage = async ({ topic, partition, message }) => {
+  try {
+    const rawValue = message.value ? message.value.toString() : '{}';
+    const eventData = JSON.parse(rawValue);
+    console.log(`[${topic}]: Received event`, eventData);
+    return eventData;
+  } catch (error) {
+    console.error(`Error processing Kafka message on topic ${topic}:`, error);
+    return null;
+  }
+};
 
 const runConsumer = async () => {
   try {
@@ -16,19 +35,39 @@ const runConsumer = async () => {
     await consumer.subscribe({ topic: 'post-events', fromBeginning: true });
 
     await consumer.run({
-      eachMessage: async ({ topic, partition, message }) => {
-        const eventData = JSON.parse(message.value.toString());
-        console.log(`[${topic}]: Received event`, eventData);
-      },
+      eachMessage: handleMessage,
     });
   } catch (error) {
     console.error('Error in Kafka Consumer:', error);
   }
 };
 
-runConsumer().catch(console.error);
+const disconnectConsumer = async () => {
+  try {
+    await consumer.disconnect();
+    console.log('Search Service Kafka Consumer disconnected');
+  } catch (error) {
+    console.error('Error disconnecting Kafka Consumer:', error);
+  }
+};
+
+if (require.main === module) {
+  runConsumer().catch(console.error);
+
+  const handleShutdown = async (signal) => {
+    console.log(`Received ${signal}, shutting down Kafka consumer...`);
+    await disconnectConsumer();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+}
 
 module.exports = {
+  kafka,
+  consumer,
   runConsumer,
-  consumer
+  disconnectConsumer,
+  handleMessage,
 };
