@@ -154,7 +154,7 @@ describe('Navbar Component & Global Search UI', () => {
         // Hamburger button has accessible open navigation menu label and controls
         const hamburgerBtn = screen.getByLabelText('Open navigation menu');
         expect(hamburgerBtn).toHaveAttribute('aria-expanded', 'false');
-        expect(hamburgerBtn).toHaveAttribute('aria-controls', 'mobile-navigation-drawer');
+        expect(hamburgerBtn).toHaveAttribute('aria-controls', 'mobile-menu');
 
         // Responsive mobile search button is available
         const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });

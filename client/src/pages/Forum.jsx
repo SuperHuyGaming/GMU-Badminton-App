@@ -322,7 +322,8 @@ export default function Forum() {
 							}
 						}}
 					>
-
+						Post
+					</Button>
 				</Paper>
 
 				{/* NEW POSTS PILL */}

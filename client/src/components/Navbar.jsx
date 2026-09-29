@@ -275,7 +275,7 @@ export default function Navbar() {
 								sx={{ display: { md: "none" } }}
 								aria-label="Open navigation menu"
 								aria-expanded={mobileOpen}
-								aria-controls="mobile-navigation-drawer"
+								aria-controls="mobile-menu"
 							>
 								<HamburgerIcon />
 							</IconButton>
@@ -631,11 +631,14 @@ export default function Navbar() {
 
 									<Avatar
 										src={getOptimizedAvatar(user.profilePic, 40)}
+										alt="User Avatar"
 										onClick={handleAvatarClick}
 										role="button"
 										tabIndex={0}
-										aria-label="User menu"
-alt="User Avatar"
+										aria-label="User account menu"
+										aria-haspopup="true"
+										aria-expanded={open}
+										aria-controls={open ? "user-menu" : undefined}
 										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
 										sx={{
 											width: 40,
@@ -751,7 +754,7 @@ alt="User Avatar"
 				</AppBar>
 
 				<Drawer
-					id="mobile-navigation-drawer"
+					id="mobile-menu"
 					aria-label="Mobile navigation drawer"
 					anchor="left"
 					open={mobileOpen}
