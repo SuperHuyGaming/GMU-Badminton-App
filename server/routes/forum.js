@@ -1,11 +1,23 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
+const { authMiddleware } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
 const xss = require("xss");
 const { analyzeContent } = require("../utils/aiModeration");
 const router = express.Router();
+
+const escapeHtml = (str) => {
+	if (!str || typeof str !== "string") return "";
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#039;");
+};
 
 // Helper to shorten long comments in notifications
 const truncateText = (text, maxLength = 40) => {
@@ -106,45 +118,65 @@ const hydrateWithPictures = async (data) => {
 // ==========================================
 router.get("/share/:postId", async (req, res) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.postId)) {
+            return res.status(404).send("Post not found");
+        }
+
         const post = await Post.findById(req.params.postId);
         if (!post) return res.status(404).send("Post not found");
         
-        const frontendUrl = process.env.FRONTEND_URL || "https://gmu-badminton-app.onrender.com";
-        const title = post.authorName ? `${post.authorName} on GMU Badminton` : "GMU Badminton Post";
-        let description = post.content || "Check out this discussion on GMU Badminton!";
-        if (description.length > 150) description = description.substring(0, 150) + "...";
+        const frontendUrl = (process.env.FRONTEND_URL || "https://gmu-badminton-app.onrender.com").replace(/\/+$/, "");
+        const rawTitle = post.authorName ? `${post.authorName} on GMU Badminton` : "GMU Badminton Post";
+        let rawDescription = post.content || "Check out this discussion on GMU Badminton!";
+        if (rawDescription.length > 150) rawDescription = rawDescription.substring(0, 150) + "...";
         
-        const imageUrl = (post.imageUrls && post.imageUrls.length > 0) ? post.imageUrls[0] : (post.imageUrl || "https://res.cloudinary.com/dcb4ilgpy/image/upload/v1727221064/default-preview_h7xk6p.png");
+        const rawImageUrl = (post.imageUrls && post.imageUrls.length > 0) ? post.imageUrls[0] : (post.imageUrl || "https://res.cloudinary.com/dcb4ilgpy/image/upload/v1727221064/default-preview_h7xk6p.png");
+        const safePostId = encodeURIComponent(post._id.toString());
+        const targetUrl = `${frontendUrl}/post/${safePostId}`;
 
-        const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta property="og:title" content="${title}" />
-            <meta property="og:description" content="${description}" />
-            <meta property="og:image" content="${imageUrl}" />
-            <meta property="og:url" content="${frontendUrl}/post/${post._id}" />
-            <meta name="twitter:card" content="summary_large_image" />
-            <title>${title}</title>
-            <script>
-                // Redirect immediately to the frontend deep link
-                window.location.href = "${frontendUrl}/post/${post._id}";
-            </script>
-        </head>
-        <body style="background:#111; color:white; font-family:sans-serif; text-align:center; padding-top:20vh;">
-            <h2>Redirecting you to the post...</h2>
-            <p>If you are not redirected automatically, <a href="${frontendUrl}/post/${post._id}" style="color:#00BFFF;">click here</a>.</p>
-        </body>
-        </html>
-        `;
+        const safeTitle = escapeHtml(rawTitle);
+        const safeDescription = escapeHtml(rawDescription);
+        const safeImageUrl = escapeHtml(rawImageUrl);
+        const safeTargetUrl = escapeHtml(targetUrl);
+        const jsonTargetUrl = JSON.stringify(targetUrl);
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:description" content="${safeDescription}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:url" content="${safeTargetUrl}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>${safeTitle}</title>
+    <script>
+        // Redirect immediately to the frontend deep link
+        window.location.href = ${jsonTargetUrl};
+    </script>
+</head>
+<body style="background:#111; color:white; font-family:sans-serif; text-align:center; padding-top:20vh;">
+    <h2>Redirecting you to the post...</h2>
+    <p>If you are not redirected automatically, <a href="${safeTargetUrl}" style="color:#00BFFF;">click here</a>.</p>
+</body>
+</html>`;
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.send(html);
     } catch (e) {
         console.error("Error generating share link:", e);
         res.status(500).send("Error generating preview");
     }
 });
-router.get("/notifications/:userId", async (req, res) => {
+router.get("/notifications/:userId", authMiddleware, async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to access these notifications." });
+		}
+
 		const notifs = await Notification.find({
 			targetUserId: req.params.userId,
 		})
@@ -156,8 +188,17 @@ router.get("/notifications/:userId", async (req, res) => {
 	}
 });
 
-router.put("/notifications/:userId/read", async (req, res) => {
+router.put("/notifications/:userId/read", authMiddleware, async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to update these notifications." });
+		}
+
 		await Notification.updateMany(
 			{ targetUserId: req.params.userId, read: false },
 			{ read: true },
@@ -168,12 +209,22 @@ router.put("/notifications/:userId/read", async (req, res) => {
 	}
 });
 
-router.put("/notifications/single/:notifId/read", async (req, res) => {
+router.put("/notifications/single/:notifId/read", authMiddleware, async (req, res) => {
 	try {
-		await Notification.findByIdAndUpdate(
-			req.params.notifId,
-			{ read: true }
-		);
+		if (!mongoose.isValidObjectId(req.params.notifId)) {
+			return res.status(400).json({ message: "Invalid notification ID format." });
+		}
+
+		const notif = await Notification.findById(req.params.notifId);
+		if (!notif) return res.status(404).json({ message: "Notification not found" });
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		if (req.user.role !== "admin" && currentUserId !== notif.targetUserId?.toString()) {
+			return res.status(403).json({ message: "Unauthorized to update this notification." });
+		}
+
+		notif.read = true;
+		await notif.save();
 		res.json({ success: true });
 	} catch (error) {
 		res.status(500).json({ message: "Error updating notification" });
@@ -210,9 +261,9 @@ router.get("/", async (req, res) => {
 	}
 });
 
-router.post("/", postLimiter, async (req, res) => {
+router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, authorName, targetDate, authorId, tags, visibility } = req.body;
+		const { title, content, imageUrl, targetDate, tags, visibility } = req.body;
 		
 		const cleanTitle = xss(title);
 		const cleanContent = xss(content);
@@ -222,6 +273,9 @@ router.post("/", postLimiter, async (req, res) => {
 		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
 		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
 
+		const authorId = (req.user.id || req.user.userId).toString();
+		const authorName = req.user.name || req.body.authorName || "Member";
+
 		const newPost = new Post({
 			title: cleanTitle,
 			content: cleanContent,
@@ -230,7 +284,7 @@ router.post("/", postLimiter, async (req, res) => {
 			visibility: visibility || 'PUBLIC',
 			authorName,
 			targetDate: targetDate || "General",
-			authorId: authorId || "000000000000000000000000",
+			authorId,
 			isFlagged: isSpam || aiAnalysis.isFlagged,
 			toxicityScore: aiAnalysis.score || 0
 		});
@@ -267,6 +321,10 @@ router.post("/", postLimiter, async (req, res) => {
 
 router.get("/user/:userId", async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
 		const page = parseInt(req.query.page) || 1;
 		const limit = parseInt(req.query.limit) || 10;
 		const skip = (page - 1) * limit;
@@ -288,12 +346,18 @@ router.get("/user/:userId", async (req, res) => {
 // ==========================================
 // EDIT & DELETE POSTS (WITH ADMIN GOD MODE)
 // ==========================================
-router.put("/:postId", async (req, res) => {
+router.put("/:postId", authMiddleware, async (req, res) => {
 	try {
-		const { userId, title, content } = req.body;
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const { title, content } = req.body;
+		const currentUserId = (req.user.id || req.user.userId).toString();
 		const post = await Post.findById(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found" });
-		if (post.authorId.toString() !== userId.toString())
+
+		if (post.authorId.toString() !== currentUserId && req.user.role !== "admin")
 			return res.status(403).json({ message: "Unauthorized" });
 
 		const cleanTitle = xss(title);
@@ -321,16 +385,19 @@ router.put("/:postId", async (req, res) => {
 	}
 });
 
-router.delete("/:postId", async (req, res) => {
+router.delete("/:postId", authMiddleware, async (req, res) => {
 	try {
-		const { userId } = req.body;
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
 		const post = await Post.findById(req.params.postId);
-		const user = await User.findById(userId);
-		const isAdmin = user && user.role === "admin";
+		const isAdmin = req.user.role === "admin";
 
 		if (!post) return res.status(404).json({ message: "Post not found" });
 		// Only Author OR Admin can delete
-		if (post.authorId.toString() !== userId.toString() && !isAdmin)
+		if (post.authorId.toString() !== currentUserId && !isAdmin)
 			return res.status(403).json({ message: "Unauthorized" });
 
 		await Post.findByIdAndDelete(req.params.postId);
@@ -358,12 +425,23 @@ router.get("/:postId/comments", async (req, res) => {
 	}
 });
 
-router.post("/:postId/comments", postLimiter, async (req, res) => {
+router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { content, authorName, authorId } = req.body;
-		const cleanContent = xss(content);
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const { content } = req.body;
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Comment content cannot be empty." });
+		}
+
+		const authorId = (req.user.id || req.user.userId).toString();
+		const authorName = req.user.name || req.body.authorName || "Member";
+		const cleanContent = xss(content.trim());
 		const cleanAuthorName = xss(authorName);
 		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
 
 		const isSpam = await checkSpam(cleanContent);
 		const aiAnalysis = await analyzeContent(cleanContent);
@@ -398,14 +476,25 @@ router.post("/:postId/comments", postLimiter, async (req, res) => {
 	}
 });
 
-router.put("/:postId/comments/:commentId", async (req, res) => {
+router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 	try {
-		const { userId, content } = req.body;
-		const cleanContent = xss(content);
-		const post = await Post.findById(req.params.postId);
-		const comment = post.comments.id(req.params.commentId);
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
 
-		if (comment.authorId.toString() !== userId.toString())
+		const { content } = req.body;
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Comment content cannot be empty." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const cleanContent = xss(content.trim());
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+		if (comment.authorId.toString() !== currentUserId && req.user.role !== "admin")
 			return res.status(403).json({ message: "Unauthorized" });
 		if (await checkSpam(cleanContent))
 			return res.json(await hydrateWithPictures(post.toObject()));
@@ -421,16 +510,21 @@ router.put("/:postId/comments/:commentId", async (req, res) => {
 	}
 });
 
-router.delete("/:postId/comments/:commentId", async (req, res) => {
+router.delete("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 	try {
-		const { userId } = req.body;
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
 		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
 		const comment = post.comments.id(req.params.commentId);
-		const user = await User.findById(userId);
-		const isAdmin = user && user.role === "admin";
+		if (!comment) return res.status(404).json({ message: "Comment not found" });
+		const isAdmin = req.user.role === "admin";
 
 		// Author OR Admin
-		if (comment.authorId.toString() !== userId.toString() && !isAdmin)
+		if (comment.authorId.toString() !== currentUserId && !isAdmin)
 			return res.status(403).json({ message: "Unauthorized" });
 
 		comment.deleteOne();
@@ -445,14 +539,27 @@ router.delete("/:postId/comments/:commentId", async (req, res) => {
 
 router.post(
 	"/:postId/comments/:commentId/replies",
+	authMiddleware,
 	postLimiter,
 	async (req, res) => {
 		try {
-			const { authorId, authorName, content } = req.body;
-			const cleanContent = xss(content);
+			if (!mongoose.isValidObjectId(req.params.postId)) {
+				return res.status(400).json({ message: "Invalid post ID format." });
+			}
+
+			const { content } = req.body;
+			if (!content || typeof content !== "string" || !content.trim()) {
+				return res.status(400).json({ message: "Reply content cannot be empty." });
+			}
+
+			const authorId = (req.user.id || req.user.userId).toString();
+			const authorName = req.user.name || req.body.authorName || "Member";
+			const cleanContent = xss(content.trim());
 			const cleanAuthorName = xss(authorName);
 			const post = await Post.findById(req.params.postId);
+			if (!post) return res.status(404).json({ message: "Post not found" });
 			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
 
 			const isSpam = await checkSpam(cleanContent);
 			const aiAnalysis = await analyzeContent(cleanContent);
@@ -498,16 +605,28 @@ router.post(
 
 router.put(
 	"/:postId/comments/:commentId/replies/:replyId",
+	authMiddleware,
 	async (req, res) => {
 		try {
-			const { userId, content } = req.body;
-			const cleanContent = xss(content);
-			const post = await Post.findById(req.params.postId);
-			const reply = post.comments
-				.id(req.params.commentId)
-				.replies.id(req.params.replyId);
+			if (!mongoose.isValidObjectId(req.params.postId)) {
+				return res.status(400).json({ message: "Invalid post ID format." });
+			}
 
-			if (reply.authorId.toString() !== userId.toString())
+			const { content } = req.body;
+			if (!content || typeof content !== "string" || !content.trim()) {
+				return res.status(400).json({ message: "Reply content cannot be empty." });
+			}
+
+			const currentUserId = (req.user.id || req.user.userId).toString();
+			const cleanContent = xss(content.trim());
+			const post = await Post.findById(req.params.postId);
+			if (!post) return res.status(404).json({ message: "Post not found" });
+			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
+			const reply = comment.replies.id(req.params.replyId);
+			if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+			if (reply.authorId.toString() !== currentUserId && req.user.role !== "admin")
 				return res.status(403).json({ message: "Unauthorized" });
 			if (await checkSpam(cleanContent))
 				return res.json(await hydrateWithPictures(post.toObject()));
@@ -526,18 +645,24 @@ router.put(
 
 router.delete(
 	"/:postId/comments/:commentId/replies/:replyId",
+	authMiddleware,
 	async (req, res) => {
 		try {
-			const { userId } = req.body;
+			if (!mongoose.isValidObjectId(req.params.postId)) {
+				return res.status(400).json({ message: "Invalid post ID format." });
+			}
+
+			const currentUserId = (req.user.id || req.user.userId).toString();
 			const post = await Post.findById(req.params.postId);
-			const reply = post.comments
-				.id(req.params.commentId)
-				.replies.id(req.params.replyId);
-			const user = await User.findById(userId);
-			const isAdmin = user && user.role === "admin";
+			if (!post) return res.status(404).json({ message: "Post not found" });
+			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
+			const reply = comment.replies.id(req.params.replyId);
+			if (!reply) return res.status(404).json({ message: "Reply not found" });
+			const isAdmin = req.user.role === "admin";
 
 			// Author OR Admin
-			if (reply.authorId.toString() !== userId.toString() && !isAdmin)
+			if (reply.authorId.toString() !== currentUserId && !isAdmin)
 				return res.status(403).json({ message: "Unauthorized" });
 
 			reply.deleteOne();
@@ -555,9 +680,13 @@ router.delete(
 // BOOKMARKS
 // ==========================================
 
-router.put("/:postId/bookmark", async (req, res) => {
+router.put("/:postId/bookmark", authMiddleware, async (req, res) => {
 	try {
-		const { userId } = req.body;
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
 		const user = await User.findById(userId);
 		if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -580,8 +709,17 @@ router.put("/:postId/bookmark", async (req, res) => {
 	}
 });
 
-router.get("/bookmarks/:userId", async (req, res) => {
+router.get("/bookmarks/:userId", authMiddleware, async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to access bookmarks." });
+		}
+
 		const user = await User.findById(req.params.userId).populate('bookmarkedPosts');
 		if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -598,10 +736,16 @@ router.get("/bookmarks/:userId", async (req, res) => {
 // ==========================================
 // LIKES
 // ==========================================
-router.put("/:postId/like", async (req, res) => {
+router.put("/:postId/like", authMiddleware, async (req, res) => {
 	try {
-		const { userId, userName } = req.body;
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
+		const userName = req.user.name || req.body.userName || "Player";
 		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
 
 		const hasLiked = post.likedBy.some(
 			(id) => id.toString() === userId.toString(),
@@ -633,11 +777,18 @@ router.put("/:postId/like", async (req, res) => {
 	}
 });
 
-router.put("/:postId/comments/:commentId/like", async (req, res) => {
+router.put("/:postId/comments/:commentId/like", authMiddleware, async (req, res) => {
 	try {
-		const { userId, userName } = req.body;
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
+		const userName = req.user.name || req.body.userName || "Player";
 		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
 		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found" });
 
 		const hasLiked = comment.likedBy.some(
 			(id) => id.toString() === userId.toString(),
@@ -674,12 +825,21 @@ router.put("/:postId/comments/:commentId/like", async (req, res) => {
 
 router.put(
 	"/:postId/comments/:commentId/replies/:replyId/like",
+	authMiddleware,
 	async (req, res) => {
 		try {
-			const { userId, userName } = req.body;
+			if (!mongoose.isValidObjectId(req.params.postId)) {
+				return res.status(400).json({ message: "Invalid post ID format." });
+			}
+
+			const userId = (req.user.id || req.user.userId).toString();
+			const userName = req.user.name || req.body.userName || "Player";
 			const post = await Post.findById(req.params.postId);
+			if (!post) return res.status(404).json({ message: "Post not found" });
 			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
 			const reply = comment.replies.id(req.params.replyId);
+			if (!reply) return res.status(404).json({ message: "Reply not found" });
 
 			const hasLiked = reply.likedBy.some(
 				(id) => id.toString() === userId.toString(),

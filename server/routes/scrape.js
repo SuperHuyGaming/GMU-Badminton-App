@@ -14,8 +14,19 @@ const client = new ApifyClient({
 router.post("/instagram", authMiddleware, async (req, res, next) => {
     try {
         const { url } = req.body;
-        if (!url || !url.includes("instagram.com")) {
+        if (!url || typeof url !== "string") {
             return res.status(400).json({ message: "Valid Instagram URL required." });
+        }
+
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(url);
+        } catch {
+            return res.status(400).json({ message: "Valid Instagram URL required." });
+        }
+
+        if (parsedUrl.protocol !== "https:" || !(parsedUrl.hostname === "instagram.com" || parsedUrl.hostname.endsWith(".instagram.com"))) {
+            return res.status(400).json({ message: "Must be a secure https://instagram.com URL." });
         }
 
         console.log(`[Scraper API] User requested manual scrape of: ${url}`);
@@ -85,10 +96,36 @@ router.post("/instagram", authMiddleware, async (req, res, next) => {
 // Saves the crowdsourced tournament to DB as pending
 router.post("/submit-pending", authMiddleware, async (req, res, next) => {
     try {
-        const data = req.body;
+        const {
+            tournamentName,
+            startDate,
+            endDate,
+            registrationDeadline,
+            skillLevels,
+            flyerImageUrl,
+            originalCaption,
+            instagramPostUrl,
+            registrationUrl,
+            hostUniversity,
+            eventLocation,
+        } = req.body;
+
+        if (!tournamentName || typeof tournamentName !== "string" || !tournamentName.trim()) {
+            return res.status(400).json({ message: "Tournament name is required." });
+        }
         
         const newTourney = new Tournament({
-            ...data,
+            tournamentName: tournamentName.trim(),
+            startDate: startDate ? new Date(startDate) : undefined,
+            endDate: endDate ? new Date(endDate) : undefined,
+            registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : undefined,
+            skillLevels: Array.isArray(skillLevels) ? skillLevels : [],
+            flyerImageUrl: flyerImageUrl || "",
+            originalCaption: originalCaption || "",
+            sourceUrl: instagramPostUrl || "",
+            registrationUrl: registrationUrl || "",
+            hostUniversity: hostUniversity || "Local Club",
+            eventLocation: eventLocation || "TBD",
             isOpenTournament: false, // Set to false so it requires Admin approval to show on main feed
             createdAt: new Date()
         });

@@ -87,6 +87,7 @@ const sanitizeUserForEvent = (doc) => {
 	if (!doc) return null;
 	const userObj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
 	delete userObj.password;
+	delete userObj.email;
 	delete userObj.pushSubscriptions;
 	return userObj;
 };

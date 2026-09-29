@@ -72,7 +72,8 @@ router.get("/:id", authMiddleware, async (req, res) => {
 		if (req.params.id === 'undefined' || req.params.id === 'null' || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
 			return res.status(404).json({ message: "User not found" });
 		}
-		const user = await User.findById(req.params.id).select("-password -pushSubscriptions");
+		// Exclude password, email, and pushSubscriptions to protect user privacy
+		const user = await User.findById(req.params.id).select("-password -email -pushSubscriptions");
 		if (!user) return res.status(404).json({ message: "User not found" });
 		res.json(user);
 	} catch (err) {
@@ -127,8 +128,10 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 		const cleanRacket = racket ? xss(racket) : undefined;
 		const cleanHomeUniversity = homeUniversity ? xss(homeUniversity) : undefined;
 
+		const currentUserId = req.user.id || req.user.userId;
+
 		const updatedUser = await User.findByIdAndUpdate(
-			req.user.userId,
+			currentUserId,
 			// NEW: Tell MongoDB to update the image fields
 			{
 				name: cleanName,
@@ -154,27 +157,6 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 	} catch (err) {
 		console.error("Error saving profile:", err);
 		res.status(500).json({ message: "Server error updating profile" });
-	}
-});
-
-// GET: Fetch ANY user's profile by ID (Public/Read-Only view)
-router.get("/:id", async (req, res) => {
-	try {
-		if (req.params.id === 'undefined' || req.params.id === 'null' || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-			return res.status(404).json({ message: "User not found" });
-		}
-		// We use .select("-password -email") to ensure we NEVER send
-		// someone's private email or hashed password to the public forum!
-		const user = await User.findById(req.params.id).select(
-			"-password -email",
-		);
-
-		if (!user) return res.status(404).json({ message: "User not found" });
-		res.json(user);
-	} catch (err) {
-		res.status(500).json({
-			message: "Server error fetching public profile",
-		});
 	}
 });
 

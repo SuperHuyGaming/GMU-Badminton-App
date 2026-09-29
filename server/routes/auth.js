@@ -21,8 +21,10 @@ const JWT_SECRET =
 const generateAccessToken = (user) => {
 	return jwt.sign(
 		{
-			userId: user._id,
+			id: user._id.toString(),
+			userId: user._id.toString(),
 			role: user.role,
+			name: user.name,
 		},
 		JWT_SECRET,
 		{ expiresIn: "15m" },
@@ -149,6 +151,10 @@ router.post("/refreshtoken", async (req, res, next) => {
 		}
 
 		let user = await User.findById(refreshToken.user);
+		if (!user) {
+			await RefreshToken.findByIdAndDelete(refreshToken._id);
+			return res.status(403).json({ message: "User belonging to this token no longer exists" });
+		}
 		let newAccessToken = generateAccessToken(user);
 
 		return res.status(200).json({

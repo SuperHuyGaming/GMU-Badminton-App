@@ -14,7 +14,18 @@ cloudinary.config({
 });
 
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload = multer({
+	storage,
+	limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+	fileFilter: (req, file, cb) => {
+		const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+		if (allowedMimes.includes(file.mimetype)) {
+			cb(null, true);
+		} else {
+			cb(new Error("Invalid file format. Only JPEG, PNG, WEBP, and GIF images are allowed."));
+		}
+	}
+});
 
 router.post(
 	"/image",
@@ -30,9 +41,11 @@ router.post(
 				return res.status(400).json({ message: "Invalid image type" });
 			}
 
-			// Explicitly grab the ID sent from the frontend!
-			const targetUserId =
-				req.body.userId || req.user?.id || req.user?._id;
+			// Security: IDOR prevention - only admins may upload on behalf of another user ID
+			const authenticatedId = (req.user?.id || req.user?.userId || req.user?._id || "").toString();
+			const targetUserId = (req.user?.role === "admin" && req.body.userId)
+				? req.body.userId
+				: authenticatedId;
 
 			cloudinary.uploader
 				.upload_stream(

@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
@@ -9,6 +10,10 @@ const Notification = require("../models/Notification");
 // GET: friends and friend requests
 router.get("/:userId", authMiddleware, async (req, res, next) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
 		const user = await User.findById(req.params.userId)
 			.populate("friends", "_id name profilePic skillLevel lastActive")
 			.populate("friendRequests", "_id name profilePic skillLevel")
@@ -29,8 +34,14 @@ router.get("/:userId", authMiddleware, async (req, res, next) => {
 // POST: send friend request
 router.post("/request", authMiddleware, async (req, res, next) => {
 	try {
-		const { requesterId, recipientId } = req.body;
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const requesterId = currentUserId;
+		const { recipientId } = req.body;
 		
+		if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
+			return res.status(400).json({ message: "Valid recipient ID is required." });
+		}
+
 		if (requesterId === recipientId) return res.status(400).json({ message: "Cannot add yourself" });
 
 		const requester = await User.findById(requesterId);
@@ -85,7 +96,13 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 // POST: accept friend request
 router.post("/accept", authMiddleware, async (req, res, next) => {
 	try {
-		const { userId, requesterId } = req.body;
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const userId = currentUserId;
+		const { requesterId } = req.body;
+
+		if (!requesterId || !mongoose.isValidObjectId(requesterId)) {
+			return res.status(400).json({ message: "Valid requester ID is required." });
+		}
 
 		const user = await User.findById(userId);
 		const requester = await User.findById(requesterId);
@@ -122,7 +139,13 @@ router.post("/accept", authMiddleware, async (req, res, next) => {
 // POST: reject/cancel friend request
 router.post("/reject", authMiddleware, async (req, res, next) => {
 	try {
-		const { userId, targetId } = req.body;
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const userId = currentUserId;
+		const { targetId } = req.body;
+
+		if (!targetId || !mongoose.isValidObjectId(targetId)) {
+			return res.status(400).json({ message: "Valid target ID is required." });
+		}
 
 		const user = await User.findById(userId);
 		const target = await User.findById(targetId);
@@ -147,7 +170,13 @@ router.post("/reject", authMiddleware, async (req, res, next) => {
 // POST: remove friend
 router.post("/remove", authMiddleware, async (req, res, next) => {
 	try {
-		const { userId, friendId } = req.body;
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const userId = currentUserId;
+		const { friendId } = req.body;
+
+		if (!friendId || !mongoose.isValidObjectId(friendId)) {
+			return res.status(400).json({ message: "Valid friend ID is required." });
+		}
 
 		const user = await User.findById(userId);
 		const friend = await User.findById(friendId);

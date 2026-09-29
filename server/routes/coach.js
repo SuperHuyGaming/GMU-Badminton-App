@@ -1,9 +1,11 @@
 // server/routes/coach.js
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const CoachChat = require("../models/CoachChat");
 const User = require("../models/User");
 const { chat } = require("../utils/aiCoach");
+const { authMiddleware } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
 
 // Rate limit: 20 messages per minute per user
@@ -11,16 +13,20 @@ const coachLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 20,
     message: { message: "You're sending messages too fast. Take a breather! 🏸" },
-    keyGenerator: (req) => req.body.userId || "anonymous",
+    keyGenerator: (req) => (req.user?.id || req.user?.userId || req.ip || "anonymous"),
 });
+
+// All coach routes require authentication
+router.use(authMiddleware);
 
 // POST /api/coach/message - Send a message to the AI Coach
 router.post("/message", coachLimiter, async (req, res) => {
     try {
-        const { userId, message } = req.body;
+        const { message } = req.body;
+        const userId = (req.user.id || req.user.userId).toString();
 
-        if (!userId || !message?.trim()) {
-            return res.status(400).json({ message: "userId and message are required." });
+        if (!message || typeof message !== "string" || !message.trim()) {
+            return res.status(400).json({ message: "A valid message is required." });
         }
 
         // Get user's skill level for personalized coaching
@@ -66,6 +72,15 @@ router.post("/message", coachLimiter, async (req, res) => {
 // GET /api/coach/history/:userId - Get chat history
 router.get("/history/:userId", async (req, res) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.userId)) {
+            return res.status(400).json({ message: "Invalid user ID format." });
+        }
+
+        const currentUserId = (req.user.id || req.user.userId).toString();
+        if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+            return res.status(403).json({ message: "Unauthorized to access this coaching history." });
+        }
+
         const coachChat = await CoachChat.findOne({ userId: req.params.userId });
         if (!coachChat) {
             return res.json({ messages: [] });
@@ -80,6 +95,15 @@ router.get("/history/:userId", async (req, res) => {
 // DELETE /api/coach/history/:userId - Clear chat history (start fresh)
 router.delete("/history/:userId", async (req, res) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.userId)) {
+            return res.status(400).json({ message: "Invalid user ID format." });
+        }
+
+        const currentUserId = (req.user.id || req.user.userId).toString();
+        if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+            return res.status(403).json({ message: "Unauthorized to clear this coaching history." });
+        }
+
         await CoachChat.findOneAndDelete({ userId: req.params.userId });
         res.json({ message: "Chat history cleared. Ready for a fresh coaching session! 🏸" });
     } catch (error) {
