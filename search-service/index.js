@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { Client } = require('@elastic/elasticsearch');
+const Redis = require('ioredis');
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));
 
-// const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const elasticClient = new Client({ node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200' });
 
 app.get('/health', (req, res) => {
@@ -61,6 +62,19 @@ const searchHandler = async (req, res) => {
   const parsedPage = Math.max(1, parseInt(page, 10) || 1);
   const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
+  const cacheKey = `search:query:${trimmedQuery}:type:${type}:page:${parsedPage}:limit:${parsedLimit}`;
+
+  try {
+    const cachedResult = await redis.get(cacheKey);
+    if (cachedResult) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.json(JSON.parse(cachedResult));
+    }
+  } catch (err) {
+    console.error('Redis cache error:', err);
+    // Gracefully degrade, continue to Elasticsearch
+  }
+
   try {
       let indices = ['users', 'posts'];
       if (type === 'user' || type === 'users') indices = ['users'];
@@ -87,14 +101,23 @@ const searchHandler = async (req, res) => {
           ...hit._source
       }));
 
-      res.json({ 
+      const responseData = { 
         query: trimmedQuery,
         type,
         page: parsedPage,
         limit: parsedLimit,
         total: result.hits.total?.value || 0,
         results: hits 
-      });
+      };
+
+      res.setHeader('X-Cache', 'MISS');
+      res.json(responseData);
+
+      try {
+        await redis.set(cacheKey, JSON.stringify(responseData), 'EX', 60);
+      } catch (redisErr) {
+        console.error('Redis set error:', redisErr);
+      }
   } catch (err) {
       console.error('Search error:', err);
       res.status(500).json({ error: 'Search failed' });
