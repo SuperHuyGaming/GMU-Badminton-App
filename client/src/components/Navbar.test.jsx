@@ -185,5 +185,11 @@ describe('Navbar Component & Global Search UI', () => {
 
         expect(screen.queryByRole('link', { name: 'Leaderboard' })).not.toBeInTheDocument();
     });
+
+    it('does not render the Players navigation link', () => {
+        renderNavbar();
+
+        expect(screen.queryByRole('link', { name: 'Players' })).not.toBeInTheDocument();
+    });
 });
 

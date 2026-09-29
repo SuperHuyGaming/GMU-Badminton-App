@@ -315,7 +315,6 @@ export default function Navbar() {
 								{[
 									{ label: "Dashboard", path: "/" },
 									{ label: "Community", path: "/community" },
-									{ label: "Players", path: "/matchmaking" },
 									{ label: "Tournaments", path: "/tournaments" },
 								].map((item) => {
 									const isActive = location.pathname === item.path;
@@ -788,7 +787,6 @@ export default function Navbar() {
 								{ label: "Search", path: "/search" },
 								{ label: "Dashboard", path: "/" },
 								{ label: "Community", path: "/community" },
-								{ label: "Players", path: "/matchmaking" },
 								{ label: "Tournaments", path: "/tournaments" },
 							].map((item) => {
 								const isActive = location.pathname === item.path;

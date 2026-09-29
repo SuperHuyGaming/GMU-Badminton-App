@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, CircularProgress } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import CheckIcon from '@mui/icons-material/Check';
 import HistoryIcon from '@mui/icons-material/History';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import apiFetch from '../utils/api';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -21,11 +24,13 @@ const cardVariants = {
 
 export default function Matchmaking() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [matches, setMatches] = useState([]);
     const [recommended, setRecommended] = useState([]);
     const [loading, setLoading] = useState(true);
     const [dropdownLoading, setDropdownLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [friendStatus, setFriendStatus] = useState({});
     
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
@@ -187,7 +192,7 @@ export default function Matchmaking() {
                     <Card sx={{ height: '100%', p: 2.5, borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
                             <Skeleton variant="circular" width={72} height={72} animation="wave" />
-                            <Stack direction="column" spacing={1} alignItems="flex-end">
+                            <Stack direction="column" spacing={1} sx={{ alignItems: 'flex-end' }}>
                                 <Skeleton variant="rounded" width={80} height={24} animation="wave" sx={{ borderRadius: 1.5 }} />
                             </Stack>
                         </Box>
@@ -200,63 +205,102 @@ export default function Matchmaking() {
         </Grid>
     );
 
-    const renderPlayerCard = (player) => (
-        <Card 
-            sx={{ 
-                height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, p: 2.5, transition: 'transform 0.2s, box-shadow 0.2s',
-                '&:hover': { transform: 'translateY(-4px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.1)' }
-            }}
-        >
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
-                <Badge
-                    overlap="circular"
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    variant="dot"
-                    color="success"
-                    invisible={!isRecentlyActive(player.lastActive)}
-                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white' } }}
-                >
-                    <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none' }}>
-                        <Avatar 
-                            src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} 
-                            sx={{ width: 72, height: 72, bgcolor: 'secondary.main', color: 'secondary.contrastText', '&:hover': { opacity: 0.8 } }}
-                         alt={player.name} />
+    const handleAddFriend = async (player) => {
+        if (!user) {
+            toast.error("Please log in to add friends");
+            return;
+        }
+        setFriendStatus((prev) => ({ ...prev, [player._id]: 'loading' }));
+        try {
+            await apiFetch('/api/friends/request', {
+                method: 'POST',
+                body: JSON.stringify({ recipientId: player._id })
+            });
+            setFriendStatus((prev) => ({ ...prev, [player._id]: 'sent' }));
+            toast.success(`Friend request sent to ${player.name}`);
+        } catch (err) {
+            toast.error(err.message || 'Failed to send friend request');
+            setFriendStatus((prev) => ({ ...prev, [player._id]: 'idle' }));
+        }
+    };
+
+    const renderPlayerCard = (player) => {
+        const status = friendStatus[player._id] || 'idle';
+        const isLoading = status === 'loading';
+        const isSent = status === 'sent';
+
+        return (
+            <Card 
+                sx={{ 
+                    height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, p: 2.5, transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': { transform: 'translateY(-4px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.1)' }
+                }}
+            >
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
+                    <Badge
+                        overlap="circular"
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        variant="dot"
+                        color="success"
+                        invisible={!isRecentlyActive(player.lastActive)}
+                        sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white' } }}
+                    >
+                        <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none' }}>
+                            <Avatar 
+                                src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} 
+                                sx={{ width: 72, height: 72, bgcolor: 'secondary.main', color: 'secondary.contrastText', '&:hover': { opacity: 0.8 } }}
+                             alt={player.name} />
+                        </Link>
+                    </Badge>
+                    <Stack direction="column" spacing={1} sx={{ alignItems: 'flex-end' }}>
+                        {player.skillLevel && <Chip label={player.skillLevel} size="small" color="primary" sx={{ fontWeight: 600, borderRadius: 1.5 }} />}
+                        {player.preferredPlay && <Chip label={player.preferredPlay} size="small" variant="outlined" sx={{ fontWeight: 500, borderRadius: 1.5 }} />}
+                    </Stack>
+                </Box>
+                <CardContent sx={{ flexGrow: 1, p: 0, width: '100%' }}>
+                    <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                        <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.2, mb: 1, color: 'text.primary', wordBreak: 'break-word', '&:hover': { textDecoration: 'underline' } }}>
+                            {player.name}
+                        </Typography>
                     </Link>
-                </Badge>
-                <Stack direction="column" spacing={1} alignItems="flex-end">
-                    {player.skillLevel && <Chip label={player.skillLevel} size="small" color="primary" sx={{ fontWeight: 600, borderRadius: 1.5 }} />}
-                    {player.preferredPlay && <Chip label={player.preferredPlay} size="small" variant="outlined" sx={{ fontWeight: 500, borderRadius: 1.5 }} />}
-                </Stack>
-            </Box>
-            <CardContent sx={{ flexGrow: 1, p: 0, width: '100%' }}>
-                <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.2, mb: 1, color: 'text.primary', wordBreak: 'break-word', '&:hover': { textDecoration: 'underline' } }}>
-                        {player.name}
-                    </Typography>
-                </Link>
-                {player.homeUniversity && (
-                    <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <span aria-hidden="true">🏫</span> {player.homeUniversity}
-                    </Typography>
-                )}
-                {player.racket && (
-                    <Typography variant="body2" sx={{ mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <span aria-hidden="true">🏸</span> {player.racket}
-                    </Typography>
-                )}
-                {player.bio && (
-                    <Typography variant="body2" sx={{ fontStyle: 'italic', mb: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'text.secondary', wordBreak: 'break-word' }}>
-                        "{player.bio}"
-                    </Typography>
-                )}
-            </CardContent>
-            <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2 }}>
-                <Button variant="contained" color="primary" fullWidth sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }} onClick={() => alert(`Adding ${player.name} as friend...`)} startIcon={<PersonAddIcon />}>
-                    Add Friend
-                </Button>
-            </Box>
-        </Card>
-    );
+                    {player.homeUniversity && (
+                        <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span aria-hidden="true">🏫</span> {player.homeUniversity}
+                        </Typography>
+                    )}
+                    {player.racket && (
+                        <Typography variant="body2" sx={{ mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span aria-hidden="true">🏸</span> {player.racket}
+                        </Typography>
+                    )}
+                    {player.bio && (
+                        <Typography variant="body2" sx={{ fontStyle: 'italic', mb: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'text.secondary', wordBreak: 'break-word' }}>
+                            "{player.bio}"
+                        </Typography>
+                    )}
+                </CardContent>
+                <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2 }}>
+                    <Button 
+                        variant="contained" 
+                        color="primary" 
+                        fullWidth 
+                        sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }} 
+                        onClick={() => handleAddFriend(player)}
+                        disabled={isLoading || isSent}
+                        startIcon={isLoading ? null : (isSent ? <CheckIcon /> : <PersonAddIcon />)}
+                    >
+                        {isLoading ? (
+                            <CircularProgress size={20} color="inherit" />
+                        ) : isSent ? (
+                            "Request Sent"
+                        ) : (
+                            "Add Friend"
+                        )}
+                    </Button>
+                </Box>
+            </Card>
+        );
+    };
 
     if (error) {
         return (
@@ -283,29 +327,48 @@ export default function Matchmaking() {
                         placeholder="Search by name or university..."
                         autoComplete="off"
                         name="dummy-search-prevent-autofill"
-                        aria-label="Search players"
-                        inputProps={{ 
-                            'aria-label': 'Search players',
-                            autoComplete: 'off',
-                            form: { autoComplete: 'off' }
-                        }}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onFocus={() => setIsFocused(true)}
                         onKeyDown={handleKeyDown}
-                        sx={{ 
-                            bgcolor: 'background.paper', 
-                            '& .MuiOutlinedInput-root': {
-                                borderRadius: 50,
-                                transition: 'box-shadow 0.2s',
-                                boxShadow: isFocused ? (theme) => theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.1)' : 'none',
-                                '& fieldset': {
-                                    borderColor: isFocused ? 'primary.main' : 'divider',
-                                }
+                        slotProps={{
+                            htmlInput: {
+                                'aria-label': 'Search players',
+                                autoComplete: 'off'
+                            },
+                            input: {
+                                startAdornment: <InputAdornment position="start"><SearchIcon color={isFocused ? "primary" : "inherit"} /></InputAdornment>,
                             }
                         }}
-                        InputProps={{
-                            startAdornment: <InputAdornment position="start"><SearchIcon color={isFocused ? "primary" : "inherit"} /></InputAdornment>,
+                        sx={{ 
+                            borderRadius: 50,
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 50,
+                                backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                                    ? 'rgba(255, 255, 255, 0.08)' 
+                                    : 'background.paper',
+                                backdropFilter: 'blur(10px)',
+                                WebkitBackdropFilter: 'blur(10px)',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover': {
+                                    backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                                        ? 'rgba(255, 255, 255, 0.12)' 
+                                        : 'rgba(255, 255, 255, 0.9)',
+                                },
+                                boxShadow: isFocused 
+                                    ? (theme) => theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.1)' 
+                                    : 'none',
+                                '& fieldset': {
+                                    borderColor: isFocused 
+                                        ? 'primary.main' 
+                                        : (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.18)' : 'divider',
+                                },
+                                '&:hover fieldset': {
+                                    borderColor: isFocused 
+                                        ? 'primary.main' 
+                                        : (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.35)' : 'primary.light',
+                                }
+                            }
                         }}
                     />
 
