@@ -31,7 +31,21 @@ export default function Matchmaking() {
     const [error, setError] = useState(null);
     
     // Search state
-    const [searchQuery, setSearchQuery] = useState('');
+    
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const observer = useRef();
+    const lastElementRef = (node) => {
+        if (loading) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore) {
+                setPage(prevPage => prevPage + 1);
+            }
+        });
+        if (node) observer.current.observe(node);
+    };
+\n    const [searchQuery, setSearchQuery] = useState('');
     const [skillFilter, setSkillFilter] = useState('All');
     const [recentSearches, setRecentSearches] = useState(() => {
         const saved = localStorage.getItem('matchmaking_recent_searches');
@@ -202,7 +216,7 @@ export default function Matchmaking() {
     const isRecentlyActive = (lastActiveDate) => {
         if (!lastActiveDate) return false;
         const diff = new Date() - new Date(lastActiveDate);
-        return diff < 24 * 60 * 60 * 1000;
+        return diff < 15 * 60 * 1000; // 15 mins
     };
 
     const renderSkeletons = (count = 6) => (
@@ -239,7 +253,7 @@ export default function Matchmaking() {
                     variant="dot"
                     color="success"
                     invisible={!isRecentlyActive(player.lastActive)}
-                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white', cursor: 'pointer' } }}
+                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white', cursor: 'pointer', boxShadow: '0 0 8px 2px rgba(76, 175, 80, 0.6)', animation: 'pulse 2s infinite' }, '@keyframes pulse': { '0%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0.7)' }, '70%': { boxShadow: '0 0 0 10px rgba(76, 175, 80, 0)' }, '100%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0)' } } }}
                     onMouseEnter={(e) => handlePeekOpen(e, player)}
                     onMouseLeave={handlePeekClose}
                 >
