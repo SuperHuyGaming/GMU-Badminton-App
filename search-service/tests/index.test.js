@@ -1,7 +1,47 @@
+const mockRedisGet = jest.fn().mockResolvedValue(null);
+const mockRedisSet = jest.fn().mockResolvedValue('OK');
+const mockRedisQuit = jest.fn().mockResolvedValue('OK');
+
+jest.mock('ioredis', () => {
+  return jest.fn().mockImplementation(() => ({
+    get: mockRedisGet,
+    set: mockRedisSet,
+    quit: mockRedisQuit,
+    disconnect: jest.fn(),
+    on: jest.fn(),
+  }));
+});
+
+const mockElasticSearch = jest.fn().mockResolvedValue({
+  hits: {
+    total: { value: 0 },
+    hits: [],
+  },
+});
+
+jest.mock('@elastic/elasticsearch', () => {
+  return {
+    Client: jest.fn().mockImplementation(() => ({
+      search: mockElasticSearch,
+    })),
+  };
+});
+
 const request = require('supertest');
 const { app } = require('../index');
 
 describe('Search Service Express Server', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRedisGet.mockResolvedValue(null);
+    mockRedisSet.mockResolvedValue('OK');
+    mockElasticSearch.mockResolvedValue({
+      hits: {
+        total: { value: 0 },
+        hits: [],
+      },
+    });
+  });
   it('GET /health returns 200 with service status', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
@@ -12,9 +52,10 @@ describe('Search Service Express Server', () => {
   });
 
   describe('GET /api/search validation', () => {
-    it('returns 200 with search results for valid query', async () => {
+    it('returns 200 with search results for valid query (cache miss)', async () => {
       const res = await request(app).get('/api/search?q=badminton&type=players&page=1&limit=10');
       expect(res.status).toBe(200);
+      expect(res.headers['x-cache']).toBe('MISS');
       expect(res.body).toEqual({
         query: 'badminton',
         type: 'players',
@@ -23,6 +64,25 @@ describe('Search Service Express Server', () => {
         total: 0,
         results: [],
       });
+      expect(mockRedisSet).toHaveBeenCalled();
+    });
+
+    it('returns cached results when cache hit occurs', async () => {
+      const cachedData = {
+        query: 'badminton',
+        type: 'players',
+        page: 1,
+        limit: 10,
+        total: 1,
+        results: [{ _id: '1', name: 'Cached User' }],
+      };
+      mockRedisGet.mockResolvedValueOnce(JSON.stringify(cachedData));
+
+      const res = await request(app).get('/api/search?q=badminton&type=players&page=1&limit=10');
+      expect(res.status).toBe(200);
+      expect(res.headers['x-cache']).toBe('HIT');
+      expect(res.body).toEqual(cachedData);
+      expect(mockElasticSearch).not.toHaveBeenCalled();
     });
 
     it('returns 400 when search query "q" is missing or empty', async () => {
