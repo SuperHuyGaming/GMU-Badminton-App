@@ -347,9 +347,18 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					<Avatar
 						src={localPost.authorPic}
 						alt={localPost.authorName || "Post author"}
+						role="link"
+						tabIndex={0}
+						aria-label={`View ${localPost.authorName || "author"}'s profile`}
 						onClick={() =>
 							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 						}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								localPost.authorId && navigate(`/profile/${localPost.authorId}`);
+							}
+						}}
 						sx={{
 							bgcolor: "secondary.main",
 							color: "primary.main",
@@ -570,7 +579,17 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						{images.length === 1 && (
 							<>
 								<Box 
+									role="button"
+									tabIndex={0}
+									aria-label="View post image in fullscreen preview"
 									onClick={() => { setActiveLightboxIndex(0); setIsLightboxOpen(true); }}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											setActiveLightboxIndex(0);
+											setIsLightboxOpen(true);
+										}
+									}}
 									sx={{ 
 										mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 400, 
 										cursor: "pointer", position: "relative",
@@ -599,7 +618,17 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								{images.map((url, i) => (
 									<Box 
 										key={i}
+										role="button"
+										tabIndex={0}
+										aria-label={`View post image ${i + 1} in fullscreen preview`}
 										onClick={() => { setActiveLightboxIndex(i); setIsLightboxOpen(true); }}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												setActiveLightboxIndex(i);
+												setIsLightboxOpen(true);
+											}
+										}}
 										sx={{ 
 											scrollSnapAlign: 'center', width: '85%', flexShrink: 0,
 											borderRadius: 3, overflow: "hidden", maxHeight: 400, cursor: "pointer", position: "relative",
@@ -683,6 +712,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					>
 						{totalCommentsCount > 0 && (
 							<Typography
+								role="button"
+								tabIndex={0}
 								variant="body2"
 								color="text.primary"
 								sx={{
@@ -690,6 +721,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 									"&:hover": { textDecoration: "underline" },
 								}}
 								onClick={() => setIsCommentModalOpen(true)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										setIsCommentModalOpen(true);
+									}
+								}}
 							>
 								{totalCommentsCount}{" "}
 								{totalCommentsCount === 1
@@ -699,6 +736,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						)}
 						{localPost.likedBy?.length > 0 && (
 							<Box
+								role="button"
+								tabIndex={0}
+								aria-label="View users who liked this post"
 								onClick={(e) =>
 									openLikes(
 										e,
@@ -706,6 +746,16 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 										localPost.likedByDetails,
 									)
 								}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										openLikes(
+											e,
+											"Post Likes",
+											localPost.likedByDetails,
+										);
+									}
+								}}
 								sx={{
 									display: "flex",
 									alignItems: "center",
