@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, LinearProgress, Fade } from '@mui/material';
-import SportsIcon from '@mui/icons-material/SportsTennis';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -84,18 +83,6 @@ export default function ServerWarmup({ children }) {
         >
             <Fade in timeout={600}>
                 <Box sx={{ textAlign: 'center' }}>
-                    <SportsIcon
-                        sx={{
-                            fontSize: 64,
-                            color: 'primary.main',
-                            mb: 2,
-                            animation: 'bounce 1.5s ease-in-out infinite',
-                            '@keyframes bounce': {
-                                '0%, 100%': { transform: 'translateY(0)' },
-                                '50%': { transform: 'translateY(-12px)' },
-                            },
-                        }}
-                    />
                     <Typography variant="h5" fontWeight="bold" gutterBottom>
                         Mason Badminton Connect
                     </Typography>
