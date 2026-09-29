@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     Container, Typography, Box, Paper, Tabs, Tab, 
     Avatar, Table, TableBody, TableCell, TableContainer, TableHead, 
@@ -12,6 +13,7 @@ import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
 
 const Leaderboard = () => {
+    const navigate = useNavigate();
     const [tab, setTab] = useState('singles');
     const [search, setSearch] = useState('');
     const [university, setUniversity] = useState('');
@@ -153,7 +155,7 @@ const Leaderboard = () => {
                             components={{
                                 Table: (props) => <Table {...props} aria-label="leaderboard table" style={{ borderCollapse: 'collapse' }} />,
                                 TableHead: TableHead,
-                                TableRow: TableRow,
+                                TableRow: (props) => <TableRow {...props} hover />,
                                 TableBody: React.forwardRef((props, ref) => <TableBody {...props} ref={ref} />),
                             }}
                             fixedHeaderContent={() => (
@@ -176,12 +178,28 @@ const Leaderboard = () => {
                                 
                                 return (
                                     <React.Fragment>
-                                        <TableCell align="center" sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
-                                            <Typography variant="h6" fontWeight="900" color={index < 3 ? 'text.primary' : 'text.primary'}>
+                                        <TableCell align="center" sx={{ py: 2.5 }}>
+                                            <Typography variant="h6" fontWeight="900" color="text.primary">
                                                 #{index + 1}
                                             </Typography>
                                         </TableCell>
-                                        <TableCell sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                        <TableCell 
+                                            sx={{ 
+                                                py: 2.5, 
+                                                cursor: 'pointer',
+                                                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' }
+                                            }} 
+                                            onClick={() => navigate(`/profile/${user._id}`)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    navigate(`/profile/${user._id}`);
+                                                }
+                                            }}
+                                            tabIndex={0}
+                                            role="link"
+                                            aria-label={`View profile of ${user.name}`}
+                                        >
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                                 <Avatar 
                                                     src={getOptimizedAvatar(user.profilePic, 40)}
@@ -191,23 +209,24 @@ const Leaderboard = () => {
                                                         border: index < 3 ? `3px solid ${getRankColor(index)}` : 'none',
                                                         boxShadow: index < 3 ? `0 0 10px ${getRankColor(index)}` : 'none'
                                                     }}
-                                                 alt="User Avatar" />
-                                                <Typography fontWeight="bold">{user.name}</Typography>
+                                                    alt={`${user.name}'s avatar`} 
+                                                />
+                                                <Typography fontWeight="bold" sx={{ '&:hover': { textDecoration: 'underline' } }}>{user.name}</Typography>
                                             </Box>
                                         </TableCell>
-                                        <TableCell sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                        <TableCell sx={{ py: 2.5 }}>
                                             <Chip 
                                                 label={user.skillLevel || 'N/A'} 
                                                 size="small" 
                                                 sx={{ 
                                                     fontWeight: 800, 
-                                                    bgcolor: 'rgba(0, 102, 51, 0.1)', 
+                                                    bgcolor: 'rgba(0, 92, 46, 0.1)', 
                                                     color: 'primary.main',
                                                     borderRadius: 2
                                                 }} 
                                             />
                                         </TableCell>
-                                        <TableCell align="right" sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                        <TableCell align="right" sx={{ py: 2.5 }}>
                                             <Typography variant="h5" fontWeight="900" color="primary.main">
                                                 {tab === 'singles' ? user.singlesElo : user.doublesElo}
                                             </Typography>

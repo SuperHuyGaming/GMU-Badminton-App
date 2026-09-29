@@ -122,17 +122,18 @@ export default function CommentBubble({
 						>
 							{comment.authorName}
 							{comment.isEdited && (
-								<span
-									style={{
+								<Typography
+									component="span"
+									sx={{
 										fontWeight: "normal",
 										fontStyle: "italic",
 										fontSize: "0.75rem",
-										opacity: 0.6,
-										marginLeft: "6px",
+										color: "text.secondary",
+										ml: 0.75,
 									}}
 								>
 									(edited)
-								</span>
+								</Typography>
 							)}
 						</Typography>
 
@@ -341,7 +342,7 @@ export default function CommentBubble({
 					>
 						Reply
 					</Typography>
-					<Typography variant="caption" color="text.disabled">
+					<Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
 						{formatTime(comment.timestamp)}
 					</Typography>
 				</Box>

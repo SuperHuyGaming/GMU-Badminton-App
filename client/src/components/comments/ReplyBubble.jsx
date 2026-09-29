@@ -137,17 +137,18 @@ export default function ReplyBubble({
 						>
 							{reply.authorName}
 							{reply.isEdited && (
-								<span
-									style={{
+								<Typography
+									component="span"
+									sx={{
 										fontWeight: "normal",
 										fontStyle: "italic",
 										fontSize: "0.7rem",
-										opacity: 0.6,
-										marginLeft: "6px",
+										color: "text.secondary",
+										ml: 0.75,
 									}}
 								>
 									(edited)
-								</span>
+								</Typography>
 							)}
 						</Typography>
 
