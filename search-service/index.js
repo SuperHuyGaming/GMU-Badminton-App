@@ -34,7 +34,7 @@ app.get('/health', (req, res) => {
 });
 
 const searchHandler = async (req, res) => {
-  const { q, type = 'all', page = 1, limit = 20 } = req.query;
+  const { q, type = 'all', page = 1, limit = 20, searcherHomeUniversity } = req.query;
 
   if (!q || typeof q !== 'string' || q.trim() === '') {
     return res.status(400).json({
@@ -51,7 +51,7 @@ const searchHandler = async (req, res) => {
     });
   }
 
-  const validTypes = ['all', 'users', 'posts', 'user', 'post'];
+  const validTypes = ['all', 'users', 'posts', 'user', 'post', 'players'];
   if (!validTypes.includes(type)) {
     return res.status(400).json({
       error: 'Validation Error',
@@ -62,7 +62,7 @@ const searchHandler = async (req, res) => {
   const parsedPage = Math.max(1, parseInt(page, 10) || 1);
   const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-  const cacheKey = `search:query:${trimmedQuery}:type:${type}:page:${parsedPage}:limit:${parsedLimit}`;
+  const cacheKey = `search:query:${trimmedQuery}:type:${type}:page:${parsedPage}:limit:${parsedLimit}:uni:${searcherHomeUniversity || 'none'}`;
 
   try {
     const cachedResult = await redis.get(cacheKey);
@@ -77,22 +77,52 @@ const searchHandler = async (req, res) => {
 
   try {
       let indices = ['users', 'posts'];
-      if (type === 'user' || type === 'users') indices = ['users'];
+      if (type === 'user' || type === 'users' || type === 'players') indices = ['users'];
       if (type === 'post' || type === 'posts') indices = ['posts'];
+
+      let baseQuery = {
+          multi_match: {
+              query: trimmedQuery,
+              fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
+              fuzziness: 'AUTO'
+          }
+      };
+
+      let queryBody = { query: baseQuery };
+
+      if (searcherHomeUniversity && (type === 'user' || type === 'users' || type === 'players' || type === 'all')) {
+          queryBody = {
+              query: {
+                  bool: {
+                      must: baseQuery,
+                      should: [
+                          {
+                              match: {
+                                  homeUniversity: {
+                                      query: searcherHomeUniversity,
+                                      boost: 2.0
+                                  }
+                              }
+                          },
+                          {
+                              match: {
+                                  university: {
+                                      query: searcherHomeUniversity,
+                                      boost: 2.0
+                                  }
+                              }
+                          }
+                      ]
+                  }
+              }
+          };
+      }
 
       const result = await elasticClient.search({
           index: indices.join(','),
           from: (parsedPage - 1) * parsedLimit,
           size: parsedLimit,
-          body: {
-              query: {
-                  multi_match: {
-                      query: trimmedQuery,
-                      fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
-                      fuzziness: 'AUTO'
-                  }
-              }
-          }
+          body: queryBody
       });
 
       const hits = result.hits.hits.map(hit => ({

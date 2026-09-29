@@ -33,6 +33,25 @@ describe('Search Proxy Routes', () => {
         });
     });
 
+    it('should pass searcherHomeUniversity to search-service', async () => {
+        const mockResults = [
+            { _id: 'u1', name: 'Alice Smith', skillLevel: 'Intermediate', university: 'GMU' }
+        ];
+
+        axios.get.mockResolvedValue({
+            data: { results: mockResults }
+        });
+
+        const res = await request(app)
+            .get('/api/search?q=Alice&type=user&searcherHomeUniversity=GMU');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ results: mockResults });
+        expect(axios.get).toHaveBeenCalledWith('http://localhost:5001/search', {
+            params: { q: 'Alice', type: 'user', searcherHomeUniversity: 'GMU' }
+        });
+    });
+
     it('should handle search-service failure gracefully and return empty results fallback', async () => {
         axios.get.mockRejectedValue(new Error('Connection refused'));
 

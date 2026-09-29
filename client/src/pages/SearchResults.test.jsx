@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import SearchResults from './SearchResults';
 import apiFetch from '../utils/api';
 import posthog from 'posthog-js';
+import { useAuth } from '../context/AuthContext';
 
 // Mock API fetch
 vi.mock('../utils/api', () => ({
@@ -17,6 +18,11 @@ vi.mock('posthog-js', () => ({
     },
 }));
 
+// Mock AuthContext
+vi.mock('../context/AuthContext', () => ({
+    useAuth: vi.fn(),
+}));
+
 describe('SearchResults Page Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -27,6 +33,10 @@ describe('SearchResults Page Component', () => {
             disconnect: () => null,
         });
         window.IntersectionObserver = mockIntersectionObserver;
+        
+        useAuth.mockReturnValue({
+            user: { _id: 'u1', name: 'Test User', university: 'GMU' }
+        });
     });
 
     const renderSearchResults = (query = 'Alice') => {
