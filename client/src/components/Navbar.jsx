@@ -311,7 +311,6 @@ export default function Navbar() {
 								{[
 									{ label: "Dashboard", path: "/" },
 									{ label: "Community", path: "/community" },
-									{ label: "Leaderboard", path: "/leaderboard" },
 									{ label: "Players", path: "/matchmaking" },
 									{ label: "Tournaments", path: "/tournaments" },
 								].map((item) => {
@@ -785,7 +784,6 @@ export default function Navbar() {
 								{ label: "Search", path: "/search" },
 								{ label: "Dashboard", path: "/" },
 								{ label: "Community", path: "/community" },
-								{ label: "Leaderboard", path: "/leaderboard" },
 								{ label: "Players", path: "/matchmaking" },
 								{ label: "Tournaments", path: "/tournaments" },
 							].map((item) => {
