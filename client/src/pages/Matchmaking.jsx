@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import HistoryIcon from '@mui/icons-material/History';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import TuneIcon from '@mui/icons-material/Tune';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import apiFetch from '../utils/api';
@@ -47,6 +48,12 @@ export default function Matchmaking() {
     const [dropdownResults, setDropdownResults] = useState([]);
     const [selectedIndex, setSelectedIndex] = useState(-1);
     
+    // Advanced Filter state
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [campusFilter, setCampusFilter] = useState('All');
+    const [playStyleFilter, setPlayStyleFilter] = useState('All');
+    const [availableNow, setAvailableNow] = useState(false);
+
     const searchContainerRef = useRef(null);
 
     const skillLevels = ['All', 'Beginner', 'Intermediate', 'Advanced'];
@@ -277,37 +284,55 @@ export default function Matchmaking() {
 
             <ClickAwayListener onClickAway={() => setIsFocused(false)}>
                 <Box ref={searchContainerRef} sx={{ position: 'relative', mb: 3, zIndex: 10 }}>
-                    <TextField
-                        fullWidth
-                        variant="outlined"
-                        placeholder="Search by name or university..."
-                        autoComplete="off"
-                        name="dummy-search-prevent-autofill"
-                        aria-label="Search players"
-                        inputProps={{ 
-                            'aria-label': 'Search players',
-                            autoComplete: 'off',
-                            form: { autoComplete: 'off' }
-                        }}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onFocus={() => setIsFocused(true)}
-                        onKeyDown={handleKeyDown}
-                        sx={{ 
-                            bgcolor: 'background.paper', 
-                            '& .MuiOutlinedInput-root': {
-                                borderRadius: 50,
-                                transition: 'box-shadow 0.2s',
-                                boxShadow: isFocused ? (theme) => theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.1)' : 'none',
-                                '& fieldset': {
-                                    borderColor: isFocused ? 'primary.main' : 'divider',
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                            fullWidth
+                            variant="outlined"
+                            placeholder="Search by name or university..."
+                            autoComplete="off"
+                            name="dummy-search-prevent-autofill"
+                            aria-label="Search players"
+                            inputProps={{ 
+                                'aria-label': 'Search players',
+                                autoComplete: 'off',
+                                form: { autoComplete: 'off' }
+                            }}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onFocus={() => setIsFocused(true)}
+                            onKeyDown={handleKeyDown}
+                            sx={{ 
+                                flexGrow: 1,
+                                bgcolor: 'background.paper', 
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 50,
+                                    transition: 'box-shadow 0.2s',
+                                    boxShadow: isFocused ? (theme) => theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.1)' : 'none',
+                                    '& fieldset': {
+                                        borderColor: isFocused ? 'primary.main' : 'divider',
+                                    }
                                 }
-                            }
-                        }}
-                        InputProps={{
-                            startAdornment: <InputAdornment position="start"><SearchIcon color={isFocused ? "primary" : "inherit"} /></InputAdornment>,
-                        }}
-                    />
+                            }}
+                            InputProps={{
+                                startAdornment: <InputAdornment position="start"><SearchIcon color={isFocused ? "primary" : "inherit"} /></InputAdornment>,
+                            }}
+                        />
+                        <IconButton 
+                            onClick={() => setDrawerOpen(true)}
+                            aria-label="Advanced filters"
+                            sx={{ 
+                                bgcolor: 'background.paper', 
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: '50%',
+                                width: 56,
+                                height: 56,
+                                '&:hover': { bgcolor: 'action.hover' }
+                            }}
+                        >
+                            <TuneIcon />
+                        </IconButton>
+                    </Box>
 
                     <AnimatePresence>
                         {isFocused && (
@@ -549,6 +574,46 @@ export default function Matchmaking() {
                     )}
                 </>
             )}
+
+            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+                <Box sx={{ width: { xs: '100vw', sm: 340 }, p: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Advanced Filters</Typography>
+                        <IconButton onClick={() => setDrawerOpen(false)}>
+                            <CloseIcon />
+                        </IconButton>
+                    </Box>
+                    
+                    <FormControlLabel 
+                        control={<Switch checked={availableNow} onChange={(e) => setAvailableNow(e.target.checked)} color="success" />} 
+                        label={<Typography sx={{ fontWeight: 500 }}>Available Now (Online)</Typography>} 
+                        sx={{ mb: 4, display: 'block' }}
+                    />
+
+                    <FormControl fullWidth sx={{ mb: 4 }}>
+                        <InputLabel id="campus-filter-label">Campus Location</InputLabel>
+                        <Select labelId="campus-filter-label" value={campusFilter} label="Campus Location" onChange={(e) => setCampusFilter(e.target.value)}>
+                            <MenuItem value="All">All Locations</MenuItem>
+                            <MenuItem value="RAC">RAC (Recreation Athletic Complex)</MenuItem>
+                            <MenuItem value="Skyline">Skyline Fitness</MenuItem>
+                            <MenuItem value="AFC">AFC (Aquatic Fitness Center)</MenuItem>
+                        </Select>
+                    </FormControl>
+
+                    <FormControl fullWidth sx={{ mb: 5 }}>
+                        <InputLabel id="playstyle-filter-label">Play Style</InputLabel>
+                        <Select labelId="playstyle-filter-label" value={playStyleFilter} label="Play Style" onChange={(e) => setPlayStyleFilter(e.target.value)}>
+                            <MenuItem value="All">Any Style</MenuItem>
+                            <MenuItem value="Singles">Singles</MenuItem>
+                            <MenuItem value="Doubles">Doubles</MenuItem>
+                        </Select>
+                    </FormControl>
+
+                    <Button variant="contained" color="primary" fullWidth size="large" onClick={() => setDrawerOpen(false)} sx={{ borderRadius: 2, fontWeight: 'bold' }}>
+                        Apply Filters
+                    </Button>
+                </Box>
+            </Drawer>
         </Box>
     );
 }
