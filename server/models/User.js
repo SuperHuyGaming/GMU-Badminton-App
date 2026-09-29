@@ -30,6 +30,7 @@ const userSchema = new mongoose.Schema({
 	// Preferences
 	homeUniversity: { type: String, default: "George Mason University" },
 	searchRadius: { type: Number, default: 50 },
+	hideFromSearch: { type: Boolean, default: false },
 
 	// Geospatial Location (Task 4: Geolocation Proximity API)
 	location: {

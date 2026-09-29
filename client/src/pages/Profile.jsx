@@ -52,6 +52,7 @@ export default function Profile() {
 		coverPic: "",
 		homeUniversity: "",
 		searchRadius: 50,
+		hideFromSearch: false,
 	});
 
 	const { data: profileQueryData, isError: isProfileError } = useQuery({
@@ -92,6 +93,7 @@ export default function Profile() {
 					coverPic: profileQueryData.coverPic || "",
 					homeUniversity: profileQueryData.homeUniversity || "",
 					searchRadius: profileQueryData.searchRadius || 50,
+					hideFromSearch: profileQueryData.hideFromSearch || false,
 				});
 			}
 		}
