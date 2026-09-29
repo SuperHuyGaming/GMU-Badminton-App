@@ -253,15 +253,16 @@ router.put("/:matchId/confirm", authMiddleware, async (req, res, next) => {
         
         match.eloChanges = [];
         
-        // Apply changes
+        // Apply changes and persist updated Elo
         for (const u of t1.users) {
             u[t1.eloField] += change1;
-            // Removed await u.save() from here because processMatchResults will save the user
+            await u.save();
             match.eloChanges.push({ userId: u._id, change: change1 });
         }
         
         for (const u of t2.users) {
             u[t2.eloField] += change2;
+            await u.save();
             match.eloChanges.push({ userId: u._id, change: change2 });
         }
         
@@ -288,26 +289,6 @@ router.put("/:matchId/confirm", authMiddleware, async (req, res, next) => {
                 console.error("Leaderboard cache invalidation error:", cacheErr);
             }
         }
-        
-        // 4. Add to ActivityFeed so it appears in the Community tab
-        const ActivityFeed = require("../models/ActivityFeed");
-        const submitter = await User.findById(match.submittedBy).select("name profilePic skillLevel").lean();
-        await ActivityFeed.create({
-            type: "match",
-            referenceId: match._id,
-            authorId: submitter?._id || match.submittedBy,
-            authorName: submitter?.name || "Player",
-            authorProfilePic: submitter?.profilePic,
-            authorSkillLevel: submitter?.skillLevel,
-            team1Score: match.team1Score,
-            team2Score: match.team2Score,
-            team1: t1.users.map(u => u.name),
-            team2: t2.users.map(u => u.name),
-            team1Avatars: t1.users.map(u => u.profilePic),
-            team2Avatars: t2.users.map(u => u.profilePic),
-            createdAt: match.date || new Date(),
-            score: match.team1Score + match.team2Score
-        }).catch(e => console.error("ActivityFeed create error:", e));
 
         if (req.io) {
             req.io.emit("matchConfirmed");

@@ -307,21 +307,6 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 				.status(201)
 				.json({ message: "Post submitted for review." });
 
-		// Add to ActivityFeed so it appears in the Community tab
-		const ActivityFeed = require("../models/ActivityFeed");
-		await ActivityFeed.create({
-			type: "post",
-			referenceId: newPost._id,
-			authorId: newPost.authorId,
-			authorName: newPost.authorName,
-			title: newPost.title,
-			content: newPost.content,
-			image: newPost.imageUrl,
-            tags: newPost.tags,
-			createdAt: newPost.timestamp || new Date(),
-			score: 0
-		}).catch(e => console.error("ActivityFeed create error:", e));
-
 		const hydratedPost = await hydrateWithPictures(newPost.toObject());
 		if (req.io) req.io.emit("postCreated", hydratedPost);
 		res.status(201).json(hydratedPost);
@@ -436,6 +421,10 @@ router.delete("/:postId", authMiddleware, async (req, res) => {
 
 router.get("/:postId/comments", async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
 		const post = await Post.findById(req.params.postId).lean();
 		if (!post) return res.status(404).json({ message: "Post not found" });
 

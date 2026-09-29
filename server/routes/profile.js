@@ -184,8 +184,12 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 			{ new: true, runValidators: true },
 		).select("-password -pushSubscriptions");
 
+		if (!updatedUser) {
+			return res.status(404).json({ message: "User not found" });
+		}
+
 		const io = req.io || req.app?.get("io");
-		if (io && updatedUser) {
+		if (io) {
 			// Strip sensitive fields (email, push subscriptions, password) before broadcasting
 			const publicUser = typeof updatedUser.toObject === "function" ? updatedUser.toObject() : { ...updatedUser };
 			delete publicUser.password;

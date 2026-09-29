@@ -547,4 +547,78 @@ describe('Backend Security & Validation Tests', () => {
             expect(res.body.message).toContain('Refresh Token is required');
         });
     });
+
+    describe('Forum Comments Validation & Profile 404 Guard', () => {
+        it('should return 400 for invalid postId format when fetching comments', async () => {
+            const res = await request(app).get('/api/forum/not-a-valid-id/comments');
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toBe('Invalid post ID format.');
+        });
+
+        it('should return 404 if profile update target user does not exist', async () => {
+            User.findByIdAndUpdate = jest.fn().mockReturnValue({
+                select: jest.fn().mockResolvedValue(null)
+            });
+
+            const res = await request(app)
+                .put('/api/profile')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ name: 'Ghost Player' });
+
+            expect(res.statusCode).toBe(404);
+            expect(res.body.message).toBe('User not found');
+        });
+    });
+
+    describe('Match Confirmation Elo Persistence', () => {
+        it('should save updated Elo on user documents during match confirmation', async () => {
+            const mockUser1 = {
+                _id: '650000000000000000000001',
+                name: 'Player 1',
+                singlesElo: 1200,
+                save: jest.fn().mockResolvedValue(true)
+            };
+            const mockUser2 = {
+                _id: '650000000000000000000002',
+                name: 'Player 2',
+                singlesElo: 1200,
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const mockMatch = {
+                _id: new mongoose.Types.ObjectId(),
+                type: 'singles',
+                status: 'pending',
+                team1: ['650000000000000000000001'],
+                team2: ['650000000000000000000002'],
+                team1Score: 21,
+                team2Score: 18,
+                winner: 'team1',
+                submittedBy: '650000000000000000000001',
+                eloChanges: [],
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            Match.findById = jest.fn().mockResolvedValue(mockMatch);
+            User.find = jest.fn()
+                .mockImplementationOnce(() => Promise.resolve([mockUser1]))
+                .mockImplementationOnce(() => Promise.resolve([mockUser2]));
+            User.findById = jest.fn().mockImplementation((id) => Promise.resolve({
+                _id: id,
+                badges: [],
+                stats: { totalMatches: 0, winStreak: 0, highestWinStreak: 0 },
+                save: jest.fn().mockResolvedValue(true)
+            }));
+
+            const res = await request(app)
+                .put(`/api/matches/${mockMatch._id}/confirm`)
+                .set('Authorization', `Bearer ${otherUserToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(mockUser1.save).toHaveBeenCalled();
+            expect(mockUser2.save).toHaveBeenCalled();
+            expect(mockUser1.singlesElo).toBeGreaterThan(1200);
+            expect(mockUser2.singlesElo).toBeLessThan(1200);
+        });
+    });
 });
