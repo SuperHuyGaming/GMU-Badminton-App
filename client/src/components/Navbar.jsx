@@ -41,6 +41,7 @@ const GlobalSearch = () => {
     const [loading, setLoading] = useState(false);
     const [inputValue, setInputValue] = useState("");
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     useEffect(() => {
         if (!inputValue.trim()) {
@@ -52,7 +53,11 @@ const GlobalSearch = () => {
         const timer = setTimeout(async () => {
             setLoading(true);
             try {
-                const res = await apiFetch(`/api/search?q=${encodeURIComponent(inputValue)}`);
+                let url = `/api/search?q=${encodeURIComponent(inputValue)}`;
+                if (user?.university || user?.homeUniversity) {
+                    url += `&searcherHomeUniversity=${encodeURIComponent(user.homeUniversity || user.university)}`;
+                }
+                const res = await apiFetch(url);
                 if (res.ok && active) {
                     const data = await res.json();
                     setOptions(data.results || []);
@@ -68,7 +73,7 @@ const GlobalSearch = () => {
             active = false;
             clearTimeout(timer);
         };
-    }, [inputValue]);
+    }, [inputValue, user]);
 
     return (
         <ClickAwayListener onClickAway={() => setOpen(false)}>
@@ -311,7 +316,6 @@ export default function Navbar() {
 								{[
 									{ label: "Dashboard", path: "/" },
 									{ label: "Community", path: "/community" },
-									{ label: "Leaderboard", path: "/leaderboard" },
 									{ label: "Players", path: "/matchmaking" },
 									{ label: "Tournaments", path: "/tournaments" },
 								].map((item) => {
@@ -785,7 +789,6 @@ export default function Navbar() {
 								{ label: "Search", path: "/search" },
 								{ label: "Dashboard", path: "/" },
 								{ label: "Community", path: "/community" },
-								{ label: "Leaderboard", path: "/leaderboard" },
 								{ label: "Players", path: "/matchmaking" },
 								{ label: "Tournaments", path: "/tournaments" },
 							].map((item) => {

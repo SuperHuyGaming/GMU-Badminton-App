@@ -20,6 +20,7 @@ import {
 import posthog from 'posthog-js';
 import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
+import { useAuth } from '../context/AuthContext';
 
 const useQuery = () => {
     return new URLSearchParams(useLocation().search);
@@ -28,6 +29,7 @@ const useQuery = () => {
 export default function SearchResults() {
     const queryParams = useQuery();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const searchQuery = queryParams.get('q') || '';
 
     const [results, setResults] = useState([]);
@@ -89,7 +91,11 @@ export default function SearchResults() {
                 let newResults = [];
                 
                 const typeParam = searchType === 'players' ? 'user' : 'post';
-                const res = await apiFetch(`/api/search?q=${encodeURIComponent(searchQuery)}&type=${typeParam}`);
+                let url = `/api/search?q=${encodeURIComponent(searchQuery)}&type=${typeParam}`;
+                if (user?.university || user?.homeUniversity) {
+                    url += `&searcherHomeUniversity=${encodeURIComponent(user.homeUniversity || user.university)}`;
+                }
+                const res = await apiFetch(url);
                 
                 if (res.ok) {
                     const data = await res.json();
@@ -140,7 +146,7 @@ export default function SearchResults() {
         return () => {
             active = false;
         };
-    }, [searchQuery, searchType, skillLevel, homeUniversity, page]);
+    }, [searchQuery, searchType, skillLevel, homeUniversity, page, user]);
 
     const handleTypeChange = (newType) => {
         setSearchType(newType);

@@ -98,7 +98,7 @@ describe('Search Proxy Routes', () => {
 
         expect(res.statusCode).toBe(200);
         expect(axios.get).toHaveBeenCalledWith('http://custom-search-service:5001/search', {
-            params: { q: 'custom', type: undefined },
+            params: { q: 'custom' },
             timeout: 5000,
         });
 

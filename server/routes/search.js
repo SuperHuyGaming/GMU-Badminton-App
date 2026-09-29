@@ -22,16 +22,10 @@ const sanitizeResults = (data) => {
 
 router.get('/', async (req, res) => {
     try {
-        const { q, type, page, limit } = req.query;
         const searchServiceUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:5001/search';
-
-        const params = { q, type };
-        if (page !== undefined) params.page = page;
-        if (limit !== undefined) params.limit = limit;
-
         // Proxy to search-service with 5s timeout to prevent thread starvation
         const response = await axios.get(searchServiceUrl, {
-            params,
+            params: req.query,
             timeout: 5000,
         });
         res.json(sanitizeResults(response.data));

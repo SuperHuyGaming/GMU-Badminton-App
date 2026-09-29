@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { Client } = require('@elastic/elasticsearch');
+const Redis = require('ioredis');
 
 dotenv.config();
 
@@ -40,7 +41,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const elasticClient = new Client({ node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200' });
 
 app.get('/health', (req, res) => {
@@ -48,7 +49,7 @@ app.get('/health', (req, res) => {
 });
 
 const searchHandler = async (req, res) => {
-  const { q, type = 'all', page = 1, limit = 20 } = req.query;
+  const { q, type = 'all', page = 1, limit = 20, searcherHomeUniversity } = req.query;
 
   if (!q || typeof q !== 'string' || q.trim() === '') {
     return res.status(400).json({
@@ -76,24 +77,67 @@ const searchHandler = async (req, res) => {
   const parsedPage = Math.max(1, parseInt(page, 10) || 1);
   const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
+  const cacheKey = `search:query:${trimmedQuery}:type:${type}:page:${parsedPage}:limit:${parsedLimit}:uni:${searcherHomeUniversity || 'none'}`;
+
+  try {
+    const cachedResult = await redis.get(cacheKey);
+    if (cachedResult) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.json(JSON.parse(cachedResult));
+    }
+  } catch (err) {
+    console.error('Redis cache error:', err);
+    // Gracefully degrade, continue to Elasticsearch
+  }
+
   try {
       let indices = ['users', 'posts'];
       if (type === 'user' || type === 'users' || type === 'players') indices = ['users'];
       if (type === 'post' || type === 'posts') indices = ['posts'];
 
+      let baseQuery = {
+          multi_match: {
+              query: trimmedQuery,
+              fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
+              fuzziness: 'AUTO'
+          }
+      };
+
+      let queryBody = { query: baseQuery };
+
+      if (searcherHomeUniversity && (type === 'user' || type === 'users' || type === 'players' || type === 'all')) {
+          queryBody = {
+              query: {
+                  bool: {
+                      must: baseQuery,
+                      should: [
+                          {
+                              match: {
+                                  homeUniversity: {
+                                      query: searcherHomeUniversity,
+                                      boost: 2.0
+                                  }
+                              }
+                          },
+                          {
+                              match: {
+                                  university: {
+                                      query: searcherHomeUniversity,
+                                      boost: 2.0
+                                  }
+                              }
+                          }
+                      ]
+                  }
+              }
+          };
+      }
+
       const result = await elasticClient.search({
           index: indices.join(','),
           from: (parsedPage - 1) * parsedLimit,
           size: parsedLimit,
-          body: {
-              query: {
-                  multi_match: {
-                      query: trimmedQuery,
-                      fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
-                      fuzziness: 'AUTO'
-                  }
-              }
-          }
+          body: queryBody
       });
 
       const hits = (result.hits?.hits || []).map(hit => {
@@ -115,14 +159,23 @@ const searchHandler = async (req, res) => {
           ? result.hits.total
           : (result.hits?.total?.value || 0);
 
-      res.json({ 
+      const responseData = { 
         query: trimmedQuery,
         type,
         page: parsedPage,
         limit: parsedLimit,
         total: totalHits,
         results: hits 
-      });
+      };
+
+      res.setHeader('X-Cache', 'MISS');
+      res.json(responseData);
+
+      try {
+        await redis.set(cacheKey, JSON.stringify(responseData), 'EX', 60);
+      } catch (redisErr) {
+        console.error('Redis set error:', redisErr);
+      }
   } catch (err) {
       console.error('Search error:', err);
       res.status(500).json({ error: 'Search failed' });
