@@ -275,7 +275,7 @@ export default function Navbar() {
 								sx={{ display: { md: "none" } }}
 								aria-label="Open navigation menu"
 								aria-expanded={mobileOpen}
-								aria-controls="mobile-navigation-drawer"
+								aria-controls="mobile-menu"
 							>
 								<HamburgerIcon />
 							</IconButton>
@@ -560,7 +560,7 @@ export default function Navbar() {
 												sx={{
 													py: 3,
 													justifyContent: "center",
-													color: "text.secondary",
+													color: "text.primary",
 												}}
 												disableRipple
 											>
@@ -601,29 +601,29 @@ export default function Navbar() {
 															}
 														}}
 													>
-														<Box sx={{ width: '100%' }}>
-															<Typography
-																variant="body2"
-																sx={{
-																	lineHeight: 1.3,
-																	fontWeight: notif.read ? "normal" : 700,
-																	color: "text.primary",
-																}}
-															>
-																{notif.message}
-															</Typography>
-															<Typography
-																variant="caption"
-																sx={{
-																	mt: 0.5,
-																	display: "block",
-																	color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.75)' : '#495057',
-																}}
-															>
-																{formatNotificationTime(notif.time)}
-															</Typography>
-														</Box>
-													</MenuItem>
+														<Box>
+														<Typography
+															variant="body2"
+															sx={{
+																lineHeight: 1.3,
+																fontWeight: notif.read ? "normal" : "bold"
+															}}
+														>
+															{notif.message}
+														</Typography>
+														<Typography
+															variant="caption"
+															color="text.primary"
+															sx={{
+																mt: 0.5,
+																display:
+																	"block",
+															}}
+														>
+															{formatNotificationTime(notif.time)}
+														</Typography>
+													</Box>
+												</MenuItem>
 												</motion.div>
 											))
 										)}
@@ -631,6 +631,7 @@ export default function Navbar() {
 
 									<Avatar
 										src={getOptimizedAvatar(user.profilePic, 40)}
+										alt="User Avatar"
 										onClick={handleAvatarClick}
 										role="button"
 										tabIndex={0}
@@ -753,7 +754,7 @@ export default function Navbar() {
 				</AppBar>
 
 				<Drawer
-					id="mobile-navigation-drawer"
+					id="mobile-menu"
 					aria-label="Mobile navigation drawer"
 					anchor="left"
 					open={mobileOpen}

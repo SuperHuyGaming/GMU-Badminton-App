@@ -139,7 +139,7 @@ export default function ReplyBubble({
 								aria-label="Reply options"
 								size="small"
 								onClick={(e) => setMenuAnchor(e.currentTarget)}
-								sx={{ p: 0.2, ml: 1, color: "text.secondary" }}
+								sx={{ p: 0.2, ml: 1, color: "text.primary" }}
 							>
 								<MoreVertIcon />
 							</IconButton>
@@ -228,7 +228,7 @@ export default function ReplyBubble({
 								variant="caption"
 								sx={{
 									fontSize: "0.7rem",
-									color: "text.secondary",
+									color: "text.primary",
 									fontWeight: "bold",
 								}}
 							>
@@ -286,7 +286,7 @@ export default function ReplyBubble({
 							fontWeight: "bold",
 							color: reply.likedBy?.includes(currentUser?.id)
 								? "primary.main"
-								: "text.secondary",
+								: "text.primary",
 							"&:active": { transform: "scale(0.9)" },
 						}}
 					>
@@ -298,7 +298,7 @@ export default function ReplyBubble({
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",
-							color: "text.secondary",
+							color: "text.primary",
 							"&:active": { transform: "scale(0.9)" },
 						}}
 					>

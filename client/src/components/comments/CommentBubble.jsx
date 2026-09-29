@@ -124,7 +124,7 @@ export default function CommentBubble({
 								aria-label="Comment options"
 								size="small"
 								onClick={(e) => setMenuAnchor(e.currentTarget)}
-								sx={{ p: 0.2, ml: 1, color: "text.secondary" }}
+								sx={{ p: 0.2, ml: 1, color: "text.primary" }}
 							>
 								<MoreVertIcon />
 							</IconButton>
@@ -213,7 +213,7 @@ export default function CommentBubble({
 								variant="caption"
 								sx={{
 									fontSize: "0.7rem",
-									color: "text.secondary",
+									color: "text.primary",
 									fontWeight: "bold",
 								}}
 							>
@@ -271,7 +271,7 @@ export default function CommentBubble({
 							fontWeight: "bold",
 							color: comment.likedBy?.includes(currentUser?.id)
 								? "primary.main"
-								: "text.secondary",
+								: "text.primary",
 							"&:active": { transform: "scale(0.9)" },
 						}}
 					>
@@ -283,7 +283,7 @@ export default function CommentBubble({
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",
-							color: "text.secondary",
+							color: "text.primary",
 							"&:active": { transform: "scale(0.9)" },
 						}}
 					>

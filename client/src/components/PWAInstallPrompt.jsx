@@ -75,13 +75,13 @@ export default function PWAInstallPrompt() {
 				<Typography variant="body1" sx={{ mb: 2 }}>
 					Add our app to your home screen for the best experience!
 				</Typography>
-				<Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+				<Typography variant="body2" color="text.primary" sx={{ mb: 1 }}>
 					🏸 View profiles and forums offline in the RAC basement
 				</Typography>
-				<Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+				<Typography variant="body2" color="text.primary" sx={{ mb: 1 }}>
 					⚡ Lightning fast load times
 				</Typography>
-				<Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+				<Typography variant="body2" color="text.primary" sx={{ mb: 1 }}>
 					🔔 Instant push notifications
 				</Typography>
 			</DialogContent>

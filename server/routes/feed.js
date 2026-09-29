@@ -83,18 +83,29 @@ router.get("/", authMiddleware, async (req, res, next) => {
                         safeAgeInHours: {
                             $cond: [ { $lt: ["$ageInHours", 0] }, 0, "$ageInHours" ]
                         },
-                        skillBoost: isForYou ? {
-                            $cond: {
-                                if: { $eq: ["$authorSkillLevel", currentUser.skillLevel] },
-                                then: 1.5, // 50% score boost if they share the same skill level
-                                else: 1
-                            }
+                        discoveryBoost: isForYou ? {
+                            $multiply: [
+                                {
+                                    $cond: {
+                                        if: { $eq: ["$authorSkillLevel", currentUser.skillLevel] },
+                                        then: 1.5, // 50% score boost if they share the same skill level
+                                        else: 1
+                                    }
+                                },
+                                {
+                                    $cond: {
+                                        if: { $lt: ["$safeAgeInHours", 1] }, // New post freshness boost (< 1 hour old)
+                                        then: 5, // Massive multiplier to force new posts to the top of "For You"
+                                        else: 1
+                                    }
+                                }
+                            ]
                         } : 1
                     }
                 },
                 {
                     $addFields: {
-                        // score = (likes + comments + 1) / (ageInHours + 2)^1.5 * skillBoost
+                        // score = (likes + comments + 1) / (ageInHours + 2)^1.5 * discoveryBoost
                         velocityScore: {
                             $multiply: [
                                 {
@@ -103,7 +114,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
                                         { $pow: [{ $add: ["$safeAgeInHours", 2] }, 1.5] } // denominator (gravity = 1.5)
                                     ]
                                 },
-                                "$skillBoost"
+                                "$discoveryBoost"
                             ]
                         }
                     }
@@ -113,10 +124,16 @@ router.get("/", authMiddleware, async (req, res, next) => {
             if (lastDoc) {
                 // We must recalculate the last document's exact velocityScore relative to the SAME sessionTime
                 const lastDocAgeHours = Math.max(0, (sessionTime - new Date(lastDoc.createdAt)) / (1000 * 60 * 60));
-                const lastDocSkillBoost = (isForYou && lastDoc.authorSkillLevel === currentUser.skillLevel) ? 1.5 : 1;
+                let lastDocBoost = 1;
+                if (isForYou) {
+                    const skillB = lastDoc.authorSkillLevel === currentUser.skillLevel ? 1.5 : 1;
+                    const freshB = lastDocAgeHours < 1 ? 5 : 1;
+                    lastDocBoost = skillB * freshB;
+                }
+                
                 const lastDocNumerator = Math.max(lastDoc.score || 0, 0) + 1;
                 const lastDocDenominator = Math.pow(lastDocAgeHours + 2, 1.5);
-                const lastDocVelocityScore = (lastDocNumerator / lastDocDenominator) * lastDocSkillBoost;
+                const lastDocVelocityScore = (lastDocNumerator / lastDocDenominator) * lastDocBoost;
 
                 pipeline.push({
                     $match: {

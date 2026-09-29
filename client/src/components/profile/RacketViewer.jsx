@@ -45,14 +45,14 @@ export default function RacketViewer({ primaryColor = '#006633', secondaryColor 
                 <svg width="64" height="64" viewBox="0 0 24 24" fill={primaryColor} xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 2C8.69 2 6 5.58 6 10C6 13.9 8.13 17.11 11 17.89V20H10V22H14V20H13V17.89C15.87 17.11 18 13.9 18 10C18 5.58 15.31 2 12 2ZM12 16C9.24 16 7 12.87 7 10C7 7.13 9.24 4 12 4C14.76 4 17 7.13 17 10C17 12.87 14.76 16 12 16Z" />
                 </svg>
-                <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>3D Viewer Unavailable</Typography>
+                <Typography variant="body2" sx={{ mt: 2, color: 'text.primary' }}>3D Viewer Unavailable</Typography>
             </Box>
         );
     }
 
     return (
         <Box ref={ref} sx={{ width: '100%', height: 260, borderRadius: 3, overflow: 'hidden', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', position: 'relative' }}>
-            <Typography variant="caption" sx={{ position: 'absolute', top: 12, left: 16, zIndex: 10, fontWeight: 'bold', color: 'text.secondary' }}>
+            <Typography variant="caption" sx={{ position: 'absolute', top: 12, left: 16, zIndex: 10, fontWeight: 'bold', color: 'text.primary' }}>
                 INTERACTIVE 3D VIEWER
             </Typography>
             
