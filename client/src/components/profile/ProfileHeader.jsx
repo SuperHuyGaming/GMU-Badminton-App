@@ -451,7 +451,13 @@ export default function ProfileHeader({
 								backgroundColor:
 									activeTab === tab
 										? "transparent"
-										: "#f0f2f5",
+										: "action.hover",
+							},
+							"&:focus-visible": {
+								outline: "2px solid",
+								outlineColor: "primary.main",
+								outlineOffset: "2px",
+								borderRadius: "4px",
 							},
 						}}
 					>

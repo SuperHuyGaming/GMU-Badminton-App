@@ -495,30 +495,28 @@ export default function Dashboard() {
 									alignItems: "center",
 									p: 4,
 									textAlign: "center",
-									opacity: 0.5,
 									width: "100%",
 								}}
 							>
 								<style>
 									{`
 										@keyframes floatMsg { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
-										.floating-msg { animation: floatMsg 3s ease-in-out infinite; color: #006633; }
+										.floating-msg { animation: floatMsg 3s ease-in-out infinite; }
 									`}
 								</style>
-								<div className="floating-msg">
+								<Box className="floating-msg" sx={{ color: 'primary.main', mb: 2 }}>
 									<MegaphoneIcon
 										style={{
 											width: 60,
 											height: 60,
-											marginBottom: 16,
-											opacity: 0.7,
 										}}
+										aria-hidden="true"
 									/>
-								</div>
+								</Box>
 								<Typography variant="h6" fontWeight="bold" sx={{ color: 'text.primary' }}>
 									No New Updates
 								</Typography>
-								<Typography variant="body2" sx={{ color: 'text.primary', maxWidth: 250, mx: 'auto' }}>
+								<Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 280, mx: 'auto', mt: 0.5 }}>
 									The court is clear. Check back later for
 									official club announcements!
 								</Typography>

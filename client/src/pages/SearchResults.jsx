@@ -449,12 +449,18 @@ export default function SearchResults() {
                                         <Box sx={{ flex: '1 1 180px', minWidth: 0 }}>
                                             <Typography 
                                                 variant="h6" 
-                                                component="h3" 
+                                                component={RouterLink} 
+                                                to={`/profile/${result._id}`}
+                                                onClick={(e) => e.stopPropagation()}
                                                 fontWeight="bold" 
                                                 sx={{ 
                                                     color: 'text.primary', 
+                                                    textDecoration: 'none',
+                                                    '&:hover': { textDecoration: 'underline', color: 'primary.main' },
+                                                    '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '2px', borderRadius: '2px' },
                                                     lineHeight: 1.25,
                                                     wordBreak: 'break-word',
+                                                    display: 'inline-block',
                                                 }}
                                             >
                                                 {result.name}
