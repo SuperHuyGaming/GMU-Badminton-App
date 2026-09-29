@@ -442,19 +442,9 @@ export default function Matchmaking() {
                         <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
                             People You May Know
                         </Typography>
-                        {!loading && recommended.length > 3 && (
-                            <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                <IconButton size="small" aria-label="Scroll left" onClick={() => document.getElementById('carousel-scroll')?.scrollBy({ left: -300, behavior: 'smooth' })}>
-                                    <ChevronLeftIcon />
-                                </IconButton>
-                                <IconButton size="small" aria-label="Scroll right" onClick={() => document.getElementById('carousel-scroll')?.scrollBy({ left: 300, behavior: 'smooth' })}>
-                                    <ChevronRightIcon />
-                                </IconButton>
-                            </Box>
-                        )}
                     </Box>
                     {loading ? (
-                        <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto' }}>
+                        <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
                             {Array.from({ length: 4 }).map((_, idx) => (
                                 <Card key={idx} sx={{ minWidth: 260, maxWidth: 280, p: 2.5, borderRadius: 3, flexShrink: 0 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
@@ -468,14 +458,65 @@ export default function Matchmaking() {
                             ))}
                         </Box>
                     ) : recommended.length > 0 ? (
-                        <Box id="carousel-scroll" sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', scrollSnapType: 'x mandatory', pb: 2, px: 0.5 }}>
-                            {recommended.map((player, i) => (
-                                <Box key={`rec-${player._id}`} sx={{ minWidth: 260, maxWidth: 280, flexShrink: 0, scrollSnapAlign: 'start' }}>
-                                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06, duration: 0.35 }}>
-                                        {renderPlayerCard(player)}
-                                    </motion.div>
-                                </Box>
-                            ))}
+                        <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            {recommended.length > 3 && (
+                                <IconButton 
+                                    size="small" 
+                                    aria-label="Scroll left" 
+                                    onClick={() => document.getElementById('carousel-scroll')?.scrollBy({ left: -300, behavior: 'smooth' })}
+                                    sx={{ 
+                                        position: 'absolute', 
+                                        left: -16, 
+                                        zIndex: 2, 
+                                        bgcolor: 'background.paper', 
+                                        boxShadow: 3,
+                                        '&:hover': { bgcolor: 'action.hover' }
+                                    }}
+                                >
+                                    <ChevronLeftIcon />
+                                </IconButton>
+                            )}
+                            
+                            <Box 
+                                id="carousel-scroll" 
+                                sx={{ 
+                                    display: 'flex', 
+                                    gap: 2.5, 
+                                    overflowX: 'auto', 
+                                    scrollSnapType: 'x mandatory', 
+                                    pb: 2, 
+                                    px: 0.5,
+                                    scrollbarWidth: 'none', // Firefox
+                                    msOverflowStyle: 'none', // IE/Edge
+                                    '&::-webkit-scrollbar': { display: 'none' } // Chrome/Safari
+                                }}
+                            >
+                                {recommended.map((player, i) => (
+                                    <Box key={`rec-${player._id}`} sx={{ minWidth: 260, maxWidth: 280, flexShrink: 0, scrollSnapAlign: 'start' }}>
+                                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06, duration: 0.35 }}>
+                                            {renderPlayerCard(player)}
+                                        </motion.div>
+                                    </Box>
+                                ))}
+                            </Box>
+
+                            {recommended.length > 3 && (
+                                <IconButton 
+                                    size="small" 
+                                    aria-label="Scroll right" 
+                                    onClick={() => document.getElementById('carousel-scroll')?.scrollBy({ left: 300, behavior: 'smooth' })}
+                                    sx={{ 
+                                        position: 'absolute', 
+                                        right: -16, 
+                                        zIndex: 2, 
+                                        bgcolor: 'background.paper', 
+                                        boxShadow: 3,
+                                        '&:hover': { bgcolor: 'action.hover' }
+                                    }}
+                                >
+                                    <ChevronRightIcon />
+                                </IconButton>
+                            )}
                         </Box>
                     ) : null}
                     <Divider sx={{ mt: 3 }} />
