@@ -54,7 +54,12 @@ export default function Matchmaking() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [campusFilter, setCampusFilter] = useState('All');
     const [playStyleFilter, setPlayStyleFilter] = useState('All');
+    const [timeOfDayFilter, setTimeOfDayFilter] = useState('All');
     const [availableNow, setAvailableNow] = useState(false);
+
+    // Online Presence & Queue state
+    const [onlineUsers, setOnlineUsers] = useState(new Set());
+    const [inQueue, setInQueue] = useState(false);
 
     // Friend Request state
     const [requestedFriends, setRequestedFriends] = useState(new Set());
@@ -98,27 +103,73 @@ export default function Matchmaking() {
         });
     };
 
+    // Infinite Scroll Cursor state
+    const [cursor, setCursor] = useState(null);
+    const [hasMore, setHasMore] = useState(true);
+    const observerTarget = useRef(null);
+
     useEffect(() => {
-        const fetchMainData = async () => {
-            setLoading(true);
+        const fetchMainData = async (isLoadMore = false) => {
+            if (!isLoadMore) {
+                setLoading(true);
+            }
             try {
-                let url = '/api/matchmaking/discover?';
+                let url = `/api/matchmaking/discover?`;
                 if (searchQuery && !isFocused) url += `search=${encodeURIComponent(searchQuery)}&`;
                 if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
+                if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
+                if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
+                if (isLoadMore && cursor) url += `cursor=${encodeURIComponent(cursor)}&`;
                 
                 const response = await apiFetch(url);
                 const data = await response.json();
-                setMatches(data.matches || []);
-                setRecommended(data.recommended || []);
+                
+                if (isLoadMore) {
+                    setMatches(prev => [...prev, ...(data.matches || [])]);
+                } else {
+                    setMatches(data.matches || []);
+                    setRecommended(data.recommended || []);
+                }
+
+                if (data.matches && data.matches.length > 0) {
+                    setCursor(data.matches[data.matches.length - 1]._id);
+                    setHasMore(data.matches.length === 50); // backend limit
+                } else {
+                    setHasMore(false);
+                }
             } catch (err) {
                 setError(err.message || 'Failed to fetch players');
             } finally {
                 setLoading(false);
             }
         };
-        fetchMainData();
+
+        if (cursor === null) {
+            fetchMainData(false);
+        }
+
+        const observer = new IntersectionObserver(
+            entries => {
+                if (entries[0].isIntersecting && hasMore && !loading && cursor) {
+                    fetchMainData(true);
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [skillFilter]); // Only run on skillFilter change or manual submit
+    }, [skillFilter, campusFilter, timeOfDayFilter, cursor, hasMore, loading]);
+
+    // Reset cursor when filters change
+    useEffect(() => {
+        setCursor(null);
+        setHasMore(true);
+    }, [skillFilter, campusFilter, timeOfDayFilter, searchQuery]);
 
     useEffect(() => {
         if (!searchQuery.trim()) {
@@ -143,6 +194,24 @@ export default function Matchmaking() {
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
 
+    // Task 7: Presence Polling
+    useEffect(() => {
+        const fetchPresence = async () => {
+            try {
+                const res = await apiFetch('/api/matchmaking/presence');
+                if (res.ok) {
+                    const data = await res.json();
+                    setOnlineUsers(new Set(data.onlineUsers.map(u => u._id)));
+                }
+            } catch (err) {
+                console.error('Failed to fetch presence', err);
+            }
+        };
+        fetchPresence();
+        const interval = setInterval(fetchPresence, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     const handleSearchSubmit = (query) => {
         const q = typeof query === 'string' ? query : searchQuery;
         saveRecentSearch(q);
@@ -155,6 +224,8 @@ export default function Matchmaking() {
             try {
                 let url = `/api/matchmaking/discover?search=${encodeURIComponent(q)}&`;
                 if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
+                if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
+                if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
                 const response = await apiFetch(url);
                 const data = await response.json();
                 setMatches(data.matches || []);
@@ -260,7 +331,7 @@ export default function Matchmaking() {
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                     variant="dot"
                     color="success"
-                    invisible={!isRecentlyActive(player.lastActive)}
+                    invisible={!(onlineUsers.has(player._id) || isRecentlyActive(player.lastActive))}
                     sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white', cursor: 'pointer' } }}
                     onMouseEnter={(e) => handlePeekOpen(e, player)}
                     onMouseLeave={handlePeekClose}
@@ -622,6 +693,13 @@ export default function Matchmaking() {
                             </AnimatePresence>
                         </Grid>
                     )}
+
+                    {/* Infinite Scroll Target */}
+                    {hasMore && matches.length > 0 && (
+                        <Box ref={observerTarget} sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+                            <Skeleton variant="circular" width={40} height={40} animation="wave" />
+                        </Box>
+                    )}
                 </>
             )}
 
@@ -633,9 +711,42 @@ export default function Matchmaking() {
                             <CloseIcon />
                         </IconButton>
                     </Box>
-                    
+
+                    <Typography variant="subtitle2" color="primary" sx={{ mb: 1, fontWeight: 'bold' }}>
+                        PLAY NOW QUEUE
+                    </Typography>
                     <FormControlLabel 
-                        control={<Switch checked={availableNow} onChange={(e) => setAvailableNow(e.target.checked)} color="success" />} 
+                        control={
+                            <Switch 
+                                checked={inQueue} 
+                                onChange={async (e) => {
+                                    const join = e.target.checked;
+                                    try {
+                                        const res = await apiFetch(`/api/matchmaking/queue/${join ? 'join' : 'leave'}`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                checkInLocation: campusFilter !== 'All' ? campusFilter : undefined,
+                                                preferredTimeOfDay: timeOfDayFilter !== 'All' ? timeOfDayFilter : undefined
+                                            })
+                                        });
+                                        if (res.ok) setInQueue(join);
+                                    } catch (err) {
+                                        console.error('Queue toggle error', err);
+                                    }
+                                }} 
+                                color="success" 
+                            />
+                        } 
+                        label={<Typography sx={{ fontWeight: 500 }}>{inQueue ? "Looking for match..." : "Join Matchmaking Queue"}</Typography>} 
+                        sx={{ mb: 4, display: 'block', p: 1.5, border: '1px solid', borderColor: inQueue ? 'success.main' : 'divider', borderRadius: 2, bgcolor: inQueue ? 'success.light' : 'transparent' }}
+                    />
+                    
+                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, fontWeight: 'bold' }}>
+                        SEARCH FILTERS
+                    </Typography>
+                    <FormControlLabel 
+                        control={<Switch checked={availableNow} onChange={(e) => setAvailableNow(e.target.checked)} color="primary" />} 
                         label={<Typography sx={{ fontWeight: 500 }}>Available Now (Online)</Typography>} 
                         sx={{ mb: 4, display: 'block' }}
                     />
@@ -647,6 +758,16 @@ export default function Matchmaking() {
                             <MenuItem value="RAC">RAC (Recreation Athletic Complex)</MenuItem>
                             <MenuItem value="Skyline">Skyline Fitness</MenuItem>
                             <MenuItem value="AFC">AFC (Aquatic Fitness Center)</MenuItem>
+                        </Select>
+                    </FormControl>
+
+                    <FormControl fullWidth sx={{ mb: 4 }}>
+                        <InputLabel id="time-filter-label">Time of Day</InputLabel>
+                        <Select labelId="time-filter-label" value={timeOfDayFilter} label="Time of Day" onChange={(e) => setTimeOfDayFilter(e.target.value)}>
+                            <MenuItem value="All">Any Time</MenuItem>
+                            <MenuItem value="Morning">Morning</MenuItem>
+                            <MenuItem value="Afternoon">Afternoon</MenuItem>
+                            <MenuItem value="Evening">Evening</MenuItem>
                         </Select>
                     </FormControl>
 
