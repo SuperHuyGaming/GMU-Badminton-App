@@ -358,7 +358,7 @@ export default function ReplyBubble({
 						Reply
 					</Typography>
 					{/* Fixed: Adding timestamp back in for replies */}
-					<Typography variant="caption" color="text.disabled">
+					<Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
 						{formatTime(reply.timestamp)}
 					</Typography>
 				</Box>
