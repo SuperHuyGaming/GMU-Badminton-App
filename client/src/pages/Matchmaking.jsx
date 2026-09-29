@@ -1,8 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ChatIcon from '@mui/icons-material/Chat';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { motion, AnimatePresence } from 'framer-motion';
 import apiFetch from '../utils/api';
+
+
+
+const cardVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i) => ({
+        opacity: 1,
+        y: 0,
+        transition: { delay: i * 0.08, duration: 0.4, ease: 'easeOut' },
+    }),
+};
 
 export default function Matchmaking() {
     const [matches, setMatches] = useState([]);
@@ -50,17 +64,46 @@ export default function Matchmaking() {
         <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
             {Array.from({ length: count }).map((_, idx) => (
                 <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={idx}>
-                    <Card sx={{ height: '100%', p: 2, borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <Skeleton variant="circular" width={80} height={80} sx={{ mb: 2 }} />
-                        <Skeleton variant="text" width="60%" height={32} sx={{ mb: 1 }} />
-                        <Skeleton variant="rectangular" width="80%" height={24} sx={{ mb: 2, borderRadius: 1 }} />
-                        <Skeleton variant="text" width="40%" height={20} sx={{ mb: 1 }} />
-                        <Skeleton variant="text" width="90%" height={40} sx={{ mt: 'auto' }} />
-                        <Skeleton variant="rectangular" width="100%" height={36} sx={{ mt: 2, borderRadius: 2 }} />
+                    <Card sx={{ height: '100%', p: 2.5, borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
+                            <Skeleton variant="circular" width={72} height={72} animation="wave" />
+                            <Stack direction="column" spacing={1} alignItems="flex-end">
+                                <Skeleton variant="rounded" width={80} height={24} animation="wave" sx={{ borderRadius: 1.5 }} />
+                                <Skeleton variant="rounded" width={60} height={24} animation="wave" sx={{ borderRadius: 1.5 }} />
+                            </Stack>
+                        </Box>
+                        <Skeleton variant="text" width="70%" height={28} animation="wave" sx={{ mb: 0.5 }} />
+                        <Skeleton variant="text" width="85%" height={20} animation="wave" sx={{ mb: 0.5 }} />
+                        <Skeleton variant="text" width="55%" height={20} animation="wave" sx={{ mb: 1.5 }} />
+                        <Skeleton variant="text" width="95%" height={18} animation="wave" sx={{ mb: 0.5 }} />
+                        <Skeleton variant="text" width="80%" height={18} animation="wave" sx={{ mb: 2 }} />
+                        <Box sx={{ display: 'flex', gap: 1.5, mt: 'auto', pt: 2 }}>
+                            <Skeleton variant="rounded" width="48%" height={36} animation="wave" sx={{ borderRadius: 2 }} />
+                            <Skeleton variant="rounded" width="48%" height={36} animation="wave" sx={{ borderRadius: 2 }} />
+                        </Box>
                     </Card>
                 </Grid>
             ))}
         </Grid>
+    );
+
+    const renderCarouselSkeletons = (count = 4) => (
+        <Box sx={{ display: 'flex', gap: 2.5 }}>
+            {Array.from({ length: count }).map((_, idx) => (
+                <Card key={idx} sx={{ minWidth: 260, maxWidth: 280, p: 2.5, borderRadius: 3, flexShrink: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+                        <Skeleton variant="circular" width={72} height={72} animation="wave" />
+                        <Skeleton variant="rounded" width={70} height={24} animation="wave" sx={{ borderRadius: 1.5 }} />
+                    </Box>
+                    <Skeleton variant="text" width="70%" height={28} animation="wave" sx={{ mb: 0.5 }} />
+                    <Skeleton variant="text" width="85%" height={20} animation="wave" sx={{ mb: 1.5 }} />
+                    <Box sx={{ display: 'flex', gap: 1.5, mt: 'auto', pt: 1 }}>
+                        <Skeleton variant="rounded" width="48%" height={36} animation="wave" sx={{ borderRadius: 2 }} />
+                        <Skeleton variant="rounded" width="48%" height={36} animation="wave" sx={{ borderRadius: 2 }} />
+                    </Box>
+                </Card>
+            ))}
+        </Box>
     );
 
     const renderPlayerCard = (player) => (
@@ -168,19 +211,70 @@ export default function Matchmaking() {
                 ))}
             </Stack>
 
-            {!loading && recommended.length > 0 && !searchQuery && skillFilter === 'All' && (
+            {!searchQuery && skillFilter === 'All' && (
                 <Box sx={{ mb: 5 }}>
-                    <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
-                        People You May Know
-                    </Typography>
-                    <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-                        {recommended.map(player => (
-                            <Grid size={{'xs': 12, 'sm': 6, 'md': 3}} key={`rec-${player._id}`}>
-                                {renderPlayerCard(player)}
-                            </Grid>
-                        ))}
-                    </Grid>
-                    <Divider sx={{ mt: 4 }} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                            People You May Know
+                        </Typography>
+                        {!loading && recommended.length > 3 && (
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <IconButton
+                                    size="small"
+                                    aria-label="Scroll left"
+                                    onClick={() => {
+                                        const el = document.getElementById('carousel-scroll');
+                                        if (el) el.scrollBy({ left: -300, behavior: 'smooth' });
+                                    }}
+                                    sx={{ bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
+                                >
+                                    <ChevronLeftIcon />
+                                </IconButton>
+                                <IconButton
+                                    size="small"
+                                    aria-label="Scroll right"
+                                    onClick={() => {
+                                        const el = document.getElementById('carousel-scroll');
+                                        if (el) el.scrollBy({ left: 300, behavior: 'smooth' });
+                                    }}
+                                    sx={{ bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
+                                >
+                                    <ChevronRightIcon />
+                                </IconButton>
+                            </Box>
+                        )}
+                    </Box>
+                    {loading ? renderCarouselSkeletons() : recommended.length > 0 ? (
+                        <Box
+                            id="carousel-scroll"
+                            sx={{
+                                display: 'flex',
+                                gap: 2.5,
+                                overflowX: 'auto',
+                                scrollSnapType: 'x mandatory',
+                                pb: 2,
+                                px: 0.5,
+                                '&::-webkit-scrollbar': { height: 6 },
+                                '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 3 },
+                            }}
+                        >
+                            {recommended.map((player, i) => (
+                                <Box
+                                    key={`rec-${player._id}`}
+                                    sx={{ minWidth: 260, maxWidth: 280, flexShrink: 0, scrollSnapAlign: 'start' }}
+                                >
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: i * 0.06, duration: 0.35 }}
+                                    >
+                                        {renderPlayerCard(player)}
+                                    </motion.div>
+                                </Box>
+                            ))}
+                        </Box>
+                    ) : null}
+                    <Divider sx={{ mt: 3 }} />
                 </Box>
             )}
 
@@ -197,11 +291,22 @@ export default function Matchmaking() {
                         </Alert>
                     ) : (
                         <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-                            {matches.map((player) => (
-                                <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={`match-${player._id}`}>
-                                    {renderPlayerCard(player)}
-                                </Grid>
-                            ))}
+                            <AnimatePresence>
+                                {matches.map((player, i) => (
+                                    <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={`match-${player._id}`}>
+                                        <motion.div
+                                            custom={i}
+                                            variants={cardVariants}
+                                            initial="hidden"
+                                            animate="visible"
+                                            exit="hidden"
+                                            layout
+                                        >
+                                            {renderPlayerCard(player)}
+                                        </motion.div>
+                                    </Grid>
+                                ))}
+                            </AnimatePresence>
                         </Grid>
                     )}
                 </>
