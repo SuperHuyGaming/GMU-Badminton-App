@@ -32,7 +32,8 @@ export default function ServerWarmup({ children }) {
                 const controller = new AbortController();
                 timeoutId = setTimeout(() => controller.abort(), 5000);
                 
-                const res = await fetch(`${API_URL}/api/status`, {
+                const normalizedApiUrl = API_URL.replace(/\/+$/, '');
+                const res = await fetch(`${normalizedApiUrl}/api/status`, {
                     signal: controller.signal,
                 });
                 clearTimeout(timeoutId);
