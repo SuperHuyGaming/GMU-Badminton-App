@@ -66,7 +66,16 @@ export default function CommentBubble({
 			<Avatar
 				src={comment.authorPic}
 				alt={comment.authorName || "Comment author"}
+				role="link"
+				tabIndex={0}
+				aria-label={`View ${comment.authorName || "author"}'s profile`}
 				onClick={() => navigate(`/profile/${comment.authorId}`)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						navigate(`/profile/${comment.authorId}`);
+					}
+				}}
 				sx={{
 					width: 32,
 					height: 32,
@@ -96,9 +105,17 @@ export default function CommentBubble({
 						}}
 					>
 						<Typography
+							role="link"
+							tabIndex={0}
 							onClick={() =>
 								navigate(`/profile/${comment.authorId}`)
 							}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									navigate(`/profile/${comment.authorId}`);
+								}
+							}}
 							variant="subtitle2"
 							fontWeight="bold"
 							sx={{ lineHeight: 1, ...clickableStyle }}
@@ -179,6 +196,9 @@ export default function CommentBubble({
 
 					{comment.likedBy?.length > 0 && (
 						<Box
+							role="button"
+							tabIndex={0}
+							aria-label="View users who liked this comment"
 							onClick={(e) =>
 								openLikes(
 									e,
@@ -186,6 +206,16 @@ export default function CommentBubble({
 									comment.likedByDetails,
 								)
 							}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									openLikes(
+										e,
+										"Comment Likes",
+										comment.likedByDetails,
+									);
+								}
+							}}
 							sx={{
 								position: "absolute",
 								bottom: -8,
@@ -262,6 +292,8 @@ export default function CommentBubble({
 
 				<Box sx={{ display: "flex", gap: 2, ml: 1, mt: 0.5 }}>
 					<Typography
+						role="button"
+						tabIndex={0}
 						variant="caption"
 						onClick={() =>
 							handleToggleLike(
@@ -269,6 +301,15 @@ export default function CommentBubble({
 								comment._id,
 							)
 						}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								handleToggleLike(
+									`/api/forum/${localPostId}/comments/${comment._id}/like`,
+									comment._id,
+								);
+							}
+						}}
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",
@@ -281,8 +322,16 @@ export default function CommentBubble({
 						Like
 					</Typography>
 					<Typography
+						role="button"
+						tabIndex={0}
 						variant="caption"
 						onClick={onReply}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								onReply();
+							}
+						}}
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",

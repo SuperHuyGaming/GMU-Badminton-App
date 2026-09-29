@@ -243,8 +243,8 @@ const sendNotification = async (io, targetUserId, message, link) => {
 // ==========================================
 router.get("/", async (req, res) => {
 	try {
-		const page = parseInt(req.query.page) || 1;
-		const limit = parseInt(req.query.limit) || 10;
+		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
 		const skip = (page - 1) * limit;
 
 		const query = { isFlagged: { $ne: true } };
@@ -264,9 +264,20 @@ router.get("/", async (req, res) => {
 router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
 		const { title, content, imageUrl, targetDate, tags, visibility } = req.body;
+
+		if (!title || typeof title !== "string" || !title.trim()) {
+			return res.status(400).json({ message: "Post title is required." });
+		}
+		if (title.trim().length > 200) {
+			return res.status(400).json({ message: "Post title cannot exceed 200 characters." });
+		}
+
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Post content is required." });
+		}
 		
-		const cleanTitle = xss(title);
-		const cleanContent = xss(content);
+		const cleanTitle = xss(title.trim());
+		const cleanContent = xss(content.trim());
 		const cleanImageUrl = imageUrl ? xss(imageUrl) : "";
 		const cleanTags = Array.isArray(tags) ? tags.map(t => xss(t)) : [];
 		
@@ -325,8 +336,8 @@ router.get("/user/:userId", async (req, res) => {
 			return res.status(400).json({ message: "Invalid user ID format." });
 		}
 
-		const page = parseInt(req.query.page) || 1;
-		const limit = parseInt(req.query.limit) || 10;
+		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
 		const skip = (page - 1) * limit;
 
 		const rawPosts = await Post.find({
@@ -353,6 +364,17 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 		}
 
 		const { title, content } = req.body;
+		if (!title || typeof title !== "string" || !title.trim()) {
+			return res.status(400).json({ message: "Post title is required." });
+		}
+		if (title.trim().length > 200) {
+			return res.status(400).json({ message: "Post title cannot exceed 200 characters." });
+		}
+
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Post content is required." });
+		}
+
 		const currentUserId = (req.user.id || req.user.userId).toString();
 		const post = await Post.findById(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found" });
@@ -360,8 +382,8 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 		if (post.authorId.toString() !== currentUserId && req.user.role !== "admin")
 			return res.status(403).json({ message: "Unauthorized" });
 
-		const cleanTitle = xss(title);
-		const cleanContent = xss(content);
+		const cleanTitle = xss(title.trim());
+		const cleanContent = xss(content.trim());
 
 		if (await checkSpam(cleanTitle) || await checkSpam(cleanContent)) {
 			post.isFlagged = true;
@@ -478,8 +500,8 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 
 router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
 		}
 
 		const { content } = req.body;
@@ -512,8 +534,8 @@ router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 
 router.delete("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
 		}
 
 		const currentUserId = (req.user.id || req.user.userId).toString();
@@ -543,8 +565,8 @@ router.post(
 	postLimiter,
 	async (req, res) => {
 		try {
-			if (!mongoose.isValidObjectId(req.params.postId)) {
-				return res.status(400).json({ message: "Invalid post ID format." });
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+				return res.status(400).json({ message: "Invalid post or comment ID format." });
 			}
 
 			const { content } = req.body;
@@ -608,8 +630,8 @@ router.put(
 	authMiddleware,
 	async (req, res) => {
 		try {
-			if (!mongoose.isValidObjectId(req.params.postId)) {
-				return res.status(400).json({ message: "Invalid post ID format." });
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
+				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
 			}
 
 			const { content } = req.body;
@@ -648,8 +670,8 @@ router.delete(
 	authMiddleware,
 	async (req, res) => {
 		try {
-			if (!mongoose.isValidObjectId(req.params.postId)) {
-				return res.status(400).json({ message: "Invalid post ID format." });
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
+				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
 			}
 
 			const currentUserId = (req.user.id || req.user.userId).toString();
@@ -779,8 +801,8 @@ router.put("/:postId/like", authMiddleware, async (req, res) => {
 
 router.put("/:postId/comments/:commentId/like", authMiddleware, async (req, res) => {
 	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
 		}
 
 		const userId = (req.user.id || req.user.userId).toString();
@@ -828,8 +850,8 @@ router.put(
 	authMiddleware,
 	async (req, res) => {
 		try {
-			if (!mongoose.isValidObjectId(req.params.postId)) {
-				return res.status(400).json({ message: "Invalid post ID format." });
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
+				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
 			}
 
 			const userId = (req.user.id || req.user.userId).toString();

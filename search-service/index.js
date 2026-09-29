@@ -42,6 +42,9 @@ app.use((req, res, next) => {
 });
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+redis.on('error', (err) => {
+  console.warn('Redis client error:', err.message);
+});
 const elasticClient = new Client({ node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200' });
 
 app.get('/health', (req, res) => {
@@ -77,7 +80,11 @@ const searchHandler = async (req, res) => {
   const parsedPage = Math.max(1, parseInt(page, 10) || 1);
   const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-  const cacheKey = `search:query:${trimmedQuery}:type:${type}:page:${parsedPage}:limit:${parsedLimit}:uni:${searcherHomeUniversity || 'none'}`;
+  const safeHomeUniversity = (typeof searcherHomeUniversity === 'string' && searcherHomeUniversity.trim())
+    ? searcherHomeUniversity.trim().slice(0, 100)
+    : null;
+
+  const cacheKey = `search:query:${trimmedQuery}:type:${type}:page:${parsedPage}:limit:${parsedLimit}:uni:${safeHomeUniversity || 'none'}`;
 
   try {
     const cachedResult = await redis.get(cacheKey);
@@ -105,7 +112,7 @@ const searchHandler = async (req, res) => {
 
       let queryBody = { query: baseQuery };
 
-      if (searcherHomeUniversity && (type === 'user' || type === 'users' || type === 'players' || type === 'all')) {
+      if (safeHomeUniversity && (type === 'user' || type === 'users' || type === 'players' || type === 'all')) {
           queryBody = {
               query: {
                   bool: {
@@ -114,7 +121,7 @@ const searchHandler = async (req, res) => {
                           {
                               match: {
                                   homeUniversity: {
-                                      query: searcherHomeUniversity,
+                                      query: safeHomeUniversity,
                                       boost: 2.0
                                   }
                               }
@@ -122,7 +129,7 @@ const searchHandler = async (req, res) => {
                           {
                               match: {
                                   university: {
-                                      query: searcherHomeUniversity,
+                                      query: safeHomeUniversity,
                                       boost: 2.0
                                   }
                               }
@@ -208,4 +215,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, server, elasticClient };
+module.exports = { app, server, elasticClient, redis };

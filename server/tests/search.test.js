@@ -49,6 +49,21 @@ describe('Search Proxy Routes', () => {
         });
     });
 
+    it('should forward searcherHomeUniversity parameter to search-service', async () => {
+        axios.get.mockResolvedValue({
+            data: { results: [], total: 0 }
+        });
+
+        const res = await request(app)
+            .get('/api/search?q=David&type=players&searcherHomeUniversity=GMU');
+
+        expect(res.statusCode).toBe(200);
+        expect(axios.get).toHaveBeenCalledWith('http://localhost:5001/search', {
+            params: { q: 'David', type: 'players', searcherHomeUniversity: 'GMU' },
+            timeout: 5000,
+        });
+    });
+
     it('should strip sensitive fields from search proxy response', async () => {
         const mockResultsWithSecrets = [
             {

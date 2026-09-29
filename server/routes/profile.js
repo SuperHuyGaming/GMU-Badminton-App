@@ -33,7 +33,7 @@ router.get("/export", authMiddleware, async (req, res, next) => {
             $or: [{ team1: userId }, { team2: userId }]
         }).lean();
 
-        const userPosts = await Post.find({ author: userId }).lean();
+        const userPosts = await Post.find({ authorId: userId.toString() }).lean();
 
         // 2. Set headers for file download
         const safeName = (userProfile.name || "user").replace(/\s+/g, '_');
@@ -118,6 +118,21 @@ router.put("/", authMiddleware, profileLimiter, async (req, res) => {
 
 		if (name !== undefined && name.trim() === "") {
 			return res.status(400).json({ message: "Display name cannot be empty or just whitespace." });
+		}
+
+		if (skillLevel !== undefined && !["D Level", "C Level", "B Level"].includes(skillLevel)) {
+			return res.status(400).json({ message: "Invalid skill level. Allowed values: D Level, C Level, B Level." });
+		}
+
+		if (preferredPlay !== undefined && !["Singles", "Doubles", "Mixed", "Any"].includes(preferredPlay)) {
+			return res.status(400).json({ message: "Invalid preferred play. Allowed values: Singles, Doubles, Mixed, Any." });
+		}
+
+		if (searchRadius !== undefined) {
+			const parsedRadius = Number(searchRadius);
+			if (isNaN(parsedRadius) || parsedRadius < 0 || parsedRadius > 500) {
+				return res.status(400).json({ message: "Search radius must be a number between 0 and 500." });
+			}
 		}
 
 		const cleanName = name ? xss(name) : undefined;

@@ -206,8 +206,11 @@ const escapeRegex = (string) => {
 // GET: search users
 router.get("/search/:query", authMiddleware, async (req, res, next) => {
 	try {
-		const escapeRegex = (text) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-		const safeQuery = escapeRegex(req.params.query);
+		const rawQuery = (req.params.query || "").trim();
+		if (!rawQuery) {
+			return res.json([]);
+		}
+		const safeQuery = escapeRegex(rawQuery);
 		const users = await User.find({
 			name: { $regex: safeQuery, $options: "i" }
 		}).select("_id name profilePic skillLevel").limit(10);

@@ -67,6 +67,19 @@ describe('SearchResults Page Component', () => {
         });
     });
 
+    it('appends searcherHomeUniversity to search API call when user has university', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Alice');
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/search?q=Alice&type=user&searcherHomeUniversity=GMU');
+        });
+    });
+
     it('captures PostHog search_executed event', async () => {
         apiFetch.mockResolvedValue({
             ok: true,

@@ -80,7 +80,16 @@ export default function ReplyBubble({
 			<Avatar
 				src={reply.authorPic}
 				alt={reply.authorName || "Reply author"}
+				role="link"
+				tabIndex={0}
+				aria-label={`View ${reply.authorName || "author"}'s profile`}
 				onClick={() => navigate(`/profile/${reply.authorId}`)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						navigate(`/profile/${reply.authorId}`);
+					}
+				}}
 				sx={{
 					width: 24,
 					height: 24,
@@ -111,9 +120,17 @@ export default function ReplyBubble({
 						}}
 					>
 						<Typography
+							role="link"
+							tabIndex={0}
 							onClick={() =>
 								navigate(`/profile/${reply.authorId}`)
 							}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									navigate(`/profile/${reply.authorId}`);
+								}
+							}}
 							variant="subtitle2"
 							fontWeight="bold"
 							sx={{ fontSize: "0.8rem", ...clickableStyle }}
@@ -194,6 +211,9 @@ export default function ReplyBubble({
 
 					{reply.likedBy?.length > 0 && (
 						<Box
+							role="button"
+							tabIndex={0}
+							aria-label="View users who liked this reply"
 							onClick={(e) =>
 								openLikes(
 									e,
@@ -201,6 +221,16 @@ export default function ReplyBubble({
 									reply.likedByDetails,
 								)
 							}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									openLikes(
+										e,
+										"Reply Likes",
+										reply.likedByDetails,
+									);
+								}
+							}}
 							sx={{
 								position: "absolute",
 								bottom: -8,
@@ -277,6 +307,8 @@ export default function ReplyBubble({
 
 				<Box sx={{ display: "flex", gap: 2, ml: 1, mt: 0.5 }}>
 					<Typography
+						role="button"
+						tabIndex={0}
 						variant="caption"
 						onClick={() =>
 							handleToggleLike(
@@ -284,6 +316,15 @@ export default function ReplyBubble({
 								reply._id,
 							)
 						}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								handleToggleLike(
+									`/api/forum/${localPostId}/comments/${commentId}/replies/${reply._id}/like`,
+									reply._id,
+								);
+							}
+						}}
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",
@@ -296,8 +337,16 @@ export default function ReplyBubble({
 						Like
 					</Typography>
 					<Typography
+						role="button"
+						tabIndex={0}
 						variant="caption"
 						onClick={onReply}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								onReply();
+							}
+						}}
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",

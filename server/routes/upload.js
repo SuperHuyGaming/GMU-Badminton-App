@@ -27,9 +27,19 @@ const upload = multer({
 	}
 });
 
+const rateLimit = require("express-rate-limit");
+const mongoose = require("mongoose");
+
+const uploadLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 30,
+	message: { message: "Too many upload requests, please try again later." },
+});
+
 router.post(
 	"/image",
 	authMiddleware,
+	uploadLimiter,
 	upload.single("image"),
 	async (req, res) => {
 		try {
@@ -43,9 +53,13 @@ router.post(
 
 			// Security: IDOR prevention - only admins may upload on behalf of another user ID
 			const authenticatedId = (req.user?.id || req.user?.userId || req.user?._id || "").toString();
-			const targetUserId = (req.user?.role === "admin" && req.body.userId)
-				? req.body.userId
-				: authenticatedId;
+			let targetUserId = authenticatedId;
+			if (req.user?.role === "admin" && req.body.userId) {
+				if (!mongoose.isValidObjectId(req.body.userId)) {
+					return res.status(400).json({ message: "Invalid target user ID format." });
+				}
+				targetUserId = req.body.userId;
+			}
 
 			cloudinary.uploader
 				.upload_stream(
@@ -108,6 +122,7 @@ router.post(
 router.post(
 	"/images",
 	authMiddleware,
+	uploadLimiter,
 	upload.array("images", 4),
 	async (req, res) => {
 		try {

@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const ActivityFeed = require("../models/ActivityFeed");
 const { authMiddleware } = require("../middleware/auth");
@@ -7,15 +8,14 @@ const User = require("../models/User");
 router.get("/", authMiddleware, async (req, res, next) => {
     try {
         const tab = req.query.tab || "foryou";
-        const limit = parseInt(req.query.limit) || 20;
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
         const cursor = req.query.cursor; // The _id of the last item
         // Use the sessionTime passed from the client, or default to now if not provided
-        const sessionTime = req.query.sessionTime ? new Date(parseInt(req.query.sessionTime)) : new Date();
+        const sessionTime = req.query.sessionTime ? new Date(parseInt(req.query.sessionTime, 10)) : new Date();
 
         const userDoc = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
         const currentUser = userDoc || { skillLevel: "Beginner", bookmarkedPosts: [] };
         
-        const mongoose = require('mongoose');
         let matchStage = {
             $or: [
                 { visibility: 'PUBLIC' },
@@ -28,6 +28,9 @@ router.get("/", authMiddleware, async (req, res, next) => {
 
         let lastDoc = null;
         if (cursor && cursor !== "null") {
+            if (!mongoose.isValidObjectId(cursor)) {
+                return res.status(400).json({ message: "Invalid cursor ID format." });
+            }
             lastDoc = await ActivityFeed.findById(cursor);
         }
 

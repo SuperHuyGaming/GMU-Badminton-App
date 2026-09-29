@@ -36,12 +36,16 @@ jest.mock('../models/Post');
 jest.mock('../models/User');
 jest.mock('../models/Match');
 jest.mock('../models/CoachChat');
+jest.mock('../models/EquipmentListing');
+jest.mock('../models/ActivityFeed');
 
 const Announcement = require('../models/Announcement');
 const Message = require('../models/Message');
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Match = require('../models/Match');
+const EquipmentListing = require('../models/EquipmentListing');
+const ActivityFeed = require('../models/ActivityFeed');
 
 const announcementRoutes = require('../routes/announcements');
 const messageRoutes = require('../routes/messages');
@@ -49,6 +53,10 @@ const forumRoutes = require('../routes/forum');
 const matchesRoutes = require('../routes/matches');
 const scrapeRoutes = require('../routes/scrape');
 const { router: profileRoutes } = require('../routes/profile');
+const marketplaceRoutes = require('../routes/marketplace');
+const feedRoutes = require('../routes/feed');
+const adminRoutes = require('../routes/admin');
+const errorHandler = require('../middleware/errorHandler');
 
 const app = express();
 app.use(express.json());
@@ -59,6 +67,10 @@ app.use('/api/forum', forumRoutes);
 app.use('/api/matches', matchesRoutes);
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/feed', feedRoutes);
+app.use('/api/admin', adminRoutes);
+app.use(errorHandler);
 
 describe('Backend Security & Validation Tests', () => {
     beforeEach(() => {
@@ -227,6 +239,162 @@ describe('Backend Security & Validation Tests', () => {
 
             expect(res.statusCode).toBe(400);
             expect(res.body.message).toContain('https://instagram.com');
+        });
+    });
+
+    describe('Marketplace Validation & Authorization', () => {
+        it('should reject fetching listing with invalid ID format', async () => {
+            const res = await request(app).get('/api/marketplace/invalid-id');
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Invalid listing ID format');
+        });
+
+        it('should reject listing creation with missing title or description', async () => {
+            const res = await request(app)
+                .post('/api/marketplace')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({
+                    price: 50,
+                    condition: 'Good',
+                    category: 'Racket'
+                });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Listing title is required');
+        });
+
+        it('should reject listing creation with negative or invalid price', async () => {
+            const res = await request(app)
+                .post('/api/marketplace')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({
+                    title: 'Yonex Astrox 88D',
+                    description: 'Great condition racket',
+                    price: -10,
+                    condition: 'Good',
+                    category: 'Racket'
+                });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('valid non-negative price');
+        });
+
+        it('should reject listing creation with invalid condition or category', async () => {
+            const res = await request(app)
+                .post('/api/marketplace')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({
+                    title: 'Yonex Astrox 88D',
+                    description: 'Great condition racket',
+                    price: 80,
+                    condition: 'Broken',
+                    category: 'Racket'
+                });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Invalid condition');
+        });
+
+        it('should reject updating listing when user is not the seller or admin', async () => {
+            EquipmentListing.findById = jest.fn().mockResolvedValue({
+                _id: '650000000000000000000020',
+                sellerId: '650000000000000000000002' // Different user
+            });
+
+            const res = await request(app)
+                .put('/api/marketplace/650000000000000000000020')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ price: 100 });
+
+            expect(res.statusCode).toBe(403);
+            expect(res.body.message).toContain('Not authorized to update');
+        });
+    });
+
+    describe('Feed Validation & Bounds', () => {
+        it('should reject feed request with invalid cursor ID format', async () => {
+            const res = await request(app)
+                .get('/api/feed?cursor=malicious-or-invalid-id')
+                .set('Authorization', `Bearer ${userToken}`);
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Invalid cursor ID format');
+        });
+    });
+
+    describe('Forum Post Creation Validation & Comment/Reply IDs', () => {
+        it('should reject post creation with whitespace or empty title/content', async () => {
+            const res = await request(app)
+                .post('/api/forum')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({
+                    title: '   ',
+                    content: 'Valid content'
+                });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Post title is required');
+        });
+
+        it('should reject comment update with invalid commentId format', async () => {
+            const res = await request(app)
+                .put('/api/forum/650000000000000000000010/comments/not-an-id')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ content: 'Updated comment' });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Invalid post or comment ID format');
+        });
+
+        it('should reject reply update with invalid replyId format', async () => {
+            const res = await request(app)
+                .put('/api/forum/650000000000000000000010/comments/650000000000000000000011/replies/not-an-id')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ content: 'Updated reply' });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Invalid post, comment, or reply ID format');
+        });
+    });
+
+    describe('Admin Protection & Validation', () => {
+        it('should prevent admin from deleting their own account', async () => {
+            const res = await request(app)
+                .delete('/api/admin/users/650000000000000000000099')
+                .set('Authorization', `Bearer ${adminToken}`);
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Cannot delete your own admin account');
+        });
+
+        it('should reject admin operations with invalid ObjectId format', async () => {
+            const res = await request(app)
+                .delete('/api/admin/users/invalid-id')
+                .set('Authorization', `Bearer ${adminToken}`);
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Invalid user ID format');
+        });
+    });
+
+    describe('Error Handling Middleware', () => {
+        it('should return 400 for CastError and ValidationError', () => {
+            const req = {};
+            const res = {
+                statusCode: 200,
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            };
+            const next = jest.fn();
+
+            const castError = new Error('Cast to ObjectId failed');
+            castError.name = 'CastError';
+
+            errorHandler(castError, req, res, next);
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                message: 'Cast to ObjectId failed'
+            }));
         });
     });
 });

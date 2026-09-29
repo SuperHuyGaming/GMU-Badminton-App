@@ -1,5 +1,6 @@
 // server/routes/admin.js
 const express = require("express");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const Post = require("../models/Post");
 const Message = require("../models/Message");
@@ -27,6 +28,15 @@ router.get("/users", async (req, res) => {
 
 router.delete("/users/:id", async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.id)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || "").toString();
+		if (currentUserId === req.params.id) {
+			return res.status(400).json({ message: "Cannot delete your own admin account." });
+		}
+
 		const deletedUser = await User.findByIdAndDelete(req.params.id);
 		if (!deletedUser)
 			return res.status(404).json({ message: "User not found" });
@@ -56,6 +66,10 @@ router.get("/flagged", async (req, res) => {
 
 router.put("/flagged/:id/approve", async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.id)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
 		const post = await Post.findByIdAndUpdate(
 			req.params.id,
 			{ isFlagged: false },
@@ -86,6 +100,10 @@ router.get("/posts", async (req, res) => {
 
 router.delete("/posts/:id", async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.id)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
 		const deletedPost = await Post.findByIdAndDelete(req.params.id);
 		if (!deletedPost)
 			return res.status(404).json({ message: "Post not found" });
@@ -132,11 +150,16 @@ router.get("/flagged-messages", async (req, res) => {
 
 router.put("/messages/:id/dismiss", async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.id)) {
+			return res.status(400).json({ message: "Invalid message ID format." });
+		}
+
 		const msg = await Message.findByIdAndUpdate(
 			req.params.id,
 			{ isFlagged: false, flagReason: "" },
 			{ new: true }
 		);
+		if (!msg) return res.status(404).json({ message: "Message not found" });
 		res.json(msg);
 	} catch (err) {
 		res.status(500).json({ message: "Server error dismissing flag" });
@@ -145,6 +168,10 @@ router.put("/messages/:id/dismiss", async (req, res) => {
 
 router.delete("/messages/:id", async (req, res) => {
 	try {
+		if (!mongoose.isValidObjectId(req.params.id)) {
+			return res.status(400).json({ message: "Invalid message ID format." });
+		}
+
 		const msg = await Message.findById(req.params.id);
 		if (!msg) return res.status(404).json({ message: "Message not found" });
 

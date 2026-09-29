@@ -94,6 +94,24 @@ describe('Navbar Component & Global Search UI', () => {
         });
     });
 
+    it('appends searcherHomeUniversity when user has university', async () => {
+        const mockMatches = [
+            { _id: 'player-1', name: 'Alice Smith', profilePic: '' },
+        ];
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: mockMatches }),
+        });
+
+        renderNavbar({ id: 'u2', name: 'Bob', university: 'GMU' });
+        const searchInput = screen.getByPlaceholderText('Search players...');
+        fireEvent.change(searchInput, { target: { value: 'Alice' } });
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/search?q=Alice&searcherHomeUniversity=GMU');
+        }, { timeout: 1500 });
+    });
+
     it('does not trigger API call when input is empty or whitespace', async () => {
         renderNavbar();
         const searchInput = screen.getByPlaceholderText('Search players...');
