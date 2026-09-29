@@ -295,6 +295,8 @@ export default function Forum() {
 					<TextField
 						fullWidth
 						size="small"
+						aria-label="What's on your mind?"
+						slotProps={{ htmlInput: { 'aria-label': "What's on your mind?" } }}
 						placeholder={`What's on your mind${currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?`}
 						value={newPost.content}
 						onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
@@ -329,10 +331,21 @@ export default function Forum() {
 				{/* NEW POSTS PILL */}
 				{newPostsQueue.length > 0 && (
 					<Box 
+						role="button"
+						tabIndex={0}
+						aria-label="Load new posts"
 						onClick={() => {
 							setFeed(prev => [...newPostsQueue, ...prev]);
 							setNewPostsQueue([]);
 							window.scrollTo({ top: 0, behavior: 'smooth' });
+						}}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								setFeed(prev => [...newPostsQueue, ...prev]);
+								setNewPostsQueue([]);
+								window.scrollTo({ top: 0, behavior: 'smooth' });
+							}
 						}}
 						sx={{
 							position: 'sticky',
@@ -447,9 +460,9 @@ export default function Forum() {
 											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '30%' }}>
 												<Typography variant="overline" color="text.primary" fontWeight="bold" sx={{ mb: -1 }}>FINAL</Typography>
 												<Typography variant="h3" fontWeight="900" sx={{ letterSpacing: '-2px', color: 'text.primary' }}>
-													<span style={{ color: team1Wins ? '#005c2e' : 'inherit' }}>{item.team1Score}</span>
+													<Box component="span" sx={{ color: team1Wins ? 'primary.main' : 'inherit' }}>{item.team1Score}</Box>
 													<span style={{ margin: '0 8px', color: 'inherit', opacity: 0.6 }}>-</span>
-													<span style={{ color: team2Wins ? '#005c2e' : 'inherit' }}>{item.team2Score}</span>
+													<Box component="span" sx={{ color: team2Wins ? 'primary.main' : 'inherit' }}>{item.team2Score}</Box>
 												</Typography>
 											</Box>
 
@@ -509,6 +522,7 @@ export default function Forum() {
 								onChange={(e) => setNewPost({ ...newPost, visibility: e.target.value })}
 								size="small"
 								fullWidth
+								aria-label="Post privacy"
 								inputProps={{ 'aria-label': 'Post privacy' }}
 							>
 								<MenuItem value="PUBLIC">🌎 Public (Everyone)</MenuItem>

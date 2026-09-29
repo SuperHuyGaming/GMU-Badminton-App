@@ -437,6 +437,8 @@ const Messages = () => {
 						fullWidth
 						size="small"
 						placeholder="Search users..."
+						aria-label="Search users"
+						slotProps={{ htmlInput: { 'aria-label': 'Search users' } }}
 						value={searchQuery}
 						onChange={handleSearch}
 						sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5, bgcolor: 'background.default' } }}
@@ -597,7 +599,16 @@ const Messages = () => {
 				{activeChat ? (
 					<>
 						<Box 
+							role="button"
+							tabIndex={0}
+							aria-label={`View ${activeChat.name}'s profile details`}
 							onClick={handleProfileClick}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									handleProfileClick();
+								}
+							}}
 							sx={{ 
 								p: 2, 
 								borderBottom: "1px solid",
@@ -792,6 +803,8 @@ const Messages = () => {
 								fullWidth 
 								size="small"
 								placeholder="Type a message..." 
+								aria-label="Type a message"
+								slotProps={{ htmlInput: { 'aria-label': 'Type a message' } }}
 								variant="outlined" 
 								multiline
 								maxRows={4}

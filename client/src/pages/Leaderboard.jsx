@@ -93,8 +93,8 @@ const Leaderboard = () => {
                         </Grid>
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
-                                <InputLabel>University</InputLabel>
-                                <Select value={university} label="University" onChange={(e) => setUniversity(e.target.value)}>
+                                <InputLabel id="leaderboard-university-label">University</InputLabel>
+                                <Select labelId="leaderboard-university-label" id="leaderboard-university-select" value={university} label="University" onChange={(e) => setUniversity(e.target.value)}>
                                     <MenuItem value=""><em>Any University</em></MenuItem>
                                     <MenuItem value="George Mason University">George Mason University</MenuItem>
                                     <MenuItem value="Virginia Tech">Virginia Tech</MenuItem>
@@ -106,8 +106,8 @@ const Leaderboard = () => {
                         </Grid>
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
-                                <InputLabel>Skill Level</InputLabel>
-                                <Select value={skillLevel} label="Skill Level" onChange={(e) => setSkillLevel(e.target.value)}>
+                                <InputLabel id="leaderboard-skill-label">Skill Level</InputLabel>
+                                <Select labelId="leaderboard-skill-label" id="leaderboard-skill-select" value={skillLevel} label="Skill Level" onChange={(e) => setSkillLevel(e.target.value)}>
                                     <MenuItem value=""><em>Any Skill</em></MenuItem>
                                     <MenuItem value="A Level">A Level (Advanced)</MenuItem>
                                     <MenuItem value="B Level">B Level (High Intermediate)</MenuItem>
@@ -118,8 +118,8 @@ const Leaderboard = () => {
                         </Grid>
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
-                                <InputLabel>Min Matches</InputLabel>
-                                <Select value={minMatches} label="Min Matches" onChange={(e) => setMinMatches(e.target.value)}>
+                                <InputLabel id="leaderboard-minmatches-label">Min Matches</InputLabel>
+                                <Select labelId="leaderboard-minmatches-label" id="leaderboard-minmatches-select" value={minMatches} label="Min Matches" onChange={(e) => setMinMatches(e.target.value)}>
                                     <MenuItem value=""><em>Any</em></MenuItem>
                                     <MenuItem value="5">5+ Matches</MenuItem>
                                     <MenuItem value="10">10+ Matches</MenuItem>

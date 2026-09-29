@@ -222,8 +222,10 @@ export default function Marketplace() {
                     
                     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
                         <FormControl fullWidth>
-                            <InputLabel>Category</InputLabel>
+                            <InputLabel id="marketplace-category-label">Category</InputLabel>
                             <Select 
+                                labelId="marketplace-category-label"
+                                id="marketplace-category-select"
                                 value={formData.category} 
                                 label="Category" 
                                 onChange={e => setFormData({...formData, category: e.target.value})}
@@ -236,8 +238,10 @@ export default function Marketplace() {
                             </Select>
                         </FormControl>
                         <FormControl fullWidth>
-                            <InputLabel>Condition</InputLabel>
+                            <InputLabel id="marketplace-condition-label">Condition</InputLabel>
                             <Select 
+                                labelId="marketplace-condition-label"
+                                id="marketplace-condition-select"
                                 value={formData.condition} 
                                 label="Condition" 
                                 onChange={e => setFormData({...formData, condition: e.target.value})}

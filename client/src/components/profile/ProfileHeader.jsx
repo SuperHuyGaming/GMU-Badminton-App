@@ -144,7 +144,16 @@ export default function ProfileHeader({
 		>
 			{/* --- COVER PHOTO --- */}
 			<Box
+				role={displayCoverPic || isOwnProfile ? "button" : undefined}
+				tabIndex={displayCoverPic || isOwnProfile ? 0 : undefined}
+				aria-label={isOwnProfile ? "View cover photo or change cover" : "View cover photo"}
 				onClick={handleCoverClick}
+				onKeyDown={(e) => {
+					if ((e.key === "Enter" || e.key === " ") && (displayCoverPic || isOwnProfile)) {
+						e.preventDefault();
+						handleCoverClick(e);
+					}
+				}}
 				sx={{
 					height: { xs: 200, sm: 300, md: 350 },
 					backgroundColor: displayCoverPic
@@ -247,7 +256,16 @@ export default function ProfileHeader({
 					>
 						<Avatar
 							src={getOptimizedAvatar(displayProfilePic, 200)}
+							role={displayProfilePic || isOwnProfile ? "button" : undefined}
+							tabIndex={displayProfilePic || isOwnProfile ? 0 : undefined}
+							aria-label={isOwnProfile ? "View profile photo or change picture" : "View profile photo"}
 							onClick={handleAvatarClick}
+							onKeyDown={(e) => {
+								if ((e.key === "Enter" || e.key === " ") && (displayProfilePic || isOwnProfile)) {
+									e.preventDefault();
+									handleAvatarClick(e);
+								}
+							}}
 							sx={{
 								width: "100%",
 								height: "100%",
@@ -403,11 +421,20 @@ export default function ProfileHeader({
 
 			<Divider sx={{ mx: 2 }} />
 
-			<Box sx={{ px: { xs: 2, md: 4 }, py: 1, display: "flex", gap: 3 }}>
+			<Box role="tablist" aria-label="Profile navigation tabs" sx={{ px: { xs: 2, md: 4 }, py: 1, display: "flex", gap: 3 }}>
 				{["posts", "about"].map((tab) => (
 					<Typography
 						key={tab}
+						role="tab"
+						tabIndex={0}
+						aria-selected={activeTab === tab}
 						onClick={() => setActiveTab(tab)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								setActiveTab(tab);
+							}
+						}}
 						fontWeight="bold"
 						color={activeTab === tab ? "primary" : "text.primary"}
 						sx={{

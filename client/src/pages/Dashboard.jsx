@@ -247,7 +247,7 @@ export default function Dashboard() {
 					
 					.custom-scrollbar::-webkit-scrollbar { width: 0.375rem; }
 					.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-					.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 10px; }
+					.custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(120, 120, 120, 0.4); border-radius: 10px; }
 				`}
 			</style>
 
@@ -427,6 +427,8 @@ export default function Dashboard() {
 								fullWidth
 								multiline
 								maxRows={4}
+								aria-label="Share news, cancellations, or updates"
+								slotProps={{ htmlInput: { 'aria-label': 'Share news, cancellations, or updates' } }}
 								placeholder="Share news, cancellations, or updates..."
 								value={newUpdateText}
 								onChange={(e) =>

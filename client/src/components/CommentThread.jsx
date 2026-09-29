@@ -156,7 +156,7 @@ export default function CommentThread({
 						multiline
 						maxRows={4}
 						aria-label={`Reply to ${comment.authorName}`}
-						inputProps={{ 'aria-label': `Reply to ${comment.authorName}` }}
+						slotProps={{ htmlInput: { 'aria-label': `Reply to ${comment.authorName}` } }}
 						placeholder={`Reply to ${comment.authorName}...`}
 						value={nestedReplyText}
 						onChange={(e) => setNestedReplyText(e.target.value)}
