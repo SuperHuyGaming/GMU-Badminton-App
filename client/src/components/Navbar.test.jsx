@@ -161,5 +161,11 @@ describe('Navbar Component & Global Search UI', () => {
         expect(mobileSearchBtn).toBeInTheDocument();
         expect(mobileSearchBtn).toHaveAttribute('href', '/search');
     });
+
+    it('does not render the Leaderboard navigation link', () => {
+        renderNavbar();
+
+        expect(screen.queryByRole('link', { name: 'Leaderboard' })).not.toBeInTheDocument();
+    });
 });
 

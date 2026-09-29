@@ -4,10 +4,9 @@ const axios = require('axios');
 
 router.get('/', async (req, res) => {
     try {
-        const { q, type } = req.query;
-        // Proxy to search-service
+        // Proxy to search-service, passing along all query params
         const response = await axios.get('http://localhost:5001/search', {
-            params: { q, type }
+            params: req.query
         });
         res.json(response.data);
     } catch (err) {
