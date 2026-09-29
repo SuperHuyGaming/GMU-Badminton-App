@@ -1,0 +1,19 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    # Ping every 14 minutes to prevent Render free tier from sleeping (15 min timeout)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Staging API
+        run: |
+          curl -sf https://gmu-social-api-staging.onrender.com/api/status || echo "Staging API is waking up..."
+      
+      - name: Ping Staging Frontend
+        run: |
+          curl -sf https://gmu-frontend-staging.onrender.com/ || echo "Staging Frontend is waking up..."

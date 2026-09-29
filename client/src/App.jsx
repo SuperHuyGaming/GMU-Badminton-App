@@ -21,6 +21,7 @@ import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
 import ReportMatchModal from "./components/ReportMatchModal";
+import ServerWarmup from "./components/ServerWarmup";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
 
@@ -470,6 +471,7 @@ function App() {
 						minHeight: '100vh',
 					}
 				}} />
+			<ServerWarmup>
 				<BrowserRouter>
 					<Navbar />
 
@@ -489,6 +491,7 @@ function App() {
 						<PWAInstallPrompt />
 					</Container>
 				</BrowserRouter>
+			</ServerWarmup>
 			</ThemeProvider>
 		</ColorModeContext.Provider>
 	);
