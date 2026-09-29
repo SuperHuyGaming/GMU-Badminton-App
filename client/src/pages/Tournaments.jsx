@@ -189,7 +189,7 @@ END:VCALENDAR`;
                                         rel="noopener noreferrer"
                                         aria-label={`Sign up for ${tournament.title || "tournament"} (opens in a new window)`}
                                         fullWidth
-                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem' }}
+                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem', color: '#002f17' }}
                                     >
                                         SIGN UP HERE
                                     </Button>

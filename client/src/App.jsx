@@ -297,7 +297,7 @@ function App() {
 		palette: {
 			mode,
 			primary: mode === "light"
-				? { main: "#005c2e", dark: "#004d26", light: "#33855c", contrastText: "#ffffff" }
+				? { main: "#005c2e", dark: "#004d26", light: "#1b663e", contrastText: "#ffffff" }
 				: { main: "#80e27e", dark: "#005c2e", light: "#a5d6a7", contrastText: "#02120a" },
 			secondary: { main: "#FFCC33", contrastText: "#002f17" },
 			text: {

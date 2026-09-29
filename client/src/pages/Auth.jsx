@@ -219,6 +219,7 @@ export default function Auth() {
 						variant="fullWidth"
 						textColor="primary"
 						indicatorColor="primary"
+						aria-label="Authentication mode"
 					>
 						<Tab label="Login" sx={{ fontWeight: "bold", fontSize: "1rem" }} />
 						<Tab label="Sign Up" sx={{ fontWeight: "bold", fontSize: "1rem" }} />

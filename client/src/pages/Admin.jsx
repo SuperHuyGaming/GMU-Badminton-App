@@ -181,8 +181,9 @@ export default function Admin() {
 								p: 3,
 								mb: 2,
 								borderRadius: 3,
-								border: "2px solid #ffcccc",
-								backgroundColor: "#fff5f5",
+								border: "2px solid",
+								borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.5)" : "#ffcccc",
+								backgroundColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.08)" : "#fff5f5",
 							}}
 						>
 							<Box
@@ -230,7 +231,8 @@ export default function Admin() {
 									p: 2,
 									backgroundColor: "background.paper",
 									borderRadius: 2,
-									border: "1px dashed #ffcccc",
+									border: "1px dashed",
+									borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.4)" : "#ffcccc",
 								}}
 							>
 								{post.content}
@@ -302,8 +304,9 @@ export default function Admin() {
 								p: 3,
 								mb: 2,
 								borderRadius: 3,
-								border: "2px solid #ff9999",
-								backgroundColor: "#fff0f0",
+								border: "2px solid",
+								borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.5)" : "#ff9999",
+								backgroundColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.08)" : "#fff0f0",
 							}}
 						>
 							<Box
@@ -336,7 +339,8 @@ export default function Admin() {
 									p: 2,
 									backgroundColor: "background.paper",
 									borderRadius: 2,
-									border: "1px dashed #ff9999",
+									border: "1px dashed",
+									borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.4)" : "#ff9999",
 								}}
 							>
 								{msg.content}

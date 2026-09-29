@@ -411,7 +411,8 @@ export default function Dashboard() {
 								p: 2,
 								mb: 2,
 								borderRadius: 3,
-								border: "1px solid #006633",
+								border: "1px solid",
+								borderColor: "primary.main",
 								backgroundColor: "rgba(0,102,51,0.02)",
 							}}
 						>
@@ -763,7 +764,7 @@ export default function Dashboard() {
 										<Box
 											sx={{
 												bgcolor: getStatusColor(slot.status),
-												color: "white",
+												color: slot.status === "OPEN_REQ" ? "#000000" : "#ffffff",
 												minWidth: { xs: 80, sm: 100 },
 												display: "flex",
 												flexDirection: "column",
@@ -809,12 +810,16 @@ export default function Dashboard() {
 												<Chip
 													label={getStatusLabel(slot.status)}
 													size="small"
+													color={
+														slot.status === "DEDICATED" ? "success" :
+														slot.status === "CLUB_ONLY" ? "info" :
+														slot.status === "OPEN_REQ" ? "warning" :
+														slot.status === "UNAVAILABLE" ? "error" : "default"
+													}
+													variant="outlined"
 													sx={{
 														fontWeight: "bold",
 														borderRadius: 2,
-														bgcolor: `${getStatusColor(slot.status)}22`,
-														color: getStatusColor(slot.status),
-														border: `1px solid ${getStatusColor(slot.status)}`
 													}}
 												/>
 											</Box>

@@ -220,7 +220,7 @@ export default function Forum() {
 
 			{/* TABS NAVIGATION */}
 			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4, gap: 2 }}>
-				<Tabs value={tab} onChange={handleTabChange} textColor="primary" indicatorColor="primary" 
+				<Tabs value={tab} onChange={handleTabChange} textColor="primary" indicatorColor="primary" aria-label="Forum post categories"
 					sx={{ 
 						'& .MuiTab-root': { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'none', px: { xs: 2, sm: 4 } },
 						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5
@@ -243,7 +243,7 @@ export default function Forum() {
                             msOverflowStyle: 'none', scrollbarWidth: 'none' 
                         }}
                     >
-                        <Chip label="Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
+                        <Chip label="Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: '#000000' }} />
                         {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment'].map((tag) => (
                             <Chip 
                                 key={tag} 

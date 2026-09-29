@@ -59,6 +59,7 @@ const PushNotificationPrompt = () => {
             open={open} 
             anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             onClose={() => setOpen(false)}
+            sx={{ mb: { xs: 8, md: 0 } }}
         >
             <Alert 
                 severity="info" 

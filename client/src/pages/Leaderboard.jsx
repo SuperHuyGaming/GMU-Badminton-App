@@ -139,8 +139,8 @@ const Leaderboard = () => {
                         centered 
                         aria-label="Leaderboard match format tabs"
                         sx={{ 
-                            bgcolor: 'rgba(0, 102, 51, 0.4)', 
-                            color: 'white',
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.12)' : 'primary.main', 
+                            color: (theme) => theme.palette.mode === 'dark' ? 'primary.main' : 'primary.contrastText',
                             '& .MuiTabs-indicator': { backgroundColor: '#FFCC33', height: 4, borderTopLeftRadius: 4, borderTopRightRadius: 4 }
                         }}
                         textColor="inherit"

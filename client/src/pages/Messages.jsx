@@ -943,13 +943,13 @@ const Messages = () => {
 									flex: 1, 
 									textAlign: "center", 
 									p: 1.5, 
-									bgcolor: "rgba(123, 31, 162, 0.06)", 
+									bgcolor: (theme) => theme.palette.mode === 'dark' ? "rgba(206, 147, 216, 0.12)" : "rgba(123, 31, 162, 0.06)", 
 									borderRadius: 3, 
 									border: '1px solid', 
-									borderColor: 'rgba(123, 31, 162, 0.15)' 
+									borderColor: (theme) => theme.palette.mode === 'dark' ? "rgba(206, 147, 216, 0.3)" : "rgba(123, 31, 162, 0.15)" 
 								}}>
-									<Typography variant="h5" sx={{ color: '#7b1fa2' }} fontWeight="900">{profileData.doublesElo || 1200}</Typography>
-									<Typography variant="caption" sx={{ color: '#7b1fa2', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.85 }}>Doubles</Typography>
+									<Typography variant="h5" sx={{ color: (theme) => theme.palette.mode === 'dark' ? '#ce93d8' : '#7b1fa2' }} fontWeight="900">{profileData.doublesElo || 1200}</Typography>
+									<Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === 'dark' ? '#ce93d8' : '#7b1fa2', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.85 }}>Doubles</Typography>
 								</Box>
 							</Box>
 
@@ -964,16 +964,16 @@ const Messages = () => {
 								
 								<Box sx={{ display: 'flex', gap: 2 }}>
 									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
-										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, color: 'primary.main' }}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
 											<Typography variant="caption" color="text.primary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Play Style</Typography>
 										</Box>
 										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.preferredPlay || "Any"}</Typography>
 									</Box>
 									
 									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
-										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, color: 'primary.main' }}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 											<Typography variant="caption" color="text.primary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Racket</Typography>
 										</Box>
 										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.racket || "N/A"}</Typography>
