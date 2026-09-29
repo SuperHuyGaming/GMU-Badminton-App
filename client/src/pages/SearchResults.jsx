@@ -105,7 +105,16 @@ export default function SearchResults() {
                         // Apply filters client-side since API might not support all these filters yet
                         const selectedSkills = Object.keys(skillLevel).filter(k => skillLevel[k]);
                         if (selectedSkills.length > 0) {
-                            newResults = newResults.filter(r => selectedSkills.includes(r.skillLevel));
+                            const mapSkill = (filterValue) => {
+                                switch (filterValue) {
+                                    case 'Beginner': return ['D Level', 'E Level', 'Beginner'];
+                                    case 'Intermediate': return ['C Level'];
+                                    case 'Advanced': return ['A Level', 'B Level'];
+                                    default: return [];
+                                }
+                            };
+                            const allowedSkillLevels = selectedSkills.flatMap(mapSkill);
+                            newResults = newResults.filter(r => allowedSkillLevels.includes(r.skillLevel));
                         }
                         const selectedUnis = Object.keys(homeUniversity).filter(k => homeUniversity[k]);
                         if (selectedUnis.length > 0) {

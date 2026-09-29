@@ -23,7 +23,16 @@ router.get("/discover", authMiddleware, async (req, res) => {
 
         // Add skill filter
         if (skill && skill !== 'All') {
-            query.skillLevel = skill;
+            const mapSkill = (filterValue) => {
+                switch (filterValue) {
+                    case 'Beginner': return ['D Level', 'E Level', 'Beginner'];
+                    case 'Intermediate': return ['C Level', 'Intermediate'];
+                    case 'Advanced': return ['A Level', 'B Level', 'Advanced'];
+                    default: return [filterValue];
+                }
+            };
+            const allowedSkillLevels = mapSkill(skill);
+            query.skillLevel = { $in: allowedSkillLevels };
         }
 
         // Add search filtering if provided
