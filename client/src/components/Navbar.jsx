@@ -469,7 +469,7 @@ export default function Navbar() {
 												sx={{
 													py: 3,
 													justifyContent: "center",
-													color: "text.secondary",
+													color: "text.primary",
 												}}
 												disableRipple
 											>
@@ -515,7 +515,7 @@ export default function Navbar() {
 														</Typography>
 														<Typography
 															variant="caption"
-															color="text.secondary"
+															color="text.primary"
 															sx={{
 																mt: 0.5,
 																display:
@@ -537,6 +537,7 @@ export default function Navbar() {
 										role="button"
 										tabIndex={0}
 										aria-label="User menu"
+alt="User Avatar"
 										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAvatarClick(e); }}
 										sx={{
 											width: 40,

@@ -97,7 +97,7 @@ export default function MobileNav() {
 				sx={{
 					height: 65,
 					"& .MuiBottomNavigationAction-root": {
-						color: "text.secondary",
+						color: "text.primary",
 						minWidth: 0,
 					},
 					"& .Mui-selected": {

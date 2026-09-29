@@ -42,7 +42,7 @@ export default function Landing() {
 						</Typography>
 					</motion.div>
 					<motion.div variants={itemVariants}>
-						<Typography variant="h6" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: "auto" }}>
+						<Typography variant="h6" color="text.primary" sx={{ mb: 4, maxWidth: 600, mx: "auto" }}>
 							A student-run community platform for George Mason University badminton players. Connect, rank up, and hit the courts.
 						</Typography>
 					</motion.div>
@@ -91,7 +91,7 @@ export default function Landing() {
 									{feature.icon}
 								</Box>
 								<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{feature.title}</Typography>
-								<Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.6 }}>{feature.desc}</Typography>
+								<Typography variant="body1" color="text.primary" sx={{ lineHeight: 1.6 }}>{feature.desc}</Typography>
 							</Paper>
 						</motion.div>
 					))}

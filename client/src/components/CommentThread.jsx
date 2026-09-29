@@ -93,7 +93,7 @@ export default function CommentThread({
 						mt: 0.5,
 						cursor: "pointer",
 						fontWeight: "bold",
-						color: "text.secondary",
+						color: "text.primary",
 					}}
 				>
 					{isExpanded

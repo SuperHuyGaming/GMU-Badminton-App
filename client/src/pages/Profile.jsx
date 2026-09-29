@@ -425,12 +425,12 @@ export default function Profile() {
 							>
 								<Typography
 									variant="h6"
-									color="text.secondary"
+									color="text.primary"
 									fontWeight="bold"
 								>
 									No Recent Posts
 								</Typography>
-								<Typography color="text.secondary">
+								<Typography color="text.primary">
 									When {profileData.name} posts in the forum,
 									they'll show up here.
 								</Typography>
@@ -462,12 +462,12 @@ export default function Profile() {
 							>
 								<Typography
 									variant="h6"
-									color="text.secondary"
+									color="text.primary"
 									fontWeight="bold"
 								>
 									About {profileData.name}
 								</Typography>
-								<Typography color="text.secondary" mt={2}>
+								<Typography color="text.primary" mt={2}>
 									Plays: {profileData.preferredPlay || "Any"}{" "}
 									| Weapon: {profileData.racket || "N/A"}
 								</Typography>
