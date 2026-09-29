@@ -4,11 +4,50 @@ const { authMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
 
+// GET /api/matchmaking/presence - Task 7
+router.get("/presence", authMiddleware, async (req, res) => {
+    try {
+        const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const activeUsers = await User.find({ lastActive: { $gte: fiveMinsAgo } })
+            .select("name _id")
+            .lean();
+        res.json({ onlineUsers: activeUsers });
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// POST /api/matchmaking/queue/join - Task 9
+router.post("/queue/join", authMiddleware, async (req, res) => {
+    try {
+        const { checkInLocation, preferredTimeOfDay } = req.body;
+        await User.findByIdAndUpdate(req.user.userId, { 
+            inQueue: true, 
+            queueJoinedAt: new Date(),
+            ...(checkInLocation && { checkInLocation }),
+            ...(preferredTimeOfDay && { preferredTimeOfDay })
+        });
+        res.json({ message: "Joined queue successfully" });
+    } catch (err) {
+        res.status(500).json({ message: "Error joining queue" });
+    }
+});
+
+// POST /api/matchmaking/queue/leave - Task 9
+router.post("/queue/leave", authMiddleware, async (req, res) => {
+    try {
+        await User.findByIdAndUpdate(req.user.userId, { inQueue: false });
+        res.json({ message: "Left queue successfully" });
+    } catch (err) {
+        res.status(500).json({ message: "Error leaving queue" });
+    }
+});
+
 // GET: /api/matchmaking/discover
 // Discover players and search for users
 router.get("/discover", authMiddleware, async (req, res) => {
     try {
-        const { search, skill } = req.query;
+        const { search, skill, cursor, campus, time } = req.query;
         const escapeRegex = (string) => {
             if (typeof string !== "string") return "";
             return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -47,10 +86,33 @@ router.get("/discover", authMiddleware, async (req, res) => {
             }
         }
 
-        // Fetch up to 50 users, sorted by most recently active
+        // Cursor-Based Pagination
+        if (cursor) {
+            query._id = { $lt: cursor };
+        }
+
+        // Geospatial Court Check-in Search
+        if (campus && campus !== "All") {
+            query.checkInLocation = campus;
+        }
+
+        // Recommendation Engine V2 (time of day)
+        if (time && time !== "All") {
+            if (query.$or) {
+                query.$and = [
+                    { $or: query.$or },
+                    { $or: [{ preferredTimeOfDay: time }, { preferredTimeOfDay: "Any" }] }
+                ];
+                delete query.$or;
+            } else {
+                query.$or = [{ preferredTimeOfDay: time }, { preferredTimeOfDay: "Any" }];
+            }
+        }
+
+        // Fetch up to 50 users
         const potentialMatches = await User.find(query)
-            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location")
-            .sort({ lastActive: -1 })
+            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location checkInLocation preferredTimeOfDay inQueue")
+            .sort({ _id: -1 })
             .limit(50)
             .lean();
 

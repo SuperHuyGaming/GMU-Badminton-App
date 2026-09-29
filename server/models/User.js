@@ -71,6 +71,12 @@ const userSchema = new mongoose.Schema({
 	// Calendar / RSVPs
 	rsvpedTournaments: [{ type: String }], // Array of Tournament IDs
 
+	// Matchmaking Masterplan Tasks
+	checkInLocation: { type: String, enum: ["RAC", "Skyline", "AFC", "None"], default: "None" },
+	inQueue: { type: Boolean, default: false },
+	queueJoinedAt: { type: Date },
+	preferredTimeOfDay: { type: String, enum: ["Morning", "Afternoon", "Evening", "Any"], default: "Any" },
+
 	lastActive: { type: Date, default: Date.now },
 	createdAt: { type: Date, default: Date.now },
 });
