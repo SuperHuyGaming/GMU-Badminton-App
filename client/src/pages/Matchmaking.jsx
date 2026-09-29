@@ -56,6 +56,9 @@ export default function Matchmaking() {
     const [playStyleFilter, setPlayStyleFilter] = useState('All');
     const [availableNow, setAvailableNow] = useState(false);
 
+    // Friend Request state
+    const [requestedFriends, setRequestedFriends] = useState(new Set());
+
     // Popover / Quick-Peek State
     const [peekAnchorEl, setPeekAnchorEl] = useState(null);
     const [peekPlayer, setPeekPlayer] = useState(null);
@@ -205,6 +208,25 @@ export default function Matchmaking() {
         return diff < 24 * 60 * 60 * 1000;
     };
 
+    const handleAddFriend = async (playerId) => {
+        try {
+            const res = await apiFetch('/api/friends/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId: playerId })
+            });
+            if (res.ok) {
+                setRequestedFriends(prev => new Set(prev).add(playerId));
+            } else {
+                const data = await res.json();
+                alert(data.message || 'Failed to send friend request');
+            }
+        } catch (err) {
+            console.error('Add friend error', err);
+            alert('Failed to send friend request');
+        }
+    };
+
     const renderSkeletons = (count = 6) => (
         <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
             {Array.from({ length: count }).map((_, idx) => (
@@ -278,8 +300,16 @@ export default function Matchmaking() {
                 )}
             </CardContent>
             <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2 }}>
-                <Button variant="contained" color="primary" fullWidth sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }} onClick={() => alert(`Adding ${player.name} as friend...`)} startIcon={<PersonAddIcon />}>
-                    Add Friend
+                <Button 
+                    variant="contained" 
+                    color={requestedFriends.has(player._id) ? "inherit" : "primary"}
+                    disabled={requestedFriends.has(player._id)}
+                    fullWidth 
+                    sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }} 
+                    onClick={() => handleAddFriend(player._id)} 
+                    startIcon={<PersonAddIcon />}
+                >
+                    {requestedFriends.has(player._id) ? "Requested" : "Add Friend"}
                 </Button>
             </Box>
         </Card>
