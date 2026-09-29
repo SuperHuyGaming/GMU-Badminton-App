@@ -6,7 +6,9 @@ const errorHandler = (err, req, res, next) => {
 	// Determine status code
 	let statusCode = (res.statusCode && res.statusCode !== 200) ? res.statusCode : 500;
 
-	if (err.status && typeof err.status === "number") {
+	if (err.message === "Not allowed by CORS") {
+		statusCode = 403;
+	} else if (err.status && typeof err.status === "number") {
 		statusCode = err.status;
 	} else if (err.statusCode && typeof err.statusCode === "number") {
 		statusCode = err.statusCode;

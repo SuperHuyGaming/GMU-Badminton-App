@@ -13,7 +13,8 @@ const coachLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 20,
     message: { message: "You're sending messages too fast. Take a breather! 🏸" },
-    keyGenerator: (req) => (req.user?.id || req.user?.userId || req.ip || "anonymous"),
+    keyGenerator: (req) => (req.user?.id || req.user?.userId || "anonymous"),
+    validate: { keyGeneratorIpFallback: false },
 });
 
 // All coach routes require authentication
@@ -27,6 +28,9 @@ router.post("/message", coachLimiter, async (req, res) => {
 
         if (!message || typeof message !== "string" || !message.trim()) {
             return res.status(400).json({ message: "A valid message is required." });
+        }
+        if (message.trim().length > 2000) {
+            return res.status(400).json({ message: "Message cannot exceed 2000 characters." });
         }
 
         // Get user's skill level for personalized coaching

@@ -322,6 +322,14 @@ describe('Search Service Express Server', () => {
       expect(res.status).toBe(200);
       expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5173');
     });
+
+    it('allows requests from gmu-frontend-staging onrender origin', async () => {
+      const res = await request(app)
+        .get('/health')
+        .set('Origin', 'https://gmu-frontend-staging.onrender.com');
+      expect(res.status).toBe(200);
+      expect(res.headers['access-control-allow-origin']).toBe('https://gmu-frontend-staging.onrender.com');
+    });
   });
 
   describe('404 Not Found Handler', () => {

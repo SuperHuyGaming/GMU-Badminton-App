@@ -68,8 +68,8 @@ router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
 			return res.status(403).json({ message: "Unauthorized to access this conversation." });
 		}
 
-		const page = parseInt(req.query.page) || 1;
-		const limit = parseInt(req.query.limit) || 50;
+		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+		const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
 		const skip = (page - 1) * limit;
 		
 		// Sort by descending timestamp to get the newest messages first
@@ -127,6 +127,9 @@ router.post("/", authMiddleware, messageLimiter, async (req, res, next) => {
 		
 		if (!content || typeof content !== "string" || !content.trim()) {
 			return res.status(400).json({ message: "Message content cannot be empty." });
+		}
+		if (content.trim().length > 2000) {
+			return res.status(400).json({ message: "Message content cannot exceed 2000 characters." });
 		}
 
 		if (!receiverId || !mongoose.isValidObjectId(receiverId)) {

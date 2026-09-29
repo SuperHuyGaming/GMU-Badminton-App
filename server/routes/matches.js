@@ -37,9 +37,14 @@ router.get("/leaderboard", async (req, res, next) => {
         // 1. $match stage: Multi-variable filtering
         const matchStage = {};
         
-        if (university) matchStage.homeUniversity = university;
-        if (skillLevel) matchStage.skillLevel = skillLevel;
-        if (minMatches) matchStage['stats.totalMatches'] = { $gte: parseInt(minMatches, 10) };
+        if (typeof university === 'string' && university.trim()) matchStage.homeUniversity = university.trim().slice(0, 100);
+        if (typeof skillLevel === 'string' && skillLevel.trim()) matchStage.skillLevel = skillLevel.trim().slice(0, 50);
+        if (minMatches !== undefined) {
+            const parsedMin = parseInt(minMatches, 10);
+            if (!isNaN(parsedMin) && parsedMin >= 0) {
+                matchStage['stats.totalMatches'] = { $gte: parsedMin };
+            }
+        }
         if (search) {
             const sanitizedSearch = escapeRegex(search);
             if (sanitizedSearch) {

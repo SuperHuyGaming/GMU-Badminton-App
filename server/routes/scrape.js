@@ -4,6 +4,14 @@ const { ApifyClient } = require("apify-client");
 const { parseInstagramPost } = require("../utils/aiParser");
 const { authMiddleware } = require("../middleware/auth");
 const Tournament = require("../models/Tournament");
+const rateLimit = require("express-rate-limit");
+const xss = require("xss");
+
+const scrapeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { message: "Too many scraping requests, please try again later." }
+});
 
 const client = new ApifyClient({
     token: process.env.APIFY_API_TOKEN || "placeholder_token",
@@ -11,7 +19,7 @@ const client = new ApifyClient({
 
 // POST /api/scrape/instagram
 // Takes a direct Instagram post URL, scrapes it, and returns Gemini parsed data
-router.post("/instagram", authMiddleware, async (req, res, next) => {
+router.post("/instagram", authMiddleware, scrapeLimiter, async (req, res, next) => {
     try {
         const { url } = req.body;
         if (!url || typeof url !== "string") {
@@ -94,7 +102,7 @@ router.post("/instagram", authMiddleware, async (req, res, next) => {
 
 // POST /api/scrape/submit-pending
 // Saves the crowdsourced tournament to DB as pending
-router.post("/submit-pending", authMiddleware, async (req, res, next) => {
+router.post("/submit-pending", authMiddleware, scrapeLimiter, async (req, res, next) => {
     try {
         const {
             tournamentName,
@@ -113,19 +121,41 @@ router.post("/submit-pending", authMiddleware, async (req, res, next) => {
         if (!tournamentName || typeof tournamentName !== "string" || !tournamentName.trim()) {
             return res.status(400).json({ message: "Tournament name is required." });
         }
+        if (tournamentName.trim().length > 200) {
+            return res.status(400).json({ message: "Tournament name cannot exceed 200 characters." });
+        }
+
+        const isValidUrl = (str) => {
+            if (!str || typeof str !== "string") return false;
+            try {
+                const u = new URL(str);
+                return u.protocol === "http:" || u.protocol === "https:";
+            } catch {
+                return false;
+            }
+        };
+
+        const cleanTournamentName = xss(tournamentName.trim());
+        const cleanHostUniversity = (typeof hostUniversity === "string" && hostUniversity.trim()) ? xss(hostUniversity.trim().slice(0, 100)) : "Local Club";
+        const cleanEventLocation = (typeof eventLocation === "string" && eventLocation.trim()) ? xss(eventLocation.trim().slice(0, 200)) : "TBD";
+        const cleanCaption = (typeof originalCaption === "string") ? xss(originalCaption.trim().slice(0, 2000)) : "";
+        const cleanFlyerUrl = isValidUrl(flyerImageUrl) ? flyerImageUrl : "";
+        const cleanRegistrationUrl = isValidUrl(registrationUrl) ? registrationUrl : "";
+        const cleanSourceUrl = isValidUrl(instagramPostUrl) ? instagramPostUrl : "";
+        const cleanSkillLevels = Array.isArray(skillLevels) ? skillLevels.filter(s => typeof s === "string").map(s => xss(s.trim())) : [];
         
         const newTourney = new Tournament({
-            tournamentName: tournamentName.trim(),
+            tournamentName: cleanTournamentName,
             startDate: startDate ? new Date(startDate) : undefined,
             endDate: endDate ? new Date(endDate) : undefined,
             registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : undefined,
-            skillLevels: Array.isArray(skillLevels) ? skillLevels : [],
-            flyerImageUrl: flyerImageUrl || "",
-            originalCaption: originalCaption || "",
-            sourceUrl: instagramPostUrl || "",
-            registrationUrl: registrationUrl || "",
-            hostUniversity: hostUniversity || "Local Club",
-            eventLocation: eventLocation || "TBD",
+            skillLevels: cleanSkillLevels,
+            flyerImageUrl: cleanFlyerUrl,
+            originalCaption: cleanCaption,
+            sourceUrl: cleanSourceUrl,
+            registrationUrl: cleanRegistrationUrl,
+            hostUniversity: cleanHostUniversity,
+            eventLocation: cleanEventLocation,
             isOpenTournament: false, // Set to false so it requires Admin approval to show on main feed
             createdAt: new Date()
         });

@@ -235,7 +235,7 @@ const sendNotification = async (io, targetUserId, message, link) => {
 	if (!targetUserId || targetUserId === "000000000000000000000000") return;
 	const notif = new Notification({ targetUserId, message, link });
 	await notif.save();
-	if (io) io.emit("newNotification", notif);
+	if (io) io.to(targetUserId.toString()).emit("newNotification", notif);
 };
 
 // ==========================================
@@ -248,7 +248,7 @@ router.get("/", async (req, res) => {
 		const skip = (page - 1) * limit;
 
 		const query = { isFlagged: { $ne: true } };
-		if (req.query.date) query.targetDate = req.query.date;
+		if (req.query.date && typeof req.query.date === "string") query.targetDate = req.query.date.slice(0, 50);
 
 		const rawPosts = await Post.find(query)
 			.sort({ timestamp: -1 })
@@ -278,8 +278,8 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		
 		const cleanTitle = xss(title.trim());
 		const cleanContent = xss(content.trim());
-		const cleanImageUrl = imageUrl ? xss(imageUrl) : "";
-		const cleanTags = Array.isArray(tags) ? tags.map(t => xss(t)) : [];
+		const cleanImageUrl = (imageUrl && typeof imageUrl === "string") ? xss(imageUrl.trim()) : "";
+		const cleanTags = Array.isArray(tags) ? tags.filter(t => typeof t === "string").map(t => xss(t.trim()).slice(0, 50)) : [];
 		
 		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
 		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);

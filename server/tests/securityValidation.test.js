@@ -38,6 +38,11 @@ jest.mock('../models/Match');
 jest.mock('../models/CoachChat');
 jest.mock('../models/EquipmentListing');
 jest.mock('../models/ActivityFeed');
+jest.mock('../models/RefreshToken');
+jest.mock('../utils/aiCoach', () => ({
+    chat: jest.fn().mockResolvedValue({ response: "Practice your footwork!", error: false }),
+    initializeGemini: jest.fn().mockReturnValue(true)
+}));
 
 const Announcement = require('../models/Announcement');
 const Message = require('../models/Message');
@@ -46,6 +51,7 @@ const User = require('../models/User');
 const Match = require('../models/Match');
 const EquipmentListing = require('../models/EquipmentListing');
 const ActivityFeed = require('../models/ActivityFeed');
+const RefreshToken = require('../models/RefreshToken');
 
 const announcementRoutes = require('../routes/announcements');
 const messageRoutes = require('../routes/messages');
@@ -56,6 +62,9 @@ const { router: profileRoutes } = require('../routes/profile');
 const marketplaceRoutes = require('../routes/marketplace');
 const feedRoutes = require('../routes/feed');
 const adminRoutes = require('../routes/admin');
+const friendsRoutes = require('../routes/friends');
+const coachRoutes = require('../routes/coach');
+const authRoutes = require('../routes/auth');
 const errorHandler = require('../middleware/errorHandler');
 
 const app = express();
@@ -70,6 +79,9 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/friends', friendsRoutes);
+app.use('/api/coach', coachRoutes);
+app.use('/api/auth', authRoutes);
 app.use(errorHandler);
 
 describe('Backend Security & Validation Tests', () => {
@@ -395,6 +407,144 @@ describe('Backend Security & Validation Tests', () => {
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 message: 'Cast to ObjectId failed'
             }));
+        });
+
+        it('should return 403 for Not allowed by CORS', () => {
+            const req = {};
+            const res = {
+                statusCode: 200,
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            };
+            const next = jest.fn();
+
+            const corsError = new Error('Not allowed by CORS');
+            errorHandler(corsError, req, res, next);
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                message: 'Not allowed by CORS'
+            }));
+        });
+    });
+
+    describe('Friends System IDOR Protection', () => {
+        it('should reject non-owner and non-admin from viewing another user friend requests', async () => {
+            const res = await request(app)
+                .get('/api/friends/650000000000000000000002')
+                .set('Authorization', `Bearer ${userToken}`);
+
+            expect(res.statusCode).toBe(403);
+            expect(res.body.message).toContain("Unauthorized to access this user's friend requests");
+        });
+
+        it('should allow user to view their own friend requests', async () => {
+            User.findById.mockReturnValue({
+                populate: jest.fn().mockReturnValue({
+                    populate: jest.fn().mockReturnValue({
+                        populate: jest.fn().mockResolvedValue({
+                            friends: [],
+                            friendRequests: [],
+                            sentFriendRequests: []
+                        })
+                    })
+                })
+            });
+
+            const res = await request(app)
+                .get('/api/friends/650000000000000000000001')
+                .set('Authorization', `Bearer ${userToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toHaveProperty('friendRequests');
+        });
+    });
+
+    describe('Profile Validation & Privacy Leak Prevention', () => {
+        it('should reject non-string first name with 400', async () => {
+            const res = await request(app)
+                .put('/api/profile')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ firstName: 12345 });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('First name cannot be empty');
+        });
+
+        it('should reject non-string bio with 400', async () => {
+            const res = await request(app)
+                .put('/api/profile')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ bio: { invalid: true } });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Bio must be a string');
+        });
+
+        it('should sanitize broadcasted profile so email and pushSubscriptions are not leaked', async () => {
+            const mockUpdatedUser = {
+                _id: "650000000000000000000001",
+                name: "Updated Name",
+                email: "secret@gmu.edu",
+                pushSubscriptions: [{ endpoint: "https://push.example.com" }],
+                toObject: () => ({
+                    _id: "650000000000000000000001",
+                    name: "Updated Name",
+                    email: "secret@gmu.edu",
+                    pushSubscriptions: [{ endpoint: "https://push.example.com" }]
+                })
+            };
+
+            User.findByIdAndUpdate.mockReturnValue({
+                select: jest.fn().mockResolvedValue(mockUpdatedUser)
+            });
+
+            const emitSpy = jest.fn();
+            app.set('io', { emit: emitSpy });
+
+            const res = await request(app)
+                .put('/api/profile')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ name: "Updated Name" });
+
+            expect(res.statusCode).toBe(200);
+            expect(emitSpy).toHaveBeenCalledWith(
+                "profileUpdated",
+                expect.not.objectContaining({ email: expect.anything(), pushSubscriptions: expect.anything() })
+            );
+        });
+    });
+
+    describe('AI Coach Input Validation & Limits', () => {
+        it('should reject empty message to coach with 400', async () => {
+            const res = await request(app)
+                .post('/api/coach/message')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ message: '   ' });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('A valid message is required');
+        });
+
+        it('should reject excessively long message to coach with 400', async () => {
+            const longMessage = 'x'.repeat(2001);
+            const res = await request(app)
+                .post('/api/coach/message')
+                .set('Authorization', `Bearer ${userToken}`)
+                .send({ message: longMessage });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body.message).toContain('Message cannot exceed 2000 characters');
+        });
+    });
+
+    describe('Auth Refresh Token Validation', () => {
+        it('should reject non-string or missing refresh token with 403', async () => {
+            const res = await request(app)
+                .post('/api/auth/refreshtoken')
+                .send({ refreshToken: 12345 });
+
+            expect(res.statusCode).toBe(403);
+            expect(res.body.message).toContain('Refresh Token is required');
         });
     });
 });

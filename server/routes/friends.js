@@ -14,6 +14,12 @@ router.get("/:userId", authMiddleware, async (req, res, next) => {
 			return res.status(400).json({ message: "Invalid user ID format." });
 		}
 
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const isOwnerOrAdmin = currentUserId === req.params.userId || req.user.role === "admin";
+		if (!isOwnerOrAdmin) {
+			return res.status(403).json({ message: "Unauthorized to access this user's friend requests." });
+		}
+
 		const user = await User.findById(req.params.userId)
 			.populate("friends", "_id name profilePic skillLevel lastActive")
 			.populate("friendRequests", "_id name profilePic skillLevel")

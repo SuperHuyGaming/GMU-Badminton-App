@@ -91,7 +91,7 @@ router.post(
 							targetUserId,
 							{ [imageType]: imageUrl },
 							{ new: true },
-						).select("-password");
+						).select("-password -pushSubscriptions");
 
 						// If user doesn't exist, stop safely instead of crashing React
 						if (!updatedUser) {

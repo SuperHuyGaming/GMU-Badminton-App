@@ -18,7 +18,7 @@ router.use(adminMiddleware);
 router.get("/users", async (req, res) => {
 	try {
 		const users = await User.find()
-			.select("-password")
+			.select("-password -pushSubscriptions")
 			.sort({ createdAt: -1 });
 		res.json(users);
 	} catch (err) {
