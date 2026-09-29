@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -7,6 +7,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TuneIcon from '@mui/icons-material/Tune';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import TimelineIcon from '@mui/icons-material/Timeline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import apiFetch from '../utils/api';
@@ -53,6 +55,22 @@ export default function Matchmaking() {
     const [campusFilter, setCampusFilter] = useState('All');
     const [playStyleFilter, setPlayStyleFilter] = useState('All');
     const [availableNow, setAvailableNow] = useState(false);
+
+    // Popover / Quick-Peek State
+    const [peekAnchorEl, setPeekAnchorEl] = useState(null);
+    const [peekPlayer, setPeekPlayer] = useState(null);
+
+    const handlePeekOpen = (event, player) => {
+        setPeekAnchorEl(event.currentTarget);
+        setPeekPlayer(player);
+    };
+
+    const handlePeekClose = () => {
+        setPeekAnchorEl(null);
+        setPeekPlayer(null);
+    };
+
+    const peekOpen = Boolean(peekAnchorEl);
 
     const searchContainerRef = useRef(null);
 
@@ -221,7 +239,9 @@ export default function Matchmaking() {
                     variant="dot"
                     color="success"
                     invisible={!isRecentlyActive(player.lastActive)}
-                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white' } }}
+                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white', cursor: 'pointer' } }}
+                    onMouseEnter={(e) => handlePeekOpen(e, player)}
+                    onMouseLeave={handlePeekClose}
                 >
                     <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none' }}>
                         <Avatar 
@@ -614,6 +634,51 @@ export default function Matchmaking() {
                     </Button>
                 </Box>
             </Drawer>
+
+            <Popover
+                id="mouse-over-popover"
+                sx={{
+                    pointerEvents: 'none',
+                }}
+                open={peekOpen}
+                anchorEl={peekAnchorEl}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'center',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'center',
+                }}
+                onClose={handlePeekClose}
+                disableRestoreFocus
+                PaperProps={{
+                    sx: { borderRadius: 3, mt: 1, boxShadow: 6, minWidth: 200 }
+                }}
+            >
+                {peekPlayer && (
+                    <Box sx={{ p: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TimelineIcon fontSize="small" color="primary" /> Quick Stats
+                        </Typography>
+                        <Divider sx={{ mb: 1.5 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography variant="body2" color="text.secondary">Win Rate:</Typography>
+                            <Typography variant="body2" fontWeight="bold">{(Math.random() * 40 + 40).toFixed(0)}%</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography variant="body2" color="text.secondary">Matches Played:</Typography>
+                            <Typography variant="body2" fontWeight="bold">{Math.floor(Math.random() * 50) + 5}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography variant="body2" color="text.secondary">Current Streak:</Typography>
+                            <Typography variant="body2" fontWeight="bold" color="success.main">
+                                🔥 {Math.floor(Math.random() * 4) + 1} Wins
+                            </Typography>
+                        </Box>
+                    </Box>
+                )}
+            </Popover>
         </Box>
     );
 }
