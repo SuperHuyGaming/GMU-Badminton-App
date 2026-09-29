@@ -262,7 +262,6 @@ export default function Navbar() {
 					elevation={0}
 					sx={{ 
 						borderBottom: "1px solid rgba(0,0,0,0.1)",
-						backgroundColor: "primary.main",
 					}}
 				>
 					<Toolbar sx={{ justifyContent: "space-between", px: { xs: 1, sm: 2, md: 3 } }}>
