@@ -66,52 +66,54 @@ export default function Matchmaking() {
     const renderPlayerCard = (player) => (
         <Card 
             sx={{ 
-                height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, alignItems: 'center', p: 2, textAlign: 'center', transition: 'transform 0.2s',
-                '&:hover': { transform: 'translateY(-4px)', boxShadow: 4 }
+                height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, p: 2.5, transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': { transform: 'translateY(-4px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.1)' }
             }}
         >
-            <Badge
-                overlap="circular"
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                variant="dot"
-                color="success"
-                invisible={!isRecentlyActive(player.lastActive)}
-                sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white' } }}
-            >
-                <Avatar 
-                    src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} 
-                    sx={{ width: 80, height: 80, mb: 2 }}
-                 alt="User Avatar" />
-            </Badge>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
+                <Badge
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    variant="dot"
+                    color="success"
+                    invisible={!isRecentlyActive(player.lastActive)}
+                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white' } }}
+                >
+                    <Avatar 
+                        src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} 
+                        sx={{ width: 72, height: 72, bgcolor: 'secondary.main', color: 'secondary.contrastText' }}
+                     alt={player.name} />
+                </Badge>
+                <Stack direction="column" spacing={1} alignItems="flex-end">
+                    {player.skillLevel && <Chip label={player.skillLevel} size="small" color="primary" sx={{ fontWeight: 600, borderRadius: 1.5 }} />}
+                    {player.preferredPlay && <Chip label={player.preferredPlay} size="small" variant="outlined" sx={{ fontWeight: 500, borderRadius: 1.5 }} />}
+                </Stack>
+            </Box>
             <CardContent sx={{ flexGrow: 1, p: 0, width: '100%' }}>
-                <Typography variant="h6" fontWeight="bold" gutterBottom>
+                <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.2, mb: 1, color: 'text.primary', wordBreak: 'break-word' }}>
                     {player.name}
                 </Typography>
-                <Stack direction="row" spacing={1} justifyContent="center" sx={{ mb: 2 }}>
-                    {player.skillLevel && <Chip label={player.skillLevel} size="small" color="primary" variant="outlined" />}
-                    {player.preferredPlay && <Chip label={player.preferredPlay} size="small" color="secondary" variant="outlined" />}
-                </Stack>
                 {player.homeUniversity && (
-                    <Typography variant="body2" color="text.primary" sx={{ mb: 1 }}>
-                        🏫 {player.homeUniversity}
+                    <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span aria-hidden="true">🏫</span> {player.homeUniversity}
                     </Typography>
                 )}
                 {player.racket && (
-                    <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
-                        🏸 {player.racket}
+                    <Typography variant="body2" sx={{ mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span aria-hidden="true">🏸</span> {player.racket}
                     </Typography>
                 )}
                 {player.bio && (
-                    <Typography variant="body2" sx={{ fontStyle: 'italic', mb: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <Typography variant="body2" sx={{ fontStyle: 'italic', mb: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'text.secondary', wordBreak: 'break-word' }}>
                         "{player.bio}"
                     </Typography>
                 )}
             </CardContent>
-            <Box sx={{ display: 'flex', gap: 1, width: '100%', mt: 'auto', alignItems: 'center' }}>
-                <Button variant="outlined" fullWidth sx={{ borderRadius: 2, fontWeight: 'bold' }} onClick={() => window.location.href = `/profile/${player._id}`}>
+            <Box sx={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 1.5, width: '100%', mt: 'auto', pt: 2 }}>
+                <Button variant="outlined" sx={{ flex: 1, borderRadius: 2, fontWeight: 'bold', minWidth: '100px', textTransform: 'none' }} onClick={() => window.location.href = `/profile/${player._id}`}>
                     Profile
                 </Button>
-                <Button variant="contained" color="primary" fullWidth sx={{ borderRadius: 2, fontWeight: 'bold' }} onClick={() => alert(`Starting conversation with ${player.name}...`)} startIcon={<ChatIcon />}>
+                <Button variant="contained" color="primary" sx={{ flex: 1, borderRadius: 2, fontWeight: 'bold', minWidth: '100px', textTransform: 'none' }} onClick={() => alert(`Starting conversation with ${player.name}...`)} startIcon={<ChatIcon />}>
                     Message
                 </Button>
             </Box>
@@ -182,24 +184,27 @@ export default function Matchmaking() {
                 </Box>
             )}
 
-            <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
-                All Players
-            </Typography>
-
-            {loading ? (
-                renderSkeletons()
-            ) : matches.length === 0 ? (
-                <Alert severity="info" sx={{ borderRadius: 2 }}>
-                    No players found matching your criteria.
-                </Alert>
-            ) : (
-                <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-                    {matches.map((player) => (
-                        <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={`match-${player._id}`}>
-                            {renderPlayerCard(player)}
+            {(searchQuery || skillFilter !== 'All') && (
+                <>
+                    <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
+                        Search Results
+                    </Typography>
+                    {loading ? (
+                        renderSkeletons()
+                    ) : matches.length === 0 ? (
+                        <Alert severity="info" sx={{ borderRadius: 2 }}>
+                            No players found matching your criteria.
+                        </Alert>
+                    ) : (
+                        <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
+                            {matches.map((player) => (
+                                <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={`match-${player._id}`}>
+                                    {renderPlayerCard(player)}
+                                </Grid>
+                            ))}
                         </Grid>
-                    ))}
-                </Grid>
+                    )}
+                </>
             )}
         </Box>
     );
