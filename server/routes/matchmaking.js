@@ -57,11 +57,15 @@ router.get("/discover", authMiddleware, async (req, res) => {
         // Fetch "People You May Know" (same university, if exists)
         let recommended = [];
         if (currentUser && currentUser.homeUniversity) {
+            const minElo = (currentUser.singlesElo || 1200) - 300;
+            const maxElo = (currentUser.singlesElo || 1200) + 300;
+
             recommended = await User.find({
                 _id: { $ne: req.user.userId },
-                homeUniversity: currentUser.homeUniversity
+                homeUniversity: currentUser.homeUniversity,
+                singlesElo: { $gte: minElo, $lte: maxElo }
             })
-            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location")
+            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location singlesElo")
             .limit(4)
             .lean();
         }
@@ -136,3 +140,4 @@ router.get("/generate-bracket", authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
