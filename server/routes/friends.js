@@ -5,6 +5,40 @@ const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
 const Notification = require("../models/Notification");
 
+const toIdString = (item) => {
+	if (!item) return null;
+	const raw = item._id !== undefined ? item._id : item;
+	if (!raw) return null;
+	const str = typeof raw.toString === "function" ? raw.toString() : String(raw);
+	return str && str !== "[object Object]" ? str : null;
+};
+
+const safeIncludesId = (arr, idToFind) => {
+	const target = toIdString(idToFind);
+	if (!target || !Array.isArray(arr)) return false;
+	return arr.some(item => toIdString(item) === target);
+};
+
+const safePushUnique = (arr, idToAdd) => {
+	if (!arr || !Array.isArray(arr)) return;
+	const target = toIdString(idToAdd);
+	if (!target) return;
+	if (!safeIncludesId(arr, target)) {
+		arr.push(idToAdd);
+	}
+};
+
+const clearBidirectionalRequests = (userA, userB) => {
+	const idA = toIdString(userA?._id || userA);
+	const idB = toIdString(userB?._id || userB);
+	if (!idA || !idB || idA === idB) return;
+
+	if (userA && userA.friendRequests) userA.friendRequests.pull(idB);
+	if (userA && userA.sentFriendRequests) userA.sentFriendRequests.pull(idB);
+	if (userB && userB.friendRequests) userB.friendRequests.pull(idA);
+	if (userB && userB.sentFriendRequests) userB.sentFriendRequests.pull(idA);
+};
+
 // Setup Socket io mapping later in server.js but for API:
 
 // GET: friends and friend requests
@@ -14,7 +48,7 @@ router.get("/:userId", authMiddleware, async (req, res, next) => {
 			return res.status(400).json({ message: "Invalid user ID format." });
 		}
 
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = toIdString(req.user.id || req.user.userId);
 		const isOwnerOrAdmin = currentUserId === req.params.userId || req.user.role === "admin";
 		if (!isOwnerOrAdmin) {
 			return res.status(403).json({ message: "Unauthorized to access this user's friend requests." });
@@ -28,9 +62,9 @@ router.get("/:userId", authMiddleware, async (req, res, next) => {
 		if (!user) return res.status(404).json({ message: "User not found" });
 
 		res.json({
-			friends: user.friends,
-			friendRequests: user.friendRequests,
-			sentFriendRequests: user.sentFriendRequests,
+			friends: (user.friends || []).filter(Boolean),
+			friendRequests: (user.friendRequests || []).filter(Boolean),
+			sentFriendRequests: (user.sentFriendRequests || []).filter(Boolean),
 		});
 	} catch (error) {
 		next(error);
@@ -40,9 +74,9 @@ router.get("/:userId", authMiddleware, async (req, res, next) => {
 // POST: send friend request
 router.post("/request", authMiddleware, async (req, res, next) => {
 	try {
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = toIdString(req.user.id || req.user.userId);
 		const requesterId = currentUserId;
-		const { recipientId } = req.body;
+		const recipientId = toIdString(req.body.recipientId || req.body.friendId || req.body.targetId);
 		
 		if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
 			return res.status(400).json({ message: "Valid recipient ID is required." });
@@ -55,29 +89,40 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 
 		if (!requester || !recipient) return res.status(404).json({ message: "User not found" });
 
-		if (recipient.friends.includes(requesterId)) {
+		if (safeIncludesId(recipient.friends, requesterId) || safeIncludesId(requester.friends, recipientId)) {
 			return res.status(400).json({ message: "Already friends" });
 		}
 
-		if (recipient.friendRequests.includes(requesterId)) {
-			return res.status(400).json({ message: "Request already sent" });
-		}
-
 		// If they already sent YOU a request, just accept it
-		if (requester.friendRequests.includes(recipientId)) {
-			requester.friendRequests.pull(recipientId);
-			recipient.sentFriendRequests.pull(requesterId);
+		if (safeIncludesId(requester.friendRequests, recipientId)) {
+			clearBidirectionalRequests(requester, recipient);
 			
-			requester.friends.push(recipientId);
-			recipient.friends.push(requesterId);
+			safePushUnique(requester.friends, recipientId);
+			safePushUnique(recipient.friends, requesterId);
 			
 			await requester.save();
 			await recipient.save();
+
+			const io = req.app?.get("io") || req.io;
+			if (io) {
+				io.to(recipientId).emit("friendRequestAccepted", {
+					userId: requesterId,
+					friend: { _id: requester._id, name: requester.name, profilePic: requester.profilePic, skillLevel: requester.skillLevel }
+				});
+				io.to(requesterId).emit("friendRequestAccepted", {
+					userId: recipientId,
+					friend: { _id: recipient._id, name: recipient.name, profilePic: recipient.profilePic, skillLevel: recipient.skillLevel }
+				});
+			}
 			return res.json({ message: "Friend request accepted automatically" });
 		}
 
-		recipient.friendRequests.push(requesterId);
-		requester.sentFriendRequests.push(recipientId);
+		if (safeIncludesId(recipient.friendRequests, requesterId) || safeIncludesId(requester.sentFriendRequests, recipientId)) {
+			return res.status(400).json({ message: "Request already sent" });
+		}
+
+		safePushUnique(recipient.friendRequests, requesterId);
+		safePushUnique(requester.sentFriendRequests, recipientId);
 
 		await recipient.save();
 		await requester.save();
@@ -90,8 +135,19 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 		});
 		await notif.save();
 
-		req.app.get("io").to(recipientId).emit("newNotification", notif);
-		req.app.get("io").to(recipientId).emit("friendRequestReceived", { requesterId });
+		const io = req.app?.get("io") || req.io;
+		if (io) {
+			io.to(recipientId).emit("newNotification", notif);
+			io.to(recipientId).emit("friendRequestReceived", {
+				requesterId,
+				requester: {
+					_id: requester._id,
+					name: requester.name,
+					profilePic: requester.profilePic,
+					skillLevel: requester.skillLevel
+				}
+			});
+		}
 
 		res.json({ message: "Friend request sent" });
 	} catch (error) {
@@ -102,9 +158,9 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 // POST: accept friend request
 router.post("/accept", authMiddleware, async (req, res, next) => {
 	try {
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = toIdString(req.user.id || req.user.userId);
 		const userId = currentUserId;
-		const { requesterId } = req.body;
+		const requesterId = toIdString(req.body.requesterId || req.body.friendId || req.body.targetId || req.body.recipientId);
 
 		if (!requesterId || !mongoose.isValidObjectId(requesterId)) {
 			return res.status(400).json({ message: "Valid requester ID is required." });
@@ -115,11 +171,16 @@ router.post("/accept", authMiddleware, async (req, res, next) => {
 
 		if (!user || !requester) return res.status(404).json({ message: "User not found" });
 
-		user.friendRequests.pull(requesterId);
-		requester.sentFriendRequests.pull(userId);
+		// Validate that requesterId exists in user.friendRequests
+		const hasPendingRequest = safeIncludesId(user.friendRequests, requesterId);
+		if (!hasPendingRequest) {
+			return res.status(400).json({ message: "No pending friend request from this user" });
+		}
 
-		if (!user.friends.includes(requesterId)) user.friends.push(requesterId);
-		if (!requester.friends.includes(userId)) requester.friends.push(userId);
+		clearBidirectionalRequests(user, requester);
+
+		safePushUnique(user.friends, requesterId);
+		safePushUnique(requester.friends, userId);
 
 		await user.save();
 		await requester.save();
@@ -132,9 +193,18 @@ router.post("/accept", authMiddleware, async (req, res, next) => {
 		});
 		await notif.save();
 
-		req.app.get("io").to(requesterId).emit("newNotification", notif);
-		req.app.get("io").to(requesterId).emit("friendRequestAccepted", { userId });
-		req.app.get("io").to(userId).emit("friendRequestAccepted", { userId: requesterId });
+		const io = req.app?.get("io") || req.io;
+		if (io) {
+			io.to(requesterId).emit("newNotification", notif);
+			io.to(requesterId).emit("friendRequestAccepted", {
+				userId,
+				friend: { _id: user._id, name: user.name, profilePic: user.profilePic, skillLevel: user.skillLevel }
+			});
+			io.to(userId).emit("friendRequestAccepted", {
+				userId: requesterId,
+				friend: { _id: requester._id, name: requester.name, profilePic: requester.profilePic, skillLevel: requester.skillLevel }
+			});
+		}
 
 		res.json({ message: "Friend request accepted" });
 	} catch (error) {
@@ -142,15 +212,19 @@ router.post("/accept", authMiddleware, async (req, res, next) => {
 	}
 });
 
-// POST: reject/cancel friend request
-router.post("/reject", authMiddleware, async (req, res, next) => {
+// Helper for decline/reject
+const handleDeclineOrReject = async (req, res, next) => {
 	try {
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = toIdString(req.user.id || req.user.userId);
 		const userId = currentUserId;
-		const { targetId } = req.body;
+		const targetId = toIdString(req.body.requesterId || req.body.targetId || req.body.friendId || req.body.recipientId);
 
 		if (!targetId || !mongoose.isValidObjectId(targetId)) {
 			return res.status(400).json({ message: "Valid target ID is required." });
+		}
+
+		if (userId === targetId) {
+			return res.status(400).json({ message: "Cannot decline yourself" });
 		}
 
 		const user = await User.findById(userId);
@@ -159,26 +233,35 @@ router.post("/reject", authMiddleware, async (req, res, next) => {
 		if (!user || !target) return res.status(404).json({ message: "User not found" });
 
 		// Could be rejecting a received request, or cancelling a sent request
-		user.friendRequests.pull(targetId);
-		user.sentFriendRequests.pull(targetId);
-		target.friendRequests.pull(userId);
-		target.sentFriendRequests.pull(userId);
+		clearBidirectionalRequests(user, target);
 
 		await user.save();
 		await target.save();
 
-		res.json({ message: "Friend request removed" });
+		const io = req.app?.get("io") || req.io;
+		if (io) {
+			io.to(targetId).emit("friendRequestDeclined", { userId });
+			io.to(userId).emit("friendRequestDeclined", { userId: targetId });
+		}
+
+		res.json({ message: "Friend request declined" });
 	} catch (error) {
 		next(error);
 	}
-});
+};
+
+// POST: decline friend request
+router.post("/decline", authMiddleware, handleDeclineOrReject);
+
+// POST: reject/cancel friend request (alias)
+router.post("/reject", authMiddleware, handleDeclineOrReject);
 
 // POST: remove friend
 router.post("/remove", authMiddleware, async (req, res, next) => {
 	try {
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = toIdString(req.user.id || req.user.userId);
 		const userId = currentUserId;
-		const { friendId } = req.body;
+		const friendId = toIdString(req.body.friendId || req.body.targetId || req.body.recipientId);
 
 		if (!friendId || !mongoose.isValidObjectId(friendId)) {
 			return res.status(400).json({ message: "Valid friend ID is required." });
@@ -189,14 +272,18 @@ router.post("/remove", authMiddleware, async (req, res, next) => {
 
 		if (!user || !friend) return res.status(404).json({ message: "User not found" });
 
-		user.friends.pull(friendId);
-		friend.friends.pull(userId);
+		if (user.friends) user.friends.pull(friendId);
+		if (friend.friends) friend.friends.pull(userId);
+		clearBidirectionalRequests(user, friend);
 
 		await user.save();
 		await friend.save();
 		
-		req.app.get("io").to(userId).emit("friendRemoved", { friendId });
-		req.app.get("io").to(friendId).emit("friendRemoved", { friendId: userId });
+		const io = req.app?.get("io") || req.io;
+		if (io) {
+			io.to(userId).emit("friendRemoved", { friendId });
+			io.to(friendId).emit("friendRemoved", { friendId: userId });
+		}
 
 		res.json({ message: "Friend removed" });
 	} catch (error) {

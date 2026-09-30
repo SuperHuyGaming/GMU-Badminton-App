@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import HistoryIcon from '@mui/icons-material/History';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -11,6 +10,8 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import apiFetch from '../utils/api';
+import socket from '../utils/socket';
+import FriendActionButton from '../components/FriendActionButton';
 
 const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -252,6 +253,27 @@ export default function Matchmaking() {
         return () => clearInterval(interval);
     }, []);
 
+    // Real-Time Socket Listeners for Friend Requests
+    useEffect(() => {
+        const handleFriendRequestReceived = ({ requesterId }) => {
+            setMatches(prev => prev.map(p => p._id === requesterId ? { ...p, friendshipStatus: 'request_received' } : p));
+            setRecommended(prev => prev.map(p => p._id === requesterId ? { ...p, friendshipStatus: 'request_received' } : p));
+        };
+
+        const handleFriendRequestAccepted = ({ userId }) => {
+            setMatches(prev => prev.map(p => p._id === userId ? { ...p, friendshipStatus: 'friends' } : p));
+            setRecommended(prev => prev.map(p => p._id === userId ? { ...p, friendshipStatus: 'friends' } : p));
+        };
+
+        socket.on('friendRequestReceived', handleFriendRequestReceived);
+        socket.on('friendRequestAccepted', handleFriendRequestAccepted);
+
+        return () => {
+            socket.off('friendRequestReceived', handleFriendRequestReceived);
+            socket.off('friendRequestAccepted', handleFriendRequestAccepted);
+        };
+    }, []);
+
     const handleSearchSubmit = (query) => {
         const q = typeof query === 'string' ? query : searchQuery;
         saveRecentSearch(q);
@@ -317,25 +339,6 @@ export default function Matchmaking() {
         if (!lastActiveDate) return false;
         const diff = new Date() - new Date(lastActiveDate);
         return diff < 24 * 60 * 60 * 1000;
-    };
-
-    const handleAddFriend = async (playerId) => {
-        try {
-            const res = await apiFetch('/api/friends/request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ friendId: playerId })
-            });
-            if (res.ok) {
-                setRequestedFriends(prev => new Set(prev).add(playerId));
-            } else {
-                const data = await res.json();
-                alert(data.message || 'Failed to send friend request');
-            }
-        } catch (err) {
-            console.error('Add friend error', err);
-            alert('Failed to send friend request');
-        }
     };
 
     const renderSkeletons = (count = 6) => (
@@ -411,17 +414,17 @@ export default function Matchmaking() {
                 )}
             </CardContent>
             <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2 }}>
-                <Button 
-                    variant="contained" 
-                    color={requestedFriends.has(player._id) ? "inherit" : "primary"}
-                    disabled={requestedFriends.has(player._id)}
-                    fullWidth 
-                    sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }} 
-                    onClick={() => handleAddFriend(player._id)} 
-                    startIcon={<PersonAddIcon />}
-                >
-                    {requestedFriends.has(player._id) ? "Requested" : "Add Friend"}
-                </Button>
+                <FriendActionButton 
+                    targetUserId={player._id}
+                    targetUserName={player.name}
+                    initialStatus={player.friendshipStatus || (requestedFriends.has(player._id) ? 'pending' : 'none')}
+                    fullWidth
+                    onStatusChange={(newStatus) => {
+                        if (newStatus === 'pending') {
+                            setRequestedFriends(prev => new Set(prev).add(player._id));
+                        }
+                    }}
+                />
             </Box>
         </Card>
     );

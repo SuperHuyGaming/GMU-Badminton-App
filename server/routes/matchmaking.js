@@ -4,6 +4,14 @@ const { authMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
 
+const toIdString = (item) => {
+    if (!item) return null;
+    const raw = item._id !== undefined ? item._id : item;
+    if (!raw) return null;
+    const str = typeof raw.toString === "function" ? raw.toString() : String(raw);
+    return str && str !== "[object Object]" ? str : null;
+};
+
 // GET /api/matchmaking/presence - Task 7
 router.get("/presence", authMiddleware, async (req, res) => {
     try {
@@ -55,9 +63,43 @@ router.get("/discover", authMiddleware, async (req, res) => {
         
         const currentUser = await User.findById(req.user.userId).lean();
         
-        // Build base query (exclude self)
+        // Collect all IDs that must be excluded from discovery
+        const excludedIds = [toIdString(req.user.userId)].filter(Boolean);
+        if (currentUser) {
+            if (Array.isArray(currentUser.friends)) {
+                currentUser.friends.forEach(f => {
+                    const idStr = toIdString(f);
+                    if (idStr) excludedIds.push(idStr);
+                });
+            }
+            if (Array.isArray(currentUser.friendRequests)) {
+                currentUser.friendRequests.forEach(f => {
+                    const idStr = toIdString(f);
+                    if (idStr) excludedIds.push(idStr);
+                });
+            }
+            if (Array.isArray(currentUser.sentFriendRequests)) {
+                currentUser.sentFriendRequests.forEach(f => {
+                    const idStr = toIdString(f);
+                    if (idStr) excludedIds.push(idStr);
+                });
+            }
+        }
+
+        // Helper to determine friendship status ("none", "pending", "friends")
+        const getFriendshipStatus = (targetId) => {
+            if (!currentUser || !targetId) return "none";
+            const targetStr = toIdString(targetId);
+            if (!targetStr) return "none";
+            if (currentUser.friends?.some(id => toIdString(id) === targetStr)) return "friends";
+            if (currentUser.sentFriendRequests?.some(id => toIdString(id) === targetStr)) return "pending";
+            if (currentUser.friendRequests?.some(id => toIdString(id) === targetStr)) return "pending";
+            return "none";
+        };
+
+        // Build base query (exclude self, existing friends, and pending requests)
         const query = {
-            _id: { $ne: req.user.userId },
+            _id: { $nin: excludedIds },
         };
 
         // Add skill filter
@@ -88,7 +130,7 @@ router.get("/discover", authMiddleware, async (req, res) => {
 
         // Cursor-Based Pagination
         if (cursor) {
-            query._id = { $ne: req.user.userId, $lt: cursor };
+            query._id = { $nin: excludedIds, $lt: cursor };
         }
 
         // Geospatial Court Check-in Search
@@ -116,19 +158,29 @@ router.get("/discover", authMiddleware, async (req, res) => {
             .limit(50)
             .lean();
 
+        const hydratedMatches = potentialMatches.map(player => ({
+            ...player,
+            friendshipStatus: getFriendshipStatus(player?._id || player)
+        }));
+
         // Fetch "People You May Know" (same university, if exists)
         let recommended = [];
         if (currentUser && currentUser.homeUniversity) {
-            recommended = await User.find({
-                _id: { $ne: req.user.userId },
+            const rawRecommended = await User.find({
+                _id: { $nin: excludedIds },
                 homeUniversity: currentUser.homeUniversity
             })
             .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location")
             .limit(4)
             .lean();
+
+            recommended = rawRecommended.map(player => ({
+                ...player,
+                friendshipStatus: getFriendshipStatus(player?._id || player)
+            }));
         }
 
-        res.json({ matches: potentialMatches, recommended });
+        res.json({ matches: hydratedMatches, recommended });
     } catch (err) {
         console.error("Discovery error:", err);
         res.status(500).json({ message: "Server error during player discovery" });

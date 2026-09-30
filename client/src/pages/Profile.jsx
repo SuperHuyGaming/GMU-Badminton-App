@@ -9,7 +9,6 @@ import {
 	Paper,
 	Skeleton,
 } from "@mui/material";
-import { io } from "socket.io-client";
 
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileIntro from "../components/profile/ProfileIntro";
@@ -18,9 +17,8 @@ import ImageCropModal from "../components/profile/ImageCropModal";
 import PostCard from "../components/PostCard";
 import BadgeShowcase from "../components/profile/BadgeShowcase";
 import apiFetch from "../utils/api";
+import socket from "../utils/socket";
 import { useQuery } from '@tanstack/react-query';
-
-const socket = io(`${import.meta.env.VITE_API_URL}`);
 import { useAuth } from "../context/AuthContext";
 
 export default function Profile() {
@@ -129,25 +127,59 @@ export default function Profile() {
 		};
 		socket.on("onlineUsersUpdate", handleOnlineUsers);
 
-		// Ask server to broadcast online users list right now so we get initial state
-		// (optional depending on how often server emits it, but good for immediate feedback)
-		// Or we can just wait for an update. Actually just wait is fine.
+		const handleFriendRequestReceived = ({ requesterId }) => {
+			if (requesterId === id) {
+				setFriendStatus("request_received");
+			}
+		};
+
+		const handleFriendRequestAccepted = ({ userId }) => {
+			if (userId === id) {
+				setFriendStatus("friends");
+			}
+		};
+
+		const handleFriendRequestDeclined = ({ userId }) => {
+			if (userId === id) {
+				setFriendStatus("none");
+			}
+		};
+
+		const handleFriendRemoved = ({ friendId }) => {
+			if (friendId === id) {
+				setFriendStatus("none");
+			}
+		};
+
+		socket.on("friendRequestReceived", handleFriendRequestReceived);
+		socket.on("friendRequestAccepted", handleFriendRequestAccepted);
+		socket.on("friendRequestDeclined", handleFriendRequestDeclined);
+		socket.on("friendRemoved", handleFriendRemoved);
 
 		return () => {
 			socket.off("profileUpdated");
 			socket.off("postUpdated");
 			socket.off("postCreated");
 			socket.off("onlineUsersUpdate", handleOnlineUsers);
+			socket.off("friendRequestReceived", handleFriendRequestReceived);
+			socket.off("friendRequestAccepted", handleFriendRequestAccepted);
+			socket.off("friendRequestDeclined", handleFriendRequestDeclined);
+			socket.off("friendRemoved", handleFriendRemoved);
 		};
 	}, [id]);
 
 	useEffect(() => {
 		if (profileData && user && !isOwnProfile) {
-			if (profileData.friends?.includes(user.id)) {
+			const currentUid = (user.id || user._id)?.toString();
+			const hasFriend = profileData.friends?.some(f => (f?._id || f)?.toString() === currentUid);
+			const hasSentRequest = profileData.friendRequests?.some(f => (f?._id || f)?.toString() === currentUid);
+			const hasReceivedRequest = profileData.sentFriendRequests?.some(f => (f?._id || f)?.toString() === currentUid);
+
+			if (hasFriend) {
 				setFriendStatus("friends");
-			} else if (profileData.friendRequests?.includes(user.id)) {
-				setFriendStatus("request_sent");
-			} else if (profileData.sentFriendRequests?.includes(user.id)) {
+			} else if (hasSentRequest) {
+				setFriendStatus("pending");
+			} else if (hasReceivedRequest) {
 				setFriendStatus("request_received");
 			} else {
 				setFriendStatus("none");
@@ -326,6 +358,7 @@ export default function Profile() {
 				activeTab={activeTab}
 				setActiveTab={setActiveTab}
 				friendStatus={friendStatus}
+				setFriendStatus={setFriendStatus}
 				handleFriendAction={handleFriendAction}
 				isOnline={isOnline}
 			/>
