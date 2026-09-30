@@ -222,6 +222,7 @@ describe('Friends Backend Routes', () => {
 
             User.findById
                 .mockResolvedValueOnce(requester)
+                .mockResolvedValueOnce(recipient)
                 .mockResolvedValueOnce(recipient);
 
             const res = await request(app)
