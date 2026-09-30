@@ -429,7 +429,7 @@ const Messages = () => {
 					height: "100%",
 					bgcolor: "background.paper"
 				}}>
-				<Box sx={{ p: 2, bgcolor: "primary.main", color: "white", borderRadius: "12px 12px 0 0" }}>
+				<Box sx={{ p: 2.5, bgcolor: "transparent", color: "text.primary", borderBottom: "1px solid", borderColor: "divider" }}>
 					<Typography variant="h6" fontWeight="bold">Messages</Typography>
 				</Box>
 				<Box sx={{ p: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
@@ -533,14 +533,25 @@ const Messages = () => {
 								secondary={
 									typingUserIds.has(chat.friend._id) 
 										? <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>typing...</Typography> 
-										: chat.lastMessage?.content
+										: <Typography 
+												variant="body2" 
+												sx={{ 
+													color: chat.unreadCount > 0 ? 'text.primary' : 'text.secondary',
+													fontWeight: chat.unreadCount > 0 ? 800 : 'normal',
+													pr: chat.unreadCount > 0 ? 3 : 1,
+													display: '-webkit-box',
+													WebkitLineClamp: 1,
+													WebkitBoxOrient: 'vertical',
+													overflow: 'hidden',
+													textOverflow: 'ellipsis',
+													wordBreak: 'break-word'
+												}}
+											>
+												{chat.lastMessage?.content || "No messages yet"}
+											</Typography>
 								}
-								secondaryTypographyProps={{ 
-									noWrap: true, 
-									color: chat.unreadCount > 0 ? 'text.primary' : 'text.primary',
-									fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal',
-									sx: { pr: 2 } // padding right to avoid unread badge overlap
-								}}
+								// Remove secondaryTypographyProps since we use explicit Typography above
+
 							/>
 							{chat.unreadCount > 0 && (
 								<Badge badgeContent={chat.unreadCount} color="secondary" sx={{ position: 'absolute', right: 24, top: '50%' }} />
