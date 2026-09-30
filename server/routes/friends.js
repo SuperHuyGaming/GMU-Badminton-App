@@ -374,10 +374,10 @@ router.get("/:id/list", authMiddleware, async (req, res, next) => {
 		const currentUserIdObj = new mongoose.Types.ObjectId(currentUserId);
 		const targetUserIdObj = new mongoose.Types.ObjectId(targetId);
 
-		const targetUser = await User.findById(targetUserIdObj).select("friends friendsListVisibility");
+		const targetUser = await User.findById(targetUserIdObj).select("friendsListVisibility").lean();
 		if (!targetUser) return res.status(404).json({ message: "User not found" });
 
-		const currentUser = await User.findById(currentUserIdObj).select("friends role");
+		const currentUser = await User.findById(currentUserIdObj).select("role").lean();
 		if (!currentUser) return res.status(404).json({ message: "Current user not found" });
 
 		const isOwner = currentUserId === targetId;
@@ -388,7 +388,7 @@ router.get("/:id/list", authMiddleware, async (req, res, next) => {
 			if (visibility === "Only Me") {
 				return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
 			} else if (visibility === "Friends Only") {
-				const isFriend = safeIncludesId(targetUser.friends, currentUserId);
+				const isFriend = await User.exists({ _id: targetUserIdObj, friends: currentUserIdObj });
 				if (!isFriend) {
 					return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
 				}
@@ -398,37 +398,61 @@ router.get("/:id/list", authMiddleware, async (req, res, next) => {
 		const cursor = req.query.cursor;
 		const limit = 20;
 
-		let matchStage = { _id: { $in: targetUser.friends } };
+		const pipeline = [
+			{ $match: { _id: targetUserIdObj } },
+			{ $project: { friends: { $ifNull: ["$friends", []] } } },
+			{ $unwind: "$friends" }
+		];
+
 		if (cursor && mongoose.isValidObjectId(cursor)) {
-			matchStage._id.$gt = new mongoose.Types.ObjectId(cursor);
+			pipeline.push({ $match: { friends: { $gt: new mongoose.Types.ObjectId(cursor) } } });
 		}
 
-		const friends = await User.aggregate([
-			{ $match: matchStage },
-			{ $sort: { _id: 1 } },
+		pipeline.push(
+			{ $sort: { friends: 1 } },
 			{ $limit: limit },
 			{
-				$addFields: {
-					mutualFriendsCount: {
-						$size: {
-							$setIntersection: [
-								{ $ifNull: ["$friends", []] },
-								currentUser.friends
-							]
-						}
-					}
+				$lookup: {
+					from: "users",
+					localField: "friends",
+					foreignField: "_id",
+					as: "friendData"
 				}
 			},
+			{ $unwind: "$friendData" },
+			{
+				$lookup: {
+					from: "users",
+					let: { theirFriends: { $ifNull: ["$friendData.friends", []] } },
+					pipeline: [
+						{ $match: { _id: currentUserIdObj } },
+						{
+							$project: {
+								mutualCount: {
+									$size: {
+										$setIntersection: ["$$theirFriends", { $ifNull: ["$friends", []] }]
+									}
+								}
+							}
+						}
+					],
+					as: "currentUserInfo"
+				}
+			},
+			{ $unwind: { path: "$currentUserInfo", preserveNullAndEmptyArrays: true } },
 			{
 				$project: {
-					name: 1,
-					profilePic: 1,
-					skillLevel: 1,
-					lastActive: 1,
-					mutualFriendsCount: 1
+					_id: "$friendData._id",
+					name: "$friendData.name",
+					profilePic: "$friendData.profilePic",
+					skillLevel: "$friendData.skillLevel",
+					lastActive: "$friendData.lastActive",
+					mutualFriendsCount: { $ifNull: ["$currentUserInfo.mutualCount", 0] }
 				}
 			}
-		]);
+		);
+
+		const friends = await User.aggregate(pipeline);
 
 		const nextCursor = friends.length === limit ? friends[friends.length - 1]._id : null;
 
