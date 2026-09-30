@@ -384,6 +384,7 @@ export default function Profile() {
 								profileData={profileData}
 								isOwnProfile={isOwnProfile}
 								onEditClick={() => setActiveTab("about")}
+								onFriendsClick={() => setActiveTab("friends")}
 							/>
 						</Box>
 					</Box>

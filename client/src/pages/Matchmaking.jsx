@@ -487,6 +487,7 @@ export default function Matchmaking() {
                             onClick={() => setDrawerOpen(true)}
                             aria-label="Advanced filters"
                             sx={{ 
+                                display: 'none',
                                 bgcolor: 'background.paper', 
                                 border: '1px solid',
                                 borderColor: 'divider',

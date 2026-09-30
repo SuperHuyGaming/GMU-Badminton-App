@@ -426,7 +426,7 @@ export default function Navbar() {
 
 						<Box
 							sx={{
-								display: { xs: "none", lg: "flex" },
+								display: 'none',
 								flex: 1,
 								justifyContent: "center",
 								mx: 2,
