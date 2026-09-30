@@ -375,7 +375,7 @@ export default function Matchmaking() {
                     variant="dot"
                     color="success"
                     invisible={!(onlineUsers.has(player._id) || isRecentlyActive(player.lastActive))}
-                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white', cursor: 'pointer' } }}
+                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white', cursor: 'pointer', boxShadow: '0 0 8px 2px rgba(76, 175, 80, 0.6)', animation: 'pulse 2s infinite' }, '@keyframes pulse': { '0%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0.7)' }, '70%': { boxShadow: '0 0 0 10px rgba(76, 175, 80, 0)' }, '100%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0)' } } }}
                     onMouseEnter={(e) => handlePeekOpen(e, player)}
                     onMouseLeave={handlePeekClose}
                 >
