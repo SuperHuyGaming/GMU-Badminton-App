@@ -128,7 +128,7 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 		await requester.save();
 
 		// Add Notification after 5 seconds to allow for 'Undo'
-		setTimeout(async () => {
+		const addNotification = async () => {
 			try {
 				// Re-verify the request wasn't cancelled or accepted within the 5 seconds
 				const checkRecipient = await User.findById(recipientId);
@@ -157,7 +157,13 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 			} catch (err) {
 				console.error("Delayed notification error:", err);
 			}
-		}, 5000);
+		};
+
+		if (process.env.NODE_ENV === 'test') {
+			await addNotification();
+		} else {
+			setTimeout(addNotification, 5000);
+		}
 
 		res.json({ message: "Friend request sent" });
 	} catch (error) {
