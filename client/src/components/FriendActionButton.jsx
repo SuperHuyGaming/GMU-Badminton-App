@@ -104,6 +104,27 @@ export default function FriendActionButton({
         if (onStatusChange) onStatusChange(prevStatus, targetUserId);
         toast.error(err.message || 'Failed to accept friend request');
       }
+    } else if (status === 'pending') {
+      // Optimistic transition to none (Undo)
+      setStatus('none');
+      if (onStatusChange) onStatusChange('none', targetUserId);
+
+      try {
+        await apiFetch('/api/friends/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipientId: targetUserId,
+          }),
+        });
+
+        toast.success(`Friend request to ${targetUserName} cancelled.`);
+      } catch (err) {
+        // Rollback on failure
+        setStatus(prevStatus);
+        if (onStatusChange) onStatusChange(prevStatus, targetUserId);
+        toast.error(err.message || 'Failed to cancel friend request');
+      }
     }
   };
 
@@ -114,11 +135,11 @@ export default function FriendActionButton({
   let isDisabled = disabled || isLoading;
 
   if (status === 'pending') {
-    label = 'Request Sent';
-    buttonVariant = variant || 'contained';
+    label = 'Cancel Request';
+    buttonVariant = variant || 'outlined';
     buttonColor = 'inherit';
     buttonIcon = <CheckIcon />;
-    isDisabled = true;
+    isDisabled = disabled || isLoading;
   } else if (status === 'friends') {
     label = 'Friends';
     buttonVariant = variant || 'outlined';

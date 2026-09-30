@@ -127,29 +127,72 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 		await recipient.save();
 		await requester.save();
 
-		// Add Notification
-		const notif = new Notification({
-			targetUserId: recipientId,
-			message: `${requester.name} sent you a friend request.`,
-			link: `/profile/${requesterId}`,
-		});
-		await notif.save();
+		// Add Notification after 5 seconds to allow for 'Undo'
+		setTimeout(async () => {
+			try {
+				// Re-verify the request wasn't cancelled or accepted within the 5 seconds
+				const checkRecipient = await User.findById(recipientId);
+				if (!checkRecipient || !safeIncludesId(checkRecipient.friendRequests, requesterId)) return;
 
-		const io = req.app?.get("io") || req.io;
-		if (io) {
-			io.to(recipientId).emit("newNotification", notif);
-			io.to(recipientId).emit("friendRequestReceived", {
-				requesterId,
-				requester: {
-					_id: requester._id,
-					name: requester.name,
-					profilePic: requester.profilePic,
-					skillLevel: requester.skillLevel
+				const notif = new Notification({
+					targetUserId: recipientId,
+					message: `${requester.name} sent you a friend request.`,
+					link: `/profile/${requesterId}`,
+				});
+				await notif.save();
+
+				const io = req.app?.get("io") || req.io;
+				if (io) {
+					io.to(recipientId).emit("newNotification", notif);
+					io.to(recipientId).emit("friendRequestReceived", {
+						requesterId,
+						requester: {
+							_id: requester._id,
+							name: requester.name,
+							profilePic: requester.profilePic,
+							skillLevel: requester.skillLevel
+						}
+					});
 				}
-			});
-		}
+			} catch (err) {
+				console.error("Delayed notification error:", err);
+			}
+		}, 5000);
 
 		res.json({ message: "Friend request sent" });
+	} catch (error) {
+		next(error);
+	}
+});
+
+// POST: cancel friend request (Undo)
+router.post("/cancel", authMiddleware, async (req, res, next) => {
+	try {
+		const requesterId = toIdString(req.user.id || req.user.userId);
+		const recipientId = toIdString(req.body.recipientId || req.body.targetId);
+
+		if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
+			return res.status(400).json({ message: "Valid recipient ID is required." });
+		}
+
+		const requester = await User.findById(requesterId);
+		const recipient = await User.findById(recipientId);
+
+		if (!requester || !recipient) return res.status(404).json({ message: "User not found" });
+
+		if (!safeIncludesId(recipient.friendRequests, requesterId) && !safeIncludesId(requester.sentFriendRequests, recipientId)) {
+			return res.status(400).json({ message: "No pending request to cancel." });
+		}
+
+		clearBidirectionalRequests(requester, recipient);
+
+		await recipient.save();
+		await requester.save();
+
+		// Optional: if we want to immediately remove the request from the client via socket we could emit an event here,
+		// but since the 5 second notification delay prevents it from showing up in the first place, it's fine.
+
+		res.json({ message: "Friend request cancelled successfully" });
 	} catch (error) {
 		next(error);
 	}
