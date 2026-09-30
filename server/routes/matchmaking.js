@@ -187,21 +187,76 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
             friendshipStatus: getFriendshipStatus(player?._id || player)
         }));
 
-        // Fetch "People You May Know" (same university, if exists)
+        // Fetch "People You May Know" using Recommendation Engine V2
         let recommended = [];
-        if (currentUser && currentUser.homeUniversity) {
-            const minElo = (currentUser.singlesElo || 1200) - 300;
-            const maxElo = (currentUser.singlesElo || 1200) + 300;
+        if (currentUser) {
+            const mongoose = require("mongoose");
+            const excludedObjectIds = excludedIds.map(id => {
+                try { return new mongoose.Types.ObjectId(id); } catch(e) { return null; }
+            }).filter(Boolean);
 
-            const rawRecommended = await User.find({
-                _id: { $nin: excludedIds },
-                homeUniversity: currentUser.homeUniversity,
-                singlesElo: { $gte: minElo, $lte: maxElo },
-                hideFromSearch: { $ne: true }
-            })
-            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location singlesElo")
-            .limit(4)
-            .lean();
+            const userElo = currentUser.singlesElo || 1200;
+            const userTime = currentUser.preferredTimeOfDay;
+            const userUni = currentUser.homeUniversity;
+
+            const timeScoreExpr = userTime ? {
+                $cond: [{ $eq: ["$preferredTimeOfDay", userTime] }, 3, 0]
+            } : 0;
+
+            const uniScoreExpr = userUni ? {
+                $cond: [{ $eq: ["$homeUniversity", userUni] }, 2, 0]
+            } : 0;
+
+            const rawRecommended = await User.aggregate([
+                {
+                    $match: {
+                        _id: { $nin: excludedObjectIds },
+                        hideFromSearch: { $ne: true }
+                    }
+                },
+                {
+                    $addFields: {
+                        eloDiff: { $abs: { $subtract: [{ $ifNull: ["$singlesElo", 1200] }, userElo] } },
+                        timeScore: timeScoreExpr,
+                        uniScore: uniScoreExpr
+                    }
+                },
+                {
+                    $addFields: {
+                        eloScore: {
+                            $cond: [
+                                { $lte: ["$eloDiff", 100] },
+                                2,
+                                {
+                                    $cond: [
+                                        { $lte: ["$eloDiff", 300] },
+                                        1,
+                                        0
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        totalScore: { $add: ["$timeScore", "$uniScore", "$eloScore"] }
+                    }
+                },
+                {
+                    $sort: { totalScore: -1, _id: -1 }
+                },
+                {
+                    $limit: 4
+                },
+                {
+                    $project: {
+                        name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
+                        profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
+                        singlesElo: 1, preferredTimeOfDay: 1
+                    }
+                }
+            ]);
 
             recommended = rawRecommended.map(player => ({
                 ...player,
