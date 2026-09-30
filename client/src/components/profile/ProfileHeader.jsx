@@ -420,7 +420,7 @@ export default function ProfileHeader({
 			<Divider sx={{ mx: 2 }} />
 
 			<Box role="tablist" aria-label="Profile navigation tabs" sx={{ px: { xs: 2, md: 4 }, py: 1, display: "flex", gap: 3 }}>
-				{["posts", "about"].map((tab) => (
+				{["posts", "about", "friends"].map((tab) => (
 					<Typography
 						key={tab}
 						role="tab"
