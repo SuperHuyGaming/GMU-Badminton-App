@@ -133,7 +133,7 @@ describe('Matchmaking Page Component', () => {
         });
     });
 
-    it('sends friend request and updates button to Cancel Request', async () => {
+    it('sends friend request and updates button to Request Sent', async () => {
         apiFetch.mockImplementation(async (url, options) => {
             if (url === '/api/friends/request' && options?.method === 'POST') {
                 return {
@@ -182,7 +182,7 @@ describe('Matchmaking Page Component', () => {
                     body: JSON.stringify({ recipientId: 'user-1', friendId: 'user-1' })
                 })
             );
-            expect(screen.getByText('Cancel Request')).toBeInTheDocument();
+            expect(screen.getByText('Request Sent')).toBeInTheDocument();
         });
     });
 });

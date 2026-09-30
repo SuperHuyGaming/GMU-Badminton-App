@@ -132,13 +132,15 @@ export default function FriendActionButton({
   let buttonColor = 'primary';
   let buttonIcon = <PersonAddIcon />;
   let isDisabled = disabled;
+    if (status === 'pending') isDisabled = true;
 
   if (status === 'pending') {
-    label = 'Cancel Request';
+    label = 'Request Sent';
     buttonVariant = variant || 'outlined';
     buttonColor = 'inherit';
     buttonIcon = <CheckIcon />;
     isDisabled = disabled;
+    if (status === 'pending') isDisabled = true;
   } else if (status === 'friends') {
     label = 'Friends';
     buttonVariant = variant || 'outlined';
@@ -151,6 +153,7 @@ export default function FriendActionButton({
     buttonColor = 'primary';
     buttonIcon = <PersonAddIcon />;
     isDisabled = disabled;
+    if (status === 'pending') isDisabled = true;
   }
 
   return (
