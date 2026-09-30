@@ -57,6 +57,11 @@ const userSchema = new mongoose.Schema({
 	friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 	friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 	sentFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+	friendsListVisibility: {
+		type: String,
+		enum: ['Public', 'Friends Only', 'Only Me'],
+		default: 'Public',
+	},
 
 	// Elo Ranking System
 	singlesElo: { type: Number, default: 1200 },

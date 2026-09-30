@@ -14,6 +14,7 @@ import ProfileHeader from "../components/profile/ProfileHeader";
 import ProfileIntro from "../components/profile/ProfileIntro";
 import ProfileEditForm from "../components/profile/ProfileEditForm";
 import ImageCropModal from "../components/profile/ImageCropModal";
+import FriendsTab from "../components/profile/FriendsTab";
 import PostCard from "../components/PostCard";
 import BadgeShowcase from "../components/profile/BadgeShowcase";
 import apiFetch from "../utils/api";
@@ -472,6 +473,10 @@ export default function Profile() {
 							</Paper>
 						)}
 					</Box>
+				</Box>
+			) : activeTab === "friends" ? (
+				<Box sx={{ display: "flex", justifyContent: "center" }}>
+					<FriendsTab profileId={profileData._id || id} isOwnProfile={isOwnProfile} />
 				</Box>
 			) : (
 				<Box sx={{ display: "flex", justifyContent: "center" }}>
