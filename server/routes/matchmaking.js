@@ -153,7 +153,7 @@ router.get("/discover", authMiddleware, async (req, res) => {
 
         // Fetch up to 50 users
         const potentialMatches = await User.find(query)
-            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location checkInLocation preferredTimeOfDay inQueue")
+            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location checkInLocation preferredTimeOfDay inQueue singlesElo")
             .sort({ _id: -1 })
             .limit(50)
             .lean();
@@ -166,11 +166,15 @@ router.get("/discover", authMiddleware, async (req, res) => {
         // Fetch "People You May Know" (same university, if exists)
         let recommended = [];
         if (currentUser && currentUser.homeUniversity) {
+            const minElo = (currentUser.singlesElo || 1200) - 300;
+            const maxElo = (currentUser.singlesElo || 1200) + 300;
+
             const rawRecommended = await User.find({
                 _id: { $nin: excludedIds },
-                homeUniversity: currentUser.homeUniversity
+                homeUniversity: currentUser.homeUniversity,
+                singlesElo: { $gte: minElo, $lte: maxElo }
             })
-            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location")
+            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location singlesElo")
             .limit(4)
             .lean();
 
