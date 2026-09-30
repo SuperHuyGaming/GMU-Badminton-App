@@ -1,6 +1,15 @@
 const express = require("express");
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
+const rateLimit = require("express-rate-limit");
+
+const discoverLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 50,
+    message: { message: "Too many discovery requests, please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 const router = express.Router();
 
@@ -16,7 +25,10 @@ const toIdString = (item) => {
 router.get("/presence", authMiddleware, async (req, res) => {
     try {
         const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-        const activeUsers = await User.find({ lastActive: { $gte: fiveMinsAgo } })
+        const activeUsers = await User.find({ 
+            lastActive: { $gte: fiveMinsAgo },
+            hideFromSearch: { $ne: true }
+        })
             .select("name _id")
             .lean();
         res.json({ onlineUsers: activeUsers });
@@ -28,7 +40,10 @@ router.get("/presence", authMiddleware, async (req, res) => {
 // POST /api/matchmaking/queue/join - Task 9
 router.post("/queue/join", authMiddleware, async (req, res) => {
     try {
-        const { checkInLocation, preferredTimeOfDay } = req.body;
+        let { checkInLocation, preferredTimeOfDay } = req.body;
+        checkInLocation = checkInLocation ? String(checkInLocation) : undefined;
+        preferredTimeOfDay = preferredTimeOfDay ? String(preferredTimeOfDay) : undefined;
+
         await User.findByIdAndUpdate(req.user.userId, { 
             inQueue: true, 
             queueJoinedAt: new Date(),
@@ -53,9 +68,14 @@ router.post("/queue/leave", authMiddleware, async (req, res) => {
 
 // GET: /api/matchmaking/discover
 // Discover players and search for users
-router.get("/discover", authMiddleware, async (req, res) => {
+router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
     try {
-        const { search, skill, cursor, campus, time } = req.query;
+        const search = req.query.search ? String(req.query.search) : undefined;
+        const skill = req.query.skill ? String(req.query.skill) : undefined;
+        const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
+        const campus = req.query.campus ? String(req.query.campus) : undefined;
+        const time = req.query.time ? String(req.query.time) : undefined;
+        
         const escapeRegex = (string) => {
             if (typeof string !== "string") return "";
             return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -100,9 +120,10 @@ router.get("/discover", authMiddleware, async (req, res) => {
             return "none";
         };
 
-        // Build base query (exclude self, existing friends, and pending requests)
+        // Build base query (exclude self, existing friends, and pending requests, and users who hide from search)
         const query = {
             _id: { $nin: excludedIds },
+            hideFromSearch: { $ne: true }
         };
 
         // Add skill filter
@@ -175,7 +196,8 @@ router.get("/discover", authMiddleware, async (req, res) => {
             const rawRecommended = await User.find({
                 _id: { $nin: excludedIds },
                 homeUniversity: currentUser.homeUniversity,
-                singlesElo: { $gte: minElo, $lte: maxElo }
+                singlesElo: { $gte: minElo, $lte: maxElo },
+                hideFromSearch: { $ne: true }
             })
             .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location singlesElo")
             .limit(4)
@@ -200,6 +222,7 @@ router.get("/generate-bracket", authMiddleware, async (req, res) => {
     try {
         // Fetch up to 16 users randomly to seed the bracket
         const users = await User.aggregate([
+            { $match: { hideFromSearch: { $ne: true } } },
             { $sample: { size: 16 } },
             { $project: { name: 1 } }
         ]);

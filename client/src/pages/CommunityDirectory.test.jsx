@@ -1,14 +1,14 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import Matchmaking from './Matchmaking';
+import CommunityDirectory from './CommunityDirectory';
 import apiFetch from '../utils/api';
 
 vi.mock('../utils/api', () => ({
     default: vi.fn(),
 }));
 
-describe('Matchmaking Page Component', () => {
+describe('CommunityDirectory Page Component', () => {
     const mockUsers = [
         {
             _id: 'user-1',
@@ -80,16 +80,16 @@ describe('Matchmaking Page Component', () => {
         });
     });
 
-    const renderMatchmaking = () => {
+    const renderCommunityDirectory = () => {
         return render(
             <MemoryRouter>
-                <Matchmaking />
+                <CommunityDirectory />
             </MemoryRouter>
         );
     };
 
     it('renders header, search input, and filter chips', async () => {
-        renderMatchmaking();
+        renderCommunityDirectory();
 
         expect(screen.getByText('Community Directory')).toBeInTheDocument();
         expect(screen.getByPlaceholderText('Search by name or university...')).toBeInTheDocument();
@@ -105,19 +105,19 @@ describe('Matchmaking Page Component', () => {
     });
 
     it('fetches and displays recommendations and presence', async () => {
-        renderMatchmaking();
+        renderCommunityDirectory();
 
         await waitFor(() => {
             expect(screen.getByText('People You May Know')).toBeInTheDocument();
             expect(screen.getByText('Charlie Brown')).toBeInTheDocument();
         });
 
-        expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/api/matchmaking/presence'));
+        // Presence polling removed
         expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/api/matchmaking/discover?'));
     });
 
     it('filters players when a skill chip is clicked', async () => {
-        renderMatchmaking();
+        renderCommunityDirectory();
 
         await waitFor(() => {
             expect(screen.getByText('Charlie Brown')).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe('Matchmaking Page Component', () => {
             return { ok: true, json: async () => ({}) };
         });
 
-        renderMatchmaking();
+        renderCommunityDirectory();
 
         // Switch filter so player cards in search results appear
         const advancedChip = screen.getByRole('button', { name: 'Advanced' });

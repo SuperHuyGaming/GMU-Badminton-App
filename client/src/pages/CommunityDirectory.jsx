@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Backdrop, CircularProgress } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Backdrop } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
-import HistoryIcon from '@mui/icons-material/History';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -23,6 +22,7 @@ const cardVariants = {
 };
 
 export default function CommunityDirectory() {
+    // eslint-disable-next-line no-unused-vars
     const navigate = useNavigate();
     const [matches, setMatches] = useState([]);
     const [recommended, setRecommended] = useState([]);
@@ -32,6 +32,7 @@ export default function CommunityDirectory() {
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
     const [skillFilter, setSkillFilter] = useState('All');
+    // eslint-disable-next-line no-unused-vars
     const [recentSearches, setRecentSearches] = useState(() => {
         const saved = localStorage.getItem('matchmaking_recent_searches');
         if (saved) {
@@ -55,6 +56,7 @@ export default function CommunityDirectory() {
     const [availableNow, setAvailableNow] = useState(false);
 
     // Online Presence & Queue state
+    // eslint-disable-next-line no-unused-vars
     const [onlineUsers, setOnlineUsers] = useState(new Set());
     const [inQueue, setInQueue] = useState(false);
 
@@ -125,6 +127,7 @@ export default function CommunityDirectory() {
         });
     };
 
+    // eslint-disable-next-line no-unused-vars
     const removeRecentSearch = (e, queryToRemove) => {
         e.stopPropagation();
         setRecentSearches(prev => {
@@ -284,6 +287,7 @@ export default function CommunityDirectory() {
         }
     };
 
+    // eslint-disable-next-line no-unused-vars
     const isRecentlyActive = (lastActiveDate) => {
         if (!lastActiveDate) return false;
         const diff = new Date() - new Date(lastActiveDate);
@@ -638,33 +642,33 @@ export default function CommunityDirectory() {
                         </Box>
                     ) : (
                         searchQuery.trim() ? (
-                            <List disablePadding sx={{ width: '100%' }}>
+                            <Stack spacing={2} sx={{ width: '100%' }}>
                                 <AnimatePresence>
                                     {matches.map((player, i) => (
                                         <motion.div custom={i} variants={cardVariants} initial="hidden" animate="visible" exit="hidden" layout key={`match-${player._id}`}>
-                                            <Card sx={{ mb: 2, borderRadius: 3, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-2px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.1)' } }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, overflow: 'hidden' }}>
-                                                    <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none' }}>
-                                                        <Avatar src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} sx={{ width: 64, height: 64 }} />
+                                            <Card sx={{ borderRadius: 3, p: { xs: 1.5, sm: 2 }, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: { xs: 1, sm: 2 }, transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-2px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.1)' } }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 }, flexGrow: 1, overflow: 'hidden' }}>
+                                                    <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
+                                                        <Avatar src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} sx={{ width: { xs: 52, sm: 64 }, height: { xs: 52, sm: 64 } }} />
                                                     </Link>
                                                     <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                                                             <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                                                                <Typography variant="h6" fontWeight="bold" sx={{ '&:hover': { textDecoration: 'underline' } }}>{player.name}</Typography>
+                                                                <Typography variant="h6" fontWeight="bold" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' }, lineHeight: 1.2, '&:hover': { textDecoration: 'underline' } }}>{player.name}</Typography>
                                                             </Link>
-                                                            {player.skillLevel && <Chip label={player.skillLevel} size="small" color={getSkillColor(player.skillLevel)} sx={{ height: 20, fontSize: '0.7rem', fontWeight: 'bold' }} />}
+                                                            {player.skillLevel && <Chip label={player.skillLevel} size="small" variant="outlined" color={getSkillColor(player.skillLevel)} sx={{ height: 20, fontSize: '0.7rem', fontWeight: 'bold', color: 'text.primary' }} />}
                                                         </Box>
                                                         {player.homeUniversity && (
-                                                            <Typography variant="body2" color="text.secondary" noWrap>
+                                                            <Typography variant="body2" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'grey.300' : 'grey.800' }} noWrap>
                                                                 {player.homeUniversity}
                                                             </Typography>
                                                         )}
-                                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontWeight: 'bold' }}>
+                                                        <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 'bold', color: (theme) => theme.palette.mode === 'dark' ? 'grey.300' : 'grey.800' }}>
                                                             🔥 {getPlayerStats(player).streak} Mutual Friends
                                                         </Typography>
                                                     </Box>
                                                 </Box>
-                                                <Box sx={{ ml: 2, display: 'flex', alignItems: 'center' }}>
+                                                <Box sx={{ ml: { xs: 0.5, sm: 2 }, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                                                     <FriendActionButton 
                                                         targetUserId={player._id}
                                                         targetUserName={player.name}
@@ -680,7 +684,7 @@ export default function CommunityDirectory() {
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>
-                            </List>
+                            </Stack>
                         ) : (
                             <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                                 <AnimatePresence>
