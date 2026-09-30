@@ -356,4 +356,83 @@ router.get("/search/:query", authMiddleware, async (req, res, next) => {
 	}
 });
 
+// GET: paginated friends list with mutual friends count
+router.get("/:id/list", authMiddleware, async (req, res, next) => {
+	try {
+		const targetId = req.params.id;
+		if (!mongoose.isValidObjectId(targetId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const currentUserIdObj = new mongoose.Types.ObjectId(currentUserId);
+		const targetUserIdObj = new mongoose.Types.ObjectId(targetId);
+
+		const targetUser = await User.findById(targetUserIdObj).select("friends friendsListVisibility");
+		if (!targetUser) return res.status(404).json({ message: "User not found" });
+
+		const currentUser = await User.findById(currentUserIdObj).select("friends role");
+		if (!currentUser) return res.status(404).json({ message: "Current user not found" });
+
+		const isOwner = currentUserId === targetId;
+		const isAdmin = currentUser.role === "admin";
+
+		if (!isOwner && !isAdmin) {
+			const visibility = targetUser.friendsListVisibility || "Public";
+			if (visibility === "Only Me") {
+				return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
+			} else if (visibility === "Friends Only") {
+				const isFriend = safeIncludesId(targetUser.friends, currentUserId);
+				if (!isFriend) {
+					return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
+				}
+			}
+		}
+
+		const cursor = req.query.cursor;
+		const limit = 20;
+
+		let matchStage = { _id: { $in: targetUser.friends } };
+		if (cursor && mongoose.isValidObjectId(cursor)) {
+			matchStage._id.$gt = new mongoose.Types.ObjectId(cursor);
+		}
+
+		const friends = await User.aggregate([
+			{ $match: matchStage },
+			{ $sort: { _id: 1 } },
+			{ $limit: limit },
+			{
+				$addFields: {
+					mutualFriendsCount: {
+						$size: {
+							$setIntersection: [
+								{ $ifNull: ["$friends", []] },
+								currentUser.friends
+							]
+						}
+					}
+				}
+			},
+			{
+				$project: {
+					name: 1,
+					profilePic: 1,
+					skillLevel: 1,
+					lastActive: 1,
+					mutualFriendsCount: 1
+				}
+			}
+		]);
+
+		const nextCursor = friends.length === limit ? friends[friends.length - 1]._id : null;
+
+		res.json({
+			friends,
+			nextCursor
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
 module.exports = router;
