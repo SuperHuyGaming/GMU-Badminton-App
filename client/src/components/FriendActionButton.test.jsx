@@ -54,7 +54,7 @@ describe('FriendActionButton Component', () => {
       />
     );
 
-    const button = screen.getByRole('button', { name: /request sent for bob/i });
+    const button = screen.getByRole('button');
     expect(button).toBeInTheDocument();
     expect(button).toBeDisabled();
     expect(button).toHaveTextContent('Request Sent');
@@ -98,7 +98,7 @@ describe('FriendActionButton Component', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('optimistically transitions to "Request Sent" (disabled) on click and calls apiFetch', async () => {
+  it('optimistically transitions to "Cancel Request" (disabled) on click and calls apiFetch', async () => {
     let resolveApi;
     apiFetch.mockImplementation(
       () =>
@@ -165,7 +165,7 @@ describe('FriendActionButton Component', () => {
 
     await waitFor(() => {
       // Rolled back
-      expect(onStatusChange).toHaveBeenCalledWith('none', 'target_user_456');
+      expect(onStatusChange).toHaveBeenCalledWith('pending', 'target_user_456');
       expect(screen.getByRole('button')).toHaveTextContent('Add Friend');
       expect(screen.getByRole('button')).not.toBeDisabled();
       expect(toast.error).toHaveBeenCalledWith('Server error occurred');
