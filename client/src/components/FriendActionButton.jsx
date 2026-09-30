@@ -55,7 +55,6 @@ export default function FriendActionButton({
     if (status === 'none') {
       // Optimistic transition to pending
       setStatus('pending');
-      setIsLoading(true);
       if (onStatusChange) onStatusChange('pending', targetUserId);
 
       try {
@@ -68,24 +67,23 @@ export default function FriendActionButton({
           }),
         });
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.message || 'Failed to send friend request');
-        }
-
         toast.success(`Friend request sent to ${targetUserName}!`);
       } catch (err) {
         // Rollback on failure
         setStatus(prevStatus);
         if (onStatusChange) onStatusChange(prevStatus, targetUserId);
-        toast.error(err.message || 'Failed to send friend request');
-      } finally {
-        setIsLoading(false);
+        
+        // Don't show toast if it's already sent, just keep the status as pending
+        if (err.message === 'Request already sent') {
+           setStatus('pending');
+           if (onStatusChange) onStatusChange('pending', targetUserId);
+        } else {
+           toast.error(err.message || 'Failed to send friend request');
+        }
       }
     } else if (status === 'request_received') {
       // Optimistic transition to friends
       setStatus('friends');
-      setIsLoading(true);
       if (onStatusChange) onStatusChange('friends', targetUserId);
 
       try {
@@ -99,19 +97,12 @@ export default function FriendActionButton({
           }),
         });
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.message || 'Failed to accept friend request');
-        }
-
         toast.success(`You and ${targetUserName} are now friends!`);
       } catch (err) {
         // Rollback on failure
         setStatus(prevStatus);
         if (onStatusChange) onStatusChange(prevStatus, targetUserId);
         toast.error(err.message || 'Failed to accept friend request');
-      } finally {
-        setIsLoading(false);
       }
     }
   };

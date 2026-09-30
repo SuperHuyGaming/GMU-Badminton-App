@@ -848,6 +848,8 @@ export default function Matchmaking() {
                 }}
                 onClose={handlePeekClose}
                 disableRestoreFocus
+                disableAutoFocus
+                disableEnforceFocus
                 PaperProps={{
                     sx: { borderRadius: 3, mt: 1, boxShadow: 6, minWidth: 200 }
                 }}
