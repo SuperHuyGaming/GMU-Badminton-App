@@ -432,7 +432,7 @@ export default function Navbar() {
 								mx: 2,
 							}}
 						>
-							<GlobalSearch />
+							{/* <GlobalSearch /> */}
 						</Box>
 
 						<Box
