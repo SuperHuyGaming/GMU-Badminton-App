@@ -128,7 +128,7 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 		await requester.save();
 
 		// Add Notification after 5 seconds to allow for 'Undo'
-		setTimeout(async () => {
+		const addNotification = async () => {
 			try {
 				// Re-verify the request wasn't cancelled or accepted within the 5 seconds
 				const checkRecipient = await User.findById(recipientId);
@@ -157,7 +157,13 @@ router.post("/request", authMiddleware, async (req, res, next) => {
 			} catch (err) {
 				console.error("Delayed notification error:", err);
 			}
-		}, 5000);
+		};
+
+		if (process.env.NODE_ENV === 'test') {
+			await addNotification();
+		} else {
+			setTimeout(addNotification, 5000);
+		}
 
 		res.json({ message: "Friend request sent" });
 	} catch (error) {
@@ -351,6 +357,109 @@ router.get("/search/:query", authMiddleware, async (req, res, next) => {
 			name: { $regex: safeQuery, $options: "i" }
 		}).select("_id name profilePic skillLevel").limit(10);
 		res.json(users);
+	} catch (error) {
+		next(error);
+	}
+});
+
+// GET: paginated friends list with mutual friends count
+router.get("/:id/list", authMiddleware, async (req, res, next) => {
+	try {
+		const targetId = req.params.id;
+		if (!mongoose.isValidObjectId(targetId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const currentUserIdObj = new mongoose.Types.ObjectId(currentUserId);
+		const targetUserIdObj = new mongoose.Types.ObjectId(targetId);
+
+		const targetUser = await User.findById(targetUserIdObj).select("friendsListVisibility").lean();
+		if (!targetUser) return res.status(404).json({ message: "User not found" });
+
+		const currentUser = await User.findById(currentUserIdObj).select("role").lean();
+		if (!currentUser) return res.status(404).json({ message: "Current user not found" });
+
+		const isOwner = currentUserId === targetId;
+		const isAdmin = currentUser.role === "admin";
+
+		if (!isOwner && !isAdmin) {
+			const visibility = targetUser.friendsListVisibility || "Public";
+			if (visibility === "Only Me") {
+				return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
+			} else if (visibility === "Friends Only") {
+				const isFriend = await User.exists({ _id: targetUserIdObj, friends: currentUserIdObj });
+				if (!isFriend) {
+					return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
+				}
+			}
+		}
+
+		const cursor = req.query.cursor;
+		const limit = 20;
+
+		const pipeline = [
+			{ $match: { _id: targetUserIdObj } },
+			{ $project: { friends: { $ifNull: ["$friends", []] } } },
+			{ $unwind: "$friends" }
+		];
+
+		if (cursor && mongoose.isValidObjectId(cursor)) {
+			pipeline.push({ $match: { friends: { $gt: new mongoose.Types.ObjectId(cursor) } } });
+		}
+
+		pipeline.push(
+			{ $sort: { friends: 1 } },
+			{ $limit: limit },
+			{
+				$lookup: {
+					from: "users",
+					localField: "friends",
+					foreignField: "_id",
+					as: "friendData"
+				}
+			},
+			{ $unwind: "$friendData" },
+			{
+				$lookup: {
+					from: "users",
+					let: { theirFriends: { $ifNull: ["$friendData.friends", []] } },
+					pipeline: [
+						{ $match: { _id: currentUserIdObj } },
+						{
+							$project: {
+								mutualCount: {
+									$size: {
+										$setIntersection: ["$$theirFriends", { $ifNull: ["$friends", []] }]
+									}
+								}
+							}
+						}
+					],
+					as: "currentUserInfo"
+				}
+			},
+			{ $unwind: { path: "$currentUserInfo", preserveNullAndEmptyArrays: true } },
+			{
+				$project: {
+					_id: "$friendData._id",
+					name: "$friendData.name",
+					profilePic: "$friendData.profilePic",
+					skillLevel: "$friendData.skillLevel",
+					lastActive: "$friendData.lastActive",
+					mutualFriendsCount: { $ifNull: ["$currentUserInfo.mutualCount", 0] }
+				}
+			}
+		);
+
+		const friends = await User.aggregate(pipeline);
+
+		const nextCursor = friends.length === limit ? friends[friends.length - 1]._id : null;
+
+		res.json({
+			friends,
+			nextCursor
+		});
 	} catch (error) {
 		next(error);
 	}
