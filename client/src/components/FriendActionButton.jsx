@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { Button, CircularProgress } from '@mui/material';
+import { Button } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import CheckIcon from '@mui/icons-material/Check';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
@@ -30,7 +30,6 @@ export default function FriendActionButton({
 
   const [prevInitialStatus, setPrevInitialStatus] = useState(initialStatus);
   const [status, setStatus] = useState(() => normalizeStatus(initialStatus));
-  const [isLoading, setIsLoading] = useState(false);
 
   if (initialStatus !== prevInitialStatus) {
     setPrevInitialStatus(initialStatus);
@@ -48,7 +47,7 @@ export default function FriendActionButton({
 
   const handleAction = async (e) => {
     if (e?.stopPropagation) e.stopPropagation();
-    if (isLoading || disabled) return;
+    if (disabled) return;
 
     const prevStatus = status;
 
@@ -58,7 +57,7 @@ export default function FriendActionButton({
       if (onStatusChange) onStatusChange('pending', targetUserId);
 
       try {
-        const res = await apiFetch('/api/friends/request', {
+        await apiFetch('/api/friends/request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -87,7 +86,7 @@ export default function FriendActionButton({
       if (onStatusChange) onStatusChange('friends', targetUserId);
 
       try {
-        const res = await apiFetch('/api/friends/accept', {
+        await apiFetch('/api/friends/accept', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -132,14 +131,14 @@ export default function FriendActionButton({
   let buttonVariant = variant || 'contained';
   let buttonColor = 'primary';
   let buttonIcon = <PersonAddIcon />;
-  let isDisabled = disabled || isLoading;
+  let isDisabled = disabled;
 
   if (status === 'pending') {
     label = 'Cancel Request';
     buttonVariant = variant || 'outlined';
     buttonColor = 'inherit';
     buttonIcon = <CheckIcon />;
-    isDisabled = disabled || isLoading;
+    isDisabled = disabled;
   } else if (status === 'friends') {
     label = 'Friends';
     buttonVariant = variant || 'outlined';
@@ -151,7 +150,7 @@ export default function FriendActionButton({
     buttonVariant = variant || 'contained';
     buttonColor = 'primary';
     buttonIcon = <PersonAddIcon />;
-    isDisabled = disabled || isLoading;
+    isDisabled = disabled;
   }
 
   return (
@@ -162,7 +161,7 @@ export default function FriendActionButton({
       fullWidth={fullWidth}
       size={size}
       onClick={handleAction}
-      startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : buttonIcon}
+      startIcon={buttonIcon}
       aria-label={`${label} for ${targetUserName}`}
       sx={{
         borderRadius: 2,
