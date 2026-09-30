@@ -235,23 +235,7 @@ export default function Matchmaking() {
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
 
-    // Task 7: Presence Polling
-    useEffect(() => {
-        const fetchPresence = async () => {
-            try {
-                const res = await apiFetch('/api/matchmaking/presence');
-                if (res.ok) {
-                    const data = await res.json();
-                    setOnlineUsers(new Set(data.onlineUsers.map(u => u._id)));
-                }
-            } catch (err) {
-                console.error('Failed to fetch presence', err);
-            }
-        };
-        fetchPresence();
-        const interval = setInterval(fetchPresence, 30000);
-        return () => clearInterval(interval);
-    }, []);
+    // Privacy: Removed Presence Polling
 
     // Real-Time Socket Listeners for Friend Requests
     useEffect(() => {
@@ -361,21 +345,25 @@ export default function Matchmaking() {
         </Grid>
     );
 
+    const getSkillColor = (skill) => {
+        if (!skill) return 'primary';
+        const s = skill.toLowerCase();
+        if (s.includes('a') || s.includes('advanced')) return 'error';
+        if (s.includes('b') || s.includes('intermediate')) return 'warning';
+        if (s.includes('c') || s.includes('beginner')) return 'success';
+        if (s.includes('d')) return 'success';
+        return 'primary';
+    };
+
     const renderPlayerCard = (player) => (
         <Card 
             sx={{ 
                 height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, p: 2.5, transition: 'transform 0.2s, box-shadow 0.2s',
-                '&:hover': { transform: 'translateY(-4px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.1)' }
+                '&:hover': { transform: 'translateY(-4px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 12px 28px rgba(0,0,0,0.6)' : '0 12px 28px rgba(0,0,0,0.12)' }
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
-                <Badge
-                    overlap="circular"
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    variant="dot"
-                    color="success"
-                    invisible={!(onlineUsers.has(player._id) || isRecentlyActive(player.lastActive))}
-                    sx={{ '& .MuiBadge-badge': { width: 14, height: 14, borderRadius: '50%', border: '2px solid white', cursor: 'pointer', boxShadow: '0 0 8px 2px rgba(76, 175, 80, 0.6)', animation: 'pulse 2s infinite' }, '@keyframes pulse': { '0%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0.7)' }, '70%': { boxShadow: '0 0 0 10px rgba(76, 175, 80, 0)' }, '100%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0)' } } }}
+                <Box
                     onMouseEnter={(e) => handlePeekOpen(e, player)}
                     onMouseLeave={handlePeekClose}
                 >
@@ -385,9 +373,9 @@ export default function Matchmaking() {
                             sx={{ width: 72, height: 72, bgcolor: 'secondary.main', color: 'secondary.contrastText', '&:hover': { opacity: 0.8 } }}
                          alt={player.name} />
                     </Link>
-                </Badge>
+                </Box>
                 <Stack direction="column" spacing={1} sx={{ alignItems: 'flex-end' }}>
-                    {player.skillLevel && <Chip label={player.skillLevel} size="small" color="primary" sx={{ fontWeight: 600, borderRadius: 1.5 }} />}
+                    {player.skillLevel && <Chip label={player.skillLevel} size="small" color={getSkillColor(player.skillLevel)} sx={{ fontWeight: 600, borderRadius: 1.5 }} />}
                     {player.preferredPlay && <Chip label={player.preferredPlay} size="small" variant="outlined" sx={{ fontWeight: 500, borderRadius: 1.5 }} />}
                 </Stack>
             </Box>
@@ -402,6 +390,10 @@ export default function Matchmaking() {
                         <span aria-hidden="true">🏫</span> {player.homeUniversity}
                     </Typography>
                 )}
+                {/* UX UI Tweak #2: Mutual Friends Mock Indicator */}
+                <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
+                    <span aria-hidden="true">🔥</span> {getPlayerStats(player).streak} Mutual Friends
+                </Typography>
                 {player.racket && (
                     <Typography variant="body2" sx={{ mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
                         <span aria-hidden="true">🏸</span> {player.racket}
@@ -594,22 +586,36 @@ export default function Matchmaking() {
                 </Box>
             </ClickAwayListener>
 
-            <Stack direction="row" spacing={1} sx={{ mb: 4, overflowX: 'auto', pb: 1 }}>
-                <Typography variant="body2" color="text.primary" sx={{ alignSelf: 'center', mr: 1, fontWeight: 'bold' }}>
-                    Filter Skill:
-                </Typography>
-                {skillLevels.map(level => (
-                    <Chip 
-                        key={level} 
-                        label={level} 
-                        onClick={() => setSkillFilter(level)}
-                        color={skillFilter === level ? 'primary' : 'default'}
-                        variant={skillFilter === level ? 'filled' : 'outlined'}
-                        sx={{ fontWeight: 'bold' }}
-                        clickable
-                    />
-                ))}
-            </Stack>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
+                <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1, alignItems: 'center' }}>
+                    <Typography variant="body2" color="text.primary" sx={{ mr: 1, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                        Filter Skill:
+                    </Typography>
+                    {skillLevels.map(level => (
+                        <Chip 
+                            key={level} 
+                            label={level} 
+                            onClick={() => setSkillFilter(level)}
+                            color={skillFilter === level ? 'primary' : 'default'}
+                            variant={skillFilter === level ? 'filled' : 'outlined'}
+                            sx={{ fontWeight: 'bold' }}
+                            clickable
+                        />
+                    ))}
+                </Stack>
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <Select
+                        value="newest"
+                        displayEmpty
+                        onChange={() => {}}
+                        sx={{ borderRadius: 50, bgcolor: 'background.paper' }}
+                    >
+                        <MenuItem value="newest">Sort: Newest</MenuItem>
+                        <MenuItem value="active">Sort: Recently Active</MenuItem>
+                        <MenuItem value="closest">Sort: Closest Skill</MenuItem>
+                    </Select>
+                </FormControl>
+            </Box>
 
             {!searchQuery && skillFilter === 'All' && (
                 <Box sx={{ mb: 5 }}>
@@ -706,9 +712,25 @@ export default function Matchmaking() {
                     {loading ? (
                         renderSkeletons()
                     ) : matches.length === 0 ? (
-                        <Alert severity="info" sx={{ borderRadius: 2 }}>
-                            No players found matching your criteria.
-                        </Alert>
+                        <Box sx={{ p: 6, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 3, border: '1px dashed', borderColor: 'divider' }}>
+                            <Typography variant="h2" sx={{ mb: 2 }}>🏸</Typography>
+                            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                No players found!
+                            </Typography>
+                            <Typography color="text.secondary" sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
+                                Looks like everyone is currently on the court. Try adjusting your skill filter or search term to find more players.
+                            </Typography>
+                            <Button 
+                                variant="contained" 
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setSkillFilter('All');
+                                }}
+                                sx={{ borderRadius: 50, px: 4, fontWeight: 'bold' }}
+                            >
+                                Clear Filters
+                            </Button>
+                        </Box>
                     ) : (
                         <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                             <AnimatePresence>
