@@ -65,7 +65,10 @@ router.get("/discover", authMiddleware, async (req, res) => {
         
         // Collect all IDs that must be excluded from discovery
         const excludedIds = [toIdString(req.user.userId)].filter(Boolean);
-        if (currentUser) {
+        
+        // Only exclude friends/pending if we are NOT actively searching.
+        // If we are searching, we want a universal directory search (including friends).
+        if (!search && currentUser) {
             if (Array.isArray(currentUser.friends)) {
                 currentUser.friends.forEach(f => {
                     const idStr = toIdString(f);

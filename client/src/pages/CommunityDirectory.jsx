@@ -27,7 +27,6 @@ export default function CommunityDirectory() {
     const [matches, setMatches] = useState([]);
     const [recommended, setRecommended] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [dropdownLoading, setDropdownLoading] = useState(false);
     const [error, setError] = useState(null);
     
     // Search state
@@ -47,8 +46,6 @@ export default function CommunityDirectory() {
     
     // Dropdown state
     const [isFocused, setIsFocused] = useState(false);
-    const [dropdownResults, setDropdownResults] = useState([]);
-    const [selectedIndex, setSelectedIndex] = useState(-1);
     
     // Advanced Filter state
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -228,29 +225,6 @@ export default function CommunityDirectory() {
         };
     }, [cursor, hasMore, loading, searchQuery, isFocused, skillFilter, campusFilter, timeOfDayFilter]);
 
-    useEffect(() => {
-        if (!searchQuery.trim()) {
-            return;
-        }
-
-        const fetchDropdown = async () => {
-            setDropdownLoading(true);
-            try {
-                const response = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(searchQuery)}`);
-                const data = await response.json();
-                setDropdownResults(data.matches || []);
-                setSelectedIndex(-1);
-            } catch (err) {
-                console.error('Failed to fetch dropdown results', err);
-            } finally {
-                setDropdownLoading(false);
-            }
-        };
-
-        const timeoutId = setTimeout(fetchDropdown, 250);
-        return () => clearTimeout(timeoutId);
-    }, [searchQuery]);
-
     // Privacy: Removed Presence Polling
 
     // Real-Time Socket Listeners for Friend Requests
@@ -302,34 +276,9 @@ export default function CommunityDirectory() {
 
     const handleKeyDown = (e) => {
         if (!isFocused) return;
-
-        const maxIndex = searchQuery.trim() 
-            ? dropdownResults.length - 1 
-            : recentSearches.length + Math.min(3, recommended.length) - 1;
-
-        if (e.key === 'ArrowDown') {
+        if (e.key === 'Enter') {
             e.preventDefault();
-            setSelectedIndex(prev => (prev < maxIndex ? prev + 1 : prev));
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setSelectedIndex(prev => (prev > 0 ? prev - 1 : 0));
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (selectedIndex >= 0) {
-                if (searchQuery.trim()) {
-                    const selectedPlayer = dropdownResults[selectedIndex];
-                    if (selectedPlayer) navigate(`/profile/${selectedPlayer._id}`);
-                } else {
-                    if (selectedIndex < recentSearches.length) {
-                        handleSearchSubmit(recentSearches[selectedIndex]);
-                    } else {
-                        const recPlayer = recommended[selectedIndex - recentSearches.length];
-                        if (recPlayer) navigate(`/profile/${recPlayer._id}`);
-                    }
-                }
-            } else {
-                handleSearchSubmit(searchQuery);
-            }
+            handleSearchSubmit(searchQuery);
         } else if (e.key === 'Escape') {
             setIsFocused(false);
         }
@@ -500,7 +449,7 @@ export default function CommunityDirectory() {
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             {/* UX UI Tweak #4: Dynamic Loading Icon */}
-                                            {dropdownLoading ? <CircularProgress size={20} color="primary" /> : <SearchIcon color={isFocused ? "primary" : "inherit"} />}
+                                            <SearchIcon color={isFocused ? "primary" : "inherit"} />
                                         </InputAdornment>
                                     ),
                                     endAdornment: (
@@ -551,111 +500,6 @@ export default function CommunityDirectory() {
                             <TuneIcon />
                         </IconButton>
                     </Box>
-
-                    <AnimatePresence>
-                        {isFocused && (
-                            <Paper 
-                                component={motion.div}
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                transition={{ duration: 0.2 }}
-                                elevation={8}
-                                sx={{ 
-                                    position: 'absolute', 
-                                    top: '100%', left: 0, right: 0, 
-                                    mt: 1, 
-                                    borderRadius: 3,
-                                    overflow: 'hidden',
-                                    maxHeight: 400,
-                                    overflowY: 'auto'
-                                }}
-                            >
-                                <List disablePadding>
-                                    {searchQuery.trim() ? (
-                                        dropdownLoading ? (
-                                            Array.from({ length: 3 }).map((_, i) => (
-                                                <ListItem key={`skel-${i}`}>
-                                                    <ListItemAvatar>
-                                                        <Skeleton variant="circular" width={40} height={40} />
-                                                    </ListItemAvatar>
-                                                    <ListItemText 
-                                                        primary={<Skeleton variant="text" width="60%" />} 
-                                                        secondary={<Skeleton variant="text" width="40%" />} 
-                                                    />
-                                                </ListItem>
-                                            ))
-                                        ) : dropdownResults.length > 0 ? (
-                                            dropdownResults.map((p, idx) => (
-                                                <ListItem disablePadding key={p._id}>
-                                                    <ListItemButton 
-                                                        selected={selectedIndex === idx}
-                                                        onClick={() => navigate(`/profile/${p._id}`)}
-                                                    >
-                                                        <ListItemAvatar>
-                                                            <Avatar src={p.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${p.name}`} alt={p.name} />
-                                                        </ListItemAvatar>
-                                                        {/* UX UI Tweak #5: Richer Dropdown Results */}
-                                                        <ListItemText 
-                                                            primary={
-                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                    <Typography component="span" fontWeight="bold">{p.name}</Typography>
-                                                                    {p.skillLevel && <Chip label={p.skillLevel} size="small" color={getSkillColor(p.skillLevel)} sx={{ height: 20, fontSize: '0.7rem', fontWeight: 'bold' }} />}
-                                                                </Box>
-                                                            } 
-                                                            secondary={p.homeUniversity || 'Player'} 
-                                                        />
-                                                    </ListItemButton>
-                                                </ListItem>
-                                            ))
-                                        ) : (
-                                            <ListItem>
-                                                {/* UX UI Tweak #6: Smarter "No Results" Dropdown */}
-                                                <ListItemText 
-                                                    primary={`No players matching "${searchQuery}"`} 
-                                                    secondary="Hit Enter to search the full directory."
-                                                    sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }} 
-                                                />
-                                            </ListItem>
-                                        )
-                                    ) : (
-                                        <>
-                                            {recentSearches.length > 0 ? (
-                                                <>
-                                                    <Typography variant="overline" sx={{ px: 2, pt: 2, pb: 1, display: 'block', color: 'text.secondary', fontWeight: 'bold' }}>
-                                                        Recent Searches
-                                                    </Typography>
-                                                    {recentSearches.map((q, idx) => (
-                                                        <ListItem disablePadding key={`recent-${idx}`}>
-                                                            <ListItemButton 
-                                                                selected={selectedIndex === idx}
-                                                                onClick={() => handleSearchSubmit(q)}
-                                                            >
-                                                                <ListItemAvatar>
-                                                                    <Avatar sx={{ bgcolor: 'transparent', color: 'text.secondary' }}>
-                                                                        <HistoryIcon />
-                                                                    </Avatar>
-                                                                </ListItemAvatar>
-                                                                <ListItemText primary={q} />
-                                                                <IconButton size="small" onClick={(e) => removeRecentSearch(e, q)} aria-label={`Remove ${q} from recent searches`}>
-                                                                    <CloseIcon fontSize="small" />
-                                                                </IconButton>
-                                                            </ListItemButton>
-                                                        </ListItem>
-                                                    ))}
-                                                    <Divider sx={{ my: 1 }} />
-                                                </>
-                                            ) : (
-                                                <ListItem>
-                                                    <ListItemText primary="Start typing to search for players..." sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }} />
-                                                </ListItem>
-                                            )}
-                                        </>
-                                    )}
-                                </List>
-                            </Paper>
-                        )}
-                    </AnimatePresence>
                 </Box>
             </ClickAwayListener>
 
@@ -793,17 +637,63 @@ export default function CommunityDirectory() {
                             </Button>
                         </Box>
                     ) : (
-                        <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-                            <AnimatePresence>
-                                {matches.map((player, i) => (
-                                    <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={`match-${player._id}`}>
-                                        <motion.div custom={i} variants={cardVariants} initial="hidden" animate="visible" exit="hidden" layout>
-                                            {renderPlayerCard(player)}
+                        searchQuery.trim() ? (
+                            <List disablePadding sx={{ width: '100%' }}>
+                                <AnimatePresence>
+                                    {matches.map((player, i) => (
+                                        <motion.div custom={i} variants={cardVariants} initial="hidden" animate="visible" exit="hidden" layout key={`match-${player._id}`}>
+                                            <Card sx={{ mb: 2, borderRadius: 3, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-2px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.1)' } }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, overflow: 'hidden' }}>
+                                                    <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none' }}>
+                                                        <Avatar src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} sx={{ width: 64, height: 64 }} />
+                                                    </Link>
+                                                    <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                                            <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                                                <Typography variant="h6" fontWeight="bold" sx={{ '&:hover': { textDecoration: 'underline' } }}>{player.name}</Typography>
+                                                            </Link>
+                                                            {player.skillLevel && <Chip label={player.skillLevel} size="small" color={getSkillColor(player.skillLevel)} sx={{ height: 20, fontSize: '0.7rem', fontWeight: 'bold' }} />}
+                                                        </Box>
+                                                        {player.homeUniversity && (
+                                                            <Typography variant="body2" color="text.secondary" noWrap>
+                                                                {player.homeUniversity}
+                                                            </Typography>
+                                                        )}
+                                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontWeight: 'bold' }}>
+                                                            🔥 {getPlayerStats(player).streak} Mutual Friends
+                                                        </Typography>
+                                                    </Box>
+                                                </Box>
+                                                <Box sx={{ ml: 2, display: 'flex', alignItems: 'center' }}>
+                                                    <FriendActionButton 
+                                                        targetUserId={player._id}
+                                                        targetUserName={player.name}
+                                                        initialStatus={player.friendshipStatus || (requestedFriends.has(player._id) ? 'pending' : 'none')}
+                                                        onStatusChange={(newStatus) => {
+                                                            if (newStatus === 'pending') {
+                                                                setRequestedFriends(prev => new Set(prev).add(player._id));
+                                                            }
+                                                        }}
+                                                    />
+                                                </Box>
+                                            </Card>
                                         </motion.div>
-                                    </Grid>
-                                ))}
-                            </AnimatePresence>
-                        </Grid>
+                                    ))}
+                                </AnimatePresence>
+                            </List>
+                        ) : (
+                            <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
+                                <AnimatePresence>
+                                    {matches.map((player, i) => (
+                                        <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={`match-${player._id}`}>
+                                            <motion.div custom={i} variants={cardVariants} initial="hidden" animate="visible" exit="hidden" layout>
+                                                {renderPlayerCard(player)}
+                                            </motion.div>
+                                        </Grid>
+                                    ))}
+                                </AnimatePresence>
+                            </Grid>
+                        )
                     )}
 
                     {/* Infinite Scroll Target */}
