@@ -13,7 +13,7 @@ const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
 const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 const Marketplace = React.lazy(() => import("./pages/Marketplace"));
-const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
+const CommunityDirectory = React.lazy(() => import("./pages/CommunityDirectory"));
 const SearchResults = React.lazy(() => import("./pages/SearchResults"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 const OnboardingWizard = React.lazy(() => import("./components/OnboardingWizard"));
@@ -228,7 +228,7 @@ const AnimatedRoutes = () => {
 						element={
 							user ? (
 								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
-									<Matchmaking />
+									<CommunityDirectory />
 								</motion.div>
 							) : (
 								<Navigate to="/auth" />

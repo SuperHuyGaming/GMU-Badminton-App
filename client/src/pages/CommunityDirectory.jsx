@@ -22,7 +22,7 @@ const cardVariants = {
     }),
 };
 
-export default function Matchmaking() {
+export default function CommunityDirectory() {
     const navigate = useNavigate();
     const [matches, setMatches] = useState([]);
     const [recommended, setRecommended] = useState([]);
@@ -474,17 +474,25 @@ export default function Matchmaking() {
                             onKeyDown={handleKeyDown}
                             sx={{ 
                                 flexGrow: 1,
-                                bgcolor: 'background.paper', 
                                 transition: 'transform 0.2s',
                                 transform: isFocused ? 'scale(1.02)' : 'scale(1)',
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 50,
-                                    transition: 'box-shadow 0.2s, border-color 0.2s',
+                                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'background.paper',
+                                    backdropFilter: 'blur(10px)',
+                                    transition: 'box-shadow 0.2s, border-color 0.2s, background-color 0.2s',
                                     boxShadow: isFocused ? (theme) => theme.palette.mode === 'dark' ? '0 8px 32px rgba(0,0,0,0.8)' : '0 8px 32px rgba(33, 150, 243, 0.25)' : 'none',
                                     '& fieldset': {
                                         borderColor: isFocused ? 'primary.main' : 'divider',
                                         borderWidth: isFocused ? 2 : 1
+                                    },
+                                    '&:hover fieldset': {
+                                        borderColor: isFocused ? 'primary.main' : 'text.secondary',
                                     }
+                                },
+                                '& .MuiOutlinedInput-input': {
+                                    py: 1.5,
+                                    px: 2,
                                 }
                             }}
                             slotProps={{
@@ -651,8 +659,8 @@ export default function Matchmaking() {
                 </Box>
             </ClickAwayListener>
 
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
-                <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1, alignItems: 'center' }}>
+            <Box sx={{ mb: 4, overflowX: 'auto', pb: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Typography variant="body2" color="text.primary" sx={{ mr: 1, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                         Filter Skill:
                     </Typography>
@@ -668,18 +676,6 @@ export default function Matchmaking() {
                         />
                     ))}
                 </Stack>
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                    <Select
-                        value="newest"
-                        displayEmpty
-                        onChange={() => {}}
-                        sx={{ borderRadius: 50, bgcolor: 'background.paper' }}
-                    >
-                        <MenuItem value="newest">Sort: Newest</MenuItem>
-                        <MenuItem value="active">Sort: Recently Active</MenuItem>
-                        <MenuItem value="closest">Sort: Closest Skill</MenuItem>
-                    </Select>
-                </FormControl>
             </Box>
 
             {!searchQuery && skillFilter === 'All' && (
