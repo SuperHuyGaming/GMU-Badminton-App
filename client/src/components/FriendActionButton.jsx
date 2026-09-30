@@ -47,7 +47,7 @@ export default function FriendActionButton({
 
   const handleAction = async (e) => {
     if (e?.stopPropagation) e.stopPropagation();
-    if (disabled) return;
+    if (disabled || status === 'pending' || status === 'friends') return;
 
     const prevStatus = status;
 

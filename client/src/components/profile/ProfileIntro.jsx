@@ -21,6 +21,7 @@ export default function ProfileIntro({
 	profileData,
 	isOwnProfile,
 	onEditClick,
+	onFriendsClick,
 }) {
 	return (
 		<Paper
@@ -28,7 +29,26 @@ export default function ProfileIntro({
 			sx={{ p: 3, borderRadius: 3, position: "sticky", top: 20 }}
 		>
 			<Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 3 }}>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid', borderTopColor: 'primary.main', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+				<Box 
+					onClick={onFriendsClick}
+					sx={{ 
+						p: 2, 
+						bgcolor: 'background.paper', 
+						borderRadius: '12px', 
+						textAlign: 'center', 
+						border: '1px solid', 
+						borderColor: 'divider', 
+						borderTop: '6px solid', 
+						borderTopColor: 'primary.main', 
+						boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+						cursor: 'pointer',
+						transition: 'all 0.2s ease',
+						'&:hover': {
+							transform: 'translateY(-2px)',
+							boxShadow: '0 6px 16px rgba(0,0,0,0.1)'
+						}
+					}}
+				>
 					<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.friends?.length || 0}</Typography>
 					<Typography variant="caption" color="text.primary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Friends</Typography>
 				</Box>
