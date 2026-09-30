@@ -7,7 +7,6 @@ import HistoryIcon from '@mui/icons-material/History';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TuneIcon from '@mui/icons-material/Tune';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -67,15 +66,33 @@ export default function Matchmaking() {
     // Popover / Quick-Peek State
     const [peekAnchorEl, setPeekAnchorEl] = useState(null);
     const [peekPlayer, setPeekPlayer] = useState(null);
+    const [peekStats, setPeekStats] = useState(null);
+
+    const getPlayerStats = (player) => {
+        if (!player) return { winRate: 60, matchesPlayed: 20, streak: 2 };
+        const str = String(player._id || player.name || 'player');
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+        }
+        const absHash = Math.abs(hash);
+        const winRate = (absHash % 41) + 40;
+        const matchesPlayed = (absHash % 45) + 5;
+        const streak = (absHash % 4) + 1;
+        return { winRate, matchesPlayed, streak };
+    };
 
     const handlePeekOpen = (event, player) => {
         setPeekAnchorEl(event.currentTarget);
         setPeekPlayer(player);
+        setPeekStats(getPlayerStats(player));
     };
 
     const handlePeekClose = () => {
         setPeekAnchorEl(null);
         setPeekPlayer(null);
+        setPeekStats(null);
     };
 
     const peekOpen = Boolean(peekAnchorEl);
@@ -109,67 +126,90 @@ export default function Matchmaking() {
     const observerTarget = useRef(null);
 
     useEffect(() => {
-        const fetchMainData = async (isLoadMore = false) => {
-            if (!isLoadMore) {
-                setLoading(true);
-            }
+        let isCancelled = false;
+
+        const fetchInitialData = async () => {
+            setLoading(true);
             try {
                 let url = `/api/matchmaking/discover?`;
                 if (searchQuery && !isFocused) url += `search=${encodeURIComponent(searchQuery)}&`;
                 if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
                 if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
                 if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
-                if (isLoadMore && cursor) url += `cursor=${encodeURIComponent(cursor)}&`;
-                
+
                 const response = await apiFetch(url);
                 const data = await response.json();
-                
-                if (isLoadMore) {
-                    setMatches(prev => [...prev, ...(data.matches || [])]);
-                } else {
-                    setMatches(data.matches || []);
-                    setRecommended(data.recommended || []);
-                }
+
+                if (isCancelled) return;
+
+                setMatches(data.matches || []);
+                setRecommended(data.recommended || []);
 
                 if (data.matches && data.matches.length > 0) {
                     setCursor(data.matches[data.matches.length - 1]._id);
-                    setHasMore(data.matches.length === 50); // backend limit
+                    setHasMore(data.matches.length === 50);
                 } else {
+                    setCursor(null);
                     setHasMore(false);
                 }
             } catch (err) {
+                if (isCancelled) return;
                 setError(err.message || 'Failed to fetch players');
             } finally {
-                setLoading(false);
+                if (!isCancelled) setLoading(false);
             }
         };
 
-        if (cursor === null) {
-            fetchMainData(false);
-        }
+        fetchInitialData();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [skillFilter, campusFilter, timeOfDayFilter, searchQuery, isFocused]);
+
+    useEffect(() => {
+        if (!hasMore || loading || !cursor) return;
 
         const observer = new IntersectionObserver(
-            entries => {
+            async (entries) => {
                 if (entries[0].isIntersecting && hasMore && !loading && cursor) {
-                    fetchMainData(true);
+                    try {
+                        let url = `/api/matchmaking/discover?`;
+                        if (searchQuery && !isFocused) url += `search=${encodeURIComponent(searchQuery)}&`;
+                        if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
+                        if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
+                        if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
+                        url += `cursor=${encodeURIComponent(cursor)}&`;
+
+                        const response = await apiFetch(url);
+                        const data = await response.json();
+
+                        setMatches(prev => [...prev, ...(data.matches || [])]);
+
+                        if (data.matches && data.matches.length > 0) {
+                            setCursor(data.matches[data.matches.length - 1]._id);
+                            setHasMore(data.matches.length === 50);
+                        } else {
+                            setHasMore(false);
+                        }
+                    } catch (err) {
+                        console.error('Failed to load more players', err);
+                    }
                 }
             },
             { threshold: 0.1 }
         );
 
-        if (observerTarget.current) {
-            observer.observe(observerTarget.current);
+        const currentTarget = observerTarget.current;
+        if (currentTarget) {
+            observer.observe(currentTarget);
         }
 
-        return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [skillFilter, campusFilter, timeOfDayFilter, cursor, hasMore, loading]);
-
-    // Reset cursor when filters change
-    useEffect(() => {
-        setCursor(null);
-        setHasMore(true);
-    }, [skillFilter, campusFilter, timeOfDayFilter, searchQuery]);
+        return () => {
+            if (currentTarget) observer.unobserve(currentTarget);
+            observer.disconnect();
+        };
+    }, [cursor, hasMore, loading, searchQuery, isFocused, skillFilter, campusFilter, timeOfDayFilter]);
 
     useEffect(() => {
         if (!searchQuery.trim()) {
@@ -305,7 +345,7 @@ export default function Matchmaking() {
                     <Card sx={{ height: '100%', p: 2.5, borderRadius: 3, display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
                             <Skeleton variant="circular" width={72} height={72} animation="wave" />
-                            <Stack direction="column" spacing={1} alignItems="flex-end">
+                            <Stack direction="column" spacing={1} sx={{ alignItems: 'flex-end' }}>
                                 <Skeleton variant="rounded" width={80} height={24} animation="wave" sx={{ borderRadius: 1.5 }} />
                             </Stack>
                         </Box>
@@ -343,7 +383,7 @@ export default function Matchmaking() {
                          alt={player.name} />
                     </Link>
                 </Badge>
-                <Stack direction="column" spacing={1} alignItems="flex-end">
+                <Stack direction="column" spacing={1} sx={{ alignItems: 'flex-end' }}>
                     {player.skillLevel && <Chip label={player.skillLevel} size="small" color="primary" sx={{ fontWeight: 600, borderRadius: 1.5 }} />}
                     {player.preferredPlay && <Chip label={player.preferredPlay} size="small" variant="outlined" sx={{ fontWeight: 500, borderRadius: 1.5 }} />}
                 </Stack>
@@ -410,14 +450,6 @@ export default function Matchmaking() {
                             fullWidth
                             variant="outlined"
                             placeholder="Search by name or university..."
-                            autoComplete="off"
-                            name="dummy-search-prevent-autofill"
-                            aria-label="Search players"
-                            inputProps={{ 
-                                'aria-label': 'Search players',
-                                autoComplete: 'off',
-                                form: { autoComplete: 'off' }
-                            }}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onFocus={() => setIsFocused(true)}
@@ -434,8 +466,18 @@ export default function Matchmaking() {
                                     }
                                 }
                             }}
-                            InputProps={{
-                                startAdornment: <InputAdornment position="start"><SearchIcon color={isFocused ? "primary" : "inherit"} /></InputAdornment>,
+                            slotProps={{
+                                input: {
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon color={isFocused ? "primary" : "inherit"} />
+                                        </InputAdornment>
+                                    ),
+                                },
+                                htmlInput: {
+                                    'aria-label': 'Search players',
+                                    autoComplete: 'off',
+                                }
                             }}
                         />
                         <IconButton 
@@ -807,7 +849,7 @@ export default function Matchmaking() {
                     sx: { borderRadius: 3, mt: 1, boxShadow: 6, minWidth: 200 }
                 }}
             >
-                {peekPlayer && (
+                {peekPlayer && peekStats && (
                     <Box sx={{ p: 2 }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <TimelineIcon fontSize="small" color="primary" /> Quick Stats
@@ -815,16 +857,16 @@ export default function Matchmaking() {
                         <Divider sx={{ mb: 1.5 }} />
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                             <Typography variant="body2" color="text.secondary">Win Rate:</Typography>
-                            <Typography variant="body2" fontWeight="bold">{(Math.random() * 40 + 40).toFixed(0)}%</Typography>
+                            <Typography variant="body2" fontWeight="bold">{peekStats.winRate}%</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                             <Typography variant="body2" color="text.secondary">Matches Played:</Typography>
-                            <Typography variant="body2" fontWeight="bold">{Math.floor(Math.random() * 50) + 5}</Typography>
+                            <Typography variant="body2" fontWeight="bold">{peekStats.matchesPlayed}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Typography variant="body2" color="text.secondary">Current Streak:</Typography>
                             <Typography variant="body2" fontWeight="bold" color="success.main">
-                                🔥 {Math.floor(Math.random() * 4) + 1} Wins
+                                🔥 {peekStats.streak} Wins
                             </Typography>
                         </Box>
                     </Box>

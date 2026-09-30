@@ -88,7 +88,7 @@ router.get("/discover", authMiddleware, async (req, res) => {
 
         // Cursor-Based Pagination
         if (cursor) {
-            query._id = { $lt: cursor };
+            query._id = { $ne: req.user.userId, $lt: cursor };
         }
 
         // Geospatial Court Check-in Search
@@ -155,13 +155,15 @@ router.get("/generate-bracket", authMiddleware, async (req, res) => {
 
         // Helper to build recursive nodes
         let idCounter = 1;
-        const buildNode = (depth, player1, player2) => {
+        const buildNode = (depth) => {
             if (depth === 0) {
                 // Leaf node (Round of 16)
+                const p1 = shuffled.pop() || { name: "TBD" };
+                const p2 = shuffled.pop() || { name: "TBD" };
                 return {
                     id: idCounter++,
-                    player1: player1.name,
-                    player2: player2.name,
+                    player1: p1.name,
+                    player2: p2.name,
                     score1: null,
                     score2: null,
                     winner: null,
@@ -171,8 +173,8 @@ router.get("/generate-bracket", authMiddleware, async (req, res) => {
             
             // Build children (previous rounds)
             // A node at depth 1 needs 2 matches at depth 0
-            const child1 = buildNode(depth - 1, shuffled.pop(), shuffled.pop());
-            const child2 = buildNode(depth - 1, shuffled.pop(), shuffled.pop());
+            const child1 = buildNode(depth - 1);
+            const child2 = buildNode(depth - 1);
 
             return {
                 id: idCounter++,
@@ -188,7 +190,7 @@ router.get("/generate-bracket", authMiddleware, async (req, res) => {
         // We want a 16-player bracket. 16 players = 8 round-of-16 matches.
         // Depth 3 = Finals (1 match). Depth 2 = Semis (2 matches). Depth 1 = Quarters (4). Depth 0 = R16 (8).
         // The buildNode recursively consumes the `shuffled` array at the leaf nodes.
-        const finals = buildNode(3, null, null);
+        const finals = buildNode(3);
 
         res.json(finals);
     } catch (err) {
