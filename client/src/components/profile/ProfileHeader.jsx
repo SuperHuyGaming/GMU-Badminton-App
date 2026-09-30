@@ -17,6 +17,7 @@ import {
 	IconButton,
 	Badge
 } from "@mui/material";
+import FriendActionButton from "../FriendActionButton";
 
 // Clean Icons
 const ShareIcon = () => (
@@ -79,7 +80,7 @@ export default function ProfileHeader({
 	activeTab,
 	setActiveTab,
 	friendStatus,
-	handleFriendAction,
+	setFriendStatus,
 	isOnline
 }) {
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
@@ -394,17 +395,14 @@ export default function ProfileHeader({
 						</Button>
 					) : (
 						<>
-							<Button
-								variant="contained"
-								color={friendStatus === "friends" ? "error" : "primary"}
-								onClick={handleFriendAction}
-								sx={{ fontWeight: "bold", borderRadius: 2, textTransform: "none" }}
-							>
-								{friendStatus === "friends" ? "Remove Friend" :
-								 friendStatus === "request_sent" ? "Cancel Request" :
-								 friendStatus === "request_received" ? "Accept Request" :
-								 "Add Friend"}
-							</Button>
+							<FriendActionButton
+								targetUserId={profileData._id}
+								targetUserName={profileData.name}
+								initialStatus={friendStatus}
+								onStatusChange={(newStatus) => {
+									if (setFriendStatus) setFriendStatus(newStatus);
+								}}
+							/>
 							{friendStatus === "friends" && (
 								<Button
 									variant="contained"

@@ -132,9 +132,15 @@ describe('Matchmaking Backend Routes', () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body).toEqual({
-                matches: mockMatches,
-                recommended: mockRecommended
+                matches: [{ ...mockMatches[0], friendshipStatus: 'none' }],
+                recommended: [{ ...mockRecommended[0], friendshipStatus: 'none' }]
             });
+            expect(User.find).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    _id: { $nin: ['current_user_123'] },
+                    checkInLocation: 'RAC'
+                })
+            );
         });
 
         it('supports cursor pagination and search filter', async () => {
@@ -160,10 +166,99 @@ describe('Matchmaking Backend Routes', () => {
             expect(User.find).toHaveBeenCalledWith(
                 expect.objectContaining({
                     _id: expect.objectContaining({
-                        $ne: 'current_user_123',
+                        $nin: ['current_user_123'],
                         $lt: '660000000000000000000010'
                     }),
                     $or: expect.any(Array)
+                })
+            );
+        });
+
+        it('excludes existing friends and pending requests from discover feed and hydrates friendshipStatus', async () => {
+            const mockCurrentUser = {
+                _id: 'current_user_123',
+                friends: ['friend_1'],
+                friendRequests: ['pending_in_1'],
+                sentFriendRequests: ['pending_out_1'],
+                homeUniversity: 'George Mason University'
+            };
+            const mockMatches = [
+                { _id: 'u2', name: 'Bob', skillLevel: 'Intermediate' }
+            ];
+            const mockRecommended = [
+                { _id: 'u3', name: 'Charlie', homeUniversity: 'George Mason University' }
+            ];
+
+            User.findById.mockReturnValue({
+                lean: jest.fn().mockResolvedValue(mockCurrentUser)
+            });
+
+            User.find
+                .mockReturnValueOnce({
+                    select: jest.fn().mockReturnValue({
+                        sort: jest.fn().mockReturnValue({
+                            limit: jest.fn().mockReturnValue({
+                                lean: jest.fn().mockResolvedValue(mockMatches)
+                            })
+                        })
+                    })
+                })
+                .mockReturnValueOnce({
+                    select: jest.fn().mockReturnValue({
+                        limit: jest.fn().mockReturnValue({
+                            lean: jest.fn().mockResolvedValue(mockRecommended)
+                        })
+                    })
+                });
+
+            const res = await request(app)
+                .get('/api/matchmaking/discover')
+                .set('Authorization', `Bearer ${testToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(User.find).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    _id: { $nin: ['current_user_123', 'friend_1', 'pending_in_1', 'pending_out_1'] }
+                })
+            );
+            expect(res.body.matches[0]).toHaveProperty('friendshipStatus', 'none');
+            expect(res.body.recommended[0]).toHaveProperty('friendshipStatus', 'none');
+        });
+
+        it('handles null or unpopulated array elements in user friend arrays without crashing', async () => {
+            const mockCurrentUser = {
+                _id: 'current_user_123',
+                friends: [null, undefined, 'friend_1'],
+                friendRequests: [null],
+                sentFriendRequests: [undefined],
+                homeUniversity: 'George Mason University'
+            };
+
+            User.findById.mockReturnValue({
+                lean: jest.fn().mockResolvedValue(mockCurrentUser)
+            });
+
+            User.find.mockReturnValue({
+                select: jest.fn().mockReturnValue({
+                    sort: jest.fn().mockReturnValue({
+                        limit: jest.fn().mockReturnValue({
+                            lean: jest.fn().mockResolvedValue([])
+                        })
+                    }),
+                    limit: jest.fn().mockReturnValue({
+                        lean: jest.fn().mockResolvedValue([])
+                    })
+                })
+            });
+
+            const res = await request(app)
+                .get('/api/matchmaking/discover')
+                .set('Authorization', `Bearer ${testToken}`);
+
+            expect(res.statusCode).toBe(200);
+            expect(User.find).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    _id: { $nin: ['current_user_123', 'friend_1'] }
                 })
             );
         });
