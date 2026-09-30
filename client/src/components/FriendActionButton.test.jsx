@@ -146,10 +146,7 @@ describe('FriendActionButton Component', () => {
   });
 
   it('rolls back to "Add Friend" on API error and shows toast error', async () => {
-    apiFetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ message: 'Server error occurred' }),
-    });
+    apiFetch.mockRejectedValueOnce(new Error('Server error occurred'));
 
     const onStatusChange = vi.fn();
     renderWithAuth(
