@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Badge, Divider, IconButton, Paper, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Backdrop, CircularProgress } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import HistoryIcon from '@mui/icons-material/History';
@@ -99,6 +99,22 @@ export default function Matchmaking() {
     const peekOpen = Boolean(peekAnchorEl);
 
     const searchContainerRef = useRef(null);
+    const searchInputRef = useRef(null);
+
+    // UX UI Tweak #3: Keyboard Shortcut Hint
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            if (
+                (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
+                ((e.metaKey || e.ctrlKey) && e.key === 'k')
+            ) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, []);
 
     const skillLevels = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 
@@ -440,9 +456,16 @@ export default function Matchmaking() {
 
             <ClickAwayListener onClickAway={() => setIsFocused(false)}>
                 <Box ref={searchContainerRef} sx={{ position: 'relative', mb: 3, zIndex: 10 }}>
+                    {/* UX UI Tweak #1: The "Spotlight" Effect */}
+                    <Backdrop
+                        open={isFocused}
+                        sx={{ color: '#fff', zIndex: -1, backdropFilter: 'blur(3px)', bgcolor: 'rgba(0,0,0,0.4)', transition: 'all 0.3s', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+                    />
+                    
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <TextField
                             fullWidth
+                            inputRef={searchInputRef}
                             variant="outlined"
                             placeholder="Search by name or university..."
                             value={searchQuery}
@@ -452,12 +475,15 @@ export default function Matchmaking() {
                             sx={{ 
                                 flexGrow: 1,
                                 bgcolor: 'background.paper', 
+                                transition: 'transform 0.2s',
+                                transform: isFocused ? 'scale(1.02)' : 'scale(1)',
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 50,
-                                    transition: 'box-shadow 0.2s',
-                                    boxShadow: isFocused ? (theme) => theme.palette.mode === 'dark' ? '0 4px 20px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'box-shadow 0.2s, border-color 0.2s',
+                                    boxShadow: isFocused ? (theme) => theme.palette.mode === 'dark' ? '0 8px 32px rgba(0,0,0,0.8)' : '0 8px 32px rgba(33, 150, 243, 0.25)' : 'none',
                                     '& fieldset': {
                                         borderColor: isFocused ? 'primary.main' : 'divider',
+                                        borderWidth: isFocused ? 2 : 1
                                     }
                                 }
                             }}
@@ -465,9 +491,34 @@ export default function Matchmaking() {
                                 input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
-                                            <SearchIcon color={isFocused ? "primary" : "inherit"} />
+                                            {/* UX UI Tweak #4: Dynamic Loading Icon */}
+                                            {dropdownLoading ? <CircularProgress size={20} color="primary" /> : <SearchIcon color={isFocused ? "primary" : "inherit"} />}
                                         </InputAdornment>
                                     ),
+                                    endAdornment: (
+                                        <InputAdornment position="end" sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                            {/* UX UI Tweak #3: Keyboard Shortcut Hint */}
+                                            {!isFocused && !searchQuery && (
+                                                <Typography variant="caption" sx={{ bgcolor: 'action.hover', px: 1, py: 0.5, borderRadius: 1, color: 'text.secondary', fontWeight: 'bold', display: { xs: 'none', sm: 'block' }, pointerEvents: 'none' }}>
+                                                    /
+                                                </Typography>
+                                            )}
+                                            {/* UX UI Tweak #2: Instant "Clear" Button */}
+                                            {searchQuery && (
+                                                <IconButton 
+                                                    size="small" 
+                                                    onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        setSearchQuery(''); 
+                                                        searchInputRef.current?.focus(); 
+                                                    }}
+                                                    sx={{ mr: -0.5 }}
+                                                >
+                                                    <CloseIcon fontSize="small" />
+                                                </IconButton>
+                                            )}
+                                        </InputAdornment>
+                                    )
                                 },
                                 htmlInput: {
                                     'aria-label': 'Search players',
@@ -536,13 +587,27 @@ export default function Matchmaking() {
                                                         <ListItemAvatar>
                                                             <Avatar src={p.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${p.name}`} alt={p.name} />
                                                         </ListItemAvatar>
-                                                        <ListItemText primary={p.name} secondary={p.homeUniversity || 'Player'} />
+                                                        {/* UX UI Tweak #5: Richer Dropdown Results */}
+                                                        <ListItemText 
+                                                            primary={
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                    <Typography component="span" fontWeight="bold">{p.name}</Typography>
+                                                                    {p.skillLevel && <Chip label={p.skillLevel} size="small" color={getSkillColor(p.skillLevel)} sx={{ height: 20, fontSize: '0.7rem', fontWeight: 'bold' }} />}
+                                                                </Box>
+                                                            } 
+                                                            secondary={p.homeUniversity || 'Player'} 
+                                                        />
                                                     </ListItemButton>
                                                 </ListItem>
                                             ))
                                         ) : (
                                             <ListItem>
-                                                <ListItemText primary="No results found." sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }} />
+                                                {/* UX UI Tweak #6: Smarter "No Results" Dropdown */}
+                                                <ListItemText 
+                                                    primary={`No players matching "${searchQuery}"`} 
+                                                    secondary="Hit Enter to search the full directory."
+                                                    sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }} 
+                                                />
                                             </ListItem>
                                         )
                                     ) : (
