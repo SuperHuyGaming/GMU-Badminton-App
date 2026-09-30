@@ -58,6 +58,7 @@ export default function FriendActionButton({
 
       try {
         await apiFetch('/api/friends/request', {
+          keepalive: true,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -87,6 +88,7 @@ export default function FriendActionButton({
 
       try {
         await apiFetch('/api/friends/accept', {
+          keepalive: true,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -110,6 +112,7 @@ export default function FriendActionButton({
 
       try {
         await apiFetch('/api/friends/cancel', {
+          keepalive: true,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
