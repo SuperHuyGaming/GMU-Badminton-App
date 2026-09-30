@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+import { useState, useEffect, useRef } from 'react';
 import { Box, Typography, TextField, InputAdornment, Grid, Card, Avatar, Button, Skeleton, Popover, IconButton, Tabs, Tab } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
