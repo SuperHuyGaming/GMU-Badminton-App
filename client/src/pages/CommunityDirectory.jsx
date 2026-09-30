@@ -284,6 +284,7 @@ export default function CommunityDirectory() {
             handleSearchSubmit(searchQuery);
         } else if (e.key === 'Escape') {
             setIsFocused(false);
+            searchInputRef.current?.blur();
         }
     };
 
@@ -412,6 +413,11 @@ export default function CommunityDirectory() {
                     {/* UX UI Tweak #1: The "Spotlight" Effect */}
                     <Backdrop
                         open={isFocused}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsFocused(false);
+                            searchInputRef.current?.blur();
+                        }}
                         sx={{ color: '#fff', zIndex: -1, backdropFilter: 'blur(3px)', bgcolor: 'rgba(0,0,0,0.4)', transition: 'all 0.3s', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
                     />
                     
