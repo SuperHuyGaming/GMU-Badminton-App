@@ -554,7 +554,7 @@ export default function Matchmaking() {
                                         )
                                     ) : (
                                         <>
-                                            {recentSearches.length > 0 && (
+                                            {recentSearches.length > 0 ? (
                                                 <>
                                                     <Typography variant="overline" sx={{ px: 2, pt: 2, pb: 1, display: 'block', color: 'text.secondary', fontWeight: 'bold' }}>
                                                         Recent Searches
@@ -579,27 +579,10 @@ export default function Matchmaking() {
                                                     ))}
                                                     <Divider sx={{ my: 1 }} />
                                                 </>
-                                            )}
-                                            
-                                            {recommended.length > 0 && (
-                                                <>
-                                                    <Typography variant="overline" sx={{ px: 2, pt: 1, pb: 1, display: 'block', color: 'text.secondary', fontWeight: 'bold' }}>
-                                                        Trending Players
-                                                    </Typography>
-                                                    {recommended.slice(0, 3).map((p, idx) => (
-                                                        <ListItem disablePadding key={`rec-${p._id}`}>
-                                                            <ListItemButton 
-                                                                selected={selectedIndex === recentSearches.length + idx}
-                                                                onClick={() => navigate(`/profile/${p._id}`)}
-                                                            >
-                                                                <ListItemAvatar>
-                                                                    <Avatar src={p.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${p.name}`} alt={p.name} />
-                                                                </ListItemAvatar>
-                                                                <ListItemText primary={p.name} secondary={p.skillLevel || 'Active Recently'} />
-                                                            </ListItemButton>
-                                                        </ListItem>
-                                                    ))}
-                                                </>
+                                            ) : (
+                                                <ListItem>
+                                                    <ListItemText primary="Start typing to search for players..." sx={{ color: 'text.secondary', textAlign: 'center', py: 2 }} />
+                                                </ListItem>
                                             )}
                                         </>
                                     )}

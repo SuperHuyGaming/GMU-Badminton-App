@@ -2,6 +2,8 @@ import { useState, useContext, useEffect } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../hooks/useNotifications';
@@ -41,6 +43,34 @@ const GlobalSearch = () => {
     const [loading, setLoading] = useState(false);
     const [inputValue, setInputValue] = useState("");
     const navigate = useNavigate();
+    
+    // Search history for specific players
+    const [recentSearches, setRecentSearches] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('navbarRecentSearches') || '[]');
+        } catch {
+            return [];
+        }
+    });
+
+    const addRecentSearch = (player) => {
+        setRecentSearches(prev => {
+            const filtered = prev.filter(p => p._id !== player._id);
+            const updated = [player, ...filtered].slice(0, 5); // Keep top 5
+            localStorage.setItem('navbarRecentSearches', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const removeRecentSearch = (e, playerId) => {
+        e.stopPropagation();
+        setRecentSearches(prev => {
+            const updated = prev.filter(p => p._id !== playerId);
+            localStorage.setItem('navbarRecentSearches', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
     const { user } = useAuth();
 
     useEffect(() => {
@@ -108,7 +138,7 @@ const GlobalSearch = () => {
                             },
                         },
                     }}
-                    open={open && inputValue.trim().length > 0}
+                    open={open && (inputValue.trim().length > 0 || recentSearches.length > 0)}
                     onOpen={() => setOpen(true)}
                     onClose={() => setOpen(false)}
                     isOptionEqualToValue={(option, value) => option._id === value._id}
@@ -116,7 +146,7 @@ const GlobalSearch = () => {
                         if (typeof option === 'string') return option;
                         return option.name || "";
                     }}
-                    options={inputValue.trim() ? options : []}
+                    options={inputValue.trim() ? options : recentSearches}
                     loading={loading}
                     onInputChange={(event, newInputValue) => {
                         setInputValue(newInputValue);
@@ -126,6 +156,7 @@ const GlobalSearch = () => {
                     }}
                     onChange={(event, newValue) => {
                         if (newValue && newValue._id) {
+                            addRecentSearch(newValue);
                             navigate(`/profile/${newValue._id}`);
                             setInputValue("");
                             setOptions([]);
@@ -175,6 +206,7 @@ const GlobalSearch = () => {
                     }}
                     renderOption={(props, option) => {
                         const { key, ...otherProps } = props;
+                        const isRecent = !inputValue.trim();
                         return (
                             <Box 
                                 component="li" 
@@ -183,7 +215,7 @@ const GlobalSearch = () => {
                                 sx={{ 
                                     display: 'flex', 
                                     alignItems: 'center', 
-                                    gap: 2, 
+                                    justifyContent: 'space-between',
                                     p: 1.5, 
                                     borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
                                     cursor: 'pointer',
@@ -192,25 +224,42 @@ const GlobalSearch = () => {
                                     }
                                 }}
                             >
-                                <Avatar 
-                                    src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} 
-                                    alt={option.name || "Player avatar"}
-                                    sx={{ width: 32, height: 32, bgcolor: 'secondary.main', color: '#002f17', fontWeight: 'bold' }}
-                                >
-                                    {!option.profilePic && option.name?.charAt(0)}
-                                </Avatar>
-                                <Box>
-                                    <Typography variant="body2" fontWeight="bold" color="text.primary">{option.name}</Typography>
-                                    <Typography 
-                                        variant="caption" 
-                                        sx={{ 
-                                            color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#404040',
-                                            fontWeight: 500,
-                                        }}
-                                    >
-                                        Player
-                                    </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    {isRecent ? (
+                                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'transparent', color: 'text.secondary' }}>
+                                            <HistoryIcon />
+                                        </Avatar>
+                                    ) : (
+                                        <Avatar 
+                                            src={option.profilePic ? getOptimizedAvatar(option.profilePic, 32) : undefined} 
+                                            alt={option.name || "Player avatar"}
+                                            sx={{ width: 32, height: 32, bgcolor: 'secondary.main', color: '#002f17', fontWeight: 'bold' }}
+                                        >
+                                            {!option.profilePic && option.name?.charAt(0)}
+                                        </Avatar>
+                                    )}
+                                    <Box>
+                                        <Typography variant="body2" fontWeight="bold" color="text.primary">{option.name}</Typography>
+                                        <Typography 
+                                            variant="caption" 
+                                            sx={{ 
+                                                color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.8)' : '#404040',
+                                                fontWeight: 500,
+                                            }}
+                                        >
+                                            {isRecent ? 'Recent Search' : 'Player'}
+                                        </Typography>
+                                    </Box>
                                 </Box>
+                                {isRecent && (
+                                    <IconButton 
+                                        size="small" 
+                                        onClick={(e) => removeRecentSearch(e, option._id)}
+                                        aria-label={`Remove ${option.name} from recent searches`}
+                                    >
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                )}
                             </Box>
                         );
                     }}
