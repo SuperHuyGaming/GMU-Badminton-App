@@ -64,6 +64,9 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    modulePreload: false
+  },
   test: {
     environment: 'jsdom',
     globals: true,
