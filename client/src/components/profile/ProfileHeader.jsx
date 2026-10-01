@@ -74,7 +74,6 @@ const CloseIcon = () => (
 
 export default function ProfileHeader({
 	profileData,
-	profileData,
 	isOwnProfile,
 	displayProfilePic,
 	displayCoverPic,

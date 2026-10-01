@@ -71,6 +71,12 @@ const Messages = () => {
 	const activeChatRef = useRef(null);
 
 	
+	function startNewChat(friend) {
+		setActiveChat(friend);
+		setSearchQuery("");
+		setSearchResults([]);
+	}
+
 	useEffect(() => {
 		if (location.state?.targetUserId && user) {
 			const targetId = location.state.targetUserId;
@@ -343,12 +349,6 @@ const Messages = () => {
 		}
 	};
 
-	const startNewChat = (friend) => {
-		setActiveChat(friend);
-		setSearchQuery("");
-		setSearchResults([]);
-		// If friend is not in recentChats, they will be added once a message is sent
-	};
 
 	const handleSearch = async (e) => {
 		const query = e.target.value;
