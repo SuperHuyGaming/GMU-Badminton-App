@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Paper } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Paper, MenuList } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -503,8 +503,9 @@ export default function CommunityDirectory() {
                                 <Typography variant="subtitle2" sx={{ px: 3, py: 2, color: 'text.secondary', fontWeight: 'bold' }}>
                                     Recent Searches
                                 </Typography>
-                                {recentSearches.map((term, index) => (
-                                    <MenuItem 
+                                <MenuList>
+                                  {recentSearches.map((term, index) => (
+                                      <MenuItem 
                                         key={index}
                                         onClick={(e) => {
                                             e.preventDefault();
@@ -524,7 +525,8 @@ export default function CommunityDirectory() {
                                             <CloseIcon fontSize="small" />
                                         </IconButton>
                                     </MenuItem>
-                                ))}
+                                  ))}
+                                  </MenuList>
                             </Paper>
                         )}
 
