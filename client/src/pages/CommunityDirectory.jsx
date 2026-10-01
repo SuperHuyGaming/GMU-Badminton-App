@@ -31,6 +31,8 @@ export default function CommunityDirectory() {
     
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
+    const [submittedQuery, setSubmittedQuery] = useState('');
+    const [suggestions, setSuggestions] = useState([]);
     const [skillFilter, setSkillFilter] = useState('All');
     const [recentSearches, setRecentSearches] = useState(() => {
         const saved = localStorage.getItem('matchmaking_recent_searches');
@@ -114,6 +116,21 @@ export default function CommunityDirectory() {
         return () => window.removeEventListener('keydown', handleGlobalKeyDown);
     }, []);
 
+    
+    useEffect(() => {
+        if (!searchQuery.trim() || !isFocused) return;
+        const delay = setTimeout(async () => {
+            try {
+                const res = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(searchQuery)}`);
+                const data = await res.json();
+                setSuggestions(data.matches?.slice(0, 5) || []);
+            } catch (e) {
+                console.error("Live search failed", e);
+            }
+        }, 300);
+        return () => clearTimeout(delay);
+    }, [searchQuery, isFocused]);
+
     const skillLevels = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 
     const saveRecentSearch = (query) => {
@@ -147,7 +164,7 @@ export default function CommunityDirectory() {
             setLoading(true);
             try {
                 let url = `/api/matchmaking/discover?`;
-                if (searchQuery && !isFocused) url += `search=${encodeURIComponent(searchQuery)}&`;
+                if (submittedQuery) url += `search=${encodeURIComponent(submittedQuery)}&`;
                 if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
                 if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
                 if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
@@ -180,7 +197,7 @@ export default function CommunityDirectory() {
         return () => {
             isCancelled = true;
         };
-    }, [skillFilter, campusFilter, timeOfDayFilter, searchQuery, isFocused]);
+    }, [skillFilter, campusFilter, timeOfDayFilter, submittedQuery]);
 
     useEffect(() => {
         if (!hasMore || loading || !cursor) return;
@@ -190,7 +207,7 @@ export default function CommunityDirectory() {
                 if (entries[0].isIntersecting && hasMore && !loading && cursor) {
                     try {
                         let url = `/api/matchmaking/discover?`;
-                        if (searchQuery && !isFocused) url += `search=${encodeURIComponent(searchQuery)}&`;
+                        if (submittedQuery) url += `search=${encodeURIComponent(submittedQuery)}&`;
                         if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
                         if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
                         if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
@@ -224,7 +241,7 @@ export default function CommunityDirectory() {
             if (currentTarget) observer.unobserve(currentTarget);
             observer.disconnect();
         };
-    }, [cursor, hasMore, loading, searchQuery, isFocused, skillFilter, campusFilter, timeOfDayFilter]);
+    }, [cursor, hasMore, loading, submittedQuery, skillFilter, campusFilter, timeOfDayFilter]);
 
     // Privacy: Removed Presence Polling
 
@@ -254,25 +271,7 @@ export default function CommunityDirectory() {
         saveRecentSearch(q);
         setIsFocused(false);
         setSearchQuery(q);
-        
-        // Trigger main fetch
-        const fetchMain = async () => {
-            setLoading(true);
-            try {
-                let url = `/api/matchmaking/discover?search=${encodeURIComponent(q)}&`;
-                if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
-                if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
-                if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
-                const response = await apiFetch(url);
-                const data = await response.json();
-                setMatches(data.matches || []);
-            } catch (err) {
-                setError(err.message || 'Failed to search');
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchMain();
+        setSubmittedQuery(q);
     };
 
     const handleKeyDown = (e) => {
@@ -507,35 +506,64 @@ export default function CommunityDirectory() {
                             <TuneIcon />
                         </IconButton>
                     </Box>
-                        {isFocused && !searchQuery && recentSearches.length > 0 && (
+                        {isFocused && (
                             <Paper elevation={8} sx={{ position: 'absolute', top: '100%', left: 0, right: 0, mt: 1, borderRadius: 3, overflow: 'hidden', zIndex: 20 }}>
-                                <Typography variant="subtitle2" sx={{ px: 3, py: 2, color: 'text.secondary', fontWeight: 'bold' }}>
-                                    Recent Searches
-                                </Typography>
                                 <MenuList>
-                                  {recentSearches.map((term, index) => (
-                                      <MenuItem 
-                                        key={index}
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setSearchQuery(term);
-                                            handleSearchSubmit(term);
-                                            setIsFocused(false);
-                                            searchInputRef.current?.blur();
-                                        }}
-                                        sx={{ px: 3, py: 1.5, display: 'flex', justifyContent: 'space-between' }}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <SearchIcon color="action" fontSize="small" />
-                                            <Typography fontWeight="500">{term}</Typography>
-                                        </Box>
-                                        <IconButton size="small" onClick={(e) => removeRecentSearch(e, term)}>
-                                            <CloseIcon fontSize="small" />
-                                        </IconButton>
-                                    </MenuItem>
-                                  ))}
-                                  </MenuList>
+                                  {searchQuery.trim().length > 0 ? (
+                                      suggestions.length > 0 ? (
+                                          suggestions.map((player) => (
+                                              <MenuItem 
+                                                  key={player._id}
+                                                  onClick={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      setSearchQuery(player.name);
+                                                      handleSearchSubmit(player.name);
+                                                  }}
+                                                  sx={{ px: 3, py: 1.5, display: 'flex', gap: 2, alignItems: 'center' }}
+                                              >
+                                                  <Avatar src={player.profilePic} />
+                                                  <Box>
+                                                      <Typography fontWeight="bold">{player.name}</Typography>
+                                                      <Typography variant="caption" color="text.secondary">{player.homeUniversity}</Typography>
+                                                  </Box>
+                                              </MenuItem>
+                                          ))
+                                      ) : (
+                                          <Box sx={{ px: 3, py: 2 }}>
+                                              <Typography color="text.secondary">No players match "{searchQuery}"</Typography>
+                                          </Box>
+                                      )
+                                  ) : (
+                                      recentSearches.length > 0 ? (
+                                          <>
+                                              <Typography variant="subtitle2" sx={{ px: 3, py: 2, color: 'text.secondary', fontWeight: 'bold' }}>
+                                                  Recent Searches
+                                              </Typography>
+                                              {recentSearches.map((term, index) => (
+                                                  <MenuItem 
+                                                      key={index}
+                                                      onClick={(e) => {
+                                                          e.preventDefault();
+                                                          e.stopPropagation();
+                                                          setSearchQuery(term);
+                                                          handleSearchSubmit(term);
+                                                      }}
+                                                      sx={{ px: 3, py: 1.5, display: 'flex', justifyContent: 'space-between' }}
+                                                  >
+                                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                          <SearchIcon color="action" fontSize="small" />
+                                                          <Typography fontWeight="500">{term}</Typography>
+                                                      </Box>
+                                                      <IconButton size="small" onClick={(e) => removeRecentSearch(e, term)}>
+                                                          <CloseIcon fontSize="small" />
+                                                      </IconButton>
+                                                  </MenuItem>
+                                              ))}
+                                          </>
+                                      ) : null
+                                  )}
+                                </MenuList>
                             </Paper>
                         )}
 
@@ -648,7 +676,7 @@ export default function CommunityDirectory() {
                 </Box>
             )}
 
-            {(searchQuery || skillFilter !== 'All') && (
+            {(submittedQuery || skillFilter !== 'All') && (
                 <>
                     <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
                         Search Results
@@ -668,6 +696,7 @@ export default function CommunityDirectory() {
                                 variant="contained" 
                                 onClick={() => {
                                     setSearchQuery('');
+                                    setSubmittedQuery('');
                                     setSkillFilter('All');
                                 }}
                                 sx={{ borderRadius: 50, px: 4, fontWeight: 'bold' }}
@@ -676,7 +705,7 @@ export default function CommunityDirectory() {
                             </Button>
                         </Box>
                     ) : (
-                        searchQuery.trim() ? (
+                        submittedQuery.trim() ? (
                             <Stack spacing={2} sx={{ width: '100%' }}>
                                 <AnimatePresence>
                                     {matches.map((player, i) => (
