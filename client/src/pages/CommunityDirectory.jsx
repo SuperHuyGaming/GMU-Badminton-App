@@ -361,9 +361,9 @@ export default function CommunityDirectory() {
                 {player.mutualFriendsCount > 0 && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem', border: '2px solid', borderColor: 'background.paper' } }}>
-                            {player.mutualFriendsSample?.map((friendId) => (
-                                <Avatar key={friendId} src={`https://api.dicebear.com/7.x/initials/svg?seed=${friendId}`} />
-                            ))}
+                            {player.mutualFriendsSample?.map((friend) => (
+        <Avatar key={friend._id} src={friend.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(friend.name)}`} />
+    ))}
                         </AvatarGroup>
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
                             {player.mutualFriendsCount} mutual friend{player.mutualFriendsCount !== 1 ? 's' : ''}
@@ -731,9 +731,9 @@ export default function CommunityDirectory() {
                                                         {player.mutualFriendsCount > 0 && (
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
                                                                 <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem', border: '2px solid', borderColor: 'background.paper' } }}>
-                                                                    {player.mutualFriendsSample?.map((friendId) => (
-                                                                        <Avatar key={friendId} src={`https://api.dicebear.com/7.x/initials/svg?seed=${friendId}`} />
-                                                                    ))}
+                                                                    {player.mutualFriendsSample?.map((friend) => (
+        <Avatar key={friend._id} src={friend.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(friend.name)}`} />
+    ))}
                                                                 </AvatarGroup>
                                                                 <Typography variant="body2" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'grey.400' : 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
                                                                     {player.mutualFriendsCount} mutual friend{player.mutualFriendsCount !== 1 ? 's' : ''}

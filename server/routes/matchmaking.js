@@ -208,14 +208,33 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                     mutualFriendsSample: { $slice: [{ $ifNull: ["$mutualFriendsRaw", []] }, 2] }
                 }
             },
+            
             {
+                $lookup: {
+                    from: "users",
+                    localField: "mutualFriendsSample",
+                    foreignField: "_id",
+                    as: "mutualFriendsObjects"
+                }
+            },
+
                 $project: {
                     name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
                     profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
                     checkInLocation: 1, preferredTimeOfDay: 1, inQueue: 1, singlesElo: 1,
-                    mutualFriendsCount: 1, mutualFriendsSample: 1
+                    mutualFriendsCount: 1, 
+                    mutualFriendsSample: {
+                        $map: {
+                            input: "$mutualFriendsObjects",
+                            as: "friend",
+                            in: {
+                                _id: "$friend._id",
+                                name: "$friend.name",
+                                profilePic: "$friend.profilePic"
+                            }
+                        }
+                    }
                 }
-            }
         ]);
 
         const hydratedMatches = potentialMatches.map(player => ({
@@ -292,14 +311,33 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                 {
                     $limit: 4
                 },
-                {
+                
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "mutualFriendsSample",
+                    foreignField: "_id",
+                    as: "mutualFriendsObjects"
+                }
+            },
+
                     $project: {
                         name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
                         profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
                         singlesElo: 1, preferredTimeOfDay: 1,
-                        mutualFriendsCount: 1, mutualFriendsSample: 1
+                        mutualFriendsCount: 1, 
+                        mutualFriendsSample: {
+                            $map: {
+                                input: "$mutualFriendsObjects",
+                                as: "friend",
+                                in: {
+                                    _id: "$friend._id",
+                                    name: "$friend.name",
+                                    profilePic: "$friend.profilePic"
+                                }
+                            }
+                        }
                     }
-                }
             ]);
 
             recommended = rawRecommended.map(player => ({
