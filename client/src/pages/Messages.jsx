@@ -86,7 +86,7 @@ const Messages = () => {
 				startNewChat(existingChat.friend);
 			} else {
 				// fetch user basic info to start chat
-				apiFetch('/api/users/profile/' + targetId)
+				apiFetch('/api/profile/' + targetId)
 					.then(res => res.json())
 					.then(data => {
 						if (data && data._id) {
