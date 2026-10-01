@@ -419,25 +419,7 @@ const Messages = () => {
 
 	return (
 		<>
-									{!hasMore && (
-										<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, mb: 6 }}>
-											<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 2 }} />
-											<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{activeChat.name}</Typography>
-											<Typography variant="body2" color="text.primary">
-												{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
-											</Typography>
-											{activeChat.checkInLocation && (
-												<Typography variant="body2" color="text.secondary">
-													Usually plays at {activeChat.checkInLocation}
-												</Typography>
-											)}
-											{activeChat.homeUniversity && (
-												<Typography variant="body2" color="text.secondary">
-													Studied at {activeChat.homeUniversity}
-												</Typography>
-											)}
-										</Box>
-									)}
+									
 
 		<Container 
 			disableGutters 
@@ -733,6 +715,25 @@ const Messages = () => {
 							) : (
 								<>
 
+									{!hasMore && (
+										<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, mb: 6 }}>
+											<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 2 }} />
+											<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{activeChat.name}</Typography>
+											<Typography variant="body2" color="text.primary">
+												{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
+											</Typography>
+											{activeChat.checkInLocation && (
+												<Typography variant="body2" color="text.secondary">
+													Usually plays at {activeChat.checkInLocation}
+												</Typography>
+											)}
+											{activeChat.homeUniversity && (
+												<Typography variant="body2" color="text.secondary">
+													Studied at {activeChat.homeUniversity}
+												</Typography>
+											)}
+										</Box>
+									)}
 									{hasMore && (
 										<Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
 											<Button 
