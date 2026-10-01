@@ -5,7 +5,7 @@ const rateLimit = require("express-rate-limit");
 
 const discoverLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 50,
+    max: 300, // Increased for live search debouncing
     message: { message: "Too many discovery requests, please try again later." },
     standardHeaders: true,
     legacyHeaders: false
