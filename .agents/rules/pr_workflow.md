@@ -2,10 +2,13 @@
 name: pr-workflow-protocol
 description: >-
   MANDATORY rule: After every coding task, create a feature branch, push, open a Pull Request on GitHub with labels and assignees, post a QA Bot comment, and invoke the QA Engineer to review and comment on the PR before merging.
-trigger: model_decision
+trigger: always_on
 ---
 
 # MANDATORY Pull Request & QA Workflow
+
+> [!CAUTION]
+> **NEVER COMMIT OR PUSH DIRECTLY TO `develop` OR `main`.** This is a strict repository invariant. All changes must be pushed to a feature branch.
 
 After EVERY coding task (no exceptions), you MUST follow this exact workflow:
 
