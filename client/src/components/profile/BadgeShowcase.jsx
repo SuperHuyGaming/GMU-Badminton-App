@@ -139,24 +139,13 @@ export default function BadgeShowcase({ badges = [] }) {
         return (
             <Tooltip title={`${label} Achievement`} key={badgeId} arrow placement="top">
                 <Box 
-                    tabIndex={0}
-                    role="img"
-                    aria-label={`${label} (${tier.toUpperCase()}) achievement badge`}
                     sx={{ 
                         width: { xs: 80, sm: 100 }, 
                         height: { xs: 100, sm: 120 }, 
                         transition: 'transform 0.2s, filter 0.2s',
                         filter: 'grayscale(0.1)',
                         cursor: 'pointer',
-                        borderRadius: 2,
                         '&:hover': {
-                            transform: 'translateY(-5px) scale(1.05)',
-                            filter: 'grayscale(0) brightness(1.1)'
-                        },
-                        '&:focus-visible': {
-                            outline: '2px solid',
-                            outlineColor: 'primary.main',
-                            outlineOffset: '4px',
                             transform: 'translateY(-5px) scale(1.05)',
                             filter: 'grayscale(0) brightness(1.1)'
                         }

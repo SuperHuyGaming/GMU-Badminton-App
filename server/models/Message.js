@@ -46,11 +46,4 @@ messageSchema.post('findOne', function (doc) {
     }
 });
 
-// Decrypt when updating and retrieving a message
-messageSchema.post('findOneAndUpdate', function (doc) {
-    if (doc && doc.content && doc.content.startsWith('ENC:')) {
-        doc.content = decrypt(doc.content);
-    }
-});
-
 module.exports = mongoose.model("Message", messageSchema);

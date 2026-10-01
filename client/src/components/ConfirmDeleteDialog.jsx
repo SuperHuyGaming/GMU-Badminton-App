@@ -20,12 +20,9 @@ export default function ConfirmDeleteDialog({
 		<Dialog
 			open={open}
 			onClose={onClose}
-			aria-labelledby="confirm-delete-dialog-title"
-			aria-describedby="confirm-delete-dialog-desc"
 			PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 		>
 			<DialogTitle
-				id="confirm-delete-dialog-title"
 				sx={{
 					fontWeight: "bold",
 					display: "flex",
@@ -37,7 +34,7 @@ export default function ConfirmDeleteDialog({
 				<TrashIcon /> Confirm Deletion
 			</DialogTitle>
 			<DialogContent>
-				<Typography id="confirm-delete-dialog-desc">
+				<Typography>
 					Are you sure you want to permanently delete this {itemName}?
 					This action cannot be undone.
 				</Typography>

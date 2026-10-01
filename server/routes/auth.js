@@ -21,10 +21,8 @@ const JWT_SECRET =
 const generateAccessToken = (user) => {
 	return jwt.sign(
 		{
-			id: user._id.toString(),
-			userId: user._id.toString(),
+			userId: user._id,
 			role: user.role,
-			name: user.name,
 		},
 		JWT_SECRET,
 		{ expiresIn: "15m" },
@@ -125,17 +123,11 @@ router.post("/login", authLimiter, validateLogin, async (req, res, next) => {
 	}
 });
 
-const refreshLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000,
-	max: 60,
-	message: { message: "Too many refresh token requests, please try again later." },
-});
-
 // POST: Refresh Access Token
-router.post("/refreshtoken", refreshLimiter, async (req, res, next) => {
+router.post("/refreshtoken", async (req, res, next) => {
 	const { refreshToken: requestToken } = req.body;
 
-	if (!requestToken || typeof requestToken !== "string") {
+	if (requestToken == null) {
 		return res.status(403).json({ message: "Refresh Token is required!" });
 	}
 
@@ -157,10 +149,6 @@ router.post("/refreshtoken", refreshLimiter, async (req, res, next) => {
 		}
 
 		let user = await User.findById(refreshToken.user);
-		if (!user) {
-			await RefreshToken.findByIdAndDelete(refreshToken._id);
-			return res.status(403).json({ message: "User belonging to this token no longer exists" });
-		}
 		let newAccessToken = generateAccessToken(user);
 
 		return res.status(200).json({
@@ -176,7 +164,7 @@ router.post("/refreshtoken", refreshLimiter, async (req, res, next) => {
 router.post("/logout", async (req, res, next) => {
 	try {
 		const { refreshToken: requestToken } = req.body;
-		if (requestToken && typeof requestToken === "string") {
+		if (requestToken) {
 			await RefreshToken.findOneAndDelete({ token: requestToken });
 		}
 		res.status(204).send();

@@ -12,9 +12,9 @@ const GlobeIcon = () => (
 
 const languages = [
     { code: 'en', label: 'English', short: 'EN' },
-    { code: 'vi', label: 'Tiếng Việt', short: 'VI' },
-    { code: 'zh', label: '中文', short: 'ZH' },
-    { code: 'ko', label: '한국어', short: 'KO' }
+    { code: 'vi', label: 'Ti?ng Vi?t', short: 'VI' },
+    { code: 'zh', label: '??', short: 'ZH' },
+    { code: 'ko', label: '???', short: 'KO' }
 ];
 
 export default function LanguageSwitcher() {

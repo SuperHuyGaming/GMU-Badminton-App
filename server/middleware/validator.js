@@ -1,13 +1,9 @@
 // server/middleware/validator.js
 
 const validateRegistration = (req, res, next) => {
-	const { name, firstName, lastName, email, password } = req.body;
+	const { name, email, password } = req.body;
 
-	const hasValidName = (name && typeof name === "string" && name.trim().length >= 2);
-	const hasValidFirstLast = (firstName && typeof firstName === "string" && firstName.trim().length >= 1) && 
-							  (lastName && typeof lastName === "string" && lastName.trim().length >= 1);
-
-	if (!hasValidName && !hasValidFirstLast) {
+	if (!name || typeof name !== "string" || name.trim().length < 2) {
 		return res.status(400).json({
 			message: "Name is required and must be at least 2 characters long.",
 		});

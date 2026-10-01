@@ -1,5 +1,4 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const router = express.Router();
 const ActivityFeed = require("../models/ActivityFeed");
 const { authMiddleware } = require("../middleware/auth");
@@ -7,17 +6,16 @@ const User = require("../models/User");
 
 router.get("/", authMiddleware, async (req, res, next) => {
     try {
-        const allowedTabs = ["saved", "latest", "top", "foryou"];
-        const tab = allowedTabs.includes(req.query.tab) ? req.query.tab : "foryou";
-        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+        const tab = req.query.tab || "foryou";
+        const limit = parseInt(req.query.limit) || 20;
         const cursor = req.query.cursor; // The _id of the last item
         // Use the sessionTime passed from the client, or default to now if not provided
-        const parsedSessionTime = req.query.sessionTime ? parseInt(req.query.sessionTime, 10) : NaN;
-        const sessionTime = !isNaN(parsedSessionTime) ? new Date(parsedSessionTime) : new Date();
+        const sessionTime = req.query.sessionTime ? new Date(parseInt(req.query.sessionTime)) : new Date();
 
         const userDoc = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
         const currentUser = userDoc || { skillLevel: "Beginner", bookmarkedPosts: [] };
         
+        const mongoose = require('mongoose');
         let matchStage = {
             $or: [
                 { visibility: 'PUBLIC' },
@@ -26,15 +24,10 @@ router.get("/", authMiddleware, async (req, res, next) => {
             ]
         };
 
-        if (req.query.tag && typeof req.query.tag === "string") {
-            matchStage.tags = req.query.tag.trim().slice(0, 50);
-        }
+        if (req.query.tag) matchStage.tags = req.query.tag;
 
         let lastDoc = null;
         if (cursor && cursor !== "null") {
-            if (!mongoose.isValidObjectId(cursor)) {
-                return res.status(400).json({ message: "Invalid cursor ID format." });
-            }
             lastDoc = await ActivityFeed.findById(cursor);
         }
 

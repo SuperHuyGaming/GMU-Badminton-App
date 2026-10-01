@@ -17,20 +17,7 @@ services:
       - key: NODE_ENV
         value: production
 
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: gmu-redis-cluster
-          property: connectionString
-
-  # 3. Redis Cache Cluster (Dedicated for autocomplete/online presence)
-  - type: redis
-    name: gmu-redis-cluster
-    ipAllowList: []
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-
-  # 4. Production Frontend (Static)
+  # 2. Production Frontend (Static)
   - type: web
     name: gmu-frontend
     env: static

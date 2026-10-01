@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
     Container, Typography, Box, Paper, Tabs, Tab, 
     Avatar, Table, TableBody, TableCell, TableContainer, TableHead, 
@@ -13,7 +12,6 @@ import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
 
 const Leaderboard = () => {
-    const navigate = useNavigate();
     const [tab, setTab] = useState('singles');
     const [search, setSearch] = useState('');
     const [university, setUniversity] = useState('');
@@ -95,8 +93,8 @@ const Leaderboard = () => {
                         </Grid>
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
-                                <InputLabel id="leaderboard-university-label">University</InputLabel>
-                                <Select labelId="leaderboard-university-label" id="leaderboard-university-select" value={university} label="University" onChange={(e) => setUniversity(e.target.value)}>
+                                <InputLabel>University</InputLabel>
+                                <Select value={university} label="University" onChange={(e) => setUniversity(e.target.value)}>
                                     <MenuItem value=""><em>Any University</em></MenuItem>
                                     <MenuItem value="George Mason University">George Mason University</MenuItem>
                                     <MenuItem value="Virginia Tech">Virginia Tech</MenuItem>
@@ -108,8 +106,8 @@ const Leaderboard = () => {
                         </Grid>
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
-                                <InputLabel id="leaderboard-skill-label">Skill Level</InputLabel>
-                                <Select labelId="leaderboard-skill-label" id="leaderboard-skill-select" value={skillLevel} label="Skill Level" onChange={(e) => setSkillLevel(e.target.value)}>
+                                <InputLabel>Skill Level</InputLabel>
+                                <Select value={skillLevel} label="Skill Level" onChange={(e) => setSkillLevel(e.target.value)}>
                                     <MenuItem value=""><em>Any Skill</em></MenuItem>
                                     <MenuItem value="A Level">A Level (Advanced)</MenuItem>
                                     <MenuItem value="B Level">B Level (High Intermediate)</MenuItem>
@@ -120,8 +118,8 @@ const Leaderboard = () => {
                         </Grid>
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>
                             <FormControl fullWidth>
-                                <InputLabel id="leaderboard-minmatches-label">Min Matches</InputLabel>
-                                <Select labelId="leaderboard-minmatches-label" id="leaderboard-minmatches-select" value={minMatches} label="Min Matches" onChange={(e) => setMinMatches(e.target.value)}>
+                                <InputLabel>Min Matches</InputLabel>
+                                <Select value={minMatches} label="Min Matches" onChange={(e) => setMinMatches(e.target.value)}>
                                     <MenuItem value=""><em>Any</em></MenuItem>
                                     <MenuItem value="5">5+ Matches</MenuItem>
                                     <MenuItem value="10">10+ Matches</MenuItem>
@@ -137,10 +135,9 @@ const Leaderboard = () => {
                         value={tab} 
                         onChange={(e, v) => setTab(v)} 
                         centered 
-                        aria-label="Leaderboard match format tabs"
                         sx={{ 
-                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.12)' : 'primary.main', 
-                            color: (theme) => theme.palette.mode === 'dark' ? 'primary.main' : 'primary.contrastText',
+                            bgcolor: 'rgba(0, 102, 51, 0.4)', 
+                            color: 'white',
                             '& .MuiTabs-indicator': { backgroundColor: '#FFCC33', height: 4, borderTopLeftRadius: 4, borderTopRightRadius: 4 }
                         }}
                         textColor="inherit"
@@ -155,7 +152,7 @@ const Leaderboard = () => {
                             components={{
                                 Table: (props) => <Table {...props} aria-label="leaderboard table" style={{ borderCollapse: 'collapse' }} />,
                                 TableHead: TableHead,
-                                TableRow: (props) => <TableRow {...props} hover />,
+                                TableRow: TableRow,
                                 TableBody: React.forwardRef((props, ref) => <TableBody {...props} ref={ref} />),
                             }}
                             fixedHeaderContent={() => (
@@ -178,28 +175,12 @@ const Leaderboard = () => {
                                 
                                 return (
                                     <React.Fragment>
-                                        <TableCell align="center" sx={{ py: 2.5 }}>
-                                            <Typography variant="h6" fontWeight="900" color="text.primary">
+                                        <TableCell align="center" sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
+                                            <Typography variant="h6" fontWeight="900" color={index < 3 ? 'text.primary' : 'text.primary'}>
                                                 #{index + 1}
                                             </Typography>
                                         </TableCell>
-                                        <TableCell 
-                                            sx={{ 
-                                                py: 2.5, 
-                                                cursor: 'pointer',
-                                                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '-2px' }
-                                            }} 
-                                            onClick={() => navigate(`/profile/${user._id}`)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    navigate(`/profile/${user._id}`);
-                                                }
-                                            }}
-                                            tabIndex={0}
-                                            role="link"
-                                            aria-label={`View profile of ${user.name}`}
-                                        >
+                                        <TableCell sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                                 <Avatar 
                                                     src={getOptimizedAvatar(user.profilePic, 40)}
@@ -209,24 +190,23 @@ const Leaderboard = () => {
                                                         border: index < 3 ? `3px solid ${getRankColor(index)}` : 'none',
                                                         boxShadow: index < 3 ? `0 0 10px ${getRankColor(index)}` : 'none'
                                                     }}
-                                                    alt={`${user.name}'s avatar`} 
-                                                />
-                                                <Typography fontWeight="bold" sx={{ '&:hover': { textDecoration: 'underline' } }}>{user.name}</Typography>
+                                                 alt="User Avatar" />
+                                                <Typography fontWeight="bold">{user.name}</Typography>
                                             </Box>
                                         </TableCell>
-                                        <TableCell sx={{ py: 2.5 }}>
+                                        <TableCell sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
                                             <Chip 
                                                 label={user.skillLevel || 'N/A'} 
                                                 size="small" 
                                                 sx={{ 
                                                     fontWeight: 800, 
-                                                    bgcolor: 'rgba(0, 92, 46, 0.1)', 
+                                                    bgcolor: 'rgba(0, 102, 51, 0.1)', 
                                                     color: 'primary.main',
                                                     borderRadius: 2
                                                 }} 
                                             />
                                         </TableCell>
-                                        <TableCell align="right" sx={{ py: 2.5 }}>
+                                        <TableCell align="right" sx={{ py: 2.5, cursor: 'pointer' }} onClick={() => window.location.href = `/profile/${user._id}`}>
                                             <Typography variant="h5" fontWeight="900" color="primary.main">
                                                 {tab === 'singles' ? user.singlesElo : user.doublesElo}
                                             </Typography>

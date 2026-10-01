@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import instaloader
@@ -107,7 +107,7 @@ class InstagramScraper:
                     "url": item.get("url", f"https://www.instagram.com/{target_handle}/"),
                     "caption": item.get("caption", ""),
                     "image_url": item.get("displayUrl", ""),
-                    "timestamp": item.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                    "timestamp": item.get("timestamp", datetime.utcnow().isoformat()),
                     "is_video": False,
                 }
             )
@@ -122,7 +122,7 @@ class InstagramScraper:
                 "url": f"https://www.instagram.com/p/mock_{target_handle}/",
                 "caption": f"🏸 {target_handle.upper()} OPEN TOURNAMENT IS HERE! 🏸\nJoin us for our annual smash fest. Open to all collegiate & external players!\nRegistration closes next Friday! Need a ride? Fill out the carpool form in bio by Wednesday!\nLink in bio!",
                 "image_url": f"https://badmintonfinder.org/mock-flyers/{target_handle}-flyer.jpg",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.utcnow().isoformat(),
                 "is_video": False,
             }
         ]

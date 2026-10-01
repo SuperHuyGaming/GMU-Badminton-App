@@ -18,7 +18,7 @@ const PushNotificationPrompt = () => {
 
     useEffect(() => {
         if ('serviceWorker' in navigator && 'PushManager' in window) {
-            if (Notification.permission === 'default' && !localStorage.getItem('pushPromptDismissed')) {
+            if (Notification.permission === 'default') {
                 // Wait a bit before asking so we don't bombard them immediately
                 const timer = setTimeout(() => {
                     setOpen(true);
@@ -59,17 +59,13 @@ const PushNotificationPrompt = () => {
             open={open} 
             anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             onClose={() => setOpen(false)}
-            sx={{ mb: { xs: 8, md: 0 } }}
         >
             <Alert 
                 severity="info" 
                 action={
                     <>
                         <Button color="inherit" size="small" onClick={handleEnable}>Enable</Button>
-                        <Button color="inherit" size="small" onClick={() => {
-                            localStorage.setItem('pushPromptDismissed', 'true');
-                            setOpen(false);
-                        }}>Not Now</Button>
+                        <Button color="inherit" size="small" onClick={() => setOpen(false)}>Not Now</Button>
                     </>
                 }
             >

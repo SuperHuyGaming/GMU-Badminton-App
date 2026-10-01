@@ -160,12 +160,7 @@ async function scrapeInstagramProfile(handle) {
  */
 async function scrapeLinktree(url) {
     try {
-        if (!url || typeof url !== 'string') return [];
-        const parsed = new URL(url);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return [];
-
         const { data } = await axios.get(url, {
-            timeout: 5000,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }

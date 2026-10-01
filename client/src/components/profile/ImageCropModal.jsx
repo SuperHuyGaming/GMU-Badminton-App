@@ -74,7 +74,6 @@ export default function ImageCropModal({
 		<Dialog 
 			open={open} 
 			onClose={onClose} 
-			aria-labelledby="crop-image-dialog-title"
 			maxWidth="md" 
 			fullWidth
 			PaperProps={{
@@ -85,7 +84,7 @@ export default function ImageCropModal({
 				}
 			}}
 		>
-			<DialogTitle id="crop-image-dialog-title" sx={{ fontWeight: "900", textAlign: "center", py: 3 }}>
+			<DialogTitle sx={{ fontWeight: "900", textAlign: "center", py: 3 }}>
 				{title}
 			</DialogTitle>
 			<DialogContent sx={{ 
@@ -111,7 +110,7 @@ export default function ImageCropModal({
 							src={imageSrc}
 							onLoad={onImageLoad}
 							style={{ maxHeight: "60vh", maxWidth: "100%", display: "block", objectFit: "contain" }}
-							alt="Crop preview"
+							alt="Crop"
 						/>
 					</ReactCrop>
 				)}
