@@ -186,8 +186,10 @@ END:VCALENDAR`;
                                         color="secondary"
                                         href={tournament.registrationUrl}
                                         target="_blank"
+                                        rel="noopener noreferrer"
+                                        aria-label={`Sign up for ${tournament.title || "tournament"} (opens in a new window)`}
                                         fullWidth
-                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem' }}
+                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem', color: '#002f17' }}
                                     >
                                         SIGN UP HERE
                                     </Button>
@@ -232,12 +234,19 @@ END:VCALENDAR`;
                 </Box>
             )}
 
-            <Dialog open={bracketOpen} onClose={() => setBracketOpen(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 4, height: '80vh' } }}>
-                <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Dialog 
+                open={bracketOpen} 
+                onClose={() => setBracketOpen(false)} 
+                aria-labelledby="bracket-dialog-title" 
+                maxWidth="lg" 
+                fullWidth 
+                PaperProps={{ sx: { borderRadius: 4, height: '80vh' } }}
+            >
+                <DialogTitle id="bracket-dialog-title" sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     16-Player Knockout Bracket
                     <Button onClick={() => setBracketOpen(false)} color="inherit" sx={{ fontWeight: 'bold' }}>Close</Button>
                 </DialogTitle>
-                <DialogContent dividers sx={{ backgroundColor: '#f9f9f9' }}>
+                <DialogContent dividers sx={{ backgroundColor: 'background.default' }}>
                     {bracketLoading ? (
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
                             <CircularProgress />

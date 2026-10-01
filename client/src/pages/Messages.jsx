@@ -11,7 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
 import { getOptimizedAvatar } from "../utils/image";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useLocation } from "react-router-dom";
 
 const formatTime = (dateString) => {
 	if (!dateString) return "";
@@ -47,6 +47,7 @@ const formatShortTime = (dateString) => {
 
 const Messages = () => {
 	const { user } = useAuth();
+	const location = useLocation();
 	const [recentChats, setRecentChats] = useState([]);
 	const [activeChat, setActiveChat] = useState(() => {
 		const saved = localStorage.getItem("activeChat");
@@ -68,6 +69,36 @@ const Messages = () => {
 	const typingTimeoutRef = useRef(null);
 	const messagesEndRef = useRef(null);
 	const activeChatRef = useRef(null);
+
+	
+	function startNewChat(friend) {
+		setActiveChat(friend);
+		setSearchQuery("");
+		setSearchResults([]);
+	}
+
+	useEffect(() => {
+		if (location.state?.targetUserId && user) {
+			const targetId = location.state.targetUserId;
+			// check if already in recentChats
+			const existingChat = recentChats.find(c => c.friend._id === targetId);
+			if (existingChat) {
+				startNewChat(existingChat.friend);
+			} else {
+				// fetch user basic info to start chat
+				apiFetch('/api/users/profile/' + targetId)
+					.then(res => res.json())
+					.then(data => {
+						if (data && data._id) {
+							startNewChat(data);
+						}
+					})
+					.catch(err => console.error("Error fetching target user", err));
+			}
+			// clear state so it doesn't loop
+			window.history.replaceState({}, document.title);
+		}
+	}, [location.state, user, recentChats]);
 
 	useEffect(() => {
 		activeChatRef.current = activeChat;
@@ -318,12 +349,6 @@ const Messages = () => {
 		}
 	};
 
-	const startNewChat = (friend) => {
-		setActiveChat(friend);
-		setSearchQuery("");
-		setSearchResults([]);
-		// If friend is not in recentChats, they will be added once a message is sent
-	};
 
 	const handleSearch = async (e) => {
 		const query = e.target.value;
@@ -394,6 +419,26 @@ const Messages = () => {
 
 	return (
 		<>
+									{!hasMore && (
+										<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, mb: 6 }}>
+											<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 2 }} />
+											<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{activeChat.name}</Typography>
+											<Typography variant="body2" color="text.primary">
+												{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
+											</Typography>
+											{activeChat.checkInLocation && (
+												<Typography variant="body2" color="text.secondary">
+													Usually plays at {activeChat.checkInLocation}
+												</Typography>
+											)}
+											{activeChat.homeUniversity && (
+												<Typography variant="body2" color="text.secondary">
+													Studied at {activeChat.homeUniversity}
+												</Typography>
+											)}
+										</Box>
+									)}
+
 		<Container 
 			disableGutters 
 			maxWidth="lg" 
@@ -429,7 +474,7 @@ const Messages = () => {
 					height: "100%",
 					bgcolor: "background.paper"
 				}}>
-				<Box sx={{ p: 2, bgcolor: "primary.main", color: "white", borderRadius: "12px 12px 0 0" }}>
+				<Box sx={{ p: 2.5, bgcolor: "transparent", color: "text.primary", borderBottom: "1px solid", borderColor: "divider" }}>
 					<Typography variant="h6" fontWeight="bold">Messages</Typography>
 				</Box>
 				<Box sx={{ p: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
@@ -437,6 +482,8 @@ const Messages = () => {
 						fullWidth
 						size="small"
 						placeholder="Search users..."
+						aria-label="Search users"
+						slotProps={{ htmlInput: { 'aria-label': 'Search users' } }}
 						value={searchQuery}
 						onChange={handleSearch}
 						sx={{ "& .MuiOutlinedInput-root": { borderRadius: 5, bgcolor: 'background.default' } }}
@@ -531,14 +578,25 @@ const Messages = () => {
 								secondary={
 									typingUserIds.has(chat.friend._id) 
 										? <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>typing...</Typography> 
-										: chat.lastMessage?.content
+										: <Typography 
+												variant="body2" 
+												sx={{ 
+													color: chat.unreadCount > 0 ? 'text.primary' : 'text.secondary',
+													fontWeight: chat.unreadCount > 0 ? 800 : 'normal',
+													pr: chat.unreadCount > 0 ? 3 : 1,
+													display: '-webkit-box',
+													WebkitLineClamp: 1,
+													WebkitBoxOrient: 'vertical',
+													overflow: 'hidden',
+													textOverflow: 'ellipsis',
+													wordBreak: 'break-word'
+												}}
+											>
+												{chat.lastMessage?.content || "No messages yet"}
+											</Typography>
 								}
-								secondaryTypographyProps={{ 
-									noWrap: true, 
-									color: chat.unreadCount > 0 ? 'text.primary' : 'text.primary',
-									fontWeight: chat.unreadCount > 0 ? 'bold' : 'normal',
-									sx: { pr: 2 } // padding right to avoid unread badge overlap
-								}}
+								// Remove secondaryTypographyProps since we use explicit Typography above
+
 							/>
 							{chat.unreadCount > 0 && (
 								<Badge badgeContent={chat.unreadCount} color="secondary" sx={{ position: 'absolute', right: 24, top: '50%' }} />
@@ -597,7 +655,16 @@ const Messages = () => {
 				{activeChat ? (
 					<>
 						<Box 
+							role="button"
+							tabIndex={0}
+							aria-label={`View ${activeChat.name}'s profile details`}
 							onClick={handleProfileClick}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									handleProfileClick();
+								}
+							}}
 							sx={{ 
 								p: 2, 
 								borderBottom: "1px solid",
@@ -611,7 +678,7 @@ const Messages = () => {
 								flexShrink: 0
 							}}
 						>
-							<IconButton aria-label="icon button" 
+							<IconButton 
 								sx={{ display: { md: "none" } }} 
 								onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}
 								aria-label="Back to conversations"
@@ -643,13 +710,29 @@ const Messages = () => {
 								<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
 									<CircularProgress color="primary" />
 								</Box>
+							
 							) : messages.length === 0 ? (
 								<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.primary', gap: 2 }}>
-									<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-									<Typography>Say hi to {activeChat.name}!</Typography>
+									<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 1 }} />
+									<Typography variant="h5" fontWeight="bold">{activeChat.name}</Typography>
+									<Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
+										{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
+									</Typography>
+									{activeChat.checkInLocation && (
+										<Typography variant="body2" color="text.secondary">
+											Usually plays at {activeChat.checkInLocation}
+										</Typography>
+									)}
+									{activeChat.homeUniversity && (
+										<Typography variant="body2" color="text.secondary">
+											Studied at {activeChat.homeUniversity}
+										</Typography>
+									)}
+									<Typography sx={{ mt: 2, color: 'text.secondary' }}>Say hi to {activeChat.name}!</Typography>
 								</Box>
 							) : (
 								<>
+
 									{hasMore && (
 										<Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
 											<Button 
@@ -692,7 +775,7 @@ const Messages = () => {
 													)}
 													<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
 														{!isMe && !msg.isDeletedByAdmin && (
-															<IconButton aria-label="icon button" className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
+															<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
 																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 															</IconButton>
 														)}
@@ -792,6 +875,8 @@ const Messages = () => {
 								fullWidth 
 								size="small"
 								placeholder="Type a message..." 
+								aria-label="Type a message"
+								slotProps={{ htmlInput: { 'aria-label': 'Type a message' } }}
 								variant="outlined" 
 								multiline
 								maxRows={4}
@@ -835,9 +920,11 @@ const Messages = () => {
 			</Paper>
 		</Container>	
 			{/* Profile Dialog */}
+			{/* Profile Dialog */}
 			<Dialog 
 				open={profileDialogOpen} 
 				onClose={() => setProfileDialogOpen(false)} 
+				aria-labelledby="messages-profile-dialog-name"
 				maxWidth="xs" 
 				fullWidth
 				PaperProps={{ 
@@ -854,12 +941,12 @@ const Messages = () => {
 					<Box sx={{ 
 						height: 120, 
 						bgcolor: 'primary.main', 
-						backgroundImage: profileData?.coverPic ? `url(${profileData.coverPic})` : 'linear-gradient(135deg, #006633 0%, #00b359 100%)',
+						backgroundImage: profileData?.coverPic ? `url(${profileData.coverPic})` : 'linear-gradient(135deg, #005c2e 0%, #00b359 100%)',
 						backgroundSize: 'cover',
 						backgroundPosition: 'center',
 						position: 'relative' 
 					}}>
-						<IconButton aria-label="icon button" 
+						<IconButton 
 							onClick={() => setProfileDialogOpen(false)} 
 							aria-label="Close profile dialog" 
 							sx={{ 
@@ -881,6 +968,7 @@ const Messages = () => {
 						<Box sx={{ px: 3, pb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', mt: -6, position: 'relative' }}>
 							<Avatar 
 								src={getOptimizedAvatar(profileData.profilePic || "", 150)} 
+								alt={profileData.name || "User profile photo"}
 								sx={{ 
 									width: 104, 
 									height: 104, 
@@ -889,10 +977,10 @@ const Messages = () => {
 									boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
 									bgcolor: 'background.default'
 								}} 
-							 alt="User Avatar" />
+							/>
 							
 							<Box sx={{ mt: 1.5, textAlign: 'center' }}>
-								<Typography variant="h5" fontWeight="900" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+								<Typography id="messages-profile-dialog-name" variant="h5" fontWeight="900" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
 									{profileData.name}
 								</Typography>
 								<Chip 
@@ -900,8 +988,8 @@ const Messages = () => {
 									label={profileData.skillLevel || "N/A"} 
 									sx={{ 
 										mt: 0.5, 
-										bgcolor: 'rgba(0, 102, 51, 0.1)', 
-										color: '#006633', 
+										bgcolor: 'rgba(0, 92, 46, 0.1)', 
+										color: 'primary.main', 
 										fontWeight: '800',
 										px: 1,
 										fontSize: '0.75rem'
@@ -915,25 +1003,25 @@ const Messages = () => {
 									flex: 1, 
 									textAlign: "center", 
 									p: 1.5, 
-									bgcolor: "rgba(0, 102, 51, 0.06)", 
+									bgcolor: "rgba(0, 92, 46, 0.06)", 
 									borderRadius: 3, 
 									border: '1px solid', 
-									borderColor: 'rgba(0, 102, 51, 0.1)' 
+									borderColor: 'rgba(0, 92, 46, 0.15)' 
 								}}>
-									<Typography variant="h5" color="#006633" fontWeight="900">{profileData.singlesElo || 1200}</Typography>
-									<Typography variant="caption" sx={{ color: '#006633', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.8 }}>Singles</Typography>
+									<Typography variant="h5" color="primary.main" fontWeight="900">{profileData.singlesElo || 1200}</Typography>
+									<Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.85 }}>Singles</Typography>
 								</Box>
 								<Box sx={{ 
 									flex: 1, 
 									textAlign: "center", 
 									p: 1.5, 
-									bgcolor: "rgba(170, 59, 255, 0.06)", 
+									bgcolor: (theme) => theme.palette.mode === 'dark' ? "rgba(206, 147, 216, 0.12)" : "rgba(123, 31, 162, 0.06)", 
 									borderRadius: 3, 
 									border: '1px solid', 
-									borderColor: 'rgba(170, 59, 255, 0.1)' 
+									borderColor: (theme) => theme.palette.mode === 'dark' ? "rgba(206, 147, 216, 0.3)" : "rgba(123, 31, 162, 0.15)" 
 								}}>
-									<Typography variant="h5" color="#aa3bff" fontWeight="900">{profileData.doublesElo || 1200}</Typography>
-									<Typography variant="caption" sx={{ color: '#aa3bff', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.8 }}>Doubles</Typography>
+									<Typography variant="h5" sx={{ color: (theme) => theme.palette.mode === 'dark' ? '#ce93d8' : '#7b1fa2' }} fontWeight="900">{profileData.doublesElo || 1200}</Typography>
+									<Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === 'dark' ? '#ce93d8' : '#7b1fa2', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.85 }}>Doubles</Typography>
 								</Box>
 							</Box>
 
@@ -948,16 +1036,16 @@ const Messages = () => {
 								
 								<Box sx={{ display: 'flex', gap: 2 }}>
 									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
-										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, color: 'primary.main' }}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
 											<Typography variant="caption" color="text.primary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Play Style</Typography>
 										</Box>
 										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.preferredPlay || "Any"}</Typography>
 									</Box>
 									
 									<Box sx={{ flex: 1, p: 2, bgcolor: 'background.default', borderRadius: 3 }}>
-										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#006633' }}><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+										<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, color: 'primary.main' }}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 											<Typography variant="caption" color="text.primary" fontWeight="800" sx={{ textTransform: 'uppercase' }}>Racket</Typography>
 										</Box>
 										<Typography variant="body2" fontWeight="600" color="text.primary">{profileData.racket || "N/A"}</Typography>

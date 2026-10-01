@@ -220,7 +220,7 @@ export default function Forum() {
 
 			{/* TABS NAVIGATION */}
 			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4, gap: 2 }}>
-				<Tabs value={tab} onChange={handleTabChange} textColor="primary" indicatorColor="primary" 
+				<Tabs value={tab} onChange={handleTabChange} textColor="primary" indicatorColor="primary" aria-label="Forum post categories"
 					sx={{ 
 						'& .MuiTab-root': { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'none', px: { xs: 2, sm: 4 } },
 						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5
@@ -243,7 +243,7 @@ export default function Forum() {
                             msOverflowStyle: 'none', scrollbarWidth: 'none' 
                         }}
                     >
-                        <Chip label="Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FF512F 0%, #F09819 100%)', color: 'white' }} />
+                        <Chip label="Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: '#000000' }} />
                         {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment'].map((tag) => (
                             <Chip 
                                 key={tag} 
@@ -278,7 +278,7 @@ export default function Forum() {
 			</Box>
 
 			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', maxWidth: '680px', mx: 'auto' }}>
-				{/* FACEBOOK STYLE COMPOSER */}
+				{/* NEW POST INPUT BOX */}
 				<Paper 
 					elevation={1} 
 					sx={{ 
@@ -292,31 +292,60 @@ export default function Forum() {
 					}}
 				>
 					<Avatar src={currentUser?.avatarUrl} alt={currentUser?.name} />
-					<Box 
-						onClick={() => setIsModalOpen(true)}
-						sx={{ 
-							flex: 1, 
-							backgroundColor: 'action.hover', 
-							borderRadius: 10, 
-							py: 1.5, 
-							px: 3, 
-							cursor: 'pointer',
-							'&:hover': { backgroundColor: 'action.selected' }
+					<TextField
+						fullWidth
+						size="small"
+						aria-label="What's on your mind?"
+						slotProps={{ htmlInput: { 'aria-label': "What's on your mind?" } }}
+						placeholder={`What's on your mind${currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?`}
+						value={newPost.content}
+						onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+					/>
+					<Button
+						variant="contained"
+						disabled={!newPost.content.trim()}
+						onClick={async () => {
+							if (!currentUser) return alert("You must be logged in to post!");
+							try {
+								const res = await apiFetch("/api/posts", {
+									method: "POST",
+									body: JSON.stringify({ content: newPost.content })
+								});
+								if (res.ok) {
+									setNewPost({ ...newPost, content: "" });
+									toast.success("Post created successfully!");
+									setPage(1);
+									setFeed([]);
+								} else {
+									toast.error("Failed to create post.");
+								}
+							} catch {
+								toast.error("Error creating post.");
+							}
 						}}
 					>
-						<Typography color="text.primary" sx={{ fontSize: '0.95rem' }}>
-							What's on your mind{currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?
-						</Typography>
-					</Box>
+						Post
+					</Button>
 				</Paper>
 
 				{/* NEW POSTS PILL */}
 				{newPostsQueue.length > 0 && (
 					<Box 
+						role="button"
+						tabIndex={0}
+						aria-label="Load new posts"
 						onClick={() => {
 							setFeed(prev => [...newPostsQueue, ...prev]);
 							setNewPostsQueue([]);
 							window.scrollTo({ top: 0, behavior: 'smooth' });
+						}}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								setFeed(prev => [...newPostsQueue, ...prev]);
+								setNewPostsQueue([]);
+								window.scrollTo({ top: 0, behavior: 'smooth' });
+							}
 						}}
 						sx={{
 							position: 'sticky',
@@ -419,7 +448,7 @@ export default function Forum() {
 												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team1Avatars?.map((avatar, i) => (
-														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
+														<Avatar key={i} src={avatar} alt={item.team1?.[i] || `Team 1 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
 												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
@@ -431,9 +460,9 @@ export default function Forum() {
 											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '30%' }}>
 												<Typography variant="overline" color="text.primary" fontWeight="bold" sx={{ mb: -1 }}>FINAL</Typography>
 												<Typography variant="h3" fontWeight="900" sx={{ letterSpacing: '-2px', color: 'text.primary' }}>
-													<span style={{ color: team1Wins ? '#006633' : 'inherit' }}>{item.team1Score}</span>
-													<span style={{ margin: '0 8px', color: '#757575' }}>-</span>
-													<span style={{ color: team2Wins ? '#006633' : 'inherit' }}>{item.team2Score}</span>
+													<Box component="span" sx={{ color: team1Wins ? 'primary.main' : 'inherit' }}>{item.team1Score}</Box>
+													<span style={{ margin: '0 8px', color: 'inherit', opacity: 0.6 }}>-</span>
+													<Box component="span" sx={{ color: team2Wins ? 'primary.main' : 'inherit' }}>{item.team2Score}</Box>
 												</Typography>
 											</Box>
 
@@ -442,7 +471,7 @@ export default function Forum() {
 												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team2Avatars?.map((avatar, i) => (
-														<Avatar key={i} src={avatar} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
+														<Avatar key={i} src={avatar} alt={item.team2?.[i] || `Team 2 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
 												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
@@ -470,13 +499,19 @@ export default function Forum() {
 			</Box>
 
 			{/* Create Post Modal */}
-			<Dialog fullScreen={fullScreen} open={isModalOpen} onClose={() => setIsModalOpen(false)} PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
-				<DialogTitle sx={{ fontWeight: "bold", fontSize: "1.5rem" }}>Create a Post</DialogTitle>
+			<Dialog 
+				fullScreen={fullScreen} 
+				open={isModalOpen} 
+				onClose={() => setIsModalOpen(false)} 
+				aria-labelledby="create-post-dialog-title"
+				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+			>
+				<DialogTitle id="create-post-dialog-title" sx={{ fontWeight: "bold", fontSize: "1.5rem" }}>Create a Post</DialogTitle>
 				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
 					<TextField label="Title" variant="outlined" fullWidth value={newPost.title} onChange={(e) => setNewPost({ ...newPost, title: e.target.value })} />
 					<TextField label="What's on your mind?" multiline rows={4} variant="outlined" fullWidth value={newPost.content} onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} />
 					
-					<Box sx={{ display: 'flex', gap: 2 }}>
+					<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
 						{/* Privacy Selection */}
 						<Box sx={{ flex: 1 }}>
 							<Typography variant="caption" color="text.primary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
@@ -487,6 +522,8 @@ export default function Forum() {
 								onChange={(e) => setNewPost({ ...newPost, visibility: e.target.value })}
 								size="small"
 								fullWidth
+								aria-label="Post privacy"
+								inputProps={{ 'aria-label': 'Post privacy' }}
 							>
 								<MenuItem value="PUBLIC">🌎 Public (Everyone)</MenuItem>
 								<MenuItem value="FRIENDS_ONLY">👥 Friends Only</MenuItem>

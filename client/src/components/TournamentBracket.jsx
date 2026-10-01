@@ -38,7 +38,7 @@ const BracketNode = ({ match }) => {
                     bgcolor: 'background.paper'
                 }}
             >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', pb: 0.5, mb: 0.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${theme.palette.divider}`, pb: 0.5, mb: 0.5 }}>
                     <Typography variant="body2" fontWeight={match.winner === match.player1 ? 'bold' : 'normal'}>
                         {match.player1 || "TBD"}
                     </Typography>

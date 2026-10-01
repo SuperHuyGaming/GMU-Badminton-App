@@ -13,13 +13,15 @@ const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
 const Tournaments = React.lazy(() => import("./pages/Tournaments"));
 const Marketplace = React.lazy(() => import("./pages/Marketplace"));
-const Matchmaking = React.lazy(() => import("./pages/Matchmaking"));
+const CommunityDirectory = React.lazy(() => import("./pages/CommunityDirectory"));
+const SearchResults = React.lazy(() => import("./pages/SearchResults"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 const OnboardingWizard = React.lazy(() => import("./components/OnboardingWizard"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
 import ReportMatchModal from "./components/ReportMatchModal";
+import ServerWarmup from "./components/ServerWarmup";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
 
@@ -127,7 +129,7 @@ const AnimatedRoutes = () => {
                     onClose={handleCloseReportModal} 
                     opponentId={reportMatchId} 
                 />
-				<Routes key={location.pathname}>
+				<Routes location={location} key={location.pathname}>
 					<Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
 					<Route
 						path="/leaderboard"
@@ -226,7 +228,7 @@ const AnimatedRoutes = () => {
 						element={
 							user ? (
 								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
-									<Matchmaking />
+									<CommunityDirectory />
 								</motion.div>
 							) : (
 								<Navigate to="/auth" />
@@ -239,6 +241,18 @@ const AnimatedRoutes = () => {
 							<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
 								<Tournaments />
 							</motion.div>
+						}
+					/>
+					<Route
+						path="/search"
+						element={
+							user ? (
+								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
+									<SearchResults />
+								</motion.div>
+							) : (
+								<Navigate to="/auth" />
+							)
 						}
 					/>
 					{/* Catch all */}
@@ -282,8 +296,14 @@ function App() {
 	const theme = useMemo(() => createTheme({
 		palette: {
 			mode,
-			primary: { main: "#005c2e", dark: "#004d26", light: "#33855c" },
-			secondary: { main: "#FFCC33" },
+			primary: mode === "light"
+				? { main: "#005c2e", dark: "#004d26", light: "#1b663e", contrastText: "#ffffff" }
+				: { main: "#80e27e", dark: "#005c2e", light: "#a5d6a7", contrastText: "#02120a" },
+			secondary: { main: "#FFCC33", contrastText: "#002f17" },
+			text: {
+				primary: mode === "light" ? "#1a202c" : "#ffffff",
+				secondary: mode === "light" ? "#404040" : "rgba(255, 255, 255, 0.8)",
+			},
 			background: { 
 				default: mode === "light" ? "#f4f6f8" : "#02120a", // Ultra deep forest green
 				paper: mode === "light" ? "rgba(255, 255, 255, 0.75)" : "rgba(8, 33, 20, 0.75)", // Translucent for glassmorphism
@@ -453,6 +473,7 @@ function App() {
 						minHeight: '100vh',
 					}
 				}} />
+			<ServerWarmup>
 				<BrowserRouter>
 					<Navbar />
 
@@ -472,6 +493,7 @@ function App() {
 						<PWAInstallPrompt />
 					</Container>
 				</BrowserRouter>
+			</ServerWarmup>
 			</ThemeProvider>
 		</ColorModeContext.Provider>
 	);

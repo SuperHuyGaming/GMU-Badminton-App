@@ -14,11 +14,32 @@ cloudinary.config({
 });
 
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload = multer({
+	storage,
+	limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+	fileFilter: (req, file, cb) => {
+		const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+		if (allowedMimes.includes(file.mimetype)) {
+			cb(null, true);
+		} else {
+			cb(new Error("Invalid file format. Only JPEG, PNG, WEBP, and GIF images are allowed."));
+		}
+	}
+});
+
+const rateLimit = require("express-rate-limit");
+const mongoose = require("mongoose");
+
+const uploadLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 30,
+	message: { message: "Too many upload requests, please try again later." },
+});
 
 router.post(
 	"/image",
 	authMiddleware,
+	uploadLimiter,
 	upload.single("image"),
 	async (req, res) => {
 		try {
@@ -30,9 +51,15 @@ router.post(
 				return res.status(400).json({ message: "Invalid image type" });
 			}
 
-			// Explicitly grab the ID sent from the frontend!
-			const targetUserId =
-				req.body.userId || req.user?.id || req.user?._id;
+			// Security: IDOR prevention - only admins may upload on behalf of another user ID
+			const authenticatedId = (req.user?.id || req.user?.userId || req.user?._id || "").toString();
+			let targetUserId = authenticatedId;
+			if (req.user?.role === "admin" && req.body.userId) {
+				if (!mongoose.isValidObjectId(req.body.userId)) {
+					return res.status(400).json({ message: "Invalid target user ID format." });
+				}
+				targetUserId = req.body.userId;
+			}
 
 			cloudinary.uploader
 				.upload_stream(
@@ -64,7 +91,7 @@ router.post(
 							targetUserId,
 							{ [imageType]: imageUrl },
 							{ new: true },
-						).select("-password");
+						).select("-password -pushSubscriptions");
 
 						// If user doesn't exist, stop safely instead of crashing React
 						if (!updatedUser) {
@@ -95,6 +122,7 @@ router.post(
 router.post(
 	"/images",
 	authMiddleware,
+	uploadLimiter,
 	upload.array("images", 4),
 	async (req, res) => {
 		try {
