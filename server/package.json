@@ -22,7 +22,7 @@
     "cheerio": "^1.2.0",
     "cloudinary": "^2.11.0",
     "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.4",
     "express": "^4.22.2",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.7.0",
