@@ -65,17 +65,7 @@ export default function CommentBubble({
 		<Box sx={{ display: "flex", gap: 1 }}>
 			<Avatar
 				src={comment.authorPic}
-				alt={comment.authorName || "Comment author"}
-				role="link"
-				tabIndex={0}
-				aria-label={`View ${comment.authorName || "author"}'s profile`}
 				onClick={() => navigate(`/profile/${comment.authorId}`)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" || e.key === " ") {
-						e.preventDefault();
-						navigate(`/profile/${comment.authorId}`);
-					}
-				}}
 				sx={{
 					width: 32,
 					height: 32,
@@ -105,35 +95,26 @@ export default function CommentBubble({
 						}}
 					>
 						<Typography
-							role="link"
-							tabIndex={0}
 							onClick={() =>
 								navigate(`/profile/${comment.authorId}`)
 							}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
-									navigate(`/profile/${comment.authorId}`);
-								}
-							}}
 							variant="subtitle2"
 							fontWeight="bold"
 							sx={{ lineHeight: 1, ...clickableStyle }}
 						>
 							{comment.authorName}
 							{comment.isEdited && (
-								<Typography
-									component="span"
-									sx={{
+								<span
+									style={{
 										fontWeight: "normal",
 										fontStyle: "italic",
 										fontSize: "0.75rem",
-										color: "text.secondary",
-										ml: 0.75,
+										opacity: 0.6,
+										marginLeft: "6px",
 									}}
 								>
 									(edited)
-								</Typography>
+								</span>
 							)}
 						</Typography>
 
@@ -156,8 +137,6 @@ export default function CommentBubble({
 								fullWidth
 								size="small"
 								multiline
-								aria-label="Edit comment"
-								inputProps={{ 'aria-label': 'Edit comment' }}
 								value={editContent}
 								onChange={(e) => setEditContent(e.target.value)}
 								sx={{
@@ -197,9 +176,6 @@ export default function CommentBubble({
 
 					{comment.likedBy?.length > 0 && (
 						<Box
-							role="button"
-							tabIndex={0}
-							aria-label="View users who liked this comment"
 							onClick={(e) =>
 								openLikes(
 									e,
@@ -207,16 +183,6 @@ export default function CommentBubble({
 									comment.likedByDetails,
 								)
 							}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault();
-									openLikes(
-										e,
-										"Comment Likes",
-										comment.likedByDetails,
-									);
-								}
-							}}
 							sx={{
 								position: "absolute",
 								bottom: -8,
@@ -293,8 +259,6 @@ export default function CommentBubble({
 
 				<Box sx={{ display: "flex", gap: 2, ml: 1, mt: 0.5 }}>
 					<Typography
-						role="button"
-						tabIndex={0}
 						variant="caption"
 						onClick={() =>
 							handleToggleLike(
@@ -302,15 +266,6 @@ export default function CommentBubble({
 								comment._id,
 							)
 						}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								handleToggleLike(
-									`/api/forum/${localPostId}/comments/${comment._id}/like`,
-									comment._id,
-								);
-							}
-						}}
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",
@@ -323,16 +278,8 @@ export default function CommentBubble({
 						Like
 					</Typography>
 					<Typography
-						role="button"
-						tabIndex={0}
 						variant="caption"
 						onClick={onReply}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								onReply();
-							}
-						}}
 						sx={{
 							cursor: "pointer",
 							fontWeight: "bold",
@@ -342,7 +289,7 @@ export default function CommentBubble({
 					>
 						Reply
 					</Typography>
-					<Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+					<Typography variant="caption" color="text.disabled">
 						{formatTime(comment.timestamp)}
 					</Typography>
 				</Box>

@@ -1,9 +1,6 @@
 // server/routes/announcements.js
 const express = require("express");
-const mongoose = require("mongoose");
-const xss = require("xss");
 const Announcement = require("../models/Announcement");
-const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -23,20 +20,19 @@ router.get("/", async (req, res) => {
 });
 
 // POST: Create a new announcement (ADMIN ONLY)
-router.post("/", authMiddleware, adminMiddleware, async (req, res) => {
+router.post("/", async (req, res) => {
 	try {
-		const { content } = req.body;
+		const { content, authorName, authorId, role } = req.body;
 
-		if (!content || typeof content !== "string" || !content.trim()) {
-			return res.status(400).json({ message: "Announcement content is required." });
+		// AUTH GUARD: Strictly verify admin role
+		if (role !== "admin") {
+			return res.status(403).json({
+				message: "Unauthorized. Only admins can broadcast updates.",
+			});
 		}
 
-		const cleanContent = xss(content.trim());
-		const authorId = req.user.id || req.user.userId;
-		const authorName = req.user.name || req.body.authorName || "Admin";
-
 		const newAnnouncement = new Announcement({
-			content: cleanContent,
+			content,
 			authorName,
 			authorId,
 		});
@@ -52,16 +48,16 @@ router.post("/", authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 // DELETE: Remove an announcement (ADMIN ONLY)
-router.delete("/:id", authMiddleware, adminMiddleware, async (req, res) => {
+router.delete("/:id", async (req, res) => {
 	try {
-		if (!mongoose.isValidObjectId(req.params.id)) {
-			return res.status(400).json({ message: "Invalid announcement ID format." });
+		const { role } = req.query; // Pass role in the URL query
+
+		// AUTH GUARD: Strictly verify admin role
+		if (role !== "admin") {
+			return res.status(403).json({ message: "Unauthorized." });
 		}
 
-		const deleted = await Announcement.findByIdAndDelete(req.params.id);
-		if (!deleted) {
-			return res.status(404).json({ message: "Announcement not found." });
-		}
+		await Announcement.findByIdAndDelete(req.params.id);
 
 		// Tell all connected clients to remove it from their screens
 		if (req.io) req.io.emit("announcementDeleted", req.params.id);

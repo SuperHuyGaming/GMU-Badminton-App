@@ -57,10 +57,10 @@ export default function RacketViewer({ primaryColor = '#006633', secondaryColor 
             </Typography>
             
             <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 1 }}>
-                <IconButton aria-label={isPlaying ? "Pause 3D rotation" : "Play 3D rotation"} size="small" onClick={togglePlay} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
+                <IconButton aria-label="icon button" size="small" onClick={togglePlay} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
                     {isPlaying ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
                 </IconButton>
-                <IconButton aria-label="Reset 3D racket rotation" size="small" onClick={handleReset} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
+                <IconButton aria-label="icon button" size="small" onClick={handleReset} sx={{ bgcolor: 'rgba(255,255,255,0.7)', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}>
                     <RestartAltIcon fontSize="small" />
                 </IconButton>
             </Box>

@@ -85,9 +85,7 @@ const chat = async (userMessage, chatHistory = [], skillLevel = "D Level") => {
     }
 
     try {
-        const allowedSkillLevels = ["D Level", "C Level", "B Level"];
-        const safeSkillLevel = allowedSkillLevels.includes(skillLevel) ? skillLevel : "D Level";
-        const skillContext = `\n\nThe user's current skill level is: ${safeSkillLevel}. Tailor your advice accordingly.`;
+        const skillContext = `\n\nThe user's current skill level is: ${skillLevel}. Tailor your advice accordingly.`;
 
         const chatSession = model.startChat({
             history: [

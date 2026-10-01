@@ -140,19 +140,9 @@ export default function PostCommentsInline({
 								<Box
 									key={i}
 									component="span"
-									role="link"
-									tabIndex={0}
-									aria-label={`View ${name}'s profile`}
 									onClick={(e) => {
 										e.stopPropagation();
 										navigate(`/profile/${id}`);
-									}}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											e.stopPropagation();
-											navigate(`/profile/${id}`);
-										}
 									}}
 									sx={{
 										color: "primary.main",
@@ -333,8 +323,6 @@ export default function PostCommentsInline({
 					size="small"
 					multiline
 					maxRows={4}
-					aria-label="Write a comment"
-					slotProps={{ htmlInput: { 'aria-label': 'Write a comment' } }}
 					placeholder={
 						currentUser ? "Write a comment..." : "Login to comment"
 					}

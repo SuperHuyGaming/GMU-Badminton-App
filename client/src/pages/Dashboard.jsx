@@ -247,7 +247,7 @@ export default function Dashboard() {
 					
 					.custom-scrollbar::-webkit-scrollbar { width: 0.375rem; }
 					.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-					.custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(120, 120, 120, 0.4); border-radius: 10px; }
+					.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 10px; }
 				`}
 			</style>
 
@@ -367,9 +367,7 @@ export default function Dashboard() {
 						color="secondary"
 						href="https://connect.recreation.gmu.edu/Facility/GetSchedule?facilityId=4434ce67-8efc-4c48-90e1-7add7f48ad24"
 						target="_blank"
-						rel="noopener noreferrer"
-						aria-label="Check Official Connect Portal (opens in a new window)"
-						sx={{ fontWeight: "bold", borderRadius: 3, color: "#002f17", py: 1, textTransform: 'none' }}
+						sx={{ fontWeight: "bold", borderRadius: 3, color: "#006633", py: 1, textTransform: 'none' }}
 					>
 						Check Official Connect Portal ➦
 					</Button>
@@ -411,8 +409,7 @@ export default function Dashboard() {
 								p: 2,
 								mb: 2,
 								borderRadius: 3,
-								border: "1px solid",
-								borderColor: "primary.main",
+								border: "1px solid #006633",
 								backgroundColor: "rgba(0,102,51,0.02)",
 							}}
 						>
@@ -428,8 +425,6 @@ export default function Dashboard() {
 								fullWidth
 								multiline
 								maxRows={4}
-								aria-label="Share news, cancellations, or updates"
-								slotProps={{ htmlInput: { 'aria-label': 'Share news, cancellations, or updates' } }}
 								placeholder="Share news, cancellations, or updates..."
 								value={newUpdateText}
 								onChange={(e) =>
@@ -496,28 +491,30 @@ export default function Dashboard() {
 									alignItems: "center",
 									p: 4,
 									textAlign: "center",
+									opacity: 0.5,
 									width: "100%",
 								}}
 							>
 								<style>
 									{`
 										@keyframes floatMsg { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
-										.floating-msg { animation: floatMsg 3s ease-in-out infinite; }
+										.floating-msg { animation: floatMsg 3s ease-in-out infinite; color: #006633; }
 									`}
 								</style>
-								<Box className="floating-msg" sx={{ color: 'primary.main', mb: 2 }}>
+								<div className="floating-msg">
 									<MegaphoneIcon
 										style={{
 											width: 60,
 											height: 60,
+											marginBottom: 16,
+											opacity: 0.7,
 										}}
-										aria-hidden="true"
 									/>
-								</Box>
+								</div>
 								<Typography variant="h6" fontWeight="bold" sx={{ color: 'text.primary' }}>
 									No New Updates
 								</Typography>
-								<Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 280, mx: 'auto', mt: 0.5 }}>
+								<Typography variant="body2" sx={{ color: 'text.primary', maxWidth: 250, mx: 'auto' }}>
 									The court is clear. Check back later for
 									official club announcements!
 								</Typography>
@@ -764,7 +761,7 @@ export default function Dashboard() {
 										<Box
 											sx={{
 												bgcolor: getStatusColor(slot.status),
-												color: slot.status === "OPEN_REQ" ? "#000000" : "#ffffff",
+												color: "white",
 												minWidth: { xs: 80, sm: 100 },
 												display: "flex",
 												flexDirection: "column",
@@ -810,16 +807,12 @@ export default function Dashboard() {
 												<Chip
 													label={getStatusLabel(slot.status)}
 													size="small"
-													color={
-														slot.status === "DEDICATED" ? "success" :
-														slot.status === "CLUB_ONLY" ? "info" :
-														slot.status === "OPEN_REQ" ? "warning" :
-														slot.status === "UNAVAILABLE" ? "error" : "default"
-													}
-													variant="outlined"
 													sx={{
 														fontWeight: "bold",
 														borderRadius: 2,
+														bgcolor: `${getStatusColor(slot.status)}22`,
+														color: getStatusColor(slot.status),
+														border: `1px solid ${getStatusColor(slot.status)}`
 													}}
 												/>
 											</Box>
@@ -872,12 +865,9 @@ export default function Dashboard() {
 			<Dialog
 				open={!!deleteUpdateId}
 				onClose={() => setDeleteUpdateId(null)}
-				aria-labelledby="delete-announcement-title"
-				aria-describedby="delete-announcement-desc"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 			>
 				<DialogTitle
-					id="delete-announcement-title"
 					sx={{
 						fontWeight: "bold",
 						display: "flex",
@@ -889,7 +879,7 @@ export default function Dashboard() {
 					<TrashIconLarge /> Confirm Deletion
 				</DialogTitle>
 				<DialogContent>
-					<Typography id="delete-announcement-desc">
+					<Typography>
 						Are you sure you want to permanently delete this
 						official announcement? This action cannot be undone.
 					</Typography>

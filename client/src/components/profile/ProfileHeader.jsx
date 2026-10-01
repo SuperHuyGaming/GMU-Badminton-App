@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { getOptimizedAvatar, getOptimizedCover } from "../../utils/image";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -18,7 +17,6 @@ import {
 	IconButton,
 	Badge
 } from "@mui/material";
-import FriendActionButton from "../FriendActionButton";
 
 // Clean Icons
 const ShareIcon = () => (
@@ -81,10 +79,9 @@ export default function ProfileHeader({
 	activeTab,
 	setActiveTab,
 	friendStatus,
-	setFriendStatus,
+	handleFriendAction,
 	isOnline
 }) {
-	const navigate = useNavigate();
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
 	const [viewerImage, setViewerImage] = useState(null);
 	const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -147,16 +144,7 @@ export default function ProfileHeader({
 		>
 			{/* --- COVER PHOTO --- */}
 			<Box
-				role={displayCoverPic || isOwnProfile ? "button" : undefined}
-				tabIndex={displayCoverPic || isOwnProfile ? 0 : undefined}
-				aria-label={isOwnProfile ? "View cover photo or change cover" : "View cover photo"}
 				onClick={handleCoverClick}
-				onKeyDown={(e) => {
-					if ((e.key === "Enter" || e.key === " ") && (displayCoverPic || isOwnProfile)) {
-						e.preventDefault();
-						handleCoverClick(e);
-					}
-				}}
 				sx={{
 					height: { xs: 200, sm: 300, md: 350 },
 					backgroundColor: displayCoverPic
@@ -259,16 +247,7 @@ export default function ProfileHeader({
 					>
 						<Avatar
 							src={getOptimizedAvatar(displayProfilePic, 200)}
-							role={displayProfilePic || isOwnProfile ? "button" : undefined}
-							tabIndex={displayProfilePic || isOwnProfile ? 0 : undefined}
-							aria-label={isOwnProfile ? "View profile photo or change picture" : "View profile photo"}
 							onClick={handleAvatarClick}
-							onKeyDown={(e) => {
-								if ((e.key === "Enter" || e.key === " ") && (displayProfilePic || isOwnProfile)) {
-									e.preventDefault();
-									handleAvatarClick(e);
-								}
-							}}
 							sx={{
 								width: "100%",
 								height: "100%",
@@ -364,18 +343,15 @@ export default function ProfileHeader({
 					</Typography>
 					<Typography
 						variant="subtitle1"
-						sx={{ 
-							fontWeight: 800, 
-							mt: 0.5,
-							color: (theme) => theme.palette.mode === 'dark' ? 'secondary.main' : 'primary.main'
-						}}
+						color="secondary.main"
+						sx={{ fontWeight: 800, mt: 0.5 }}
 					>
 						{profileData.skillLevel || "D Level"}
 					</Typography>
 				</Box>
 
 				<Box sx={{ pb: { sm: 2 }, pt: { xs: 2, sm: 0 }, display: 'flex', gap: 1, alignItems: 'center' }}>
-					<IconButton aria-label="Share profile" onClick={handleShare} sx={{ bgcolor: 'action.hover', color: 'text.primary', '&:hover': { bgcolor: 'action.selected' } }}>
+					<IconButton aria-label="Share profile" onClick={handleShare} sx={{ bgcolor: '#e4e6eb', color: 'black', '&:hover': { bgcolor: '#d8dadf' } }}>
 						<ShareIcon />
 					</IconButton>
 					{isOwnProfile ? (
@@ -383,33 +359,36 @@ export default function ProfileHeader({
 							variant="contained"
 							onClick={() => setActiveTab("about")}
 							sx={{
-								backgroundColor: "action.hover",
-								color: "text.primary",
+								backgroundColor: "#e4e6eb",
+								color: "#050505",
 								fontWeight: "bold",
 								textTransform: "none",
 								borderRadius: 2,
 								px: 2,
 								py: 1,
-								"&:hover": { backgroundColor: "action.selected" },
+								"&:hover": { backgroundColor: "#d8dadf" },
 							}}
 						>
 							Edit profile
 						</Button>
 					) : (
 						<>
-							<FriendActionButton
-								targetUserId={profileData._id}
-								targetUserName={profileData.name}
-								initialStatus={friendStatus}
-								onStatusChange={(newStatus) => {
-									if (setFriendStatus) setFriendStatus(newStatus);
-								}}
-							/>
+							<Button
+								variant="contained"
+								color={friendStatus === "friends" ? "error" : "primary"}
+								onClick={handleFriendAction}
+								sx={{ fontWeight: "bold", borderRadius: 2, textTransform: "none" }}
+							>
+								{friendStatus === "friends" ? "Remove Friend" :
+								 friendStatus === "request_sent" ? "Cancel Request" :
+								 friendStatus === "request_received" ? "Accept Request" :
+								 "Add Friend"}
+							</Button>
 							{friendStatus === "friends" && (
 								<Button
 									variant="contained"
-									sx={{ bgcolor: 'action.hover', color: 'text.primary', fontWeight: "bold", borderRadius: 2, textTransform: "none", "&:hover": { bgcolor: 'action.selected' } }}
-									onClick={() => navigate('/messages', { state: { targetUserId: profileData._id } })}
+									sx={{ bgcolor: '#e4e6eb', color: 'black', fontWeight: "bold", borderRadius: 2, textTransform: "none", "&:hover": { bgcolor: '#d8dadf' } }}
+									onClick={() => window.location.href = '/messages'}
 								>
 									Message
 								</Button>
@@ -421,20 +400,11 @@ export default function ProfileHeader({
 
 			<Divider sx={{ mx: 2 }} />
 
-			<Box role="tablist" aria-label="Profile navigation tabs" sx={{ px: { xs: 2, md: 4 }, py: 1, display: "flex", gap: 3 }}>
-				{["posts", "about", "friends"].map((tab) => (
+			<Box sx={{ px: { xs: 2, md: 4 }, py: 1, display: "flex", gap: 3 }}>
+				{["posts", "about"].map((tab) => (
 					<Typography
 						key={tab}
-						role="tab"
-						tabIndex={0}
-						aria-selected={activeTab === tab}
 						onClick={() => setActiveTab(tab)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								setActiveTab(tab);
-							}
-						}}
 						fontWeight="bold"
 						color={activeTab === tab ? "primary" : "text.primary"}
 						sx={{
@@ -451,13 +421,7 @@ export default function ProfileHeader({
 								backgroundColor:
 									activeTab === tab
 										? "transparent"
-										: "action.hover",
-							},
-							"&:focus-visible": {
-								outline: "2px solid",
-								outlineColor: "primary.main",
-								outlineOffset: "2px",
-								borderRadius: "4px",
+										: "#f0f2f5",
 							},
 						}}
 					>
@@ -470,7 +434,6 @@ export default function ProfileHeader({
 			<Dialog
 				open={!!viewerImage}
 				onClose={() => setViewerImage(null)}
-				aria-label="Profile image preview"
 				maxWidth="lg"
 				PaperProps={{
 					sx: {
@@ -507,8 +470,8 @@ export default function ProfileHeader({
 			</Dialog>
 
 			{/* --- QR CODE MODAL --- */}
-			<Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)} aria-labelledby="qr-modal-title">
-				<DialogTitle id="qr-modal-title" align="center" fontWeight="bold">Scan to Connect</DialogTitle>
+			<Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)}>
+				<DialogTitle align="center" fontWeight="bold">Scan to Connect</DialogTitle>
 				<DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
 					<QRCodeSVG value={window.location.href} size={200} level="H" />
 					<Typography mt={3} variant="body2" color="text.primary">

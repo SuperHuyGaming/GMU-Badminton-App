@@ -152,30 +152,15 @@ export default function Auth() {
 								<Grid size={{'xs': 12}} key={item.level}>
 									<Card 
 										onClick={() => handleSkillSelect(item.level)}
-										role="button"
-										tabIndex={0}
-										aria-pressed={formData.skillLevel === item.level}
-										aria-label={`Select skill level: ${item.level} - ${item.title}: ${item.desc}`}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter' || e.key === ' ') {
-												e.preventDefault();
-												handleSkillSelect(item.level);
-											}
-										}}
 										sx={{ 
 											cursor: 'pointer', 
 											border: formData.skillLevel === item.level ? '2px solid' : '2px solid transparent',
 											borderColor: formData.skillLevel === item.level ? 'primary.main' : 'divider',
-											bgcolor: formData.skillLevel === item.level ? 'rgba(0, 92, 46, 0.08)' : 'background.paper',
+											bgcolor: formData.skillLevel === item.level ? 'rgba(0, 102, 51, 0.05)' : 'background.paper',
 											transition: 'all 0.2s',
-											boxShadow: formData.skillLevel === item.level ? '0 4px 12px rgba(0, 92, 46, 0.15)' : 'none',
+											boxShadow: formData.skillLevel === item.level ? '0 4px 12px rgba(0, 102, 51, 0.15)' : 'none',
                                             '&:hover': {
                                                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                                            },
-                                            '&:focus-visible': {
-                                                outline: '2px solid',
-                                                outlineColor: 'primary.main',
-                                                outlineOffset: '2px'
                                             }
 										}}
 									>
@@ -219,7 +204,6 @@ export default function Auth() {
 						variant="fullWidth"
 						textColor="primary"
 						indicatorColor="primary"
-						aria-label="Authentication mode"
 					>
 						<Tab label="Login" sx={{ fontWeight: "bold", fontSize: "1rem" }} />
 						<Tab label="Sign Up" sx={{ fontWeight: "bold", fontSize: "1rem" }} />

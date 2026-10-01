@@ -40,13 +40,13 @@ const ScoreAdjuster = ({ label, score, setScore, isWinner, handleIncrement, hand
             {label} {isWinner && <TrophyIcon />}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton onClick={() => handleDecrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }} aria-label={`Decrease ${label}`}>
+            <IconButton aria-label="icon button" onClick={() => handleDecrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }} aria-label="Decrease score">
                 <RemoveIcon />
             </IconButton>
             <Typography variant="h3" fontWeight="900" sx={{ minWidth: '70px', textAlign: 'center', color: isWinner ? 'primary.main' : 'text.primary' }}>
                 {score}
             </Typography>
-            <IconButton onClick={() => handleIncrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }} aria-label={`Increase ${label}`}>
+            <IconButton aria-label="icon button" onClick={() => handleIncrement(setScore, score)} sx={{ bgcolor: 'rgba(0,0,0,0.05)', '&:hover': { bgcolor: 'rgba(0,0,0,0.1)' } }} aria-label="Increase score">
                 <AddIcon />
             </IconButton>
         </Box>
@@ -137,8 +137,8 @@ export default function ReportMatchModal({ open, onClose, opponentId }) {
     };
 
     return (
-        <Dialog open={open} onClose={onClose} aria-labelledby="report-match-dialog-title" fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 4 } }}>
-            <DialogTitle id="report-match-dialog-title" sx={{ fontWeight: '900', textAlign: 'center', pt: 4, fontSize: '1.5rem' }}>Report Match Score</DialogTitle>
+        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 4 } }}>
+            <DialogTitle sx={{ fontWeight: '900', textAlign: 'center', pt: 4, fontSize: '1.5rem' }}>Report Match Score</DialogTitle>
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, px: { xs: 2, sm: 4 } }}>
                 <Typography color="text.primary" textAlign="center" sx={{ mb: 2 }}>
                     Did you play a match against <strong>{opponent?.name || "Player"}</strong>? 

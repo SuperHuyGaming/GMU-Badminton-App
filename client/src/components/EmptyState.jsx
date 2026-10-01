@@ -52,13 +52,14 @@ export default function EmptyState({ type = "default", actionLabel, onAction }) 
 				{actionLabel && onAction && (
 					<Button
 						variant="contained"
-						color="primary"
 						onClick={onAction}
 						sx={{
 							borderRadius: 3,
 							px: 4,
 							py: 1.2,
 							fontWeight: "bold",
+							bgcolor: "#006633",
+							"&:hover": { bgcolor: "#005528" },
 						}}
 					>
 						{actionLabel}

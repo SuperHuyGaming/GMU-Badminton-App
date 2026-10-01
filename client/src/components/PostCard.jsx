@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "react-hot-toast";
 import {
 	Typography,
 	Button,
@@ -346,19 +345,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 				>
 					<Avatar
 						src={localPost.authorPic}
-						alt={localPost.authorName || "Post author"}
-						role="link"
-						tabIndex={0}
-						aria-label={`View ${localPost.authorName || "author"}'s profile`}
 						onClick={() =>
 							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 						}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								localPost.authorId && navigate(`/profile/${localPost.authorId}`);
-							}
-						}}
 						sx={{
 							bgcolor: "secondary.main",
 							color: "primary.main",
@@ -486,10 +475,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						sx={{
 							mb: 3,
 							p: 2,
-							bgcolor: "action.hover",
+							bgcolor: "#f9fafb",
 							borderRadius: 3,
-							border: "1px dashed",
-							borderColor: "divider",
+							border: "1px dashed #ccc",
 						}}
 					>
 						<TextField
@@ -579,17 +567,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						{images.length === 1 && (
 							<>
 								<Box 
-									role="button"
-									tabIndex={0}
-									aria-label="View post image in fullscreen preview"
 									onClick={() => { setActiveLightboxIndex(0); setIsLightboxOpen(true); }}
-									onKeyDown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											setActiveLightboxIndex(0);
-											setIsLightboxOpen(true);
-										}
-									}}
 									sx={{ 
 										mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 400, 
 										cursor: "pointer", position: "relative",
@@ -618,17 +596,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								{images.map((url, i) => (
 									<Box 
 										key={i}
-										role="button"
-										tabIndex={0}
-										aria-label={`View post image ${i + 1} in fullscreen preview`}
 										onClick={() => { setActiveLightboxIndex(i); setIsLightboxOpen(true); }}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter' || e.key === ' ') {
-												e.preventDefault();
-												setActiveLightboxIndex(i);
-												setIsLightboxOpen(true);
-											}
-										}}
 										sx={{ 
 											scrollSnapAlign: 'center', width: '85%', flexShrink: 0,
 											borderRadius: 3, overflow: "hidden", maxHeight: 400, cursor: "pointer", position: "relative",
@@ -653,7 +621,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 							<Dialog 
 								open={isLightboxOpen} 
 								onClose={() => setIsLightboxOpen(false)}
-								aria-label="Post image preview"
 								maxWidth="lg"
 								fullWidth
 								PaperProps={{ sx: { background: 'transparent', boxShadow: 'none' } }}
@@ -712,8 +679,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					>
 						{totalCommentsCount > 0 && (
 							<Typography
-								role="button"
-								tabIndex={0}
 								variant="body2"
 								color="text.primary"
 								sx={{
@@ -721,12 +686,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 									"&:hover": { textDecoration: "underline" },
 								}}
 								onClick={() => setIsCommentModalOpen(true)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										setIsCommentModalOpen(true);
-									}
-								}}
 							>
 								{totalCommentsCount}{" "}
 								{totalCommentsCount === 1
@@ -736,9 +695,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						)}
 						{localPost.likedBy?.length > 0 && (
 							<Box
-								role="button"
-								tabIndex={0}
-								aria-label="View users who liked this post"
 								onClick={(e) =>
 									openLikes(
 										e,
@@ -746,16 +702,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 										localPost.likedByDetails,
 									)
 								}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										openLikes(
-											e,
-											"Post Likes",
-											localPost.likedByDetails,
-										);
-									}
-								}}
 								sx={{
 									display: "flex",
 									alignItems: "center",
@@ -818,7 +764,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 									<IconButton 
 										key={emoji} 
 										aria-label={`React with ${emoji}`}
-										onClick={(e) => { e.stopPropagation(); toast('Coming Soon'); setShowReactions(false); }}
+										onClick={(e) => { e.stopPropagation(); handleLike(); setShowReactions(false); }}
 										sx={{ transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.3)' } }}
 									>
 										<Typography fontSize="1.2rem">{emoji}</Typography>
@@ -828,8 +774,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						</Collapse>
 
 						<Button
-							onClick={() => toast('Coming Soon')}
-							color="inherit"
+							onClick={handleLike}
+							disabled={isLiking}
+							color={hasLiked ? "secondary" : "inherit"}
 							sx={actionBtnStyle}
 						>
 							<Box sx={{ mr: { xs: 0.5, sm: 1 }, display: "flex", alignItems: "center" }}>
@@ -841,7 +788,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						</Button>
 					</Box>
 					<Button
-						onClick={() => toast('Coming Soon')}
+						onClick={() => setIsCommentModalOpen(true)}
 						color="inherit"
 						sx={actionBtnStyle}
 					>
@@ -863,7 +810,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					<Button
 						onClick={(e) => {
 							e.stopPropagation();
-							toast('Coming Soon');
+							const apiUrl = import.meta.env.VITE_API_URL 
+								? (import.meta.env.VITE_API_URL.startsWith("http") ? import.meta.env.VITE_API_URL : `https://${import.meta.env.VITE_API_URL}`)
+								: window.location.origin;
+							const shareUrl = `${apiUrl}/api/forum/share/${localPost._id}`;
+							navigator.clipboard.writeText(shareUrl);
+							alert("Share link copied to clipboard!");
 						}}
 						color="inherit"
 						sx={actionBtnStyle}

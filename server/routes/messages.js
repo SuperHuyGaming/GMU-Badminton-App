@@ -1,5 +1,4 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const router = express.Router();
 const Message = require("../models/Message");
 const User = require("../models/User");
@@ -11,15 +10,6 @@ const { analyzeContent } = require("../utils/aiModeration");
 router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId } = req.params;
-
-		if (!mongoose.isValidObjectId(userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		if (req.user.role !== "admin" && currentUserId !== userId) {
-			return res.status(403).json({ message: "Unauthorized to access these conversations." });
-		}
 
 		// Find all messages where user is sender or receiver
 		const messages = await Message.find({
@@ -58,18 +48,8 @@ router.get("/recent/:userId", authMiddleware, async (req, res, next) => {
 router.get("/:userId/:friendId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, friendId } = req.params;
-
-		if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(friendId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		if (req.user.role !== "admin" && currentUserId !== userId && currentUserId !== friendId) {
-			return res.status(403).json({ message: "Unauthorized to access this conversation." });
-		}
-
-		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-		const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+		const page = parseInt(req.query.page) || 1;
+		const limit = parseInt(req.query.limit) || 50;
 		const skip = (page - 1) * limit;
 		
 		// Sort by descending timestamp to get the newest messages first
@@ -122,27 +102,8 @@ const messageLimiter = rateLimit({
 
 router.post("/", authMiddleware, messageLimiter, async (req, res, next) => {
 	try {
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		const { receiverId, content } = req.body;
-		
-		if (!content || typeof content !== "string" || !content.trim()) {
-			return res.status(400).json({ message: "Message content cannot be empty." });
-		}
-		if (content.trim().length > 2000) {
-			return res.status(400).json({ message: "Message content cannot exceed 2000 characters." });
-		}
-
-		if (!receiverId || !mongoose.isValidObjectId(receiverId)) {
-			return res.status(400).json({ message: "Valid receiver ID is required." });
-		}
-
-		if (receiverId.toString() === currentUserId) {
-			return res.status(400).json({ message: "Cannot send message to yourself." });
-		}
-
-		// Strictly enforce sender is the authenticated user to prevent sender spoofing
-		const senderId = currentUserId;
-		const cleanContent = xss(content.trim());
+		const { senderId, receiverId, content } = req.body;
+		const cleanContent = xss(content);
 		
 		const mlResult = await analyzeContent(cleanContent);
 		
@@ -207,10 +168,6 @@ router.post("/", authMiddleware, messageLimiter, async (req, res, next) => {
 // POST: report message
 router.post("/report/:msgId", authMiddleware, async (req, res, next) => {
 	try {
-		if (!mongoose.isValidObjectId(req.params.msgId)) {
-			return res.status(400).json({ message: "Invalid message ID format." });
-		}
-
 		const msg = await Message.findById(req.params.msgId);
 		if (!msg) return res.status(404).json({ message: "Message not found" });
 		
@@ -228,16 +185,6 @@ router.post("/report/:msgId", authMiddleware, async (req, res, next) => {
 router.put("/read/:userId/:friendId", authMiddleware, async (req, res, next) => {
 	try {
 		const { userId, friendId } = req.params;
-
-		if (!mongoose.isValidObjectId(userId) || !mongoose.isValidObjectId(friendId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		if (req.user.role !== "admin" && currentUserId !== userId) {
-			return res.status(403).json({ message: "Unauthorized to update read status for another user." });
-		}
-
 		const result = await Message.updateMany(
 			{ sender: friendId, receiver: userId, read: false },
 			{ $set: { read: true } }

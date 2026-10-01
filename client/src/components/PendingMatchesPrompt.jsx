@@ -70,16 +70,7 @@ export default function PendingMatchesPrompt() {
                     <Alert 
                         key={match._id} 
                         severity="info" 
-                        sx={{ 
-                            mb: 1, 
-                            alignItems: { xs: 'flex-start', sm: 'center' },
-                            flexDirection: { xs: 'column', sm: 'row' },
-                            '& .MuiAlert-action': {
-                                pt: { xs: 1.5, sm: 0 },
-                                pl: { xs: 0, sm: 1 },
-                                alignSelf: { xs: 'flex-start', sm: 'center' },
-                            }
-                        }}
+                        sx={{ mb: 1, alignItems: 'center' }}
                         action={
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Button 
