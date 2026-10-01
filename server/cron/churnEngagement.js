@@ -15,10 +15,10 @@ async function runChurnEngagement() {
             lastActive: { $lt: fourteenDaysAgo }
         });
 
-        console.log(Found  inactive users.);
+        console.log(`Found ${inactiveUsers.length} inactive users.`);
 
         for (const user of inactiveUsers) {
-            console.log(Sending mock push notification to user  ()...);
+            console.log(`Sending mock push notification to user ${user._id}...`);
             // Mock push notification logic
             // e.g., webPush.sendNotification(user.pushSubscriptions[0], payload);
         }
