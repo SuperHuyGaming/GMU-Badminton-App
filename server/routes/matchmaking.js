@@ -228,9 +228,9 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                             input: "$mutualFriendsObjects",
                             as: "friend",
                             in: {
-                                _id: "$friend._id",
-                                name: "$friend.name",
-                                profilePic: "$friend.profilePic"
+                                _id: "$$friend._id",
+                                name: "$$friend.name",
+                                profilePic: "$$friend.profilePic"
                             }
                         }
                     }
@@ -331,9 +331,9 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                                 input: "$mutualFriendsObjects",
                                 as: "friend",
                                 in: {
-                                    _id: "$friend._id",
-                                    name: "$friend.name",
-                                    profilePic: "$friend.profilePic"
+                                    _id: "$$friend._id",
+                                name: "$$friend.name",
+                                profilePic: "$$friend.profilePic"
                                 }
                             }
                         }
