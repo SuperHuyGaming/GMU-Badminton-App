@@ -218,7 +218,7 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                 }
             },
 
-                $project: {
+                { $project: {
                     name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
                     profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
                     checkInLocation: 1, preferredTimeOfDay: 1, inQueue: 1, singlesElo: 1,
@@ -234,7 +234,7 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                             }
                         }
                     }
-                }
+                } }
         ]);
 
         const hydratedMatches = potentialMatches.map(player => ({
@@ -321,7 +321,7 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                 }
             },
 
-                    $project: {
+                    { $project: {
                         name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
                         profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
                         singlesElo: 1, preferredTimeOfDay: 1,
@@ -337,7 +337,7 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                                 }
                             }
                         }
-                    }
+                    } }
             ]);
 
             recommended = rawRecommended.map(player => ({
