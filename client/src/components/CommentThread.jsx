@@ -86,8 +86,17 @@ export default function CommentThread({
 			{/* REPLIES TOGGLE */}
 			{comment.replies?.length > 0 && (
 				<Typography
+					role="button"
+					tabIndex={0}
+					aria-expanded={isExpanded}
 					variant="caption"
 					onClick={() => setIsExpanded(!isExpanded)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							setIsExpanded(!isExpanded);
+						}
+					}}
 					sx={{
 						ml: 5,
 						mt: 0.5,
@@ -146,6 +155,8 @@ export default function CommentThread({
 						size="small"
 						multiline
 						maxRows={4}
+						aria-label={`Reply to ${comment.authorName}`}
+						slotProps={{ htmlInput: { 'aria-label': `Reply to ${comment.authorName}` } }}
 						placeholder={`Reply to ${comment.authorName}...`}
 						value={nestedReplyText}
 						onChange={(e) => setNestedReplyText(e.target.value)}

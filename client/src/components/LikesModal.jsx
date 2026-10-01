@@ -16,11 +16,13 @@ export default function LikesModal({ open, title, list, onClose }) {
 	const navigate = useNavigate();
 
 	return (
-		<Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+		<Dialog open={open} onClose={onClose} aria-labelledby="likes-modal-title" maxWidth="xs" fullWidth>
 			<DialogTitle
+				id="likes-modal-title"
 				sx={{
 					fontWeight: "bold",
-					borderBottom: "1px solid #eee",
+					borderBottom: "1px solid",
+					borderColor: "divider",
 					textAlign: "center",
 					py: 2,
 					position: "relative",
@@ -50,10 +52,11 @@ export default function LikesModal({ open, title, list, onClose }) {
 								onClose();
 								navigate(`/profile/${u.id}`);
 							}}
-							sx={{ py: 1.5, borderBottom: "1px solid #f5f5f5" }}
+							sx={{ py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}
 						>
 							<Avatar
 								src={u.profilePic}
+								alt={u.name || "User Avatar"}
 								sx={{
 									width: 40,
 									height: 40,
@@ -61,7 +64,7 @@ export default function LikesModal({ open, title, list, onClose }) {
 									bgcolor: "secondary.main",
 									color: "primary.main",
 								}}
-							 alt="User Avatar" >
+							>
 								{!u.profilePic &&
 									u.name?.charAt(0).toUpperCase()}
 							</Avatar>

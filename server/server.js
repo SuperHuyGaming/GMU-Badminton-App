@@ -59,9 +59,17 @@ const allowedOrigins = [
 	process.env.FRONTEND_URL
 ].filter(Boolean);
 
+const isOriginAllowed = (origin) => {
+	if (!origin) return true;
+	if (allowedOrigins.includes(origin)) return true;
+	if (/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(origin)) return true;
+	if (/^https:\/\/([a-z0-9-]+\.)?gmu-(badminton|frontend|social)(-[a-z0-9-]+)?\.onrender\.com$/.test(origin)) return true;
+	return false;
+};
+
 const corsOptions = {
 	origin: function (origin, callback) {
-		if (!origin || allowedOrigins.includes(origin) || origin.includes("gmu-badminton") || origin.includes("gmu-frontend")) {
+		if (isOriginAllowed(origin)) {
 			callback(null, true);
 		} else {
 			callback(new Error('Not allowed by CORS'));
@@ -128,6 +136,7 @@ app.use("/api/marketplace", require("./routes/marketplace"));
 app.use("/api/feed", require("./routes/feed"));
 app.use("/api/calendar", require("./routes/calendar"));
 app.use("/api/scrape", require("./routes/scrape"));
+app.use("/api/search", require("./routes/search"));
 
 // Make io accessible globally
 app.set("io", io);

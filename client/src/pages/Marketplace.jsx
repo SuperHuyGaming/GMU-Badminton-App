@@ -184,7 +184,7 @@ export default function Marketplace() {
                                     </Typography>
                                     
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 'auto', p: 1, bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 2 }}>
-                                        <Avatar src={listing.sellerId?.profilePic} sx={{ width: 24, height: 24 }}  alt="User Avatar" />
+                                        <Avatar src={listing.sellerId?.profilePic} sx={{ width: 24, height: 24 }} alt={listing.sellerId?.name || "Seller avatar"} />
                                         <Typography variant="caption" fontWeight="bold" noWrap>
                                             {listing.sellerId?.name}
                                         </Typography>
@@ -208,8 +208,8 @@ export default function Marketplace() {
             )}
 
             {/* Create Listing Modal */}
-            <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle sx={{ fontWeight: 'bold' }}>List an Item</DialogTitle>
+            <Dialog open={open} onClose={handleClose} aria-labelledby="create-listing-title" fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle id="create-listing-title" sx={{ fontWeight: 'bold' }}>List an Item</DialogTitle>
                 <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <TextField 
                         label="Item Title" 
@@ -220,10 +220,12 @@ export default function Marketplace() {
                         placeholder="e.g., Yonex Astrox 99 Pro"
                     />
                     
-                    <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
                         <FormControl fullWidth>
-                            <InputLabel>Category</InputLabel>
+                            <InputLabel id="marketplace-category-label">Category</InputLabel>
                             <Select 
+                                labelId="marketplace-category-label"
+                                id="marketplace-category-select"
                                 value={formData.category} 
                                 label="Category" 
                                 onChange={e => setFormData({...formData, category: e.target.value})}
@@ -236,8 +238,10 @@ export default function Marketplace() {
                             </Select>
                         </FormControl>
                         <FormControl fullWidth>
-                            <InputLabel>Condition</InputLabel>
+                            <InputLabel id="marketplace-condition-label">Condition</InputLabel>
                             <Select 
+                                labelId="marketplace-condition-label"
+                                id="marketplace-condition-select"
                                 value={formData.condition} 
                                 label="Condition" 
                                 onChange={e => setFormData({...formData, condition: e.target.value})}

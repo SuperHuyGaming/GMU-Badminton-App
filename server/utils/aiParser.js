@@ -39,12 +39,13 @@ const schema = {
  * @param {string} caption - The raw text from the Instagram post
  */
 async function parseInstagramPost(caption) {
-    if (!caption || caption.trim() === '') return null;
+    if (!caption || typeof caption !== "string" || caption.trim() === '') return null;
 
     try {
+        const safeCaption = caption.substring(0, 5000);
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${caption}`,
+            contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: schema,

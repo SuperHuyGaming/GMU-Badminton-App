@@ -65,7 +65,7 @@ export default function MobileNav() {
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
 		if (location.pathname === "/") setValue(0);
-		else if (location.pathname.startsWith("/forum")) setValue(1);
+		else if (location.pathname.startsWith("/community") || location.pathname.startsWith("/forum") || location.pathname.startsWith("/post/")) setValue(1);
 		else if (location.pathname.startsWith("/profile")) setValue(2);
 	}, [location.pathname]);
 
@@ -81,17 +81,19 @@ export default function MobileNav() {
 				right: 0,
 				zIndex: 1000,
 				display: { xs: "block", md: "none" }, // HIDDEN ON LAPTOPS!
-				borderTop: "1px solid #e0e0e0",
+				borderTop: "1px solid",
+				borderColor: "divider",
 				pb: "env(safe-area-inset-bottom)", // Fixes overlapping on iPhones with the home bar
 			}}
 		>
 			<BottomNavigation
 				showLabels
+				aria-label="Mobile Navigation"
 				value={value}
 				onChange={(event, newValue) => {
 					setValue(newValue);
 					if (newValue === 0) navigate("/");
-					if (newValue === 1) navigate("/forum");
+					if (newValue === 1) navigate("/community");
 					if (newValue === 2) navigate(`/profile/${currentUser.id}`);
 				}}
 				sx={{

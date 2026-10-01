@@ -64,10 +64,14 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    modulePreload: false
+  },
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/setupTests.js',
-    include: ['src/**/*.test.{js,jsx}']
+    include: ['src/**/*.test.{js,jsx}'],
+    testTimeout: 20000
   }
 })

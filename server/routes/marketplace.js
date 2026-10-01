@@ -1,14 +1,22 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const EquipmentListing = require("../models/EquipmentListing");
 const { authMiddleware } = require("../middleware/auth");
+const xss = require("xss");
+const rateLimit = require("express-rate-limit");
+
+const ALLOWED_CONDITIONS = ["New", "Like New", "Good", "Fair", "Used"];
+const ALLOWED_CATEGORIES = ["Racket", "Shoes", "Bag", "Shuttlecocks", "Other"];
 
 // GET all available listings (optionally filter by category)
 router.get("/", async (req, res, next) => {
     try {
         const query = { status: "available" };
         if (req.query.category && req.query.category !== "All") {
-            query.category = req.query.category;
+            if (ALLOWED_CATEGORIES.includes(req.query.category)) {
+                query.category = req.query.category;
+            }
         }
 
         const listings = await EquipmentListing.find(query)
@@ -25,6 +33,10 @@ router.get("/", async (req, res, next) => {
 // GET single listing
 router.get("/:id", async (req, res, next) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: "Invalid listing ID format." });
+        }
+
         const listing = await EquipmentListing.findById(req.params.id)
             .populate("sellerId", "name profilePic bio homeUniversity");
         if (!listing) return res.status(404).json({ message: "Listing not found" });
@@ -33,9 +45,6 @@ router.get("/:id", async (req, res, next) => {
         next(error);
     }
 });
-
-const xss = require("xss");
-const rateLimit = require("express-rate-limit");
 
 const listingLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -47,17 +56,51 @@ const listingLimiter = rateLimit({
 router.post("/", authMiddleware, listingLimiter, async (req, res, next) => {
     try {
         const { title, description, price, condition, category, images } = req.body;
-        
-        const cleanTitle = xss(title);
-        const cleanDescription = xss(description);
+
+        if (!title || typeof title !== "string" || !title.trim()) {
+            return res.status(400).json({ message: "Listing title is required." });
+        }
+        if (title.trim().length > 200) {
+            return res.status(400).json({ message: "Listing title cannot exceed 200 characters." });
+        }
+
+        if (!description || typeof description !== "string" || !description.trim()) {
+            return res.status(400).json({ message: "Listing description is required." });
+        }
+        if (description.trim().length > 1000) {
+            return res.status(400).json({ message: "Listing description cannot exceed 1000 characters." });
+        }
+
+        const parsedPrice = Number(price);
+        if (price === undefined || isNaN(parsedPrice) || parsedPrice < 0) {
+            return res.status(400).json({ message: "A valid non-negative price is required." });
+        }
+
+        if (!condition || !ALLOWED_CONDITIONS.includes(condition)) {
+            return res.status(400).json({
+                message: `Invalid condition. Allowed values: ${ALLOWED_CONDITIONS.join(", ")}.`
+            });
+        }
+
+        if (!category || !ALLOWED_CATEGORIES.includes(category)) {
+            return res.status(400).json({
+                message: `Invalid category. Allowed values: ${ALLOWED_CATEGORIES.join(", ")}.`
+            });
+        }
+
+        const cleanTitle = xss(title.trim());
+        const cleanDescription = xss(description.trim());
+        const validImages = Array.isArray(images)
+            ? images.filter(img => typeof img === "string" && img.startsWith("http")).slice(0, 5)
+            : [];
 
         const listing = new EquipmentListing({
             title: cleanTitle,
             description: cleanDescription,
-            price,
+            price: parsedPrice,
             condition,
             category,
-            images: images || [],
+            images: validImages,
             sellerId: req.user.id
         });
         
@@ -79,22 +122,73 @@ router.post("/", authMiddleware, listingLimiter, async (req, res, next) => {
 // PUT update a listing (or mark as sold)
 router.put("/:id", authMiddleware, async (req, res, next) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: "Invalid listing ID format." });
+        }
+
         const listing = await EquipmentListing.findById(req.params.id);
         if (!listing) return res.status(404).json({ message: "Listing not found" });
 
         // Ensure user is the seller (or an admin)
-        if (listing.sellerId.toString() !== req.user.id && req.user.role !== "admin") {
+        const currentUserId = (req.user.id || req.user.userId).toString();
+        if (listing.sellerId.toString() !== currentUserId && req.user.role !== "admin") {
             return res.status(403).json({ message: "Not authorized to update this listing" });
         }
 
         const { title, description, price, condition, category, status } = req.body;
         
-        if (title) listing.title = xss(title);
-        if (description) listing.description = xss(description);
-        if (price !== undefined) listing.price = price;
-        if (condition) listing.condition = condition;
-        if (category) listing.category = category;
-        if (status) listing.status = status;
+        if (title !== undefined) {
+            if (typeof title !== "string" || !title.trim()) {
+                return res.status(400).json({ message: "Listing title cannot be empty." });
+            }
+            if (title.trim().length > 200) {
+                return res.status(400).json({ message: "Listing title cannot exceed 200 characters." });
+            }
+            listing.title = xss(title.trim());
+        }
+
+        if (description !== undefined) {
+            if (typeof description !== "string" || !description.trim()) {
+                return res.status(400).json({ message: "Listing description cannot be empty." });
+            }
+            if (description.trim().length > 1000) {
+                return res.status(400).json({ message: "Listing description cannot exceed 1000 characters." });
+            }
+            listing.description = xss(description.trim());
+        }
+
+        if (price !== undefined) {
+            const parsedPrice = Number(price);
+            if (isNaN(parsedPrice) || parsedPrice < 0) {
+                return res.status(400).json({ message: "Price must be a non-negative number." });
+            }
+            listing.price = parsedPrice;
+        }
+
+        if (condition !== undefined) {
+            if (!ALLOWED_CONDITIONS.includes(condition)) {
+                return res.status(400).json({
+                    message: `Invalid condition. Allowed values: ${ALLOWED_CONDITIONS.join(", ")}.`
+                });
+            }
+            listing.condition = condition;
+        }
+
+        if (category !== undefined) {
+            if (!ALLOWED_CATEGORIES.includes(category)) {
+                return res.status(400).json({
+                    message: `Invalid category. Allowed values: ${ALLOWED_CATEGORIES.join(", ")}.`
+                });
+            }
+            listing.category = category;
+        }
+
+        if (status !== undefined) {
+            if (status !== "available" && status !== "sold") {
+                return res.status(400).json({ message: "Status must be either 'available' or 'sold'." });
+            }
+            listing.status = status;
+        }
 
         await listing.save();
         res.json(listing);
@@ -106,10 +200,15 @@ router.put("/:id", authMiddleware, async (req, res, next) => {
 // DELETE a listing
 router.delete("/:id", authMiddleware, async (req, res, next) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: "Invalid listing ID format." });
+        }
+
         const listing = await EquipmentListing.findById(req.params.id);
         if (!listing) return res.status(404).json({ message: "Listing not found" });
 
-        if (listing.sellerId.toString() !== req.user.id && req.user.role !== "admin") {
+        const currentUserId = (req.user.id || req.user.userId).toString();
+        if (listing.sellerId.toString() !== currentUserId && req.user.role !== "admin") {
             return res.status(403).json({ message: "Not authorized to delete this listing" });
         }
 

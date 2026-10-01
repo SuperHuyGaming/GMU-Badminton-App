@@ -181,8 +181,9 @@ export default function Admin() {
 								p: 3,
 								mb: 2,
 								borderRadius: 3,
-								border: "2px solid #ffcccc",
-								backgroundColor: "#fff5f5",
+								border: "2px solid",
+								borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.5)" : "#ffcccc",
+								backgroundColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.08)" : "#fff5f5",
 							}}
 						>
 							<Box
@@ -230,7 +231,8 @@ export default function Admin() {
 									p: 2,
 									backgroundColor: "background.paper",
 									borderRadius: 2,
-									border: "1px dashed #ffcccc",
+									border: "1px dashed",
+									borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.4)" : "#ffcccc",
 								}}
 							>
 								{post.content}
@@ -302,8 +304,9 @@ export default function Admin() {
 								p: 3,
 								mb: 2,
 								borderRadius: 3,
-								border: "2px solid #ff9999",
-								backgroundColor: "#fff0f0",
+								border: "2px solid",
+								borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.5)" : "#ff9999",
+								backgroundColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.08)" : "#fff0f0",
 							}}
 						>
 							<Box
@@ -336,7 +339,8 @@ export default function Admin() {
 									p: 2,
 									backgroundColor: "background.paper",
 									borderRadius: 2,
-									border: "1px dashed #ff9999",
+									border: "1px dashed",
+									borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 83, 80, 0.4)" : "#ff9999",
 								}}
 							>
 								{msg.content}
@@ -388,11 +392,11 @@ export default function Admin() {
 				<Table stickyHeader sx={{ minWidth: 600 }}>
 					<TableHead>
 						<TableRow>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Date</TableCell>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Sender</TableCell>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Receiver</TableCell>
-							<TableCell sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Message</TableCell>
-							<TableCell align="right" sx={{ fontWeight: "bold", backgroundColor: "#f4f6f8" }}>Actions</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Date</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Sender</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Receiver</TableCell>
+							<TableCell sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Message</TableCell>
+							<TableCell align="right" sx={{ fontWeight: "bold", bgcolor: "background.default" }}>Actions</TableCell>
 						</TableRow>
 					</TableHead>
 					<TableBody>
@@ -449,7 +453,7 @@ export default function Admin() {
 				}}
 			>
 				<Table sx={{ minWidth: 500 }}>
-					<TableHead sx={{ backgroundColor: "#f4f6f8" }}>
+					<TableHead sx={{ bgcolor: "background.default" }}>
 						<TableRow>
 							<TableCell
 								sx={{
@@ -553,7 +557,7 @@ export default function Admin() {
 				}}
 			>
 				<Table sx={{ minWidth: 600 }}>
-					<TableHead sx={{ backgroundColor: "#f4f6f8" }}>
+					<TableHead sx={{ bgcolor: "background.default" }}>
 						<TableRow>
 							<TableCell
 								sx={{
@@ -640,9 +644,12 @@ export default function Admin() {
 				onClose={() =>
 					setDeleteConfirm({ open: false, type: "", id: null })
 				}
+				aria-labelledby="admin-delete-title"
+				aria-describedby="admin-delete-desc"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 			>
 				<DialogTitle
+					id="admin-delete-title"
 					sx={{
 						fontWeight: "bold",
 						display: "flex",
@@ -654,7 +661,7 @@ export default function Admin() {
 					<TrashIcon /> Confirm Deletion
 				</DialogTitle>
 				<DialogContent>
-					<Typography>
+					<Typography id="admin-delete-desc">
 						Are you sure you want to permanently delete this{" "}
 						{deleteConfirm.type === "user"
 							? "user"

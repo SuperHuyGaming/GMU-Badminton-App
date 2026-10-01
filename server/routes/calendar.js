@@ -1,13 +1,25 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const ics = require("ics");
 const User = require("../models/User");
 const Tournament = require("../models/Tournament");
+const rateLimit = require("express-rate-limit");
+
+const calendarLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    message: "Too many calendar requests, please try again later."
+});
 
 // GET /api/calendar/feed/:userId.ics
-router.get("/feed/:userId.ics", async (req, res, next) => {
+router.get("/feed/:userId.ics", calendarLimiter, async (req, res, next) => {
     try {
         const { userId } = req.params;
+
+        if (!mongoose.isValidObjectId(userId)) {
+            return res.status(400).send("Invalid user ID format.");
+        }
         
         // 1. Fetch user to verify and get RSVP'd tournaments
         const user = await User.findById(userId);
@@ -83,7 +95,7 @@ router.get("/feed/:userId.ics", async (req, res, next) => {
             
             // 5. Send as text/calendar for Apple Calendar / Google Calendar
             res.set("Content-Type", "text/calendar; charset=utf-8");
-            res.set("Content-Disposition", `attachment; filename="mason-badminton-${userId}.ics"`);
+            res.set("Content-Disposition", `attachment; filename="mason-badminton-${encodeURIComponent(userId)}.ics"`);
             res.send(value);
         });
 

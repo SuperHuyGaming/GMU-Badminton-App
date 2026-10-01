@@ -1,0 +1,259 @@
+const fs = require('fs');
+const path = require('path');
+
+const filePath = path.join(__dirname, 'server', 'routes', 'matchmaking.js');
+let code = fs.readFileSync(filePath, 'utf8');
+
+const regex = /\/\/ GET: \/api\/matchmaking\/discover[\s\S]*?res\.status\(500\)\.json\(\{ message: "Server error during player discovery" \};\n    \}\n\}\);/g;
+
+const newCode = `// GET: /api/matchmaking/discover
+// Discover players and search for users
+router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
+    try {
+        const mongoose = require("mongoose");
+        const search = req.query.search ? String(req.query.search) : undefined;
+        const skill = req.query.skill ? String(req.query.skill) : undefined;
+        const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
+        const campus = req.query.campus ? String(req.query.campus) : undefined;
+        const time = req.query.time ? String(req.query.time) : undefined;
+        
+        const escapeRegex = (string) => {
+            if (typeof string !== "string") return "";
+            return string.trim().slice(0, 100).replace(/[.*+?^\\$\\{}()|[\\]\\\\]/g, "\\\\$&");
+        };
+        
+        const currentUser = await User.findById(req.user.userId).lean();
+        
+        // Collect all IDs that must be excluded from discovery
+        const excludedIds = [toIdString(req.user.userId)].filter(Boolean);
+        
+        // Only exclude friends/pending if we are NOT actively searching.
+        // If we are searching, we want a universal directory search (including friends).
+        if (!search && currentUser) {
+            if (Array.isArray(currentUser.friends)) {
+                currentUser.friends.forEach(f => {
+                    const idStr = toIdString(f);
+                    if (idStr) excludedIds.push(idStr);
+                });
+            }
+            if (Array.isArray(currentUser.friendRequests)) {
+                currentUser.friendRequests.forEach(f => {
+                    const idStr = toIdString(f);
+                    if (idStr) excludedIds.push(idStr);
+                });
+            }
+            if (Array.isArray(currentUser.sentFriendRequests)) {
+                currentUser.sentFriendRequests.forEach(f => {
+                    const idStr = toIdString(f);
+                    if (idStr) excludedIds.push(idStr);
+                });
+            }
+        }
+
+        const excludedObjectIds = excludedIds.map(id => {
+            try { return new mongoose.Types.ObjectId(id); } catch(e) { return null; }
+        }).filter(Boolean);
+
+        const currentUserFriendsIds = currentUser && Array.isArray(currentUser.friends) 
+            ? currentUser.friends.map(id => {
+                try { return new mongoose.Types.ObjectId(id); } catch(e) { return null; }
+            }).filter(Boolean)
+            : [];
+
+        // Helper to determine friendship status ("none", "pending", "friends")
+        const getFriendshipStatus = (targetId) => {
+            if (!currentUser || !targetId) return "none";
+            const targetStr = toIdString(targetId);
+            if (!targetStr) return "none";
+            if (currentUser.friends?.some(id => toIdString(id) === targetStr)) return "friends";
+            if (currentUser.sentFriendRequests?.some(id => toIdString(id) === targetStr)) return "pending";
+            if (currentUser.friendRequests?.some(id => toIdString(id) === targetStr)) return "pending";
+            return "none";
+        };
+
+        // Build base query (exclude self, existing friends, and pending requests, and users who hide from search)
+        const query = {
+            _id: { $nin: excludedObjectIds },
+            hideFromSearch: { $ne: true }
+        };
+
+        // Add skill filter
+        if (skill && typeof skill === 'string' && skill.trim() !== 'All') {
+            const cleanSkill = skill.trim().slice(0, 50);
+            const mapSkill = (filterValue) => {
+                switch (filterValue) {
+                    case 'Beginner': return ['D Level', 'E Level', 'Beginner'];
+                    case 'Intermediate': return ['C Level', 'Intermediate'];
+                    case 'Advanced': return ['A Level', 'B Level', 'Advanced'];
+                    default: return [filterValue];
+                }
+            };
+            query.skillLevel = { $in: mapSkill(cleanSkill) };
+        }
+
+        // Add search filtering if provided
+        if (search) {
+            const sanitizedSearch = escapeRegex(search);
+            if (sanitizedSearch) {
+                query.$or = [
+                    { name: { $regex: sanitizedSearch, $options: "i" } },
+                    { homeUniversity: { $regex: sanitizedSearch, $options: "i" } }
+                ];
+            }
+        }
+
+        // Cursor-Based Pagination
+        if (cursor) {
+            try {
+                query._id = { $nin: excludedObjectIds, $lt: new mongoose.Types.ObjectId(cursor) };
+            } catch(e) {}
+        }
+
+        // Geospatial Court Check-in Search
+        if (campus && campus !== "All") {
+            query.checkInLocation = campus;
+        }
+
+        // Recommendation Engine V2 (time of day)
+        if (time && time !== "All") {
+            if (query.$or) {
+                query.$and = [
+                    { $or: query.$or },
+                    { $or: [{ preferredTimeOfDay: time }, { preferredTimeOfDay: "Any" }] }
+                ];
+                delete query.$or;
+            } else {
+                query.$or = [{ preferredTimeOfDay: time }, { preferredTimeOfDay: "Any" }];
+            }
+        }
+
+        // Fetch up to 50 users via Aggregation
+        const potentialMatches = await User.aggregate([
+            { $match: query },
+            { $sort: { _id: -1 } },
+            { $limit: 50 },
+            {
+                $addFields: {
+                    mutualFriendsRaw: {
+                        $setIntersection: [
+                            { $ifNull: ["$friends", []] },
+                            currentUserFriendsIds
+                        ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    mutualFriendsCount: { $size: { $ifNull: ["$mutualFriendsRaw", []] } },
+                    mutualFriendsSample: { $slice: [{ $ifNull: ["$mutualFriendsRaw", []] }, 2] }
+                }
+            },
+            {
+                $project: {
+                    name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
+                    profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
+                    checkInLocation: 1, preferredTimeOfDay: 1, inQueue: 1, singlesElo: 1,
+                    mutualFriendsCount: 1, mutualFriendsSample: 1
+                }
+            }
+        ]);
+
+        const hydratedMatches = potentialMatches.map(player => ({
+            ...player,
+            friendshipStatus: getFriendshipStatus(player?._id || player)
+        }));
+
+        // Fetch "People You May Know" using Recommendation Engine V2
+        let recommended = [];
+        if (currentUser) {
+            const userElo = currentUser.singlesElo || 1200;
+            const userTime = currentUser.preferredTimeOfDay;
+            const userUni = currentUser.homeUniversity;
+
+            const timeScoreExpr = userTime ? {
+                $cond: [{ $eq: ["$preferredTimeOfDay", userTime] }, 3, 0]
+            } : 0;
+
+            const uniScoreExpr = userUni ? {
+                $cond: [{ $eq: ["$homeUniversity", userUni] }, 2, 0]
+            } : 0;
+
+            const rawRecommended = await User.aggregate([
+                {
+                    $match: {
+                        _id: { $nin: excludedObjectIds },
+                        hideFromSearch: { $ne: true }
+                    }
+                },
+                {
+                    $addFields: {
+                        eloDiff: { $abs: { $subtract: [{ $ifNull: ["$singlesElo", 1200] }, userElo] } },
+                        timeScore: timeScoreExpr,
+                        uniScore: uniScoreExpr
+                    }
+                },
+                {
+                    $addFields: {
+                        eloScore: {
+                            $cond: [
+                                { $lte: ["$eloDiff", 100] },
+                                2,
+                                {
+                                    $cond: [
+                                        { $lte: ["$eloDiff", 300] },
+                                        1,
+                                        0
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        totalScore: { $add: ["$timeScore", "$uniScore", "$eloScore"] },
+                        mutualFriendsRaw: {
+                            $setIntersection: [
+                                { $ifNull: ["$friends", []] },
+                                currentUserFriendsIds
+                            ]
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        mutualFriendsCount: { $size: { $ifNull: ["$mutualFriendsRaw", []] } },
+                        mutualFriendsSample: { $slice: [{ $ifNull: ["$mutualFriendsRaw", []] }, 2] }
+                    }
+                },
+                {
+                    $sort: { totalScore: -1, _id: -1 }
+                },
+                {
+                    $limit: 4
+                },
+                {
+                    $project: {
+                        name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
+                        profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
+                        singlesElo: 1, preferredTimeOfDay: 1,
+                        mutualFriendsCount: 1, mutualFriendsSample: 1
+                    }
+                }
+            ]);
+
+            recommended = rawRecommended.map(player => ({
+                ...player,
+                friendshipStatus: getFriendshipStatus(player?._id || player)
+            }));
+        }
+
+        res.json({ matches: hydratedMatches, recommended });
+    } catch (err) {
+        console.error("Discovery error:", err);
+        res.status(500).json({ message: "Server error during player discovery" });
+    }
+});`;
+
+code = code.replace(regex, newCode);
+fs.writeFileSync(filePath, code);

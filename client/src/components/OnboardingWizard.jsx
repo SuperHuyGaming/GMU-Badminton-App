@@ -181,7 +181,7 @@ export default function OnboardingWizard({ onComplete }) {
 								height: 80,
 								mx: "auto",
 								mb: 2,
-								bgcolor: "#006633",
+								bgcolor: "primary.main",
 								fontSize: "2rem",
 							}}
 						>
@@ -230,7 +230,7 @@ export default function OnboardingWizard({ onComplete }) {
 				{/* Green header bar */}
 				<Box
 					sx={{
-						bgcolor: "#006633",
+						bgcolor: (theme) => theme.palette.mode === "dark" ? "#003319" : "#005c2e",
 						py: 2,
 						px: 3,
 					}}
@@ -240,10 +240,10 @@ export default function OnboardingWizard({ onComplete }) {
 							<Step key={label}>
 								<StepLabel
 									sx={{
-										"& .MuiStepLabel-label": { color: "rgba(255,255,255,0.7)", fontWeight: "bold", fontSize: "0.75rem" },
-										"& .MuiStepLabel-label.Mui-active": { color: "#fff" },
+										"& .MuiStepLabel-label": { color: "rgba(255,255,255,0.85)", fontWeight: "bold", fontSize: "0.75rem" },
+										"& .MuiStepLabel-label.Mui-active": { color: "#ffffff" },
 										"& .MuiStepLabel-label.Mui-completed": { color: "#FFCC33" },
-										"& .MuiStepIcon-root": { color: "rgba(255,255,255,0.3)" },
+										"& .MuiStepIcon-root": { color: "rgba(255,255,255,0.4)" },
 										"& .MuiStepIcon-root.Mui-active": { color: "#FFCC33" },
 										"& .MuiStepIcon-root.Mui-completed": { color: "#FFCC33" },
 									}}
@@ -294,8 +294,8 @@ export default function OnboardingWizard({ onComplete }) {
 							onClick={handleNext}
 							disabled={activeStep === 1 && !formData.name.trim()}
 							sx={{
-								bgcolor: "#006633",
-								"&:hover": { bgcolor: "#005528" },
+								bgcolor: "primary.main",
+								"&:hover": { bgcolor: "primary.dark" },
 								borderRadius: 3,
 								px: 4,
 							}}
@@ -308,8 +308,8 @@ export default function OnboardingWizard({ onComplete }) {
 							onClick={handleFinish}
 							disabled={saving}
 							sx={{
-								bgcolor: "#006633",
-								"&:hover": { bgcolor: "#005528" },
+								bgcolor: "primary.main",
+								"&:hover": { bgcolor: "primary.dark" },
 								borderRadius: 3,
 								px: 4,
 							}}

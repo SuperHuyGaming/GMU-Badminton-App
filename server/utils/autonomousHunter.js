@@ -19,6 +19,21 @@ function isDuplicateTournament(newName, existingTournaments) {
     return false;
 }
 
+// SSRF prevention: ensure URLs do not target internal networks or cloud metadata
+function isSafeExternalUrl(urlString) {
+    if (!urlString || typeof urlString !== 'string') return false;
+    try {
+        const u = new URL(urlString);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+        const host = u.hostname.toLowerCase();
+        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '169.254.169.254') return false;
+        if (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 async function processDiscoveryQueue() {
     console.log("🧠 [Hunter] Starting AI Evaluation of Discovery Queue...");
     
@@ -36,8 +51,8 @@ async function processDiscoveryQueue() {
             console.log(`[Hunter] Fetching URL: ${item.sourceUrl}`);
             let rawText = item.rawSnippet;
             
-            // Only try to scrape if it's not facebook (which blocks axios)
-            if (item.sourceType !== 'FACEBOOK') {
+            // Only try to scrape if safe external URL and not facebook (which blocks axios)
+            if (item.sourceType !== 'FACEBOOK' && isSafeExternalUrl(item.sourceUrl)) {
                 try {
                     const { data } = await axios.get(item.sourceUrl, { timeout: 5000 });
                     const $ = cheerio.load(data);

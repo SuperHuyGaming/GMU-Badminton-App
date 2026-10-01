@@ -9,6 +9,7 @@ const MapPinIcon = ({ width = 24, height = 24, color = "#006633", className = ""
         fill="none" 
         xmlns="http://www.w3.org/2000/svg"
         className={className}
+        aria-hidden="true"
         style={{ filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.2))' }}
     >
         {/* Teardrop Pin Shape */}

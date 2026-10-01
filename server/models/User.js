@@ -30,6 +30,7 @@ const userSchema = new mongoose.Schema({
 	// Preferences
 	homeUniversity: { type: String, default: "George Mason University" },
 	searchRadius: { type: Number, default: 50 },
+	hideFromSearch: { type: Boolean, default: false },
 
 	// Geospatial Location (Task 4: Geolocation Proximity API)
 	location: {
@@ -56,6 +57,11 @@ const userSchema = new mongoose.Schema({
 	friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 	friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 	sentFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+	friendsListVisibility: {
+		type: String,
+		enum: ['Public', 'Friends Only', 'Only Me'],
+		default: 'Public',
+	},
 
 	// Elo Ranking System
 	singlesElo: { type: Number, default: 1200 },
@@ -70,6 +76,12 @@ const userSchema = new mongoose.Schema({
 	// Calendar / RSVPs
 	rsvpedTournaments: [{ type: String }], // Array of Tournament IDs
 
+	// Matchmaking Masterplan Tasks
+	checkInLocation: { type: String, enum: ["RAC", "Skyline", "AFC", "None"], default: "None" },
+	inQueue: { type: Boolean, default: false },
+	queueJoinedAt: { type: Date },
+	preferredTimeOfDay: { type: String, enum: ["Morning", "Afternoon", "Evening", "Any"], default: "Any" },
+
 	lastActive: { type: Date, default: Date.now },
 	createdAt: { type: Date, default: Date.now },
 });
@@ -80,5 +92,33 @@ userSchema.index({ location: "2dsphere" });
 userSchema.index({ name: 1 });
 userSchema.index({ homeUniversity: 1, lastActive: -1 });
 userSchema.index({ skillLevel: 1, lastActive: -1 });
+
+const { publishEvent } = require("../utils/kafkaProducer");
+
+const sanitizeUserForEvent = (doc) => {
+	if (!doc) return null;
+	const userObj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
+	delete userObj.password;
+	delete userObj.email;
+	delete userObj.pushSubscriptions;
+	return userObj;
+};
+
+userSchema.post("save", async function (doc) {
+	try {
+		await publishEvent("user-events", { type: "user.updated", payload: sanitizeUserForEvent(doc) });
+	} catch (error) {
+		console.error("Kafka publish error (User save):", error);
+	}
+});
+
+userSchema.post("findOneAndDelete", async function (doc) {
+	if (!doc) return;
+	try {
+		await publishEvent("user-events", { type: "user.deleted", payload: sanitizeUserForEvent(doc) });
+	} catch (error) {
+		console.error("Kafka publish error (User delete):", error);
+	}
+});
 
 module.exports = mongoose.model("User", userSchema);
