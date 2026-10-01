@@ -11,7 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
 import { getOptimizedAvatar } from "../utils/image";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useLocation } from "react-router-dom";
 
 const formatTime = (dateString) => {
 	if (!dateString) return "";
@@ -47,6 +47,7 @@ const formatShortTime = (dateString) => {
 
 const Messages = () => {
 	const { user } = useAuth();
+	const location = useLocation();
 	const [recentChats, setRecentChats] = useState([]);
 	const [activeChat, setActiveChat] = useState(() => {
 		const saved = localStorage.getItem("activeChat");
@@ -68,6 +69,30 @@ const Messages = () => {
 	const typingTimeoutRef = useRef(null);
 	const messagesEndRef = useRef(null);
 	const activeChatRef = useRef(null);
+
+	
+	useEffect(() => {
+		if (location.state?.targetUserId && user) {
+			const targetId = location.state.targetUserId;
+			// check if already in recentChats
+			const existingChat = recentChats.find(c => c.friend._id === targetId);
+			if (existingChat) {
+				startNewChat(existingChat.friend);
+			} else {
+				// fetch user basic info to start chat
+				apiFetch('/api/users/profile/' + targetId)
+					.then(res => res.json())
+					.then(data => {
+						if (data && data._id) {
+							startNewChat(data);
+						}
+					})
+					.catch(err => console.error("Error fetching target user", err));
+			}
+			// clear state so it doesn't loop
+			window.history.replaceState({}, document.title);
+		}
+	}, [location.state, user, recentChats]);
 
 	useEffect(() => {
 		activeChatRef.current = activeChat;
@@ -394,6 +419,26 @@ const Messages = () => {
 
 	return (
 		<>
+									{!hasMore && (
+										<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, mb: 6 }}>
+											<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 2 }} />
+											<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{activeChat.name}</Typography>
+											<Typography variant="body2" color="text.primary">
+												{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
+											</Typography>
+											{activeChat.checkInLocation && (
+												<Typography variant="body2" color="text.secondary">
+													Usually plays at {activeChat.checkInLocation}
+												</Typography>
+											)}
+											{activeChat.homeUniversity && (
+												<Typography variant="body2" color="text.secondary">
+													Studied at {activeChat.homeUniversity}
+												</Typography>
+											)}
+										</Box>
+									)}
+
 		<Container 
 			disableGutters 
 			maxWidth="lg" 
@@ -665,13 +710,29 @@ const Messages = () => {
 								<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
 									<CircularProgress color="primary" />
 								</Box>
+							
 							) : messages.length === 0 ? (
 								<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.primary', gap: 2 }}>
-									<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-									<Typography>Say hi to {activeChat.name}!</Typography>
+									<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 1 }} />
+									<Typography variant="h5" fontWeight="bold">{activeChat.name}</Typography>
+									<Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
+										{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
+									</Typography>
+									{activeChat.checkInLocation && (
+										<Typography variant="body2" color="text.secondary">
+											Usually plays at {activeChat.checkInLocation}
+										</Typography>
+									)}
+									{activeChat.homeUniversity && (
+										<Typography variant="body2" color="text.secondary">
+											Studied at {activeChat.homeUniversity}
+										</Typography>
+									)}
+									<Typography sx={{ mt: 2, color: 'text.secondary' }}>Say hi to {activeChat.name}!</Typography>
 								</Box>
 							) : (
 								<>
+
 									{hasMore && (
 										<Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
 											<Button 

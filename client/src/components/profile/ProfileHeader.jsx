@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { getOptimizedAvatar, getOptimizedCover } from "../../utils/image";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -73,6 +74,7 @@ const CloseIcon = () => (
 
 export default function ProfileHeader({
 	profileData,
+	profileData,
 	isOwnProfile,
 	displayProfilePic,
 	displayCoverPic,
@@ -83,6 +85,7 @@ export default function ProfileHeader({
 	setFriendStatus,
 	isOnline
 }) {
+	const navigate = useNavigate();
 	const [avatarMenuAnchor, setAvatarMenuAnchor] = useState(null);
 	const [viewerImage, setViewerImage] = useState(null);
 	const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -407,7 +410,7 @@ export default function ProfileHeader({
 								<Button
 									variant="contained"
 									sx={{ bgcolor: 'action.hover', color: 'text.primary', fontWeight: "bold", borderRadius: 2, textTransform: "none", "&:hover": { bgcolor: 'action.selected' } }}
-									onClick={() => window.location.href = '/messages'}
+									onClick={() => navigate('/messages', { state: { targetUserId: profileData._id } })}
 								>
 									Message
 								</Button>
