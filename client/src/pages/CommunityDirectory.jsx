@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Backdrop } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Paper } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -32,7 +32,6 @@ export default function CommunityDirectory() {
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
     const [skillFilter, setSkillFilter] = useState('All');
-    // eslint-disable-next-line no-unused-vars
     const [recentSearches, setRecentSearches] = useState(() => {
         const saved = localStorage.getItem('matchmaking_recent_searches');
         if (saved) {
@@ -127,7 +126,6 @@ export default function CommunityDirectory() {
         });
     };
 
-    // eslint-disable-next-line no-unused-vars
     const removeRecentSearch = (e, queryToRemove) => {
         e.stopPropagation();
         setRecentSearches(prev => {
@@ -411,16 +409,6 @@ export default function CommunityDirectory() {
             <ClickAwayListener onClickAway={() => setIsFocused(false)}>
                 <Box ref={searchContainerRef} sx={{ position: 'relative', mb: 3, zIndex: 10 }}>
                     {/* UX UI Tweak #1: The "Spotlight" Effect */}
-                    <Backdrop
-                        open={isFocused}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setIsFocused(false);
-                            searchInputRef.current?.blur();
-                        }}
-                        sx={{ color: '#fff', zIndex: -1, backdropFilter: 'blur(3px)', bgcolor: 'rgba(0,0,0,0.4)', transition: 'all 0.3s', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
-                    />
-                    
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <TextField
                             fullWidth
@@ -510,6 +498,36 @@ export default function CommunityDirectory() {
                             <TuneIcon />
                         </IconButton>
                     </Box>
+                        {isFocused && !searchQuery && recentSearches.length > 0 && (
+                            <Paper elevation={8} sx={{ position: 'absolute', top: '100%', left: 0, right: 0, mt: 1, borderRadius: 3, overflow: 'hidden', zIndex: 20 }}>
+                                <Typography variant="subtitle2" sx={{ px: 3, py: 2, color: 'text.secondary', fontWeight: 'bold' }}>
+                                    Recent Searches
+                                </Typography>
+                                {recentSearches.map((term, index) => (
+                                    <MenuItem 
+                                        key={index}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setSearchQuery(term);
+                                            handleSearchSubmit(term);
+                                            setIsFocused(false);
+                                            searchInputRef.current?.blur();
+                                        }}
+                                        sx={{ px: 3, py: 1.5, display: 'flex', justifyContent: 'space-between' }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <SearchIcon color="action" fontSize="small" />
+                                            <Typography fontWeight="500">{term}</Typography>
+                                        </Box>
+                                        <IconButton size="small" onClick={(e) => removeRecentSearch(e, term)}>
+                                            <CloseIcon fontSize="small" />
+                                        </IconButton>
+                                    </MenuItem>
+                                ))}
+                            </Paper>
+                        )}
+
                 </Box>
             </ClickAwayListener>
 
