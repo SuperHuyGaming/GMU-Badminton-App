@@ -70,6 +70,7 @@ router.post("/queue/leave", authMiddleware, async (req, res) => {
 // Discover players and search for users
 router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
     try {
+        const mongoose = require("mongoose");
         const search = req.query.search ? String(req.query.search) : undefined;
         const skill = req.query.skill ? String(req.query.skill) : undefined;
         const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
@@ -109,6 +110,16 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
             }
         }
 
+        const excludedObjectIds = excludedIds.map(id => {
+            try { return new mongoose.Types.ObjectId(id); } catch(e) { return null; }
+        }).filter(Boolean);
+
+        const currentUserFriendsIds = currentUser && Array.isArray(currentUser.friends) 
+            ? currentUser.friends.map(id => {
+                try { return new mongoose.Types.ObjectId(id); } catch(e) { return null; }
+            }).filter(Boolean)
+            : [];
+
         // Helper to determine friendship status ("none", "pending", "friends")
         const getFriendshipStatus = (targetId) => {
             if (!currentUser || !targetId) return "none";
@@ -122,7 +133,7 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
 
         // Build base query (exclude self, existing friends, and pending requests, and users who hide from search)
         const query = {
-            _id: { $nin: excludedIds },
+            _id: { $nin: excludedObjectIds },
             hideFromSearch: { $ne: true }
         };
 
@@ -137,8 +148,7 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                     default: return [filterValue];
                 }
             };
-            const allowedSkillLevels = mapSkill(cleanSkill);
-            query.skillLevel = { $in: allowedSkillLevels };
+            query.skillLevel = { $in: mapSkill(cleanSkill) };
         }
 
         // Add search filtering if provided
@@ -154,7 +164,9 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
 
         // Cursor-Based Pagination
         if (cursor) {
-            query._id = { $nin: excludedIds, $lt: cursor };
+            try {
+                query._id = { $nin: excludedObjectIds, $lt: new mongoose.Types.ObjectId(cursor) };
+            } catch(e) {}
         }
 
         // Geospatial Court Check-in Search
@@ -175,12 +187,36 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
             }
         }
 
-        // Fetch up to 50 users
-        const potentialMatches = await User.find(query)
-            .select("name bio skillLevel preferredPlay racket profilePic homeUniversity lastActive location checkInLocation preferredTimeOfDay inQueue singlesElo")
-            .sort({ _id: -1 })
-            .limit(50)
-            .lean();
+        // Fetch up to 50 users via Aggregation
+        const potentialMatches = await User.aggregate([
+            { $match: query },
+            { $sort: { _id: -1 } },
+            { $limit: 50 },
+            {
+                $addFields: {
+                    mutualFriendsRaw: {
+                        $setIntersection: [
+                            { $ifNull: ["$friends", []] },
+                            currentUserFriendsIds
+                        ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    mutualFriendsCount: { $size: { $ifNull: ["$mutualFriendsRaw", []] } },
+                    mutualFriendsSample: { $slice: [{ $ifNull: ["$mutualFriendsRaw", []] }, 2] }
+                }
+            },
+            {
+                $project: {
+                    name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
+                    profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
+                    checkInLocation: 1, preferredTimeOfDay: 1, inQueue: 1, singlesElo: 1,
+                    mutualFriendsCount: 1, mutualFriendsSample: 1
+                }
+            }
+        ]);
 
         const hydratedMatches = potentialMatches.map(player => ({
             ...player,
@@ -190,11 +226,6 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
         // Fetch "People You May Know" using Recommendation Engine V2
         let recommended = [];
         if (currentUser) {
-            const mongoose = require("mongoose");
-            const excludedObjectIds = excludedIds.map(id => {
-                try { return new mongoose.Types.ObjectId(id); } catch(e) { return null; }
-            }).filter(Boolean);
-
             const userElo = currentUser.singlesElo || 1200;
             const userTime = currentUser.preferredTimeOfDay;
             const userUni = currentUser.homeUniversity;
@@ -240,7 +271,19 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                 },
                 {
                     $addFields: {
-                        totalScore: { $add: ["$timeScore", "$uniScore", "$eloScore"] }
+                        totalScore: { $add: ["$timeScore", "$uniScore", "$eloScore"] },
+                        mutualFriendsRaw: {
+                            $setIntersection: [
+                                { $ifNull: ["$friends", []] },
+                                currentUserFriendsIds
+                            ]
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        mutualFriendsCount: { $size: { $ifNull: ["$mutualFriendsRaw", []] } },
+                        mutualFriendsSample: { $slice: [{ $ifNull: ["$mutualFriendsRaw", []] }, 2] }
                     }
                 },
                 {
@@ -253,7 +296,8 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
                     $project: {
                         name: 1, bio: 1, skillLevel: 1, preferredPlay: 1, racket: 1, 
                         profilePic: 1, homeUniversity: 1, lastActive: 1, location: 1, 
-                        singlesElo: 1, preferredTimeOfDay: 1
+                        singlesElo: 1, preferredTimeOfDay: 1,
+                        mutualFriendsCount: 1, mutualFriendsSample: 1
                     }
                 }
             ]);
