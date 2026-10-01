@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Paper, MenuList } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, AvatarGroup, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Paper, MenuList } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -358,10 +358,19 @@ export default function CommunityDirectory() {
                         <span aria-hidden="true">🏫</span> {player.homeUniversity}
                     </Typography>
                 )}
-                {/* UX UI Tweak #2: Mutual Friends Mock Indicator */}
-                <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
-                    <span aria-hidden="true">🔥</span> {getPlayerStats(player).streak} Mutual Friends
-                </Typography>
+                {/* Step 5: Mutual Friends UI */}
+                {player.mutualFriendsCount > 0 && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem', border: '2px solid', borderColor: 'background.paper' } }}>
+                            {player.mutualFriendsSample?.map((friendId) => (
+                                <Avatar key={friendId} src={`https://api.dicebear.com/7.x/initials/svg?seed=${friendId}`} />
+                            ))}
+                        </AvatarGroup>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
+                            {player.mutualFriendsCount} mutual friend{player.mutualFriendsCount !== 1 ? 's' : ''}
+                        </Typography>
+                    </Box>
+                )}
                 {player.racket && (
                     <Typography variant="body2" sx={{ mb: 1.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
                         <span aria-hidden="true">🏸</span> {player.racket}
@@ -689,9 +698,19 @@ export default function CommunityDirectory() {
                                                                 {player.homeUniversity}
                                                             </Typography>
                                                         )}
-                                                        <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 'bold', color: (theme) => theme.palette.mode === 'dark' ? 'grey.300' : 'grey.800' }}>
-                                                            🔥 {getPlayerStats(player).streak} Mutual Friends
-                                                        </Typography>
+                                                        {/* Step 5: Mutual Friends UI */}
+                                                        {player.mutualFriendsCount > 0 && (
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                                <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem', border: '2px solid', borderColor: 'background.paper' } }}>
+                                                                    {player.mutualFriendsSample?.map((friendId) => (
+                                                                        <Avatar key={friendId} src={`https://api.dicebear.com/7.x/initials/svg?seed=${friendId}`} />
+                                                                    ))}
+                                                                </AvatarGroup>
+                                                                <Typography variant="body2" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'grey.400' : 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
+                                                                    {player.mutualFriendsCount} mutual friend{player.mutualFriendsCount !== 1 ? 's' : ''}
+                                                                </Typography>
+                                                            </Box>
+                                                        )}
                                                     </Box>
                                                 </Box>
                                                 <Box sx={{ ml: { xs: 0.5, sm: 2 }, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
