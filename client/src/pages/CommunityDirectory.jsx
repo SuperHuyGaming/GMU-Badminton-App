@@ -167,6 +167,8 @@ export default function CommunityDirectory() {
                 if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
                 if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
                 if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
+                if (playStyleFilter !== 'All') url += `playStyle=${encodeURIComponent(playStyleFilter)}&`;
+                if (availableNow) url += `availableNow=true&`;
 
                 const response = await apiFetch(url);
                 const data = await response.json();
@@ -196,7 +198,7 @@ export default function CommunityDirectory() {
         return () => {
             isCancelled = true;
         };
-    }, [skillFilter, campusFilter, timeOfDayFilter, submittedQuery]);
+    }, [skillFilter, campusFilter, timeOfDayFilter, playStyleFilter, availableNow, submittedQuery]);
 
     useEffect(() => {
         if (!hasMore || loading || !cursor) return;
@@ -210,6 +212,8 @@ export default function CommunityDirectory() {
                         if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
                         if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
                         if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
+                        if (playStyleFilter !== 'All') url += `playStyle=${encodeURIComponent(playStyleFilter)}&`;
+                        if (availableNow) url += `availableNow=true&`;
                         url += `cursor=${encodeURIComponent(cursor)}&`;
 
                         const response = await apiFetch(url);
@@ -240,7 +244,7 @@ export default function CommunityDirectory() {
             if (currentTarget) observer.unobserve(currentTarget);
             observer.disconnect();
         };
-    }, [cursor, hasMore, loading, submittedQuery, skillFilter, campusFilter, timeOfDayFilter]);
+    }, [cursor, hasMore, loading, submittedQuery, skillFilter, campusFilter, timeOfDayFilter, playStyleFilter, availableNow]);
 
     // Privacy: Removed Presence Polling
 
@@ -587,7 +591,7 @@ export default function CommunityDirectory() {
                 </Stack>
             </Box>
 
-            {!searchQuery && skillFilter === 'All' && (
+            {!searchQuery && skillFilter === 'All' && campusFilter === 'All' && timeOfDayFilter === 'All' && playStyleFilter === 'All' && !availableNow && (
                 <Box sx={{ mb: 5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                         <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
@@ -674,7 +678,7 @@ export default function CommunityDirectory() {
                 </Box>
             )}
 
-            {(submittedQuery || skillFilter !== 'All') && (
+            {(submittedQuery || skillFilter !== 'All' || campusFilter !== 'All' || timeOfDayFilter !== 'All' || playStyleFilter !== 'All' || availableNow) && (
                 <>
                     <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
                         Search Results
@@ -696,6 +700,10 @@ export default function CommunityDirectory() {
                                     setSearchQuery('');
                                     setSubmittedQuery('');
                                     setSkillFilter('All');
+                                    setCampusFilter('All');
+                                    setTimeOfDayFilter('All');
+                                    setPlayStyleFilter('All');
+                                    setAvailableNow(false);
                                 }}
                                 sx={{ borderRadius: 50, px: 4, fontWeight: 'bold' }}
                             >

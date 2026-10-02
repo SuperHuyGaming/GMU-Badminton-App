@@ -151,6 +151,23 @@ router.get("/discover", authMiddleware, discoverLimiter, async (req, res) => {
             query.skillLevel = { $in: mapSkill(cleanSkill) };
         }
 
+        const playStyle = req.query.playStyle ? String(req.query.playStyle) : undefined;
+        const availableNow = req.query.availableNow === 'true';
+
+        // Add advanced filters
+        if (campus && campus !== 'All') {
+            query.checkInLocation = campus;
+        }
+        if (time && time !== 'All') {
+            query.preferredTimeOfDay = time;
+        }
+        if (playStyle && playStyle !== 'All') {
+            query.preferredPlay = playStyle;
+        }
+        if (availableNow) {
+            query.inQueue = true;
+        }
+
         // Add search filtering if provided
         if (search) {
             const sanitizedSearch = escapeRegex(search);
