@@ -447,7 +447,20 @@ router.get("/:id/list", authMiddleware, async (req, res, next) => {
 					profilePic: "$friendData.profilePic",
 					skillLevel: "$friendData.skillLevel",
 					lastActive: "$friendData.lastActive",
-					mutualFriendsCount: { $ifNull: ["$currentUserInfo.mutualCount", 0] }
+					mutualFriendsCount: { $ifNull: ["$currentUserInfo.mutualCount", 0] },
+					friendshipStatus: {
+						$cond: {
+							if: { $in: [currentUserIdObj, { $ifNull: ["$friendData.friends", []] }] },
+							then: "friends",
+							else: {
+								$cond: {
+									if: { $in: [currentUserIdObj, { $ifNull: ["$friendData.friendRequests", []] }] },
+									then: "pending",
+									else: "none"
+								}
+							}
+						}
+					}
 				}
 			}
 		);

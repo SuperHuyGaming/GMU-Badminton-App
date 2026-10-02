@@ -1,0 +1,90 @@
+--- a/server/routes/friends.js
++++ b/server/routes/friends.js
+@@ -7,2 +7,14 @@
+ 
++// Helper: Safely purge all reciprocal pending requests between two users
++const clearBidirectionalRequests = (userA, userB) => {
++	if (!userA || !userB) return;
++	const idA = (userA._id || userA).toString();
++	const idB = (userB._id || userB).toString();
++
++	if (userA.friendRequests?.pull) userA.friendRequests.pull(idB);
++	if (userA.sentFriendRequests?.pull) userA.sentFriendRequests.pull(idB);
++	if (userB.friendRequests?.pull) userB.friendRequests.pull(idA);
++	if (userB.sentFriendRequests?.pull) userB.sentFriendRequests.pull(idA);
++};
++
+ // GET: friends and friend requests
+@@ -58,9 +70,10 @@
+-		if (recipient.friends.some(id => (id._id || id).toString() === requesterId)) {
++		if (recipient.friends.some(id => (id?._id || id)?.toString() === requesterId) ||
++		    requester.friends.some(id => (id?._id || id)?.toString() === recipientId)) {
+ 			return res.status(400).json({ message: "Already friends" });
+ 		}
+ 
+-		if (recipient.friendRequests.some(id => (id._id || id).toString() === requesterId)) {
++		if (recipient.friendRequests.some(id => (id?._id || id)?.toString() === requesterId)) {
+ 			return res.status(400).json({ message: "Request already sent" });
+ 		}
+ 
+ 		// If they already sent YOU a request, just accept it
+-		if (requester.friendRequests.some(id => (id._id || id).toString() === recipientId)) {
+-			requester.friendRequests.pull(recipientId);
+-			recipient.sentFriendRequests.pull(requesterId);
++		if (requester.friendRequests.some(id => (id?._id || id)?.toString() === recipientId)) {
++			clearBidirectionalRequests(requester, recipient);
+ 			
+-			if (!requester.friends.some(id => (id._id || id).toString() === recipientId)) requester.friends.push(recipientId);
+-			if (!recipient.friends.some(id => (id._id || id).toString() === requesterId)) recipient.friends.push(requesterId);
++			if (!requester.friends.some(id => (id?._id || id)?.toString() === recipientId)) requester.friends.push(recipientId);
++			if (!recipient.friends.some(id => (id?._id || id)?.toString() === requesterId)) recipient.friends.push(requesterId);
+ 			
+ 			await requester.save();
+ 			await recipient.save();
+@@ -91,2 +104,7 @@
+-		recipient.friendRequests.push(requesterId);
+-		requester.sentFriendRequests.push(recipientId);
++		if (!recipient.friendRequests.some(id => (id?._id || id)?.toString() === requesterId)) {
++			recipient.friendRequests.push(requesterId);
++		}
++		if (!requester.sentFriendRequests.some(id => (id?._id || id)?.toString() === recipientId)) {
++			requester.sentFriendRequests.push(recipientId);
++		}
+ 
+@@ -142,5 +160,5 @@
+ 		// Validate that requesterId exists in user.friendRequests
+-		const hasPendingRequest = user.friendRequests.some(id => (id._id || id).toString() === requesterId);
++		const hasPendingRequest = user.friendRequests.some(id => (id?._id || id)?.toString() === requesterId);
+ 		if (!hasPendingRequest) {
+ 			return res.status(400).json({ message: "No pending friend request from this user" });
+ 		}
+ 
+-		user.friendRequests.pull(requesterId);
+-		requester.sentFriendRequests.pull(userId);
++		clearBidirectionalRequests(user, requester);
+ 
+-		if (!user.friends.some(id => (id._id || id).toString() === requesterId)) user.friends.push(requesterId);
+-		if (!requester.friends.some(id => (id._id || id).toString() === userId)) requester.friends.push(userId);
++		if (!user.friends.some(id => (id?._id || id)?.toString() === requesterId)) user.friends.push(requesterId);
++		if (!requester.friends.some(id => (id?._id || id)?.toString() === userId)) requester.friends.push(userId);
+@@ -198,6 +216,8 @@
+ 		if (!user || !target) return res.status(404).json({ message: "User not found" });
+ 
++		if (userId === targetId) return res.status(400).json({ message: "Cannot decline yourself" });
++
+ 		// Could be rejecting a received request, or cancelling a sent request
+-		user.friendRequests.pull(targetId);
+-		user.sentFriendRequests.pull(targetId);
+-		target.friendRequests.pull(userId);
+-		target.sentFriendRequests.pull(userId);
++		clearBidirectionalRequests(user, target);
+ 
+ 		await user.save();
+ 		await target.save();
+@@ -243,2 +263,3 @@
+ 		user.friends.pull(friendId);
+ 		friend.friends.pull(userId);
++		clearBidirectionalRequests(user, friend);
+ 
+ 		await user.save();
+ 		await friend.save();

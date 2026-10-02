@@ -383,8 +383,8 @@ export default function Profile() {
 							<ProfileIntro
 								profileData={profileData}
 								isOwnProfile={isOwnProfile}
-								onEditClick={() => setActiveTab("about")}
-								onFriendsClick={() => setActiveTab("friends")}
+								onEditClick={() => { setActiveTab("about"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+								onFriendsClick={() => { setActiveTab("friends"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
 							/>
 						</Box>
 					</Box>
