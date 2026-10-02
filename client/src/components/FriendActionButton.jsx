@@ -167,6 +167,8 @@ export default function FriendActionButton({
       fullWidth={fullWidth}
       size={size}
       onClick={handleAction}
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
       startIcon={buttonIcon}
       aria-label={`${label} for ${targetUserName}`}
       sx={{

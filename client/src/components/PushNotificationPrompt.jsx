@@ -16,9 +16,14 @@ const urlB64ToUint8Array = (base64String) => {
 const PushNotificationPrompt = () => {
     const [open, setOpen] = useState(false);
 
+    // Check before mount
+    if (localStorage.getItem('hidePushPrompt') === 'true') {
+        return null;
+    }
+
     useEffect(() => {
         if ('serviceWorker' in navigator && 'PushManager' in window) {
-            if (Notification.permission === 'default' && !localStorage.getItem('pushPromptDismissed')) {
+            if (Notification.permission === 'default' && !localStorage.getItem('hidePushPrompt')) {
                 // Wait a bit before asking so we don't bombard them immediately
                 const timer = setTimeout(() => {
                     setOpen(true);
@@ -67,7 +72,7 @@ const PushNotificationPrompt = () => {
                     <>
                         <Button color="inherit" size="small" onClick={handleEnable}>Enable</Button>
                         <Button color="inherit" size="small" onClick={() => {
-                            localStorage.setItem('pushPromptDismissed', 'true');
+                            localStorage.setItem('hidePushPrompt', 'true');
                             setOpen(false);
                         }}>Not Now</Button>
                     </>

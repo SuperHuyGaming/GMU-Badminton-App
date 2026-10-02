@@ -18,51 +18,6 @@ const languages = [
 ];
 
 export default function LanguageSwitcher() {
-    const { i18n } = useTranslation();
-    const [anchorEl, setAnchorEl] = useState(null);
-
-    const handleOpen = (event) => setAnchorEl(event.currentTarget);
-    const handleClose = () => setAnchorEl(null);
-
-    const handleLanguageChange = (code) => {
-        i18n.changeLanguage(code);
-        handleClose();
-    };
-
-    const currentLang = languages.find(l => l.code === (i18n.language || 'en').split('-')[0]) || languages[0];
-
-    return (
-        <>
-            <IconButton aria-label="Change language" color="inherit" onClick={handleOpen} sx={{ display: 'flex', gap: 0.5 }}>
-                <GlobeIcon />
-                <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                    {currentLang.short}
-                </Typography>
-            </IconButton>
-            <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleClose}
-                PaperProps={{
-                    sx: {
-                        mt: 1,
-                        borderRadius: 3,
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                        minWidth: 150
-                    }
-                }}
-            >
-                {languages.map((lang) => (
-                    <MenuItem 
-                        key={lang.code} 
-                        onClick={() => handleLanguageChange(lang.code)}
-                        selected={currentLang.code === lang.code}
-                        sx={{ fontWeight: currentLang.code === lang.code ? 'bold' : 'normal' }}
-                    >
-                        {lang.label}
-                    </MenuItem>
-                ))}
-            </Menu>
-        </>
-    );
+    // Hidden for this release as i18n is not fully implemented
+    return null;
 }

@@ -293,7 +293,6 @@ const Messages = () => {
 		if (!newMessage.trim() || !activeChat) return;
 
 		const msgText = newMessage.trim();
-		setNewMessage(""); // Clear immediately
 		socket.emit("stopTyping", activeChat._id); // Stop typing when sent
 		
 		// Optimistic UI update
@@ -316,6 +315,7 @@ const Messages = () => {
 					content: msgText
 				})
 			});
+			setNewMessage(""); // Clear after successful send
 			// We do not setMessages again here because the socket will emit the real message back to us, 
 			// and handlePrivateMessage will swap it or append it. Wait, handlePrivateMessage currently 
 			// appends it, so we'll get a duplicate! 

@@ -47,7 +47,7 @@ const QuickPeekPopover = ({ anchorEl, handleClose, player, stats }) => {
     );
 };
 
-const PeopleYouMayKnow = () => {
+const PeopleYouMayKnow = ({ user }) => {
     const [recommended, setRecommended] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -108,7 +108,7 @@ const PeopleYouMayKnow = () => {
                                 {player.name}
                             </Typography>
                             <Box sx={{ mt: 1.5 }}>
-                                <FriendActionButton targetUserId={player._id} targetUserName={player.name} initialStatus="none" />
+                                <FriendActionButton targetUserId={player._id} targetUserName={player.name} initialStatus={player.friendshipStatus || (user?.friends?.includes(player._id) ? 'friends' : 'none')} />
                             </Box>
                         </Card>
                     ))}
@@ -294,7 +294,7 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                                         </>
                                     ) : (
                                         user.id !== friend._id && (
-                                            <FriendActionButton targetUserId={friend._id} targetUserName={friend.name} initialStatus="none" />
+                                            <FriendActionButton targetUserId={friend._id} targetUserName={friend.name} initialStatus={friend.friendshipStatus || (user?.friends?.includes(friend._id) ? 'friends' : 'none')} />
                                         )
                                     )}
                                 </Box>
@@ -308,7 +308,7 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                     <Typography variant="h6" color="text.secondary">
                         No friends found.
                     </Typography>
-                    <PeopleYouMayKnow />
+                    <PeopleYouMayKnow user={user} />
                 </Box>
             )}
 
