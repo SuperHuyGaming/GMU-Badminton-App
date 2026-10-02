@@ -265,16 +265,16 @@ export default function Profile() {
 
 				setFormData((prev) => ({ ...prev, [cropType]: updatedUser[cropType] }));
 
-				if (cropType === "profilePic") {
-					const newLocalUser = {
-						...user,
-						name: updatedUser.name,
-						skillLevel: updatedUser.skillLevel,
-						profilePic: updatedUser.profilePic,
-					};
-					localStorage.setItem("user", JSON.stringify(newLocalUser));
-					setUser(newLocalUser);
-				}
+				// ALWAYS update AuthContext so Navbar stays in sync, regardless of crop type
+				const newLocalUser = {
+					...user,
+					name: updatedUser.name || user.name,
+					skillLevel: updatedUser.skillLevel || user.skillLevel,
+					profilePic: updatedUser.profilePic,
+				};
+				localStorage.setItem("user", JSON.stringify(newLocalUser));
+				setUser(newLocalUser);
+				
 				setToastMessage("Picture updated successfully!");
 			} else {
 				setToastMessage(data.message || "Failed to save picture.");
