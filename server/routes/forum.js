@@ -263,7 +263,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, targetDate, tags, visibility } = req.body;
+		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility } = req.body;
 
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
@@ -279,6 +279,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		const cleanTitle = xss(title.trim());
 		const cleanContent = xss(content.trim());
 		const cleanImageUrl = (imageUrl && typeof imageUrl === "string") ? xss(imageUrl.trim()) : "";
+		const cleanImageUrls = Array.isArray(imageUrls) ? imageUrls.map(url => typeof url === "string" ? xss(url.trim()) : "").filter(url => url) : [];
 		const cleanTags = Array.isArray(tags) ? tags.filter(t => typeof t === "string").map(t => xss(t.trim()).slice(0, 50)) : [];
 		
 		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
@@ -291,6 +292,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 			title: cleanTitle,
 			content: cleanContent,
 			imageUrl: cleanImageUrl,
+			imageUrls: cleanImageUrls,
 			tags: cleanTags,
 			visibility: visibility || 'PUBLIC',
 			authorName,

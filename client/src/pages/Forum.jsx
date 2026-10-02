@@ -307,9 +307,12 @@ export default function Forum() {
 						onClick={async () => {
 							if (!currentUser) return alert("You must be logged in to post!");
 							try {
-								const res = await apiFetch("/api/posts", {
+								const res = await apiFetch("/api/forum", {
 									method: "POST",
-									body: JSON.stringify({ content: newPost.content })
+									body: JSON.stringify({ 
+										title: newPost.content.substring(0, 50) + (newPost.content.length > 50 ? "..." : ""),
+										content: newPost.content 
+									})
 								});
 								if (res.ok) {
 									setNewPost({ ...newPost, content: "" });

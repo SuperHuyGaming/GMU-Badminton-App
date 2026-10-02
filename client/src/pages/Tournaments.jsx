@@ -81,7 +81,7 @@ END:VCALENDAR`;
             
             if (!apiUrl) {
                 if (isLocalNetwork) {
-                    apiUrl = `http://${window.location.hostname}:8081`;
+                    apiUrl = "";
                 } else {
                     // On production, if VITE_TOURNAMENT_API_URL is missing, it means Java isn't deployed (Free Tier constraints).
                     // Fail gracefully instead of causing a Network Error on port 8081.
@@ -94,13 +94,13 @@ END:VCALENDAR`;
                 apiUrl = "https://" + apiUrl;
             }
             
-            const endpoint = new URL(`${apiUrl}/api/v1/tournaments`);
+            let endpointUrl = apiUrl ? `${apiUrl}/api/v1/tournaments` : '/api/v1/tournaments';
             if (cursor) {
-                endpoint.searchParams.append('cursor', cursor);
+                endpointUrl += `?cursor=${cursor}`;
             }
             
             // The Java core returns paginated data: { content: [...] }
-            const response = await fetch(endpoint.toString());
+            const response = await fetch(endpointUrl);
             if (!response.ok) throw new Error('Failed to fetch tournaments');
             const data = await response.json();
             

@@ -517,8 +517,7 @@ export default function CommunityDirectory() {
                                                   onClick={(e) => {
                                                       e.preventDefault();
                                                       e.stopPropagation();
-                                                      setSearchQuery(player.name);
-                                                      handleSearchSubmit(player.name);
+                                                      navigate(`/profile/${player._id}`);
                                                   }}
                                                   sx={{ px: 3, py: 1.5, display: 'flex', gap: 2, alignItems: 'center' }}
                                               >

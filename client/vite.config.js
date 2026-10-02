@@ -73,5 +73,13 @@ export default defineConfig({
     setupFiles: './src/setupTests.js',
     include: ['src/**/*.test.{js,jsx}'],
     testTimeout: 20000
+  },
+  server: {
+    proxy: {
+      '/api/v1/tournaments': {
+        target: 'http://localhost:8081',
+        changeOrigin: true
+      }
+    }
   }
 })
