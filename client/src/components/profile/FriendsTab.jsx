@@ -293,7 +293,7 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                                             </Button>
                                         </>
                                     ) : (
-                                        user.id !== friend._id && (
+                                        user?.id !== friend._id && (
                                             <FriendActionButton targetUserId={friend._id} targetUserName={friend.name} initialStatus={friend.friendshipStatus || (user?.friends?.includes(friend._id) ? 'friends' : 'none')} />
                                         )
                                     )}

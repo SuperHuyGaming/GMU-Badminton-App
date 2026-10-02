@@ -22,7 +22,6 @@ const cardVariants = {
 };
 
 export default function CommunityDirectory() {
-    // eslint-disable-next-line no-unused-vars
     const navigate = useNavigate();
     const [matches, setMatches] = useState([]);
     const [recommended, setRecommended] = useState([]);

@@ -16,11 +16,6 @@ const urlB64ToUint8Array = (base64String) => {
 const PushNotificationPrompt = () => {
     const [open, setOpen] = useState(false);
 
-    // Check before mount
-    if (localStorage.getItem('hidePushPrompt') === 'true') {
-        return null;
-    }
-
     useEffect(() => {
         if ('serviceWorker' in navigator && 'PushManager' in window) {
             if (Notification.permission === 'default' && !localStorage.getItem('hidePushPrompt')) {
@@ -32,6 +27,11 @@ const PushNotificationPrompt = () => {
             }
         }
     }, []);
+
+    // Check after hooks
+    if (localStorage.getItem('hidePushPrompt') === 'true') {
+        return null;
+    }
 
     const handleEnable = async () => {
         setOpen(false);
