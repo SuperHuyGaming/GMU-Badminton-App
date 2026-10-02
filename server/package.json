@@ -32,7 +32,7 @@
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "kafkajs": "^2.2.4",
-    "mongoose": "^9.6.1",
+    "mongoose": "^9.10.3",
     "multer": "^2.4.0",
     "multer-storage-cloudinary": "^4.0.0",
     "natural": "^8.1.1",
