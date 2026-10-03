@@ -30,6 +30,8 @@
 
 const { Kafka } = require("kafkajs");
 const ProposedTournament = require("../models/ProposedTournament");
+const Tournament = require('../models/Tournament');
+const redis = require('./redis');
 const promClient = require('prom-client');
 const xss = require('xss');
 
@@ -146,9 +148,58 @@ const handleMessage = async ({ topic, partition, message }) => {
         const rawValue = message && message.value ? message.value.toString() : "{}";
         const parsedDoc = parseScrapedTournamentMessage(rawValue);
 
-        console.log(`[Kafka Consumer][${topic} p:${partition}]: Ingesting proposal "${parsedDoc.tournamentName}"`);
-        const proposal = new ProposedTournament(parsedDoc);
-        const savedDoc = await proposal.save();
+        let savedDoc;
+        const now = new Date();
+        const hasMandatoryFields = parsedDoc.tournamentName && parsedDoc.date && parsedDoc.location && parsedDoc.registrationLink;
+        const isFutureDate = parsedDoc.date && new Date(parsedDoc.date) > now;
+        
+        // Phase 4: Fraud & Anomaly Defense
+        let isAnomaly = false;
+        
+        // Entry Fee Anomaly
+        const feeStr = parsedDoc.entryFee || "";
+        const feeMatch = feeStr.match(/\$(\d+)/);
+        if (feeMatch && parseInt(feeMatch[1], 10) > 300) {
+            console.log(`[Kafka Consumer][${topic} p:${partition}]: Anomaly detected - Exorbitant Entry Fee: ${feeStr}`);
+            isAnomaly = true;
+        }
+
+        // Location Bounding Box (mock check for DMV keywords)
+        const locLower = (parsedDoc.location || "").toLowerCase();
+        const isDMV = locLower.includes('va') || locLower.includes('virginia') || locLower.includes('md') || locLower.includes('maryland') || locLower.includes('dc') || locLower.includes('district') || locLower.includes('fairfax') || locLower.includes('rac') || locLower.includes('umd') || locLower.includes('capital');
+        if (!isDMV && locLower !== 'tbd') {
+            console.log(`[Kafka Consumer][${topic} p:${partition}]: Anomaly detected - Location outside DMV: ${parsedDoc.location}`);
+            isAnomaly = true;
+        }
+
+        if (parsedDoc.confidenceScore >= 95 && hasMandatoryFields && isFutureDate && !isAnomaly) {
+            console.log(`[Kafka Consumer][${topic} p:${partition}]: High confidence (${parsedDoc.confidenceScore}%). Auto-publishing "${parsedDoc.tournamentName}"`);
+            
+            const tournament = new Tournament({
+                tournamentName: parsedDoc.tournamentName,
+                eventLocation: parsedDoc.location,
+                hostUniversity: "Local Club",
+                startDate: parsedDoc.date,
+                endDate: parsedDoc.date,
+                registrationDeadline: parsedDoc.registrationDeadline,
+                registrationUrl: parsedDoc.registrationLink,
+                sourceUrl: parsedDoc.sourceUrl,
+                flyerImageUrl: parsedDoc.scrapedImageUrls && parsedDoc.scrapedImageUrls.length > 0 ? parsedDoc.scrapedImageUrls[0] : "",
+                skillLevels: parsedDoc.skillLevels,
+                originalCaption: parsedDoc.rawCaption,
+                isOpenTournament: true,
+                rsvpCount: 0
+            });
+            savedDoc = await tournament.save();
+
+            // Invalidate cache
+            const keys = await redis.keys('tournaments:*');
+            if (keys.length > 0) await redis.del(keys);
+        } else {
+            console.log(`[Kafka Consumer][${topic} p:${partition}]: Ingesting proposal "${parsedDoc.tournamentName}" for Admin review`);
+            const proposal = new ProposedTournament(parsedDoc);
+            savedDoc = await proposal.save();
+        }
         return savedDoc;
     } catch (error) {
         scraperFailures.inc();
