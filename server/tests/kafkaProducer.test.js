@@ -7,9 +7,18 @@ jest.mock('kafkajs', () => {
         connect: mockConnect,
         send: mockSend,
     };
+    const mockAdminConnect = jest.fn().mockResolvedValue();
+    const mockAdminCreateTopics = jest.fn().mockResolvedValue();
+    const mockAdminDisconnect = jest.fn().mockResolvedValue();
+    const mockAdmin = {
+        connect: mockAdminConnect,
+        createTopics: mockAdminCreateTopics,
+        disconnect: mockAdminDisconnect
+    };
     return {
         Kafka: jest.fn().mockImplementation(() => ({
-            producer: jest.fn(() => mockProducer)
+            producer: jest.fn(() => mockProducer),
+            admin: jest.fn(() => mockAdmin)
         })),
         Partitioners: {
             LegacyPartitioner: jest.fn(),

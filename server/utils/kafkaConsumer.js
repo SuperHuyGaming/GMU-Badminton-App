@@ -30,6 +30,16 @@
 
 const { Kafka } = require("kafkajs");
 const ProposedTournament = require("../models/ProposedTournament");
+const promClient = require('prom-client');
+
+const scraperFailures = new promClient.Counter({
+  name: 'scraper_failures_total',
+  help: 'Total number of scraper failures'
+});
+const llmMalformedJson = new promClient.Counter({
+  name: 'llm_malformed_json_total',
+  help: 'Total number of malformed JSON responses from LLM'
+});
 
 const brokers = process.env.KAFKA_BROKERS
     ? process.env.KAFKA_BROKERS.split(",").map((b) => b.trim())
@@ -71,6 +81,7 @@ const parseScrapedTournamentMessage = (rawPayload) => {
 
     const tournamentName = (data.tournamentName || aiData.tournamentName || "").trim();
     if (!tournamentName) {
+        llmMalformedJson.inc();
         throw new Error("Missing required field: tournamentName");
     }
 
@@ -139,6 +150,7 @@ const handleMessage = async ({ topic, partition, message }) => {
         const savedDoc = await proposal.save();
         return savedDoc;
     } catch (error) {
+        scraperFailures.inc();
         console.error(`[Kafka Consumer] Error processing message on topic ${topic}:`, error.message);
         return null;
     }

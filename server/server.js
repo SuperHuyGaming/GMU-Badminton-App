@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const promBundle = require("express-prom-bundle");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
@@ -22,6 +23,10 @@ const mongoSanitize = require("express-mongo-sanitize");
 const rateLimit = require("express-rate-limit");
 
 const app = express();
+
+const metricsMiddleware = promBundle({includeMethod: true});
+app.use(metricsMiddleware);
+
 app.disable('x-powered-by'); // Hide tech stack
 
 // 1. HTTP Security Headers

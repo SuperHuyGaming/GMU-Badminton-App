@@ -1,0 +1,19 @@
+groups:
+- name: scraper_alerts
+  rules:
+  - alert: ScraperFailing
+    expr: increase(scraper_failures_total[3d]) > 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Scraper has failed consistently"
+      description: "The scraper failed during the last 3 days."
+  - alert: LLMMalformedJSON
+    expr: rate(llm_malformed_json_total[1h]) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "LLM returning malformed JSON"
+      description: "The LLM parser has returned malformed JSON in the last hour."

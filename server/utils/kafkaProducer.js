@@ -9,6 +9,29 @@ const kafka = new Kafka({
   brokers,
 });
 
+const admin = kafka.admin();
+const setupTopics = async () => {
+  try {
+    await admin.connect();
+    await admin.createTopics({
+      topics: [
+        {
+          topic: 'tournament-scraping',
+          numPartitions: 2,
+          replicationFactor: 1,
+          configEntries: [
+            { name: 'retention.ms', value: '604800000' } // 7 days
+          ]
+        }
+      ]
+    });
+    console.log('Kafka topics ensured with retention policies.');
+    await admin.disconnect();
+  } catch (error) {
+    console.error('Error setting up Kafka topics:', error);
+  }
+};
+
 const producer = kafka.producer({
   createPartitioner: Partitioners.LegacyPartitioner,
 });
@@ -46,6 +69,7 @@ const connectProducer = async () => {
   if (!connectingPromise) {
     connectingPromise = (async () => {
       try {
+        await setupTopics();
         await producer.connect();
         producerConnected = true;
       } catch (err) {
