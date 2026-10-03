@@ -15,19 +15,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install Dependencies
         run: |
           cd tournament-services/scraper-service
-          pip install -r requirements.txt || true # Assuming there's a requirements file or use poetry
+          pip install -e .
 
       - name: Run Scraper
         env:
           KAFKA_BROKER_URL: $\{\{ secrets.KAFKA_BROKER_URL \}\}
           GEMINI_API_KEY: $\{\{ secrets.GEMINI_API_KEY \}\}
-          # Add other necessary secrets
+          OPENAI_API_KEY: $\{\{ secrets.OPENAI_API_KEY \}\}
         run: |
           cd tournament-services/scraper-service
-          # Run the main scraper script or task
           python -m src.tasks.run_scraper

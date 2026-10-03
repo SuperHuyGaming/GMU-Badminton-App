@@ -17,7 +17,8 @@ dependencies = [
     "beautifulsoup4>=4.12.3",
     "instaloader>=4.13.0",
     "apify-client>=1.7.0",
-    "python-dotenv>=1.0.1"
+    "python-dotenv>=1.0.1",
+    "kafka-python>=2.0.2"
 ]
 
 [project.optional-dependencies]
