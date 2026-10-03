@@ -21,6 +21,7 @@ import {
     Alert,
     CircularProgress,
     IconButton,
+    Checkbox,
     Grid,
     Link,
 } from "@mui/material";
@@ -87,6 +88,7 @@ const initialManualForm = {
 
 export default function TournamentApprovals() {
     const [proposals, setProposals] = useState([]);
+    const [selectedIds, setSelectedIds] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedProposal, setSelectedProposal] = useState(null);
     const [submitting, setSubmitting] = useState(false);
@@ -113,12 +115,65 @@ export default function TournamentApprovals() {
     const [manualForm, setManualForm] = useState(initialManualForm);
     const [submittingManual, setSubmittingManual] = useState(false);
 
+    const handleSelectAllClick = (event) => {
+        if (event.target.checked) {
+            const newSelecteds = proposals.map((n) => n._id);
+            setSelectedIds(newSelecteds);
+            return;
+        }
+        setSelectedIds([]);
+    };
+
+    const handleSelectClick = (event, id) => {
+        const selectedIndex = selectedIds.indexOf(id);
+        let newSelected = [];
+
+        if (selectedIndex === -1) {
+            newSelected = newSelected.concat(selectedIds, id);
+        } else if (selectedIndex === 0) {
+            newSelected = newSelected.concat(selectedIds.slice(1));
+        } else if (selectedIndex === selectedIds.length - 1) {
+            newSelected = newSelected.concat(selectedIds.slice(0, -1));
+        } else if (selectedIndex > 0) {
+            newSelected = newSelected.concat(
+                selectedIds.slice(0, selectedIndex),
+                selectedIds.slice(selectedIndex + 1)
+            );
+        }
+        setSelectedIds(newSelected);
+    };
+
+    const handleBulkApprove = async () => {
+        if (selectedIds.length === 0) return;
+        if (!window.confirm(`Are you sure you want to approve ${selectedIds.length} proposals?`)) return;
+        try {
+            await Promise.all(selectedIds.map(id => apiFetch(`/api/admin/tournaments/approve/${id}`, { method: 'POST' })));
+            toast.success(`${selectedIds.length} proposals approved`);
+            fetchProposals();
+        } catch (err) {
+            toast.error(err.message || 'Failed to bulk approve');
+        }
+    };
+    
+    const handleBulkReject = async () => {
+        if (selectedIds.length === 0) return;
+        if (!window.confirm(`Are you sure you want to reject ${selectedIds.length} proposals?`)) return;
+        try {
+            await Promise.all(selectedIds.map(id => apiFetch(`/api/admin/tournaments/reject/${id}`, { method: 'POST' })));
+            toast.success(`${selectedIds.length} proposals rejected`);
+            fetchProposals();
+        } catch (err) {
+            toast.error(err.message || 'Failed to bulk reject');
+        }
+    };
+
     const fetchProposals = useCallback(async () => {
         try {
             setLoading(true);
             const res = await apiFetch("/api/admin/tournaments/proposed");
             const data = await res.json();
             setProposals(Array.isArray(data) ? data : []);
+            setSelectedIds([]);
         } catch (err) {
             toast.error(err.message || "Failed to load tournament proposals");
         } finally {
@@ -127,7 +182,7 @@ export default function TournamentApprovals() {
     }, []);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         fetchProposals();
     }, [fetchProposals]);
 
@@ -336,6 +391,16 @@ export default function TournamentApprovals() {
                 </Box>
 
                 <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+                    {selectedIds.length > 0 && (
+                        <>
+                            <Button variant="contained" color="success" onClick={handleBulkApprove} sx={{ textTransform: "none", fontWeight: "bold" }}>
+                                Approve ({selectedIds.length})
+                            </Button>
+                            <Button variant="contained" color="error" onClick={handleBulkReject} sx={{ textTransform: "none", fontWeight: "bold" }}>
+                                Reject ({selectedIds.length})
+                            </Button>
+                        </>
+                    )}
                     <Button
                         variant="outlined"
                         startIcon={<RefreshIcon />}
@@ -472,6 +537,14 @@ export default function TournamentApprovals() {
                     <Table aria-label="pending tournament proposals table">
                         <TableHead sx={{ bgcolor: "background.default" }}>
                             <TableRow>
+                                <TableCell padding="checkbox">
+                                    <Checkbox
+                                        color="primary"
+                                        indeterminate={selectedIds.length > 0 && selectedIds.length < proposals.length}
+                                        checked={proposals.length > 0 && selectedIds.length === proposals.length}
+                                        onChange={handleSelectAllClick}
+                                    />
+                                </TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Tournament Name</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Date</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Location</TableCell>
@@ -506,6 +579,13 @@ export default function TournamentApprovals() {
                                                 : "inherit",
                                         }}
                                     >
+                                        <TableCell padding="checkbox">
+                                            <Checkbox
+                                                color="primary"
+                                                checked={selectedIds.indexOf(proposal._id) !== -1}
+                                                onChange={(event) => handleSelectClick(event, proposal._id)}
+                                            />
+                                        </TableCell>
                                         <TableCell>
                                             <Typography
                                                 variant="body1"

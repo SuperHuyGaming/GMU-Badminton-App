@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import EventIcon from '@mui/icons-material/Event';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import MapIcon from '@mui/icons-material/Map';
 import TournamentBracket from '../components/TournamentBracket';
 import EmptyTournaments from '../components/EmptyTournaments';
 import apiFetch from '../utils/api';
@@ -15,6 +19,8 @@ export default function Tournaments() {
     const [hasNext, setHasNext] = useState(false);
 
     
+
+    const [viewMode, setViewMode] = useState('list'); // list, calendar, map
 
     // Bracket State
     const [bracketOpen, setBracketOpen] = useState(false);
@@ -133,15 +139,30 @@ END:VCALENDAR`;
 
     return (
         <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3, mt: 4 }}>
-            <Typography variant="h3" sx={{ mb: 1, fontWeight: 'bold' }}>
-                Upcoming Tournaments
-            </Typography>
+            <Box sx={{ mb: 4, p: 4, borderRadius: 2, bgcolor: 'primary.main', color: 'primary.contrastText', textAlign: 'center' }}>
+                <Typography variant="h3" sx={{ mb: 1, fontWeight: 'bold' }}>
+                    Discover DMV Tournaments
+                </Typography>
+                <Typography variant="subtitle1">
+                    Find local badminton tournaments scraped from across the web.
+                </Typography>
+            </Box>
 
-
-
-            <Typography color="text.primary" sx={{ mb: 4 }}>
-                Find local badminton tournaments scraped from across the web.
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                <ToggleButtonGroup
+                    value={viewMode}
+                    exclusive
+                    onChange={(e, newMode) => { if (newMode) setViewMode(newMode); }}
+                    aria-label="view mode"
+                >
+                    <ToggleButton value="list" aria-label="list view"><ViewListIcon sx={{ mr: 1 }}/> List</ToggleButton>
+                    <ToggleButton value="calendar" aria-label="calendar view"><EventIcon sx={{ mr: 1 }}/> Calendar</ToggleButton>
+                    <ToggleButton value="map" aria-label="map view"><MapIcon sx={{ mr: 1 }}/> Map</ToggleButton>
+                </ToggleButtonGroup>
+                <Button startIcon={<FilterListIcon />} variant="outlined" onClick={() => { /* TODO: wire up filter drawer */ }}>
+                    Filters
+                </Button>
+            </Box>
 
             {loading && !tournaments.length && <CircularProgress />}
             
