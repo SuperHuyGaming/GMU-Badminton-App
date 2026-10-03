@@ -14,38 +14,47 @@ SEED_LIST = ["gmu_badminton", "umd_badminton", "nova_badminton", "capitalbadmint
 HASHTAGS = ["dmvbadminton", "badmintontournament"]
 
 async def process_posts(posts, source_handle, extractor, kafka_prod):
-    for post in posts:
-        logger.info(f"Extracting data from post: {post.get('shortcode')}")
-        try:
-            tournament_data = extractor.extract_from_flyer(
-                image_url_or_base64=post.get("display_url"),
-                carousel_urls=post.get("carousel_urls", []),
-                caption_text=post.get("caption", ""),
-                source_handle=source_handle
-            )
-        except Exception as e:
-            logger.error(f"Extraction failed: {e}")
-            continue
+    if not posts:
+        return
 
-        if not tournament_data:
-            logger.info("No tournament data extracted.")
-            continue
+    logger.info(f"Extracting synthesized data from {len(posts)} posts for handle: {source_handle}")
+    try:
+        tournament_data = extractor.extract_from_multiple_posts(
+            posts=posts,
+            source_handle=source_handle
+        )
+    except Exception as e:
+        logger.error(f"Multi-post extraction failed: {e}")
+        return
 
-        payload = {
-            "sourceUrl": post.get("url", f"https://instagram.com/p/{post.get('shortcode')}"),
-            "confidenceScore": getattr(tournament_data, 'confidenceScore', 85),
-            "rawCaption": post.get("caption", ""),
-            "scrapedImageUrls": ([post.get("display_url")] if post.get("display_url") else []) + post.get("carousel_urls", []),
-            "sourceLinks": [],
-            "tournamentName": getattr(tournament_data, 'tournamentName', 'Unknown'),
-            "date": getattr(tournament_data, 'date', None),
-            "location": getattr(tournament_data, 'location', 'TBD'),
-            "entryFee": getattr(tournament_data, 'entryFee', ''),
-            "registrationLink": getattr(tournament_data, 'registrationLink', ''),
-            "skillLevels": getattr(tournament_data, 'skillLevels', []),
-            "registrationDeadline": getattr(tournament_data, 'registrationDeadline', None)
-        }
-        kafka_prod.publish_scraped_tournament(payload)
+    if not tournament_data:
+        logger.info("No tournament data extracted.")
+        return
+
+    # Use the most recent post as the primary source URL if multiple exist
+    primary_post = posts[0]
+    all_image_urls = []
+    for p in posts:
+        if p.get("display_url"): all_image_urls.append(p.get("display_url"))
+        all_image_urls.extend(p.get("carousel_urls", []))
+    
+    combined_captions = "\\n---\\n".join([p.get("caption", "") for p in posts])
+
+    payload = {
+        "sourceUrl": primary_post.get("url", f"https://instagram.com/p/{primary_post.get('shortcode')}"),
+        "confidenceScore": getattr(tournament_data, 'confidenceScore', 85),
+        "rawCaption": combined_captions,
+        "scrapedImageUrls": all_image_urls,
+        "sourceLinks": [],
+        "tournamentName": getattr(tournament_data, 'tournamentName', getattr(tournament_data, 'tournament_name', 'Unknown')),
+        "date": getattr(tournament_data, 'date', None) or getattr(tournament_data, 'start_date', None) or getattr(tournament_data, 'registration_deadline', None),
+        "location": getattr(tournament_data, 'location', getattr(tournament_data, 'event_location', 'TBD')),
+        "entryFee": getattr(tournament_data, 'entryFee', ''),
+        "registrationLink": getattr(tournament_data, 'registrationLink', getattr(tournament_data, 'registration_url', '')),
+        "skillLevels": getattr(tournament_data, 'skillLevels', []),
+        "registrationDeadline": getattr(tournament_data, 'registrationDeadline', getattr(tournament_data, 'registration_deadline', None))
+    }
+    kafka_prod.publish_scraped_tournament(payload)
 
 async def main():
     logger.info("Starting Autonomous Tournament Hunter...")
