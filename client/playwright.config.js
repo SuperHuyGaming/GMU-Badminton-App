@@ -29,7 +29,7 @@ export default defineConfig({
       cwd: './',
     },
     {
-      command: 'npm run server',
+      command: 'npm run start',
       url: 'http://localhost:5005',
       // eslint-disable-next-line no-undef
       reuseExistingServer: !process.env.CI,

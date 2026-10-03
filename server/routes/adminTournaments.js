@@ -4,6 +4,14 @@ const xss = require("xss");
 const ProposedTournament = require("../models/ProposedTournament");
 const Tournament = require("../models/Tournament");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
+const redis = require("../utils/redis");
+const rateLimit = require('express-rate-limit');
+
+const adminActionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { message: "Too many admin actions from this IP, please try again after 15 minutes" }
+});
 
 const router = express.Router();
 
@@ -30,7 +38,7 @@ router.get("/proposed", async (req, res) => {
  * Approves a proposed tournament: creates a Tournament entry with isOpenTournament: true,
  * transitions proposal status to approved, and records audit metadata.
  */
-router.post("/approve/:id", async (req, res) => {
+router.post("/approve/:id", adminActionLimiter, async (req, res) => {
     try {
         const { id } = req.params;
         if (!mongoose.isValidObjectId(id)) {
@@ -70,6 +78,10 @@ router.post("/approve/:id", async (req, res) => {
 
         await tournament.save();
 
+        // Invalidate public tournaments cache
+        const keys = await redis.keys("tournaments:*");
+        if (keys.length > 0) await redis.del(keys);
+
         proposed.status = "approved";
         proposed.approvedAt = new Date();
         proposed.approvedBy = req.user?.id || req.user?.userId || null;
@@ -95,7 +107,7 @@ router.post("/approve/:id", async (req, res) => {
  * POST /api/admin/tournaments/reject/:id
  * Rejects a proposed tournament and logs the rejection reason.
  */
-router.post("/reject/:id", async (req, res) => {
+router.post("/reject/:id", adminActionLimiter, async (req, res) => {
     try {
         const { id } = req.params;
         if (!mongoose.isValidObjectId(id)) {

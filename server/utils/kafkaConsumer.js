@@ -31,6 +31,7 @@
 const { Kafka } = require("kafkajs");
 const ProposedTournament = require("../models/ProposedTournament");
 const promClient = require('prom-client');
+const xss = require('xss');
 
 const scraperFailures = new promClient.Counter({
   name: 'scraper_failures_total',
@@ -118,17 +119,17 @@ const parseScrapedTournamentMessage = (rawPayload) => {
     }
 
     return {
-        rawCaption,
-        scrapedImageUrls,
-        sourceLinks,
-        tournamentName,
+        rawCaption: xss(rawCaption),
+        scrapedImageUrls: scrapedImageUrls.map(u => xss(u)),
+        sourceLinks: sourceLinks.map(l => xss(l)),
+        tournamentName: xss(tournamentName),
         date,
-        location,
-        entryFee,
-        registrationLink,
-        skillLevels,
+        location: xss(location),
+        entryFee: xss(entryFee),
+        registrationLink: xss(registrationLink),
+        skillLevels: skillLevels.map(s => xss(s)),
         registrationDeadline,
-        sourceUrl,
+        sourceUrl: xss(sourceUrl),
         confidenceScore,
         status: "pending"
     };
