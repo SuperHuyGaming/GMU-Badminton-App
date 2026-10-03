@@ -121,6 +121,8 @@ const forumRoutes = require("./routes/forum");
 app.use("/api/forum", forumRoutes);
 const { router: profileRoutes } = require("./routes/profile");
 app.use("/api/profile", profileRoutes);
+const adminTournamentsRoutes = require("./routes/adminTournaments");
+app.use("/api/admin/tournaments", adminTournamentsRoutes);
 const adminRoutes = require("./routes/admin");
 app.use("/api/admin", adminRoutes);
 const announcementRoutes = require("./routes/announcements");
