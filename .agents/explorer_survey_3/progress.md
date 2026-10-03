@@ -1,13 +1,14 @@
-# Progress — Explorer 3 (Survey)
+# Progress — Explorer 3 (Survey: Tests, Tooling, Kafka Stub, & Git Branch)
 
-Last visited: 2026-09-29T18:39:40Z
+Last visited: 2026-10-02T23:45:30Z
 
 ## Status
 - [x] Initialized DISPATCH.md and BRIEFING.md
-- [x] Locate Matchmaking player cards and "Add Friend" button in `client/` (`client/src/pages/Matchmaking.jsx`: lines 203-259)
-- [x] Trace backend Friend API endpoints (`server/routes/friends.js`: `POST /api/friends/request`, `GET /api/friends/:userId`)
-- [x] Investigate client API layer and state management (`client/src/utils/api.js`, `client/src/context/AuthContext.jsx`, `react-hot-toast`)
-- [x] Inspect existing unit / integration tests (verified `npm test` and `npm run lint` in `client/`, noted absence of `Matchmaking.test.jsx`)
-- [x] Produce `analysis.md`
-- [x] Produce `handoff.md`
-- [x] Ready to notify parent orchestrator via `send_message`
+- [x] Inspect server/package.json for test & lint scripts and dependencies
+- [x] Inspect existing server test suite and test structure
+- [x] Run current server test and lint commands to establish baseline (9 suites / 115 tests passed, 0 lint errors)
+- [x] Inspect server/utils/kafkaConsumer.js or Kafka-related architecture (documented stub and reference pattern)
+- [x] Inspect git branch status and repository status (`feature/tournament-admin-approval` verified, `gh` CLI located)
+- [x] Produce comprehensive analysis in `analysis.md`
+- [x] Produce comprehensive handoff report in `handoff.md`
+- [x] Ready to report completion to parent via send_message

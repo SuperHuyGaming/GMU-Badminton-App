@@ -26,7 +26,7 @@ const QuickPeekPopover = ({ anchorEl, handleClose, player, stats }) => {
             PaperProps={{ elevation: 3, sx: { borderRadius: 3, p: 2, minWidth: 220, mb: 1 } }}
         >
             <Box sx={{ textAlign: 'center' }}>
-                <Avatar src={getOptimizedAvatar(player.profilePic)} sx={{ width: 64, height: 64, mx: 'auto', mb: 1, border: '2px solid #1976d2' }} />
+                <Avatar src={getOptimizedAvatar(player.profilePic)} sx={{ width: 64, height: 64, mx: 'auto', mb: 1, border: '2px solid #1976d2' }}  alt="User Avatar" />
                 <Typography variant="subtitle1" fontWeight="bold">
                     {player.name}
                 </Typography>
@@ -89,7 +89,7 @@ const PeopleYouMayKnow = ({ user }) => {
             </Typography>
             <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 {recommended.length > 3 && (
-                    <IconButton 
+                    <IconButton aria-label="icon button" 
                         size="small" 
                         onClick={() => document.getElementById('pymk-scroll')?.scrollBy({ left: -250, behavior: 'smooth' })}
                         sx={{ position: 'absolute', left: -16, zIndex: 2, bgcolor: 'background.paper', boxShadow: 3, '&:hover': { bgcolor: 'action.hover' } }}
@@ -103,7 +103,7 @@ const PeopleYouMayKnow = ({ user }) => {
                 >
                     {recommended.map(player => (
                         <Card key={player._id} sx={{ minWidth: 200, p: 2, borderRadius: 3, flexShrink: 0, scrollSnapAlign: 'start', textAlign: 'center' }}>
-                            <Avatar src={getOptimizedAvatar(player.profilePic)} sx={{ width: 64, height: 64, mx: 'auto', mb: 1 }} />
+                            <Avatar src={getOptimizedAvatar(player.profilePic)} sx={{ width: 64, height: 64, mx: 'auto', mb: 1 }}  alt="User Avatar" />
                             <Typography variant="subtitle1" fontWeight="bold" noWrap>
                                 {player.name}
                             </Typography>
@@ -114,7 +114,7 @@ const PeopleYouMayKnow = ({ user }) => {
                     ))}
                 </Box>
                 {recommended.length > 3 && (
-                    <IconButton 
+                    <IconButton aria-label="icon button" 
                         size="small" 
                         onClick={() => document.getElementById('pymk-scroll')?.scrollBy({ left: 250, behavior: 'smooth' })}
                         sx={{ position: 'absolute', right: -16, zIndex: 2, bgcolor: 'background.paper', boxShadow: 3, '&:hover': { bgcolor: 'action.hover' } }}
@@ -270,6 +270,7 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                                     src={getOptimizedAvatar(friend.profilePic)}
                                     sx={{ width: 64, height: 64, cursor: 'pointer' }}
                                     onMouseEnter={(e) => handlePeekOpen(e, friend)}
+                                    alt="User Avatar"
                                     onMouseLeave={handlePeekClose}
                                 />
                                 <Box sx={{ ml: 2, flexGrow: 1, minWidth: 0 }}>

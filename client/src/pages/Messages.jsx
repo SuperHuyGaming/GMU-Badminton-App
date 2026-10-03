@@ -660,7 +660,7 @@ const Messages = () => {
 								flexShrink: 0
 							}}
 						>
-							<IconButton 
+							<IconButton aria-label="icon button" 
 								sx={{ display: { md: "none" } }} 
 								onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}
 								aria-label="Back to conversations"
@@ -695,7 +695,7 @@ const Messages = () => {
 							
 							) : messages.length === 0 ? (
 								<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.primary', gap: 2 }}>
-									<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 1 }} />
+									<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 1 }}  alt="User Avatar" />
 									<Typography variant="h5" fontWeight="bold">{activeChat.name}</Typography>
 									<Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
 										{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
@@ -717,7 +717,7 @@ const Messages = () => {
 
 									{!hasMore && (
 										<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, mb: 6 }}>
-											<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 2 }} />
+											<Avatar src={getOptimizedAvatar(activeChat.profilePic || "", 120)} sx={{ width: 90, height: 90, mb: 2 }}  alt="User Avatar" />
 											<Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>{activeChat.name}</Typography>
 											<Typography variant="body2" color="text.primary">
 												{friends.some(f => f._id === activeChat._id) ? "You're friends on GMU Badminton Connect" : "Not friends yet"}
@@ -776,7 +776,7 @@ const Messages = () => {
 													)}
 													<Box sx={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", mb: isNextSame ? 0.5 : 2, alignItems: 'center', '&:hover .report-btn': { opacity: 1 } }}>
 														{!isMe && !msg.isDeletedByAdmin && (
-															<IconButton className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
+															<IconButton aria-label="icon button" className="report-btn" size="small" onClick={() => handleReport(msg._id)} sx={{ opacity: 0, transition: 'opacity 0.2s', color: 'error.main', mr: 1 }} title="Report message" aria-label="Report message">
 																<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 															</IconButton>
 														)}
@@ -947,7 +947,7 @@ const Messages = () => {
 						backgroundPosition: 'center',
 						position: 'relative' 
 					}}>
-						<IconButton 
+						<IconButton aria-label="icon button" 
 							onClick={() => setProfileDialogOpen(false)} 
 							aria-label="Close profile dialog" 
 							sx={{ 

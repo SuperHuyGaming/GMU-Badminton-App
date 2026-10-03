@@ -365,7 +365,7 @@ export default function CommunityDirectory() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem', border: '2px solid', borderColor: 'background.paper' } }}>
                             {player.mutualFriendsSample?.map((friend) => (
-        <Avatar key={friend._id} src={friend.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(friend.name)}`} />
+        <Avatar key={friend._id} src={friend.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(friend.name)}`}  alt="User Avatar" />
     ))}
                         </AvatarGroup>
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
@@ -471,7 +471,7 @@ export default function CommunityDirectory() {
                                             )}
                                             {/* UX UI Tweak #2: Instant "Clear" Button */}
                                             {searchQuery && (
-                                                <IconButton 
+                                                <IconButton aria-label="icon button" 
                                                     size="small" 
                                                     onClick={(e) => { 
                                                         e.stopPropagation(); 
@@ -524,7 +524,7 @@ export default function CommunityDirectory() {
                                                   }}
                                                   sx={{ px: 3, py: 1.5, display: 'flex', gap: 2, alignItems: 'center' }}
                                               >
-                                                  <Avatar src={player.profilePic} />
+                                                  <Avatar src={player.profilePic}  alt="User Avatar" />
                                                   <Box>
                                                       <Typography fontWeight="bold">{player.name}</Typography>
                                                       <Typography variant="caption" color="text.secondary">{player.homeUniversity}</Typography>
@@ -557,7 +557,7 @@ export default function CommunityDirectory() {
                                                           <SearchIcon color="action" fontSize="small" />
                                                           <Typography fontWeight="500">{term}</Typography>
                                                       </Box>
-                                                      <IconButton size="small" onClick={(e) => removeRecentSearch(e, term)}>
+                                                      <IconButton aria-label="icon button" size="small" onClick={(e) => removeRecentSearch(e, term)}>
                                                           <CloseIcon fontSize="small" />
                                                       </IconButton>
                                                   </MenuItem>
@@ -719,7 +719,7 @@ export default function CommunityDirectory() {
                                             <Card sx={{ borderRadius: 3, p: { xs: 1.5, sm: 2 }, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: { xs: 1, sm: 2 }, transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-2px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.1)' } }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 }, flexGrow: 1, overflow: 'hidden' }}>
                                                     <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
-                                                        <Avatar src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} sx={{ width: { xs: 52, sm: 64 }, height: { xs: 52, sm: 64 } }} />
+                                                        <Avatar src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} sx={{ width: { xs: 52, sm: 64 }, height: { xs: 52, sm: 64 } }}  alt="User Avatar" />
                                                     </Link>
                                                     <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
@@ -738,7 +738,7 @@ export default function CommunityDirectory() {
                                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
                                                                 <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem', border: '2px solid', borderColor: 'background.paper' } }}>
                                                                     {player.mutualFriendsSample?.map((friend) => (
-        <Avatar key={friend._id} src={friend.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(friend.name)}`} />
+        <Avatar key={friend._id} src={friend.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(friend.name)}`}  alt="User Avatar" />
     ))}
                                                                 </AvatarGroup>
                                                                 <Typography variant="body2" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'grey.400' : 'text.secondary', fontWeight: 500, fontSize: '0.85rem' }}>
@@ -793,7 +793,7 @@ export default function CommunityDirectory() {
                 <Box sx={{ width: { xs: '100vw', sm: 340 }, p: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Advanced Filters</Typography>
-                        <IconButton onClick={() => setDrawerOpen(false)}>
+                        <IconButton aria-label="icon button" onClick={() => setDrawerOpen(false)}>
                             <CloseIcon />
                         </IconButton>
                     </Box>

@@ -297,9 +297,21 @@ function App() {
 		palette: {
 			mode,
 			primary: mode === "light"
-				? { main: "#005c2e", dark: "#004d26", light: "#1b663e", contrastText: "#ffffff" }
+				? { main: "#004d26", dark: "#003319", light: "#156536", contrastText: "#ffffff" }
 				: { main: "#80e27e", dark: "#005c2e", light: "#a5d6a7", contrastText: "#02120a" },
 			secondary: { main: "#FFCC33", contrastText: "#002f17" },
+			error: mode === "light"
+				? { main: "#B00020", contrastText: "#ffffff" }
+				: { main: "#ef5350", contrastText: "#000000" },
+			warning: mode === "light"
+				? { main: "#E65100", contrastText: "#ffffff" }
+				: { main: "#ff9800", contrastText: "#000000" },
+			info: mode === "light"
+				? { main: "#01579B", contrastText: "#ffffff" }
+				: { main: "#29b6f6", contrastText: "#000000" },
+			success: mode === "light"
+				? { main: "#1B5E20", contrastText: "#ffffff" }
+				: { main: "#66bb6a", contrastText: "#000000" },
 			text: {
 				primary: mode === "light" ? "#1a202c" : "#ffffff",
 				secondary: mode === "light" ? "#404040" : "rgba(255, 255, 255, 0.8)",

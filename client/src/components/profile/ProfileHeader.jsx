@@ -263,6 +263,7 @@ export default function ProfileHeader({
 							tabIndex={displayProfilePic || isOwnProfile ? 0 : undefined}
 							aria-label={isOwnProfile ? "View profile photo or change picture" : "View profile photo"}
 							onClick={handleAvatarClick}
+							alt="User Avatar"
 							onKeyDown={(e) => {
 								if ((e.key === "Enter" || e.key === " ") && (displayProfilePic || isOwnProfile)) {
 									e.preventDefault();

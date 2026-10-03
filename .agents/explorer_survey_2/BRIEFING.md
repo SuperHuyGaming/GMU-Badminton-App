@@ -1,7 +1,7 @@
-# BRIEFING — 2026-09-29T18:38:50Z
+# BRIEFING — 2026-10-02T23:44:50Z
 
 ## Mission
-Investigate Requirement 2: Refine Matchmaking Search Bar Styling in client/
+Investigate server/server.js, existing routes, auth middleware, and role verification in server codebase to determine how to securely implement and mount /api/admin/tournaments.
 
 ## 🔒 My Identity
 - Archetype: teamwork_preview_explorer
@@ -9,29 +9,31 @@ Investigate Requirement 2: Refine Matchmaking Search Bar Styling in client/
 - Working directory: D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_2
 - Original parent: 93d2d1d0-6d75-4341-b9f0-ead10a1e3f67
 - Milestone: survey
+- Phase 3 Parent: 174a7ea6-23e1-42b2-9fe5-f2203f2e5cf7
+- Phase 3 Role: Explorer 2 (Core Backend: Routes, Middleware & Admin Auth)
 
 ## 🔒 Key Constraints
 - Read-only investigation — do NOT implement
 - Produce analysis.md and handoff.md in working directory
 - Follow Handoff Protocol (Observation, Logic Chain, Caveats, Conclusion, Verification Method)
+- Phase 3: Investigate server/server.js, existing routes, auth middleware, role verification for /api/admin/tournaments
 
 ## Current Parent
-- Conversation ID: 93d2d1d0-6d75-4341-b9f0-ead10a1e3f67
-- Updated: not yet
+- Conversation ID: 174a7ea6-23e1-42b2-9fe5-f2203f2e5cf7
+- Updated: 2026-10-02T23:44:50Z
 
 ## Investigation State
-- **Explored paths**: `client/src/pages/Matchmaking.jsx`, `client/src/App.jsx`, `client/src/components/Navbar.jsx`, `client/src/pages/SearchResults.jsx`, `client/src/index.css`, `client/src/components/Navbar.test.jsx`, `client/package.json`
+- **Explored paths**: `server/server.js`, `server/routes/admin.js`, `server/routes/announcements.js`, `server/routes/scrape.js`, `server/routes/calendar.js`, `server/middleware/auth.js`, `server/middleware/errorHandler.js`, `server/models/Tournament.js`, `server/models/User.js`, `server/tests/securityValidation.test.js`.
 - **Key findings**:
-  - Search bar is in `client/src/pages/Matchmaking.jsx` (lines 280-310) using MUI `TextField` with `bgcolor: 'background.paper'`.
-  - In dark mode, `background.paper` is `rgba(8, 33, 20, 0.75)` which blends into the `#02120a` page background with virtually zero contrast delta.
-  - Recommended fix: Apply `backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'background.paper'` on `.MuiOutlinedInput-root` with `backdropFilter: 'blur(10px)'` and `borderRadius: 50`.
-  - Confirmed 0 tests currently test `Matchmaking.jsx`; `npm test` has 42 passing tests and zero breakage risk.
-  - Confirmed `npm run lint` and `npm run lint:a11y` pass with 0 errors.
-- **Unexplored areas**: None for R2 survey scope.
+  - `authMiddleware` and `adminMiddleware` are already fully implemented and exported in `server/middleware/auth.js`.
+  - Recommended mounting point in `server/server.js`: mount `/api/admin/tournaments` using `server/routes/adminTournaments.js` directly before `app.use("/api/admin", adminRoutes)` around line 124.
+  - Enforce role verification using router-level middleware `router.use(authMiddleware); router.use(adminMiddleware);` in `adminTournaments.js`.
+  - Fully designed endpoints for `GET /proposed`, `POST /approve/:id`, `POST /reject/:id`, and `PUT /:id` with idempotency and sanitization guards.
+- **Unexplored areas**: None for Explorer 2 scope.
 
 ## Key Decisions Made
-- [2026-09-29T18:35:41Z] Initiated exploration for R2 (search bar styling refinement).
-- [2026-09-29T18:38:50Z] Concluded exploration, produced `analysis.md` and `handoff.md`.
+- [2026-10-02T23:41:00Z] Initiated Phase 3 Explorer 2 investigation.
+- [2026-10-02T23:44:50Z] Concluded exploration, produced comprehensive `analysis.md` and `handoff.md`.
 
 ## Artifact Index
 - D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_2\DISPATCH.md — Dispatch instructions

@@ -1,30 +1,30 @@
-# Dispatch for Explorer Survey 1
+# Dispatch: Explorer 1 - Models & Schemas
 
-## Mission
-Investigate R3: Removal of "Players" tab from Navbar.
-- Locate the Navbar component in `client/`.
-- Identify how the "Players" link is rendered.
-- Identify all tests that check Navbar or the "Players" link.
-- Detail the exact code changes and test updates required.
-- Write your findings to `analysis.md` and summary in `handoff.md`.
+## Objective
+Investigate Mongoose models in `server/models/`, specifically `Tournament.js` and other models, to understand the current Tournament schema structure, data types, and how `ProposedTournament.js` should be structured and mapped to `Tournament.js` upon approval.
 
-## 2026-09-29T18:35:41Z
-You are Explorer 1 (Archetype: teamwork_preview_explorer).
+## Key Files to Investigate
+- `D:\GMU Fall 2026\GMU-Badminton-App\.agents\ORIGINAL_REQUEST.md` (mandatory read)
+- `D:\GMU Fall 2026\GMU-Badminton-App\server\models\Tournament.js`
+- Other files in `server/models/`
+
+## Deliverables
+Write your comprehensive findings and recommendations to `.agents/explorer_survey_1/handoff.md`. Include:
+1. Exact structure and fields of existing `Tournament.js`.
+2. Proposed schema specification for `ProposedTournament.js` (Raw Scraped Data, AI Structured Data, Metadata with confidenceScore 0-100 and status enum ['pending', 'approved', 'rejected']).
+3. Exact field mapping from `ProposedTournament` to `Tournament` for the `POST /approve/:id` action.
+4. Any potential schema pitfalls, validations, or indexing considerations.
+
+## 2026-10-02T23:40:30Z
+You are Explorer 1 for Phase 3 (Core Backend).
 Your working directory is: D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_1
-Your parent is: orchestrator_1 (Conversation ID: 93d2d1d0-6d75-4341-b9f0-ead10a1e3f67)
+You MUST read D:\GMU Fall 2026\GMU-Badminton-App\.agents\ORIGINAL_REQUEST.md before starting work.
+Read your dispatch task in D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_1\DISPATCH.md.
 
-Read ORIGINAL_REQUEST.md at: D:\GMU Fall 2026\GMU-Badminton-App\.agents\ORIGINAL_REQUEST.md
-Read DISPATCH.md at: D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_1\DISPATCH.md
+Task:
+Investigate Mongoose models in `server/models/`, specifically `Tournament.js` and other models, to understand the current Tournament schema structure, data types, and how `ProposedTournament.js` should be structured and mapped to `Tournament.js` upon approval.
 
-Your task is to investigate Requirement 3: Removal of the "Players" tab from the navigation bar.
-1. Locate where the Navbar component is defined in `client/` (e.g., `client/src/components/layout/Navbar.jsx` or similar).
-2. Inspect how the "Players" navigation link is currently rendered, its routing target, and if any other component or route depends on it.
-3. Locate all existing tests in `client/` that test the Navbar or reference the "Players" link (e.g. search for tests in `client/src` or `client/__tests__`).
-4. Determine the exact changes needed in code and tests so that `npm test` and `npm run lint` pass cleanly with 0 errors.
-5. Check package.json scripts and lint/test configurations in `client/`.
+Deliverable:
+Write a comprehensive report to D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_1\handoff.md.
+When finished, send a message to parent with your completion status and reference the handoff report path.
 
-Produce two files in your working directory:
-- `D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_1\analysis.md`: Detailed technical findings with file paths, code snippets, and test files.
-- `D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_1\handoff.md`: Structured handoff following the Handoff Protocol (Observation, Logic Chain, Caveats, Conclusion, Verification Method).
-
-When complete, send a message to orchestrator_1 reporting completion and linking to your handoff.md.

@@ -1,336 +1,233 @@
-# Analysis Report: Requirement 1 — "Add Friend" Functionality on Matchmaking Player Cards
+# Phase 3 Core Backend Survey: Test Configuration, Linting, Kafka Consumer, & Git Status
 
-**Author**: Explorer 3 (`teamwork_preview_explorer`)  
-**Date**: 2026-09-29  
-**Target Requirement**: R1 (Integrate "Add Friend" buttons on Matchmaking player cards with backend friend API, showing a loading spinner during request, transitioning to disabled "Request Sent" upon success).
-
----
-
-## 1. Executive Summary
-
-In `client/src/pages/Matchmaking.jsx`, the "Add Friend" button on player cards is currently a stubbed placeholder executing `onClick={() => alert(`Adding ${player.name} as friend...`)}`.
-The backend provides a fully functional, authenticated friend request system at `POST /api/friends/request` (defined in `server/routes/friends.js`), with notifications and Socket.io events.
-This analysis outlines the exact technical architecture to connect the UI button to this backend endpoint, manage per-card loading and disabled states, handle errors gracefully using `react-hot-toast`, and verify the changes with Vitest unit tests while maintaining full compliance with the client's ESLint rules.
+**Explorer:** Explorer 3 (Phase 3 Core Backend Survey)  
+**Date:** 2026-10-02  
+**Target:** DMV Tournament Aggregation & Admin Approval System (`server/`)
 
 ---
 
-## 2. Component Inspection & Codebase Locations
+## 1. Test Configuration & Baseline Status
 
-### 2.1 Matchmaking Component & Player Card Definition
-- **File**: `client/src/pages/Matchmaking.jsx`
-- **Component**: `Matchmaking()` (Lines 22–554)
-- **Card Renderer**: `renderPlayerCard(player)` (Lines 203–259)
-- **Stub Button Location**: Lines 253–257:
-  ```jsx
-  <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2 }}>
-      <Button 
-          variant="contained" 
-          color="primary" 
-          fullWidth 
-          sx={{ borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }} 
-          onClick={() => alert(`Adding ${player.name} as friend...`)} 
-          startIcon={<PersonAddIcon />}
-      >
-          Add Friend
-      </Button>
-  </Box>
-  ```
+### 1.1 Configuration & Tooling
+- **Configuration File:** `server/package.json`
+- **Script:** `"test": "cross-env NODE_ENV=test jest"`
+- **Framework & Libraries:**
+  - `jest`: `^29.7.0` (Test runner & assertion library)
+  - `supertest`: `^7.3.0` (HTTP endpoint testing against Express apps)
+  - `cross-env`: `^10.1.0` (Cross-platform environment variable setting)
+- **Module System:** CommonJS (`"type": "commonjs"`)
 
-### 2.2 Where Player Cards Are Rendered
-The `renderPlayerCard(player)` function is consumed in two key places in `Matchmaking.jsx`:
-1. **"People You May Know" Carousel** (Lines 494–500):
-   ```jsx
-   {recommended.map((player, i) => (
-       <Box key={`rec-${player._id}`} sx={{ minWidth: 260, maxWidth: 280, flexShrink: 0, scrollSnapAlign: 'start' }}>
-           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06, duration: 0.35 }}>
-               {renderPlayerCard(player)}
-           </motion.div>
-       </Box>
-   ))}
-   ```
-2. **"Search Results" Grid** (Lines 540–546):
-   ```jsx
-   {matches.map((player, i) => (
-       <Grid size={{'xs': 12, 'sm': 6, 'md': 4}} key={`match-${player._id}`}>
-           <motion.div custom={i} variants={cardVariants} initial="hidden" animate="visible" exit="hidden" layout>
-               {renderPlayerCard(player)}
-           </motion.div>
-       </Grid>
-   ))}
-   ```
+### 1.2 Baseline Test Execution Results
+Execution of `npm test` inside `server/`:
+- **Result:** **PASSED** (Exit code: 0)
+- **Test Suites:** 9 passed, 9 total
+- **Tests:** 115 passed, 8 skipped, 123 total
+- **Execution Time:** ~3.07 seconds
+- **Suites Verified:**
+  1. `tests/kafkaProducer.test.js` (6 tests passed)
+  2. `tests/search.test.js` (11 tests passed)
+  3. `tests/gamification.test.js` (6 tests passed)
+  4. `tests/auth.test.js` (4 tests passed)
+  5. `tests/matchmaking.test.js` (10 tests passed)
+  6. `tests/friends.test.js` (26 tests passed)
+  7. `tests/challenge_stress.test.js` (33 tests passed, 8 skipped)
+  8. `tests/aiModeration.test.js` (6 tests passed)
+  9. `tests/securityValidation.test.js` (13 tests passed)
 
-### 2.3 Player Data Structure
-Each `player` object received from `GET /api/matchmaking/discover` contains:
-```json
-{
-  "_id": "650000000000000000000002",
-  "name": "Jane Doe",
-  "bio": "Casual badminton lover!",
-  "skillLevel": "Intermediate",
-  "preferredPlay": "Doubles",
-  "racket": "Yonex Astrox 88D",
-  "profilePic": "https://...",
-  "homeUniversity": "George Mason University",
-  "lastActive": "2026-09-29T12:00:00.000Z"
-}
-```
+### 1.3 Client Test Baseline
+Execution of `npm test` inside `client/`:
+- **Result:** **PASSED** (Exit code: 0)
+- **Tool:** Vitest v3.2.7
+- **Suites:** 12 passed, 12 total (59 passed, 18 skipped)
+- **Execution Time:** ~4.80 seconds
 
 ---
 
-## 3. Backend Friend API Trace
+## 2. Linting Configuration & Status
 
-### 3.1 Endpoint Mounting
-- Route file: `server/routes/friends.js`
-- Mounted in `server/server.js` line 129:
+### 2.1 Configuration & Tooling
+- **Configuration File:** `server/eslint.config.js`
+- **Config Content:**
   ```javascript
-  app.use("/api/friends", require("./routes/friends"));
+  module.exports = [{}];
   ```
+- **Script:** `"lint": "eslint ."`
+- **Dependencies:**
+  - `eslint`: `^10.11.0`
+  - `@eslint/js`: `^10.0.1`
 
-### 3.2 Friend Request Endpoint Specification
-- **URL**: `POST /api/friends/request`
-- **Middleware**: `authMiddleware` (`server/middleware/auth.js`)
-- **Required Header**:
-  - `Authorization: Bearer <accessToken>`
-  - `Content-Type: application/json`
-- **Request Body**:
-  ```json
-  {
-    "recipientId": "<Target User ObjectId>"
+### 2.2 Baseline Lint Execution Results
+Execution of `npm run lint` inside `server/`:
+- **Result:** **PASSED** (Exit code: 0, 0 errors, 0 warnings).
+
+---
+
+## 3. Kafka Utilities & Consumer Architecture
+
+### 3.1 Existing Kafka Utilities in `server/`
+- `server/utils/kafkaProducer.js` is the primary Kafka utility in the server service.
+  - Client ID: `gmu-badminton-server`
+  - Broker default: `process.env.KAFKA_BROKERS || 'localhost:9092'`
+  - Uses legacy partitioner: `Partitioners.LegacyPartitioner`
+  - Payload sanitizer: Strips sensitive fields (`password`, `token`, `secret`, `jwt`, `pushSubscriptions`)
+  - Test safety: Bypasses publishing if `NODE_ENV === 'test'` unless `ENABLE_KAFKA_TESTS` is set.
+- `server/utils/kafkaConsumer.js` does **NOT** currently exist in `server/utils/`.
+
+### 3.2 Reference Kafka Consumer (`search-service/kafkaConsumer.js`)
+The `search-service` microservice contains an established consumer pattern:
+- Connects using `kafkajs`.
+- Configurable group ID: `process.env.KAFKA_GROUP_ID || '...'`.
+- Topic subscription: `consumer.subscribe({ topic: '...', fromBeginning: true })`.
+- Run loop: `consumer.run({ eachMessage: handleMessage })`.
+- Graceful shutdown on `SIGINT` / `SIGTERM`.
+
+### 3.3 Proposed `server/utils/kafkaConsumer.js` Design
+Per Requirement R4:
+> "In `server/utils/kafkaConsumer.js` (if it exists), add a stub case for the `tournament-scraping` topic that inserts a message into the `ProposedTournament` collection. If it doesn't exist, just document where the consumer should be added."
+
+If implemented, `server/utils/kafkaConsumer.js` should reside in `server/utils/kafkaConsumer.js`:
+```javascript
+const { Kafka } = require('kafkajs');
+const ProposedTournament = require('../models/ProposedTournament');
+
+const brokers = process.env.KAFKA_BROKERS
+  ? process.env.KAFKA_BROKERS.split(',').map((b) => b.trim())
+  : ['localhost:9092'];
+
+const kafka = new Kafka({
+  clientId: process.env.KAFKA_CLIENT_ID || 'gmu-badminton-server-consumer',
+  brokers,
+});
+
+const consumer = kafka.consumer({
+  groupId: process.env.KAFKA_GROUP_ID || 'tournament-consumer-group',
+});
+
+const handleMessage = async ({ topic, partition, message }) => {
+  try {
+    const rawValue = message.value ? message.value.toString() : '{}';
+    const eventData = JSON.parse(rawValue);
+
+    if (topic === 'tournament-scraping') {
+      const proposal = await ProposedTournament.create({
+        rawCaption: eventData.rawCaption || eventData.originalCaption || '',
+        scrapedImageUrls: eventData.scrapedImageUrls || (eventData.flyerImageUrl ? [eventData.flyerImageUrl] : []),
+        sourceLinks: eventData.sourceLinks || (eventData.sourceUrl ? [eventData.sourceUrl] : []),
+        tournamentName: eventData.tournamentName || eventData.tournament_name || 'Untitled Tournament',
+        date: eventData.date || eventData.startDate || null,
+        location: eventData.location || eventData.event_location || 'TBD',
+        entryFee: eventData.entryFee || 0,
+        registrationLink: eventData.registrationLink || eventData.registration_url || '',
+        skillLevels: eventData.skillLevels || [],
+        registrationDeadline: eventData.registrationDeadline || eventData.registration_deadline || null,
+        sourceUrl: eventData.sourceUrl || eventData.source_url || '',
+        confidenceScore: eventData.confidenceScore !== undefined ? eventData.confidenceScore : 85,
+        status: 'pending',
+      });
+      return proposal;
+    }
+  } catch (error) {
+    console.error(`Error processing Kafka message on topic ${topic}:`, error);
+    return null;
   }
-  ```
-  *(Note: Frontend calls in `Messages.jsx` and `Profile.jsx` pass `{ requesterId: user.id, recipientId }`. The backend reads `recipientId` from `req.body` and extracts `requesterId` from `req.user.id || req.user.userId`).*
+};
 
-### 3.3 Server Logic & Response Behavior
-From `server/routes/friends.js` (lines 41–100):
-1. **Validation Checks**:
-   - `!recipientId` or invalid ObjectId $\rightarrow$ HTTP 400 `{ "message": "Valid recipient ID is required." }`
-   - `requesterId === recipientId` $\rightarrow$ HTTP 400 `{ "message": "Cannot add yourself" }`
-   - `!requester || !recipient` $\rightarrow$ HTTP 404 `{ "message": "User not found" }`
-   - `recipient.friends.includes(requesterId)` $\rightarrow$ HTTP 400 `{ "message": "Already friends" }`
-   - `recipient.friendRequests.includes(requesterId)` $\rightarrow$ HTTP 400 `{ "message": "Request already sent" }`
-2. **Mutual Request Handling**:
-   - If recipient already sent requester a friend request (`requester.friendRequests.includes(recipientId)`), the server automatically accepts it, adds both to each other's friends array, saves, and returns HTTP 200 `{ "message": "Friend request accepted automatically" }`.
-3. **Standard Success**:
-   - Pushes `requesterId` to `recipient.friendRequests`.
-   - Pushes `recipientId` to `requester.sentFriendRequests`.
-   - Saves both User documents.
-   - Creates a `Notification` record in MongoDB.
-   - Emits Socket.io events: `newNotification` and `friendRequestReceived`.
-   - Returns HTTP 200 `{ "message": "Friend request sent" }`.
+const runConsumer = async () => {
+  if (process.env.NODE_ENV === 'test' && !process.env.ENABLE_KAFKA_TESTS) {
+    return;
+  }
+  try {
+    await consumer.connect();
+    await consumer.subscribe({ topic: 'tournament-scraping', fromBeginning: false });
+    await consumer.run({ eachMessage: handleMessage });
+  } catch (error) {
+    console.error('Error starting Kafka consumer:', error);
+  }
+};
 
-### 3.4 Additional Relevant Friend Endpoints
-- `GET /api/friends/:userId`: Fetches `{ friends: [...], friendRequests: [...], sentFriendRequests: [...] }`. Protected by IDOR check: caller must be owner or admin.
-- `POST /api/friends/accept`: `{ requesterId }`
-- `POST /api/friends/reject`: `{ targetId }`
-- `POST /api/friends/remove`: `{ friendId }`
+const disconnectConsumer = async () => {
+  try {
+    await consumer.disconnect();
+  } catch (error) {
+    console.error('Error disconnecting Kafka consumer:', error);
+  }
+};
 
----
-
-## 4. Client-Side API & State Architecture
-
-### 4.1 Client API Layer (`client/src/utils/api.js`)
-- `apiFetch(endpoint, options)` is the standard fetch wrapper used across the client.
-- **Automatic Headers**:
-  - Automatically attaches `Authorization: Bearer <accessToken>` from `localStorage.getItem("accessToken")`.
-  - Sets default `Content-Type: application/json` unless body is `FormData`.
-- **401 Refresh Handling**:
-  - Intercepts 401, attempts `/api/auth/refreshtoken`, queues concurrent requests, and retries.
-  - If refresh fails, purges localStorage and redirects to `/auth`.
-- **Error Propagation**:
-  - Throws `new Error(errorData.message || ...)` on any non-2xx status code (except 401).
-
-### 4.2 Authentication Context (`client/src/context/AuthContext.jsx`)
-- Exported hook: `useAuth()`
-- Provides: `{ user, setUser, login, logout, updateUser, setToastMessage }`
-- `user.id` or `user._id` holds the logged-in user's ObjectId.
-
-### 4.3 UI Notifications
-- `react-hot-toast` is already installed and configured with `<Toaster position="top-center" />` in `client/src/App.jsx`.
-- Components throughout the app (`Forum.jsx`, `PostCard.jsx`, `AuthContext.jsx`, `useNotifications.js`) import `{ toast }` from `'react-hot-toast'` and invoke `toast.success(msg)`, `toast.error(msg)`, or `toast(msg)`.
-
----
-
-## 5. Implementation Design for Requirement 1
-
-### 5.1 State Management Strategy
-Because multiple player cards appear on the Matchmaking screen simultaneously, button state cannot be a single global boolean. Tracking must be keyed by `player._id`.
-
-```javascript
-// State dictionary: { [playerId]: 'idle' | 'loading' | 'sent' }
-const [friendStatus, setFriendStatus] = useState({});
-```
-
-Benefits:
-- O(1) status lookup per card: `friendStatus[player._id]`.
-- Synchronizes status across views: if a player appears in both "People You May Know" and "Search Results", clicking "Add Friend" in one will simultaneously update both cards.
-- Isolation: other cards remain completely interactive.
-
-### 5.2 Pre-populating Existing Sent Requests (Optional Hydration)
-On component mount, if `user` is authenticated, `Matchmaking` can fetch `GET /api/friends/${user.id}` to pre-populate any players the user has already sent requests to or is already friends with:
-```javascript
-useEffect(() => {
-    if (!user?.id && !user?._id) return;
-    const currentId = user.id || user._id;
-
-    const fetchExistingFriendStatus = async () => {
-        try {
-            const res = await apiFetch(`/api/friends/${currentId}`);
-            const data = await res.json();
-            const map = {};
-            if (data.sentFriendRequests) {
-                data.sentFriendRequests.forEach(req => {
-                    const id = typeof req === 'string' ? req : req._id;
-                    if (id) map[id] = 'sent';
-                });
-            }
-            if (data.friends) {
-                data.friends.forEach(f => {
-                    const id = typeof f === 'string' ? f : f._id;
-                    if (id) map[id] = 'sent';
-                });
-            }
-            setFriendStatus(prev => ({ ...map, ...prev }));
-        } catch (err) {
-            console.warn("Could not pre-populate friend requests:", err);
-        }
-    };
-
-    fetchExistingFriendStatus();
-}, [user]);
-```
-
-### 5.3 Click Event Handler (`handleAddFriend`)
-```javascript
-const handleAddFriend = async (player) => {
-    if (!player?._id) return;
-
-    if (!user) {
-        toast.error("Please log in to send friend requests.");
-        navigate('/auth');
-        return;
-    }
-
-    // Prevent duplicate triggers if already in-flight or sent
-    if (friendStatus[player._id] === 'loading' || friendStatus[player._id] === 'sent') {
-        return;
-    }
-
-    // 1. Immediate loading spinner state
-    setFriendStatus(prev => ({ ...prev, [player._id]: 'loading' }));
-
-    try {
-        const response = await apiFetch('/api/friends/request', {
-            method: 'POST',
-            body: JSON.stringify({
-                requesterId: user.id || user._id,
-                recipientId: player._id,
-            }),
-        });
-
-        const data = await response.json().catch(() => ({}));
-
-        // 2. Transition to disabled "Request Sent" state
-        setFriendStatus(prev => ({ ...prev, [player._id]: 'sent' }));
-        toast.success(data.message || `Friend request sent to ${player.name}!`);
-    } catch (err) {
-        console.error("Failed to send friend request:", err);
-        const errMsg = err.message || "Failed to send friend request";
-
-        // Handle edge-case: request was already sent previously
-        if (errMsg.toLowerCase().includes("already sent") || errMsg.toLowerCase().includes("already friends")) {
-            setFriendStatus(prev => ({ ...prev, [player._id]: 'sent' }));
-            toast(errMsg, { icon: 'ℹ️' });
-        } else {
-            // 3. Revert to enabled state on failure
-            setFriendStatus(prev => ({ ...prev, [player._id]: 'idle' }));
-            toast.error(errMsg);
-        }
-    }
+module.exports = {
+  kafka,
+  consumer,
+  handleMessage,
+  runConsumer,
+  disconnectConsumer,
 };
 ```
 
-### 5.4 Button JSX & UI Feedback
-In `renderPlayerCard(player)`:
-```jsx
-const status = friendStatus[player._id];
-const isLoading = status === 'loading';
-const isSent = status === 'sent';
+---
 
-return (
-    <Card ...>
-        ...
-        <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2 }}>
-            <Button
-                variant={isSent ? 'outlined' : 'contained'}
-                color="primary"
-                fullWidth
-                disabled={isLoading || isSent}
-                sx={{ 
-                    borderRadius: 2, 
-                    fontWeight: 'bold', 
-                    textTransform: 'none',
-                    ...(isSent && {
-                        borderColor: 'primary.main',
-                        color: 'primary.main',
-                    })
-                }}
-                onClick={() => handleAddFriend(player)}
-                startIcon={
-                    isLoading ? null : isSent ? <CheckIcon fontSize="small" /> : <PersonAddIcon />
-                }
-                aria-label={
-                    isLoading 
-                        ? `Sending friend request to ${player.name}` 
-                        : isSent 
-                        ? `Friend request sent to ${player.name}` 
-                        : `Add ${player.name} as friend`
-                }
-                aria-busy={isLoading}
-            >
-                {isLoading ? (
-                    <CircularProgress size={20} color="inherit" aria-label="Loading" />
-                ) : isSent ? (
-                    'Request Sent'
-                ) : (
-                    'Add Friend'
-                )}
-            </Button>
-        </Box>
-    </Card>
-);
-```
+## 4. Git Branch & PR Workflow Status
 
-### 5.5 Imports Required in `Matchmaking.jsx`
-- Add `CircularProgress` to `@mui/material` imports.
-- Add `CheckIcon` from `@mui/icons-material/Check`.
-- Add `useAuth` from `../context/AuthContext`.
-- Add `toast` from `react-hot-toast`.
+### 4.1 Branch Verification
+- **Current Active Branch:** `feature/tournament-admin-approval`
+- **Branch Existence:** Verified locally.
+- **Working Tree Status:** Clean source directory (`server/`, `client/`, `search-service/` have no unstaged code changes). Only metadata files in `.agents/` and `ORIGINAL_REQUEST.md` are modified.
+
+### 4.2 GitHub CLI (`gh`) Availability
+- **Default PATH:** `gh` is not in the system environment PATH.
+- **Absolute Path Found:** `C:\Program Files\GitHub CLI\gh.exe`
+- **Authentication Verified:**
+  - Account: `SuperHuyGaming`
+  - Active: `true`
+  - Protocol: `https`
+  - Scopes: `gist`, `read:org`, `repo`, `workflow`
+- **Execution Command for PR Workflow:**
+  Use `& "C:\Program Files\GitHub CLI\gh.exe"` or add `C:\Program Files\GitHub CLI` to `$env:PATH`.
+
+### 4.3 Target Branch & PR Invariants
+- Base branch: `develop`
+- Head branch: `feature/tournament-admin-approval`
+- Invariant rule: **Never commit or push directly to `develop` or `main`.**
+- Workflow steps:
+  1. Commit changes to `feature/tournament-admin-approval`
+  2. Push branch: `git push -u origin feature/tournament-admin-approval`
+  3. Create PR targeting `develop`:
+     ```powershell
+     & "C:\Program Files\GitHub CLI\gh.exe" pr create --base develop --head feature/tournament-admin-approval --title "feat(tournaments): tournament aggregation & admin approval backend" --body "..." --assignee SuperHuyGaming --label "QA Pipeline" --label "Automated"
+     ```
+  4. Post QA Bot comment:
+     ```powershell
+     & "C:\Program Files\GitHub CLI\gh.exe" pr comment <PR#> --body "🤖 **Automated QA Pipeline:** ..."
+     ```
+  5. Invoke `qa_engineer` subagent.
 
 ---
 
-## 6. Testing & Quality Assurance Plan
+## 5. Blueprint for New Unit & Integration Tests
 
-### 6.1 Existing Test Analysis
-- Running `npm test` in `client/` passes 42 tests across 9 test files (all Vitest).
-- Running `npm run lint` in `client/` passes with 0 warnings/errors.
-- **Gap Identified**: There is currently NO `Matchmaking.test.jsx` in `client/src/pages/`.
-- No tests currently assert on friend requests in `client/`.
+### 5.1 Test File Placement
+Create `server/tests/adminTournaments.test.js` to cover the new endpoints and models.
 
-### 6.2 Proposed Test Suite (`client/src/pages/Matchmaking.test.jsx`)
-To satisfy acceptance criteria without regression:
-1. **Mock Setup**:
-   - Mock `../utils/api` (`apiFetch`).
-   - Mock `../context/AuthContext` (`useAuth`).
-   - Mock `react-router-dom` (`useNavigate`, `Link`).
-   - Mock `framer-motion` (simple `div` wrapper for `motion.div`).
-2. **Key Test Cases**:
-   - `renders player cards with "Add Friend" button`: Verify button exists and is enabled by default.
-   - `triggers friend request and shows loading spinner on click`: Clicking "Add Friend" invokes `POST /api/friends/request` with `recipientId` and displays `CircularProgress` with disabled button.
-   - `transitions to disabled "Request Sent" button on success`: When API promise resolves, button has text "Request Sent" and `disabled={true}`.
-   - `reverts to "Add Friend" and shows error toast on failure`: When API promise rejects, button reverts to enabled "Add Friend".
-
----
-
-## 7. Requirement Interactions & Scope Boundary
-- **Interaction with Requirement 2**: R2 modifies the Search Bar styling within `client/src/pages/Matchmaking.jsx` (Lines 280–310).
-- **Guidance for Implementer**: Ensure edits to `renderPlayerCard` and top-level hooks for R1 do not clash with the search bar background styling for R2. The two requirements are co-located in `Matchmaking.jsx` but operate on distinct sections of the component tree.
+### 5.2 Test Specifications
+1. **Authentication & Authorization:**
+   - Missing token -> `401 Unauthorized` (`{ message: "No token, authorization denied" }`).
+   - Invalid token -> `401 Unauthorized` (`{ message: "Token is not valid" }`).
+   - Non-admin user token (`role: 'user'`) -> `403 Forbidden` (`{ message: "Access denied. Admins only." }`).
+   - Admin user token (`role: 'admin'`) -> `200 OK` / authorized access.
+2. **`GET /api/admin/tournaments/proposed`:**
+   - Returns only tournaments where `status === 'pending'`.
+   - Results are sorted by `confidenceScore` in descending order.
+3. **`POST /api/admin/tournaments/approve/:id`:**
+   - Invalid ObjectId -> `400 Bad Request`.
+   - Non-existent ID -> `404 Not Found`.
+   - Success -> Creates a document in `Tournament` collection, updates `ProposedTournament.status` to `'approved'`, returns `200` with both objects.
+4. **`POST /api/admin/tournaments/reject/:id`:**
+   - Invalid ObjectId -> `400 Bad Request`.
+   - Non-existent ID -> `404 Not Found`.
+   - Success -> Updates `ProposedTournament.status` to `'rejected'`, returns `200`.
+5. **`PUT /api/admin/tournaments/:id`:**
+   - Invalid ObjectId -> `400 Bad Request`.
+   - Non-existent ID -> `404 Not Found`.
+   - Success -> Updates AI structured data (`tournamentName`, `date`, `location`, `entryFee`, `registrationLink`, `skillLevels`, `registrationDeadline`), returns `200` with updated proposal.
+6. **`ProposedTournament` Model Schema Validation:**
+   - Defaults `status` to `'pending'`.
+   - Rejects invalid enum values for `status` (only allows `'pending'`, `'approved'`, `'rejected'`).
+   - Rejects `confidenceScore` outside the `0-100` range (min: 0, max: 100).

@@ -71,11 +71,22 @@ describe('Search Service Express Server', () => {
         size: 10,
         body: {
           query: {
-            multi_match: {
-              query: 'badminton',
-              fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
-              fuzziness: 'AUTO',
-            },
+            bool: {
+              must: [
+                {
+                  multi_match: {
+                    query: 'badminton',
+                    fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
+                    fuzziness: 'AUTO',
+                  },
+                },
+              ],
+              must_not: [
+                {
+                  term: { hideFromSearch: true }
+                }
+              ]
+            }
           },
         },
       });
@@ -155,11 +166,22 @@ describe('Search Service Express Server', () => {
         size: 5,
         body: {
           query: {
-            multi_match: {
-              query: 'tournament',
-              fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
-              fuzziness: 'AUTO',
-            },
+            bool: {
+              must: [
+                {
+                  multi_match: {
+                    query: 'tournament',
+                    fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
+                    fuzziness: 'AUTO',
+                  },
+                },
+              ],
+              must_not: [
+                {
+                  term: { hideFromSearch: true }
+                }
+              ]
+            }
           },
         },
       });
@@ -172,13 +194,20 @@ describe('Search Service Express Server', () => {
           body: {
             query: {
               bool: {
-                must: {
-                  multi_match: {
-                    query: 'John',
-                    fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
-                    fuzziness: 'AUTO',
-                  },
-                },
+                must: [
+                  {
+                    multi_match: {
+                      query: 'John',
+                      fields: ['name', 'bio', 'title', 'content', 'authorName', 'tags'],
+                      fuzziness: 'AUTO',
+                    },
+                  }
+                ],
+                must_not: [
+                  {
+                    term: { hideFromSearch: true }
+                  }
+                ],
                 should: [
                   {
                     match: {

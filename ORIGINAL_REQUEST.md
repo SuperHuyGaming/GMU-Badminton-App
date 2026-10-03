@@ -84,3 +84,42 @@ Follow the project's standard PR workflow by creating a feature branch, committi
 - [ ] The reusable `<FriendActionButton>` correctly handles optimistic state updates and error rollbacks.
 - [ ] A feature branch was created, and the QA Engineer subagent was invoked to review it.
 
+## 2026-10-02T23:38:06Z
+
+# Teamwork Project Prompt
+
+> Goal: Implement Phase 3 (Core Backend) of the DMV Tournament Aggregation & Admin Approval System
+> Requested team: Backend / API Specialists
+
+Implement the backend foundation for the Tournament Approval system. We need to store scraped tournament data, provide an admin queue for review, and expose endpoints to approve/reject them.
+
+Working directory: `server/`
+Integrity mode: development
+
+## Requirements
+
+### R1. ProposedTournament Model
+Create `server/models/ProposedTournament.js` using Mongoose. It should include:
+- Raw Scraped Data (`rawCaption`, `scrapedImageUrls`, `sourceLinks`)
+- AI Structured Data (`tournamentName`, `date`, `location`, `entryFee`, `registrationLink`, `skillLevels`, `registrationDeadline`)
+- Metadata (`sourceUrl`, `confidenceScore` 0-100, `status` enum: ['pending', 'approved', 'rejected'])
+
+### R2. Admin API Routes
+Create `server/routes/adminTournaments.js` and mount it in `server/server.js` at `/api/admin/tournaments`.
+- `GET /proposed`: Returns all 'pending' ProposedTournaments, sorted by confidenceScore (descending).
+- `POST /approve/:id`: Finds a ProposedTournament, creates a new entry in `Tournament.js` (existing model), and marks the proposal as 'approved'.
+- `POST /reject/:id`: Marks the ProposedTournament as 'rejected'.
+- `PUT /:id`: Allows an admin to manually edit the AI Structured Data before approval.
+
+### R3. Authentication & Security
+Ensure all `/api/admin/tournaments` routes use `authMiddleware` AND verify that `req.user.role === 'admin'`.
+
+### R4. Kafka Consumer (Optional/Stub)
+In `server/utils/kafkaConsumer.js` (if it exists), add a stub case for the `tournament-scraping` topic that inserts a message into the `ProposedTournament` collection. If it doesn't exist, just document where the consumer should be added.
+
+## Acceptance Criteria
+- [ ] The `ProposedTournament` model is created and matches the schema requirements.
+- [ ] The `/api/admin/tournaments` routes are fully implemented and protected.
+- [ ] A feature branch was already created (`feature/tournament-admin-approval`), so just commit your work to it.
+- [ ] Run `npm run lint` and `npm test` in the `server/` directory to ensure no regressions.
+
