@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Tournament = require('../models/Tournament');
-const authMiddleware = require('../middleware/auth');
+const { authMiddleware } = require('../middleware/auth');
 const redis = require('../utils/redis');
 
 router.get('/', async (req, res) => {
