@@ -19,6 +19,7 @@ async def process_posts(posts, source_handle, extractor, kafka_prod):
         try:
             tournament_data = extractor.extract_from_flyer(
                 image_url_or_base64=post.get("display_url"),
+                carousel_urls=post.get("carousel_urls", []),
                 caption_text=post.get("caption", ""),
                 source_handle=source_handle
             )
@@ -34,7 +35,7 @@ async def process_posts(posts, source_handle, extractor, kafka_prod):
             "sourceUrl": post.get("url", f"https://instagram.com/p/{post.get('shortcode')}"),
             "confidenceScore": getattr(tournament_data, 'confidenceScore', 85),
             "rawCaption": post.get("caption", ""),
-            "scrapedImageUrls": [post.get("display_url")] if post.get("display_url") else [],
+            "scrapedImageUrls": ([post.get("display_url")] if post.get("display_url") else []) + post.get("carousel_urls", []),
             "sourceLinks": [],
             "tournamentName": getattr(tournament_data, 'tournamentName', 'Unknown'),
             "date": getattr(tournament_data, 'date', None),

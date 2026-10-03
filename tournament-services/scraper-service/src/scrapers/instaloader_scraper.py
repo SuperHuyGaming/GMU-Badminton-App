@@ -76,6 +76,7 @@ class InstagramScraper:
                     "url": f"https://www.instagram.com/p/{post.shortcode}/",
                     "caption": post.caption or "",
                     "image_url": post.url,
+                    "carousel_urls": [node.display_url for node in post.get_sidecar_nodes()] if getattr(post, "typename", "") == "GraphSidecar" else [],
                     "timestamp": post.date_utc.isoformat(),
                     "is_video": post.is_video,
                 }
@@ -132,6 +133,7 @@ class InstagramScraper:
                     "shortcode": post.shortcode,
                     "url": f"https://instagram.com/p/{post.shortcode}/",
                     "display_url": post.url,
+                    "carousel_urls": [node.display_url for node in post.get_sidecar_nodes()] if getattr(post, "typename", "") == "GraphSidecar" else [],
                     "caption": post.caption,
                     "timestamp": post.date_utc.isoformat(),
                     "owner_username": post.owner_profile.username if post.owner_profile else "unknown"
