@@ -38,7 +38,7 @@ class TournamentExtractor:
         reraise=True,
     )
     def extract_from_flyer(
-        self, image_url_or_base64: str, caption_text: str, source_handle: str = "collegiate_club"
+        self, image_url_or_base64: str, caption_text: str, source_handle: str = "collegiate_club", carousel_urls: list[str] | None = None
     ) -> TournamentData:
         """
         Extract structured TournamentData from a tournament flyer image and accompanying caption.
@@ -62,6 +62,21 @@ class TournamentExtractor:
         """
 
         logger.info(f"Dispatching GPT-4o Vision extraction for handle: {source_handle}")
+        content_array = [
+            {"type": "text", "text": prompt},
+            {
+                "type": "image_url",
+                "image_url": {"url": image_url_or_base64, "detail": "high"},
+            },
+        ]
+        
+        if carousel_urls:
+            for url in carousel_urls:
+                content_array.append({
+                    "type": "image_url",
+                    "image_url": {"url": url, "detail": "high"}
+                })
+
         try:
             tournament: TournamentData = self.client.chat.completions.create(
                 model="gpt-4o-2024-08-06",
@@ -69,13 +84,7 @@ class TournamentExtractor:
                 messages=[
                     {
                         "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": image_url_or_base64, "detail": "high"},
-                            },
-                        ],
+                        "content": content_array,
                     }
                 ],
                 temperature=0.1,
