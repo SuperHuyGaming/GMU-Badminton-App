@@ -1,0 +1,33 @@
+name: Scraper Cron Job
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Daily at 2:00 AM UTC
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          cd tournament-services/scraper-service
+          pip install -r requirements.txt || true # Assuming there's a requirements file or use poetry
+
+      - name: Run Scraper
+        env:
+          KAFKA_BROKER_URL: $\{\{ secrets.KAFKA_BROKER_URL \}\}
+          GEMINI_API_KEY: $\{\{ secrets.GEMINI_API_KEY \}\}
+          # Add other necessary secrets
+        run: |
+          cd tournament-services/scraper-service
+          # Run the main scraper script or task
+          python -m src.tasks.run_scraper
