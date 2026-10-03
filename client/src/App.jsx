@@ -8,6 +8,7 @@ const Profile = React.lazy(() => import("./pages/Profile"));
 const Dashboard = React.lazy(() => import("./pages/Dashboard"));
 const Forum = React.lazy(() => import("./pages/Forum"));
 const Admin = React.lazy(() => import("./pages/Admin"));
+const TournamentApprovals = React.lazy(() => import("./pages/admin/TournamentApprovals"));
 const Messages = React.lazy(() => import("./pages/Messages"));
 const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
@@ -211,6 +212,16 @@ const AnimatedRoutes = () => {
 							<AdminRoute>
 								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
 									<Admin />
+								</motion.div>
+							</AdminRoute>
+						}
+					/>
+					<Route
+						path="/admin/tournaments"
+						element={
+							<AdminRoute>
+								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
+									<TournamentApprovals />
 								</motion.div>
 							</AdminRoute>
 						}

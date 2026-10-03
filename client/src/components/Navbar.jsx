@@ -397,30 +397,57 @@ export default function Navbar() {
 									);
 								})}
 								{user && user.role === "admin" && (
-									<Button
-										variant="contained"
-										component={RouterLink}
-										to="/admin"
-										aria-current={location.pathname === "/admin" ? "page" : undefined}
-										sx={{
-											textTransform: "none",
-											fontWeight: "bold",
-											ml: 2,
-											backgroundColor: "#FFCC33",
-											color: "#1a202c",
-											boxShadow: "none",
-											"&:hover": {
-												backgroundColor: "#e6b800",
+									<>
+										<Button
+											variant="contained"
+											component={RouterLink}
+											to="/admin"
+											aria-current={location.pathname === "/admin" ? "page" : undefined}
+											sx={{
+												textTransform: "none",
+												fontWeight: "bold",
+												ml: 2,
+												backgroundColor: "#FFCC33",
+												color: "#1a202c",
 												boxShadow: "none",
-											},
-											"&:focus-visible": {
-												outline: "2px solid #ffffff",
-												outlineOffset: "2px",
-											},
-										}}
-									>
-										Admin Panel
-									</Button>
+												"&:hover": {
+													backgroundColor: "#e6b800",
+													boxShadow: "none",
+												},
+												"&:focus-visible": {
+													outline: "2px solid #ffffff",
+													outlineOffset: "2px",
+												},
+											}}
+										>
+											Admin Panel
+										</Button>
+										<Button
+											variant="outlined"
+											component={RouterLink}
+											to="/admin/tournaments"
+											aria-current={location.pathname === "/admin/tournaments" ? "page" : undefined}
+											sx={{
+												textTransform: "none",
+												fontWeight: "bold",
+												ml: 1,
+												borderColor: "#FFCC33",
+												color: "#FFCC33",
+												boxShadow: "none",
+												"&:hover": {
+													borderColor: "#e6b800",
+													backgroundColor: "rgba(255, 204, 51, 0.08)",
+													boxShadow: "none",
+												},
+												"&:focus-visible": {
+													outline: "2px solid #ffffff",
+													outlineOffset: "2px",
+												},
+											}}
+										>
+											Tournament Approvals
+										</Button>
+									</>
 								)}
 							</Box>
 						</Box>
@@ -871,29 +898,55 @@ export default function Navbar() {
 								);
 							})}
 							{user && user.role === "admin" && (
-								<ListItemButton
-									component={RouterLink}
-									to="/admin"
-									onClick={handleDrawerToggle}
-									aria-current={location.pathname === "/admin" ? "page" : undefined}
-									sx={{
-										textAlign: "center",
-										backgroundColor: location.pathname === "/admin" ? "rgba(255, 255, 255, 0.2)" : "rgba(255, 204, 51, 0.12)",
-										borderLeft: "4px solid #FFCC33",
-										"&:focus-visible": {
-											outline: "2px solid #FFCC33",
-											outlineOffset: "-2px",
-										},
-									}}
-								>
-									<ListItemText
-										primaryTypographyProps={{
-											fontWeight: "bold",
-											color: "#ffffff",
+								<>
+									<ListItemButton
+										component={RouterLink}
+										to="/admin"
+										onClick={handleDrawerToggle}
+										aria-current={location.pathname === "/admin" ? "page" : undefined}
+										sx={{
+											textAlign: "center",
+											backgroundColor: location.pathname === "/admin" ? "rgba(255, 255, 255, 0.2)" : "rgba(255, 204, 51, 0.12)",
+											borderLeft: "4px solid #FFCC33",
+											"&:focus-visible": {
+												outline: "2px solid #FFCC33",
+												outlineOffset: "-2px",
+											},
 										}}
-										primary="Admin Panel"
-									/>
-								</ListItemButton>
+									>
+										<ListItemText
+											primaryTypographyProps={{
+												fontWeight: "bold",
+												color: "#ffffff",
+											}}
+											primary="Admin Panel"
+										/>
+									</ListItemButton>
+									<ListItemButton
+										component={RouterLink}
+										to="/admin/tournaments"
+										onClick={handleDrawerToggle}
+										aria-current={location.pathname === "/admin/tournaments" ? "page" : undefined}
+										sx={{
+											textAlign: "center",
+											mt: 0.5,
+											backgroundColor: location.pathname === "/admin/tournaments" ? "rgba(255, 255, 255, 0.2)" : "rgba(255, 204, 51, 0.12)",
+											borderLeft: "4px solid #FFCC33",
+											"&:focus-visible": {
+												outline: "2px solid #FFCC33",
+												outlineOffset: "-2px",
+											},
+										}}
+									>
+										<ListItemText
+											primaryTypographyProps={{
+												fontWeight: "bold",
+												color: "#ffffff",
+											}}
+											primary="Tournament Approvals"
+										/>
+									</ListItemButton>
+								</>
 							)}
 						</List>
 					</Box>

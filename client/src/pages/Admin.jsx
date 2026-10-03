@@ -1,5 +1,6 @@
 // client/src/pages/Admin.jsx
 import { useState, useEffect } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import {
 	Container,
 	Typography,
@@ -145,6 +146,48 @@ export default function Admin() {
 					Platform Administration Hub
 				</Typography>
 			</Box>
+
+			{/* TOURNAMENT APPROVALS BANNER */}
+			<Paper
+				elevation={0}
+				sx={{
+					p: 3,
+					mb: 4,
+					borderRadius: 3,
+					border: "1px solid",
+					borderColor: "divider",
+					bgcolor: "background.paper",
+					display: "flex",
+					justifyContent: "space-between",
+					alignItems: "center",
+					flexWrap: "wrap",
+					gap: 2,
+				}}
+			>
+				<Box>
+					<Typography variant="h6" fontWeight="bold" color="text.primary">
+						🏸 Tournament Approvals & Scraper Review Queue
+					</Typography>
+					<Typography variant="body2" color="text.secondary">
+						Review, verify, and approve AI-extracted tournament proposals from web scraping before publishing.
+					</Typography>
+				</Box>
+				<Button
+					variant="contained"
+					color="secondary"
+					component={RouterLink}
+					to="/admin/tournaments"
+					sx={{
+						textTransform: "none",
+						fontWeight: "bold",
+						backgroundColor: "#FFCC33",
+						color: "#1a202c",
+						"&:hover": { backgroundColor: "#e6b800" },
+					}}
+				>
+					Open Tournament Approvals
+				</Button>
+			</Paper>
 
 			{/* MODERATION QUEUE */}
 			<Typography

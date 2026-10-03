@@ -124,6 +124,20 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
             expect(res.status).toBe(403);
             expect(res.body.message).toMatch(/admins only/i);
         });
+
+        it("returns 401 on POST /manual when unauthenticated", async () => {
+            const res = await request(app).post("/api/admin/tournaments/manual").send({ tournamentName: "Open" });
+            expect(res.status).toBe(401);
+        });
+
+        it("returns 403 on POST /manual when authenticated as regular user", async () => {
+            const res = await request(app)
+                .post("/api/admin/tournaments/manual")
+                .set("Authorization", `Bearer ${userToken}`)
+                .send({ tournamentName: "Unauthorized Tournament" });
+            expect(res.status).toBe(403);
+            expect(res.body.message).toMatch(/admins only/i);
+        });
     });
 
     describe("2. GET /api/admin/tournaments/proposed", () => {
@@ -681,6 +695,83 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
             });
 
             expect(result).toBeNull();
+        });
+    });
+
+    describe("8. POST /api/admin/tournaments/manual", () => {
+        it("returns 400 when tournamentName is missing or empty", async () => {
+            const res = await request(app)
+                .post("/api/admin/tournaments/manual")
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ eventLocation: "RAC Gym" });
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toMatch(/tournament name is required/i);
+        });
+
+        it("returns 400 when tournamentName is only whitespace", async () => {
+            const res = await request(app)
+                .post("/api/admin/tournaments/manual")
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ tournamentName: "   " });
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toMatch(/tournament name is required/i);
+        });
+
+        it("successfully creates a manual tournament with isOpenTournament: true, emits socket event, and returns 201", async () => {
+            const payload = {
+                tournamentName: "GMU Spring Invitational 2026",
+                eventLocation: "EagleBank Arena",
+                startDate: "2026-04-15T09:00:00.000Z",
+                endDate: "2026-04-16T18:00:00.000Z",
+                registrationDeadline: "2026-04-10T23:59:59.000Z",
+                registrationUrl: "https://gmu.edu/badminton/register",
+                flyerImageUrl: "https://cdn.example.com/spring-flyer.png",
+                skillLevels: ["Beginner", "Intermediate", "Advanced"],
+                originalCaption: "Annual spring invitational hosted by GMU Badminton Club"
+            };
+
+            const res = await request(app)
+                .post("/api/admin/tournaments/manual")
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send(payload);
+
+            expect(res.status).toBe(201);
+            expect(res.body.message).toMatch(/tournament created successfully/i);
+            expect(res.body.tournament).toBeDefined();
+
+            // Strict Invariant Assertions
+            expect(res.body.tournament.isOpenTournament).toBe(true);
+            expect(res.body.tournament.tournamentName).toBe("GMU Spring Invitational 2026");
+            expect(res.body.tournament.eventLocation).toBe("EagleBank Arena");
+            expect(res.body.tournament.registrationUrl).toBe("https://gmu.edu/badminton/register");
+            expect(res.body.tournament.flyerImageUrl).toBe("https://cdn.example.com/spring-flyer.png");
+            expect(res.body.tournament.skillLevels).toEqual(["Beginner", "Intermediate", "Advanced"]);
+            expect(res.body.tournament.rsvpCount).toBe(0);
+
+            // Real-Time Socket Emission
+            expect(mockIo.emit).toHaveBeenCalledWith("tournamentApproved", expect.objectContaining({
+                isOpenTournament: true,
+                tournamentName: "GMU Spring Invitational 2026"
+            }));
+        });
+
+        it("handles default fallbacks for optional fields when creating manual tournament", async () => {
+            const res = await request(app)
+                .post("/api/admin/tournaments/manual")
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({
+                    tournamentName: "Minimal Manual Tourney"
+                });
+
+            expect(res.status).toBe(201);
+            expect(res.body.tournament.isOpenTournament).toBe(true);
+            expect(res.body.tournament.eventLocation).toBe("TBD");
+            expect(res.body.tournament.hostUniversity).toBe("Local Club");
+            expect(res.body.tournament.registrationUrl).toBe("");
+            expect(res.body.tournament.flyerImageUrl).toBe("");
+            expect(res.body.tournament.skillLevels).toEqual([]);
         });
     });
 });

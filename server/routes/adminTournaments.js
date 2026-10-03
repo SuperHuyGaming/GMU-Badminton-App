@@ -204,4 +204,82 @@ router.put("/:id", async (req, res) => {
     }
 });
 
+/**
+ * POST /api/admin/tournaments/manual
+ * Manually creates a new tournament in the tournaments collection with isOpenTournament: true.
+ * Emits tournamentApproved event via Socket.io if available.
+ */
+router.post("/manual", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const tournamentName = body.tournamentName;
+
+        if (!tournamentName || typeof tournamentName !== "string" || !tournamentName.trim()) {
+            return res.status(400).json({ message: "Tournament name is required." });
+        }
+
+        const sanitizedName = xss(tournamentName.trim());
+        const eventLocation = body.eventLocation || body.location;
+        const sanitizedLocation = eventLocation && typeof eventLocation === "string" && eventLocation.trim()
+            ? xss(eventLocation.trim().slice(0, 200))
+            : "TBD";
+
+        const startDate = body.startDate || body.date ? new Date(body.startDate || body.date) : undefined;
+        const endDate = body.endDate
+            ? new Date(body.endDate)
+            : (body.startDate || body.date ? new Date(body.startDate || body.date) : undefined);
+        const registrationDeadline = body.registrationDeadline
+            ? new Date(body.registrationDeadline)
+            : startDate;
+
+        const regUrl = body.registrationUrl || body.registrationLink || "";
+        const sanitizedRegUrl = typeof regUrl === "string" ? xss(regUrl.trim()) : "";
+
+        const flyerUrl = body.flyerImageUrl || "";
+        const sanitizedFlyerUrl = typeof flyerUrl === "string" ? xss(flyerUrl.trim()) : "";
+
+        const skillLevels = Array.isArray(body.skillLevels)
+            ? body.skillLevels.filter((s) => typeof s === "string").map((s) => xss(s.trim()))
+            : [];
+
+        const originalCaption = body.originalCaption || body.rawCaption || "";
+        const sanitizedCaption = typeof originalCaption === "string" ? xss(originalCaption.trim()) : "";
+
+        const tournament = new Tournament({
+            tournamentName: sanitizedName,
+            eventLocation: sanitizedLocation,
+            hostUniversity: body.hostUniversity && typeof body.hostUniversity === "string" ? xss(body.hostUniversity.trim()) : "Local Club",
+            startDate,
+            endDate,
+            registrationDeadline,
+            registrationUrl: sanitizedRegUrl,
+            sourceUrl: body.sourceUrl ? xss(body.sourceUrl.trim()) : "",
+            flyerImageUrl: sanitizedFlyerUrl,
+            skillLevels,
+            originalCaption: sanitizedCaption,
+            isOpenTournament: true,
+            rsvpCount: 0,
+            hasSentDeadlineWarning: false,
+            createdAt: new Date()
+        });
+
+        await tournament.save();
+
+        const io = req.io || req.app?.get("io");
+        if (io) {
+            io.emit("tournamentApproved", tournament);
+        }
+
+        return res.status(201).json({
+            message: "Tournament created successfully",
+            tournament
+        });
+    } catch (err) {
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ message: err.message });
+        }
+        return res.status(500).json({ message: "Server error creating manual tournament", error: err.message });
+    }
+});
+
 module.exports = router;
