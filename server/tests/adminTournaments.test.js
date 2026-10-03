@@ -2,6 +2,14 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+
+jest.mock("../utils/redis", () => ({
+    keys: jest.fn().mockResolvedValue([]),
+    del: jest.fn().mockResolvedValue(1),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue("OK")
+}));
+
 const adminTournamentsRoutes = require("../routes/adminTournaments");
 const ProposedTournament = require("../models/ProposedTournament");
 const Tournament = require("../models/Tournament");
