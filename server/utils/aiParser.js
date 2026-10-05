@@ -41,7 +41,7 @@ const schema = {
 async function parseInstagramPost(caption) {
     if (!caption || typeof caption !== "string" || caption.trim() === '') return null;
 
-    let retries = 3;
+    let retries = 5;
     while (retries > 0) {
         try {
             const safeCaption = caption.substring(0, 5000);
@@ -62,9 +62,10 @@ async function parseInstagramPost(caption) {
             return null;
         } catch (e) {
             if (e.message && e.message.includes("503") && retries > 1) {
-                console.warn(`[AIParser] High demand 503 error. Retrying... (${retries - 1} attempts left)`);
+                const waitTime = (6 - retries) * 5000; // 5s, 10s, 15s, 20s
+                console.warn(`[AIParser] High demand 503 error. Waiting ${waitTime/1000}s before retrying... (${retries - 1} attempts left)`);
                 retries--;
-                await new Promise(res => setTimeout(res, 2000)); // wait 2 seconds before retry
+                await new Promise(res => setTimeout(res, waitTime));
             } else {
                 console.error("[AIParser] Error parsing Instagram post:", e.message);
                 return null;
@@ -107,7 +108,7 @@ const discoverySchema = {
 
 async function parseDiscoveredWebpage(rawText, url) {
     if (!rawText) return null;
-    let retries = 3;
+    let retries = 5;
     while (retries > 0) {
         try {
             const response = await ai.models.generateContent({
@@ -123,9 +124,10 @@ async function parseDiscoveredWebpage(rawText, url) {
             return null;
         } catch (e) {
             if (e.message && e.message.includes("503") && retries > 1) {
-                console.warn(`[AIParser] High demand 503 error. Retrying... (${retries - 1} attempts left)`);
+                const waitTime = (6 - retries) * 5000;
+                console.warn(`[AIParser] High demand 503 error. Waiting ${waitTime/1000}s before retrying... (${retries - 1} attempts left)`);
                 retries--;
-                await new Promise(res => setTimeout(res, 2000));
+                await new Promise(res => setTimeout(res, waitTime));
             } else {
                 console.error("[AIParser] Web discovery parse failed:", e.message);
                 return null;
