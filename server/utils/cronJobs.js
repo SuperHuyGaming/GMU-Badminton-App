@@ -119,17 +119,46 @@ async function checkTournamentDeadlines() {
     }
 }
 
+async function cleanupArchivedTournaments() {
+    try {
+        console.log("[Cron] Auto-Archiving past tournaments...");
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+
+        const result = await Tournament.updateMany(
+            { endDate: { $lte: yesterday }, status: { $ne: "archived" } },
+            { $set: { status: "archived", isOpenTournament: false } }
+        );
+
+        if (result.modifiedCount > 0) {
+            console.log(`[Cron] Successfully archived ${result.modifiedCount} past tournaments.`);
+        }
+    } catch (e) {
+        console.error("[Cron] Failed to archive past tournaments:", e);
+    }
+}
+
 function startCronJobs() {
     // Run immediately on boot
     assignTopContributorBadges();
     createMatchOfTheWeek();
+    cleanupArchivedTournaments();
 
     // Then run every hour
     setInterval(() => {
         assignTopContributorBadges();
         createMatchOfTheWeek();
         checkTournamentDeadlines();
+        cleanupArchivedTournaments();
     }, 1000 * 60 * 60);
+
+    // Auto-archive tournaments every night at 4:00 AM EST
+    cron.schedule('0 4 * * *', () => {
+        console.log("Running scheduled Tournament Cleanup...");
+        cleanupArchivedTournaments();
+    }, {
+        timezone: "America/New_York"
+    });
 
     // Run Autonomous Web Search Hunter every Sunday at 2:00 AM EST
     cron.schedule('0 2 * * 0', () => {

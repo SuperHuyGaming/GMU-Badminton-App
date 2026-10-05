@@ -32,6 +32,7 @@ const { Kafka } = require("kafkajs");
 const ProposedTournament = require("../models/ProposedTournament");
 const Tournament = require('../models/Tournament');
 const redis = require('./redis');
+const { sendPushToAllUsers } = require('./pushNotifications');
 const promClient = require('prom-client');
 const xss = require('xss');
 
@@ -120,6 +121,8 @@ const parseScrapedTournamentMessage = (rawPayload) => {
         confidenceScore = 100;
     }
 
+    const eventStatus = data.status || aiData.status || "active";
+
     return {
         rawCaption: xss(rawCaption),
         scrapedImageUrls: scrapedImageUrls.map(u => xss(u)),
@@ -133,7 +136,8 @@ const parseScrapedTournamentMessage = (rawPayload) => {
         registrationDeadline,
         sourceUrl: xss(sourceUrl),
         confidenceScore,
-        status: "pending"
+        status: "pending", // Status of the proposal
+        eventStatus: xss(eventStatus) // Status of the actual tournament (active, sold_out, canceled)
     };
 };
 
@@ -173,28 +177,94 @@ const handleMessage = async ({ topic, partition, message }) => {
         }
 
         if (parsedDoc.confidenceScore >= 95 && hasMandatoryFields && isFutureDate && !isAnomaly) {
-            console.log(`[Kafka Consumer][${topic} p:${partition}]: High confidence (${parsedDoc.confidenceScore}%). Auto-publishing "${parsedDoc.tournamentName}"`);
+            console.log(`[Kafka Consumer][${topic} p:${partition}]: High confidence (${parsedDoc.confidenceScore}%). Checking for existing tournament "${parsedDoc.tournamentName}"`);
             
-            const tournament = new Tournament({
-                tournamentName: parsedDoc.tournamentName,
-                eventLocation: parsedDoc.location,
-                hostUniversity: "Local Club",
-                startDate: parsedDoc.date,
-                endDate: parsedDoc.date,
-                registrationDeadline: parsedDoc.registrationDeadline,
-                registrationUrl: parsedDoc.registrationLink,
-                sourceUrl: parsedDoc.sourceUrl,
-                flyerImageUrl: parsedDoc.scrapedImageUrls && parsedDoc.scrapedImageUrls.length > 0 ? parsedDoc.scrapedImageUrls[0] : "",
-                skillLevels: parsedDoc.skillLevels,
-                originalCaption: parsedDoc.rawCaption,
-                isOpenTournament: true,
-                rsvpCount: 0
+            // Phase 5: Delta Detection & Auto-Updating
+            const existingTournament = await Tournament.findOne({
+                $or: [
+                    { tournamentName: parsedDoc.tournamentName },
+                    { sourceUrl: parsedDoc.sourceUrl }
+                ]
             });
-            savedDoc = await tournament.save();
 
-            // Invalidate cache
-            const keys = await redis.keys('tournaments:*');
-            if (keys.length > 0) await redis.del(keys);
+            if (existingTournament) {
+                console.log(`[Kafka Consumer] Found existing tournament. Applying deltas...`);
+                
+                let hasChanges = false;
+                
+                if (parsedDoc.registrationDeadline && 
+                    existingTournament.registrationDeadline && 
+                    parsedDoc.registrationDeadline.getTime() !== existingTournament.registrationDeadline.getTime()) {
+                    console.log(`[Kafka Consumer] Auto-Updating Deadline: ${existingTournament.registrationDeadline} -> ${parsedDoc.registrationDeadline}`);
+                    existingTournament.registrationDeadline = parsedDoc.registrationDeadline;
+                    hasChanges = true;
+                    await sendPushToAllUsers(
+                        "🚨 Tournament Update!",
+                        `The registration deadline for ${existingTournament.tournamentName} has been updated to ${new Date(parsedDoc.registrationDeadline).toLocaleDateString()}.`,
+                        "/tournaments"
+                    ).catch(e => console.error(e));
+                }
+
+                if (parsedDoc.eventStatus && existingTournament.status !== parsedDoc.eventStatus) {
+                    console.log(`[Kafka Consumer] Auto-Updating Status: ${existingTournament.status} -> ${parsedDoc.eventStatus}`);
+                    existingTournament.status = parsedDoc.eventStatus;
+                    
+                    // Sold out / Canceled detection
+                    if (parsedDoc.eventStatus === "sold_out") {
+                        existingTournament.isOpenTournament = false;
+                        await sendPushToAllUsers(
+                            "🔥 Tournament Sold Out",
+                            `Registration for ${existingTournament.tournamentName} is now fully booked!`,
+                            "/tournaments"
+                        ).catch(e => console.error(e));
+                    } else if (parsedDoc.eventStatus === "canceled") {
+                        existingTournament.isOpenTournament = false;
+                        await sendPushToAllUsers(
+                            "❌ Tournament Canceled",
+                            `Unfortunately, ${existingTournament.tournamentName} has been canceled.`,
+                            "/tournaments"
+                        ).catch(e => console.error(e));
+                    }
+                    hasChanges = true;
+                }
+
+                if (hasChanges) {
+                    existingTournament.scraperLastRun = now;
+                    savedDoc = await existingTournament.save();
+                    
+                    // Invalidate cache
+                    const keys = await redis.keys('tournaments:*');
+                    if (keys.length > 0) await redis.del(keys);
+                } else {
+                    console.log(`[Kafka Consumer] No changes detected. Skipping update.`);
+                    savedDoc = existingTournament;
+                }
+
+            } else {
+                console.log(`[Kafka Consumer] Creating new Auto-published tournament.`);
+                const tournament = new Tournament({
+                    tournamentName: parsedDoc.tournamentName,
+                    eventLocation: parsedDoc.location,
+                    hostUniversity: "Local Club",
+                    startDate: parsedDoc.date,
+                    endDate: parsedDoc.date,
+                    registrationDeadline: parsedDoc.registrationDeadline,
+                    registrationUrl: parsedDoc.registrationLink,
+                    sourceUrl: parsedDoc.sourceUrl,
+                    flyerImageUrl: parsedDoc.scrapedImageUrls && parsedDoc.scrapedImageUrls.length > 0 ? parsedDoc.scrapedImageUrls[0] : "",
+                    skillLevels: parsedDoc.skillLevels,
+                    originalCaption: parsedDoc.rawCaption,
+                    isOpenTournament: parsedDoc.eventStatus === "sold_out" ? false : true,
+                    status: parsedDoc.eventStatus,
+                    rsvpCount: 0,
+                    scraperLastRun: now
+                });
+                savedDoc = await tournament.save();
+                
+                // Invalidate cache
+                const keys = await redis.keys('tournaments:*');
+                if (keys.length > 0) await redis.del(keys);
+            }
         } else {
             console.log(`[Kafka Consumer][${topic} p:${partition}]: Ingesting proposal "${parsedDoc.tournamentName}" for Admin review`);
             const proposal = new ProposedTournament(parsedDoc);
