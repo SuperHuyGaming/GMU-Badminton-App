@@ -80,7 +80,12 @@ const consumer = kafka.consumer({
 const parseScrapedTournamentMessage = (rawPayload) => {
     let data = rawPayload;
     if (typeof data === "string") {
-        data = JSON.parse(data);
+        try {
+            data = JSON.parse(data);
+        } catch (err) {
+            llmMalformedJson.inc();
+            throw new Error("Invalid JSON from LLM: " + err.message);
+        }
     }
 
     if (!data || typeof data !== "object") {

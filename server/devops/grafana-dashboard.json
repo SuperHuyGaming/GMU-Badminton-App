@@ -30,6 +30,16 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "type": "stat",
+      "title": "LLM Malformed JSON",
+      "targets": [
+        {
+          "expr": "sum(llm_malformed_json_total)",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }
