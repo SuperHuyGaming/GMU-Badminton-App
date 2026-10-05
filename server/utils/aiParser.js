@@ -142,7 +142,7 @@ async function parseDiscoveredWebpage(rawText, url) {
     while (retries > 0) {
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-1.5-flash-8b",
+                model: "gemini-flash-lite-latest",
                 contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.\n\nWebpage Text:\n${rawText.substring(0, 5000)}`,
                 config: {
                     responseMimeType: "application/json",
