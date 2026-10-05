@@ -102,10 +102,13 @@ const parseScrapedTournamentMessage = (rawPayload) => {
         ? data.sourceLinks
         : (Array.isArray(rawData.sourceLinks) ? rawData.sourceLinks : [sourceUrl]);
 
-    const date = data.date || aiData.date ? new Date(data.date || aiData.date) : undefined;
-    const registrationDeadline = data.registrationDeadline || aiData.registrationDeadline
-        ? new Date(data.registrationDeadline || aiData.registrationDeadline)
-        : undefined;
+    const dateStr = data.date || aiData.date;
+    const parsedDate = dateStr ? new Date(dateStr) : undefined;
+    const date = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate : undefined;
+
+    const deadlineStr = data.registrationDeadline || aiData.registrationDeadline;
+    const parsedDeadline = deadlineStr ? new Date(deadlineStr) : undefined;
+    const registrationDeadline = parsedDeadline && !isNaN(parsedDeadline.getTime()) ? parsedDeadline : undefined;
 
     const location = (data.location || aiData.location || "TBD").trim();
     const entryFee = (data.entryFee || aiData.entryFee || "").trim();
@@ -121,7 +124,11 @@ const parseScrapedTournamentMessage = (rawPayload) => {
         confidenceScore = 100;
     }
 
-    const eventStatus = data.status || aiData.status || "active";
+    let eventStatus = data.status || aiData.status || "active";
+    const validStatuses = ["active", "sold_out", "canceled", "archived"];
+    if (!validStatuses.includes(eventStatus)) {
+        eventStatus = "active";
+    }
 
     return {
         rawCaption: xss(rawCaption),
@@ -190,11 +197,18 @@ const handleMessage = async ({ topic, partition, message }) => {
             if (existingTournament) {
                 console.log(`[Kafka Consumer] Found existing tournament. Applying deltas...`);
                 
+                if (existingTournament.sourceUrl !== parsedDoc.sourceUrl) {
+                    console.warn(`[Kafka Consumer] SECURITY WARNING: sourceUrl mismatch for tournament "${parsedDoc.tournamentName}". Preventing unauthorized auto-update.`);
+                    console.log(`[Kafka Consumer][${topic} p:${partition}]: Ingesting as proposal for Admin review instead`);
+                    const proposal = new ProposedTournament(parsedDoc);
+                    return await proposal.save();
+                }
+
                 let hasChanges = false;
                 
                 if (parsedDoc.registrationDeadline && 
-                    existingTournament.registrationDeadline && 
-                    parsedDoc.registrationDeadline.getTime() !== existingTournament.registrationDeadline.getTime()) {
+                    (!existingTournament.registrationDeadline || 
+                     parsedDoc.registrationDeadline.getTime() !== existingTournament.registrationDeadline.getTime())) {
                     console.log(`[Kafka Consumer] Auto-Updating Deadline: ${existingTournament.registrationDeadline} -> ${parsedDoc.registrationDeadline}`);
                     existingTournament.registrationDeadline = parsedDoc.registrationDeadline;
                     hasChanges = true;
@@ -254,7 +268,7 @@ const handleMessage = async ({ topic, partition, message }) => {
                     flyerImageUrl: parsedDoc.scrapedImageUrls && parsedDoc.scrapedImageUrls.length > 0 ? parsedDoc.scrapedImageUrls[0] : "",
                     skillLevels: parsedDoc.skillLevels,
                     originalCaption: parsedDoc.rawCaption,
-                    isOpenTournament: parsedDoc.eventStatus === "sold_out" ? false : true,
+                    isOpenTournament: (parsedDoc.eventStatus === "sold_out" || parsedDoc.eventStatus === "canceled") ? false : true,
                     status: parsedDoc.eventStatus,
                     rsvpCount: 0,
                     scraperLastRun: now

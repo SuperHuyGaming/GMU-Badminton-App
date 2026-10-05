@@ -10,6 +10,10 @@ jest.mock("../utils/redis", () => ({
     set: jest.fn().mockResolvedValue("OK")
 }));
 
+jest.mock("../utils/pushNotifications", () => ({
+    sendPushToAllUsers: jest.fn().mockResolvedValue(true)
+}));
+
 const adminTournamentsRoutes = require("../routes/adminTournaments");
 const ProposedTournament = require("../models/ProposedTournament");
 const Tournament = require("../models/Tournament");
@@ -780,6 +784,135 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
             expect(res.body.tournament.registrationUrl).toBe("");
             expect(res.body.tournament.flyerImageUrl).toBe("");
             expect(res.body.tournament.skillLevels).toEqual([]);
+        });
+    });
+
+    describe("9. Kafka Consumer Delta Auto-Updating", () => {
+        beforeEach(() => {
+            jest.clearAllMocks();
+            jest.spyOn(ProposedTournament.prototype, 'save').mockResolvedValue({ _id: "dummy_id" });
+        });
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        it("gracefully ignores invalid date strings for registrationDeadline without crashing or modifying into Invalid Date", async () => {
+            const existingTournament = {
+                _id: "fake_id",
+                tournamentName: "Delta Test Tournament",
+                sourceUrl: "https://delta-test.com",
+                location: "Fairfax VA",
+                date: new Date("2026-10-10"),
+                registrationDeadline: new Date("2026-09-01"),
+                status: "active",
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const findOneSpy = jest.spyOn(Tournament, 'findOne').mockResolvedValue(existingTournament);
+            
+            const message = {
+                value: Buffer.from(JSON.stringify({
+                    tournamentName: "Delta Test Tournament",
+                    sourceUrl: "https://delta-test.com",
+                    confidenceScore: 98,
+                    registrationDeadline: "TBD", // Should become undefined
+                    location: "Fairfax VA",
+                    date: "2026-10-10",
+                    registrationLink: "https://delta-test.com"
+                }))
+            };
+
+            await handleMessage({
+                topic: "tournament-scraping",
+                partition: 0,
+                message
+            });
+            
+            expect(findOneSpy).toHaveBeenCalled();
+            expect(existingTournament.save).not.toHaveBeenCalled(); // No changes applied because undefined won't trigger update
+            expect(existingTournament.registrationDeadline.getTime()).toBe(new Date("2026-09-01").getTime());
+            
+            findOneSpy.mockRestore();
+        });
+        
+        it("updates existing tournament when new registrationDeadline is provided and valid", async () => {
+            const existingTournament = {
+                _id: "fake_id",
+                tournamentName: "Delta Test Update Deadline",
+                sourceUrl: "https://delta-test-deadline.com",
+                location: "Fairfax VA",
+                date: new Date("2026-10-10"),
+                registrationDeadline: new Date("2026-09-01"),
+                status: "active",
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const findOneSpy = jest.spyOn(Tournament, 'findOne').mockResolvedValue(existingTournament);
+            const newDeadline = new Date("2026-09-15");
+
+            const message = {
+                value: Buffer.from(JSON.stringify({
+                    tournamentName: "Delta Test Update Deadline",
+                    sourceUrl: "https://delta-test-deadline.com",
+                    confidenceScore: 98,
+                    registrationDeadline: newDeadline.toISOString(),
+                    location: "Fairfax VA",
+                    date: "2026-10-10",
+                    registrationLink: "https://delta-test-deadline.com"
+                }))
+            };
+
+            await handleMessage({
+                topic: "tournament-scraping",
+                partition: 0,
+                message
+            });
+            
+            expect(findOneSpy).toHaveBeenCalled();
+            expect(existingTournament.save).toHaveBeenCalled();
+            expect(existingTournament.registrationDeadline.getTime()).toBe(newDeadline.getTime());
+            
+            findOneSpy.mockRestore();
+        });
+
+        it("updates existing tournament status to sold_out and closes it", async () => {
+            const existingTournament = {
+                _id: "fake_id",
+                tournamentName: "Delta Test Sold Out",
+                sourceUrl: "https://delta-test-soldout.com",
+                location: "Fairfax VA",
+                date: new Date("2026-10-10"),
+                status: "active",
+                isOpenTournament: true,
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const findOneSpy = jest.spyOn(Tournament, 'findOne').mockResolvedValue(existingTournament);
+
+            const message = {
+                value: Buffer.from(JSON.stringify({
+                    tournamentName: "Delta Test Sold Out",
+                    sourceUrl: "https://delta-test-soldout.com",
+                    confidenceScore: 98,
+                    status: "sold_out",
+                    location: "Fairfax VA",
+                    date: "2026-10-10",
+                    registrationLink: "https://delta-test-soldout.com"
+                }))
+            };
+
+            await handleMessage({
+                topic: "tournament-scraping",
+                partition: 0,
+                message
+            });
+            
+            expect(findOneSpy).toHaveBeenCalled();
+            expect(existingTournament.save).toHaveBeenCalled();
+            expect(existingTournament.status).toBe("sold_out");
+            expect(existingTournament.isOpenTournament).toBe(false);
+            
+            findOneSpy.mockRestore();
         });
     });
 });
