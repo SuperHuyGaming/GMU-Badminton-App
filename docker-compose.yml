@@ -119,8 +119,32 @@ services:
       kafka:
         condition: service_started
 
+  # ----------------------------------------------------------------------------
+  # Monitoring & DevOps
+  # ----------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gmu-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./server/devops/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gmu-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./server/devops/grafana-dashboard.json:/var/lib/grafana/dashboards/grafana-dashboard.json
+
 volumes:
   mongo_data:
   redis_data:
   redis_cache_data:
   kafka_data:
+  grafana_data:
+
