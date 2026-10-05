@@ -64,6 +64,9 @@ router.post("/instagram", authMiddleware, scrapeLimiter, async (req, res, next) 
         const input = {
             directUrls: [url],
             resultsType: "details",
+            proxyConfiguration: {
+                useApifyProxy: true
+            }
         };
 
         const run = await client.actor("apify/instagram-post-scraper").call(input);

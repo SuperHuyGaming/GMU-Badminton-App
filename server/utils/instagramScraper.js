@@ -118,7 +118,10 @@ async function scrapeInstagramProfile(handle) {
         // Prepare Actor input
         const input = {
             usernames: [handle],
-            resultsLimit: 3, // Only get the 3 most recent posts to save compute
+            resultsLimit: 3,
+            proxyConfiguration: {
+                useApifyProxy: true
+            }
         };
 
         // Run the Actor: apify/instagram-profile-scraper
