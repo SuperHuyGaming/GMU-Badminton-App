@@ -22,10 +22,17 @@ class ScraperKafkaProducer:
         if not self.producer:
             logger.warning("Kafka Producer not initialized, falling back to HTTP ingest.")
             import requests
+            import json
             try:
                 # Use Render API URL in production, or localhost for local testing
                 api_url = os.getenv('API_URL', 'http://127.0.0.1:8080')
-                resp = requests.post(f"{api_url}/api/admin/tournaments/ingest", json=data, timeout=10)
+                payload = json.dumps(data, default=str)
+                resp = requests.post(
+                    f"{api_url}/api/admin/tournaments/ingest", 
+                    data=payload,
+                    headers={'Content-Type': 'application/json'},
+                    timeout=10
+                )
                 if resp.status_code == 200:
                     logger.info("Successfully pushed to HTTP ingest fallback.")
                     return True
