@@ -44,7 +44,7 @@ async function parseInstagramPost(caption) {
     try {
         const safeCaption = caption.substring(0, 5000);
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.8-flash",
             contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
             config: {
                 responseMimeType: "application/json",
@@ -100,7 +100,7 @@ async function parseDiscoveredWebpage(rawText, url) {
     if (!rawText) return null;
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3.8-flash",
             contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.\n\nWebpage Text:\n${rawText.substring(0, 5000)}`,
             config: {
                 responseMimeType: "application/json",
