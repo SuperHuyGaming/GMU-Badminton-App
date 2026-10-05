@@ -23,6 +23,7 @@ const mongoSanitize = require("express-mongo-sanitize");
 const rateLimit = require("express-rate-limit");
 
 const app = express();
+app.set('trust proxy', 1); // Trust the first proxy (Render's load balancer) for correct rate limiting IP detection
 
 const metricsMiddleware = promBundle({includeMethod: true});
 app.use(metricsMiddleware);

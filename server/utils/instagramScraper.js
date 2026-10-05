@@ -117,15 +117,17 @@ async function scrapeInstagramProfile(handle) {
         
         // Prepare Actor input
         const input = {
-            usernames: [handle],
+            search: handle,
+            searchType: "user",
+            resultsType: "posts",
             resultsLimit: 3,
             proxyConfiguration: {
                 useApifyProxy: true
             }
         };
 
-        // Run the Actor: apify/instagram-profile-scraper
-        const run = await client.actor("apify/instagram-profile-scraper").call(input);
+        // Run the Actor: apify/instagram-scraper
+        const run = await client.actor("apify/instagram-scraper").call(input);
 
         // Fetch and print Actor results from the run's dataset
         const { items } = await client.dataset(run.defaultDatasetId).listItems();
@@ -135,21 +137,19 @@ async function scrapeInstagramProfile(handle) {
             return null;
         }
 
-        const profile = items[0];
-        
-        // Extract the latest posts
-        const recentPosts = profile.latestPosts ? profile.latestPosts.map(post => ({
+        // apify/instagram-scraper returns an array of post objects directly
+        const recentPosts = items.map(post => ({
             caption: post.caption,
-            imageUrl: post.displayUrl,
+            imageUrl: post.displayUrl || post.videoUrl,
             postUrl: post.url,
             timestamp: post.timestamp
-        })) : [];
+        }));
 
         console.log(`[Apify] Successfully scraped @${handle}. Found ${recentPosts.length} recent posts.`);
 
         return {
             handle: handle,
-            linktreeUrl: profile.externalUrl || `https://linktr.ee/${handle}`,
+            linktreeUrl: `https://linktr.ee/${handle}`, // Fallback for registration links
             recentPosts: recentPosts
         };
     } catch (e) {
