@@ -46,7 +46,7 @@ async function parseInstagramPost(caption) {
         try {
             const safeCaption = caption.substring(0, 5000);
             const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
+                model: "gemini-1.5-flash-8b",
                 contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
                 config: {
                     responseMimeType: "application/json",
@@ -67,11 +67,41 @@ async function parseInstagramPost(caption) {
                 retries--;
                 await new Promise(res => setTimeout(res, waitTime));
             } else {
-                console.error("[AIParser] Error parsing Instagram post:", e.message);
-                return null;
+                console.error("[AIParser] AI failed entirely. Falling back to local Regex parser.", e.message);
+                return fallbackRegexParser(caption);
             }
         }
     }
+    return fallbackRegexParser(caption);
+}
+
+function fallbackRegexParser(caption) {
+    const lower = caption.toLowerCase();
+    const isTournament = /tournament|open|invitational|championship/i.test(lower);
+    if (!isTournament) return null;
+
+    let skillLevels = [];
+    if (/flight/i.test(lower)) {
+        if (/\ba\b/i.test(lower)) skillLevels.push("A");
+        if (/\bb\b/i.test(lower)) skillLevels.push("B");
+        if (/\bc\b/i.test(lower)) skillLevels.push("C");
+        if (/\bd\b/i.test(lower)) skillLevels.push("D");
+    }
+    if (skillLevels.length === 0) skillLevels = ["Open"];
+
+    let tournamentName = "Collegiate Badminton Tournament";
+    const nameMatch = caption.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s(?:Open|Invitational|Tournament))/);
+    if (nameMatch) tournamentName = nameMatch[1];
+
+    let startDate = null;
+    const dateMatch = caption.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}/i);
+    if (dateMatch) {
+        const d = new Date(`${dateMatch[0]} ${new Date().getFullYear()}`);
+        if (!isNaN(d)) startDate = d.toISOString().split('T')[0];
+    }
+
+    console.log("[AIParser] Regex fallback successfully extracted basic data.");
+    return { isTournamentPost: true, tournamentName, skillLevels, startDate, endDate: startDate, registrationDeadline: null };
 }
 
 
@@ -112,7 +142,7 @@ async function parseDiscoveredWebpage(rawText, url) {
     while (retries > 0) {
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
+                model: "gemini-1.5-flash-8b",
                 contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.\n\nWebpage Text:\n${rawText.substring(0, 5000)}`,
                 config: {
                     responseMimeType: "application/json",
