@@ -20,7 +20,19 @@ class ScraperKafkaProducer:
 
     def publish_scraped_tournament(self, data: dict):
         if not self.producer:
-            logger.warning("Kafka Producer not initialized, skipping publish.")
+            logger.warning("Kafka Producer not initialized, falling back to HTTP ingest.")
+            import requests
+            try:
+                # Use Render API URL in production, or localhost for local testing
+                api_url = os.getenv('API_URL', 'http://127.0.0.1:8080')
+                resp = requests.post(f"{api_url}/api/admin/tournaments/ingest", json=data, timeout=10)
+                if resp.status_code == 200:
+                    logger.info("Successfully pushed to HTTP ingest fallback.")
+                    return True
+                else:
+                    logger.warning(f"HTTP ingest failed: {resp.status_code} - {resp.text}")
+            except Exception as e:
+                logger.error(f"HTTP ingest error: {e}")
             return False
         
         try:

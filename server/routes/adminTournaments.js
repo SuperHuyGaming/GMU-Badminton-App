@@ -13,7 +13,30 @@ const adminActionLimiter = rateLimit({
     message: { message: "Too many admin actions from this IP, please try again after 15 minutes" }
 });
 
+const { handleMessage } = require('../utils/kafkaConsumer');
+
 const router = express.Router();
+
+router.post('/ingest', async (req, res) => {
+    try {
+        const secret = req.headers['x-scraper-secret'];
+        if (process.env.SCRAPER_SECRET && secret !== process.env.SCRAPER_SECRET) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        const savedDoc = await handleMessage({
+            topic: 'tournament-scraping',
+            partition: 0,
+            message: { value: JSON.stringify(req.body) }
+        });
+        if (savedDoc) {
+            return res.status(200).json({ message: 'Ingested', id: savedDoc._id });
+        }
+        return res.status(400).json({ message: 'Failed to ingest' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
 
 // Enforce authentication and admin authorization for all tournament admin endpoints
 router.use(authMiddleware);
