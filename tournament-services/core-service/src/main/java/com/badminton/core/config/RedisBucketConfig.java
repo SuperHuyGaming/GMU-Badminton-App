@@ -25,7 +25,7 @@ public class RedisBucketConfig {
     }
 
     @Bean
-    public ProxyManager<String> proxyManager(RedisClient redisClient) {
+    public ProxyManager<byte[]> proxyManager(RedisClient redisClient) {
         return LettuceBasedProxyManager.builderFor(redisClient)
                 .withExpirationStrategy(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(5)))
                 .build();

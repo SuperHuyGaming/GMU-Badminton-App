@@ -121,25 +121,7 @@ const SEARCH_QUERIES = [
 async function huntGoogleForTournaments() {
     console.log("🕵️‍♂️ [Hunter] Starting autonomous Google Search hunt...");
     
-    // If no real token, we gracefully exit or mock
-    if (!process.env.APIFY_API_TOKEN || process.env.APIFY_API_TOKEN === 'placeholder_token') {
-        console.log("⚠️ [Hunter] No Apify Token. Skipping real Google Search. Injecting mock discovery.");
-        
-        // Mock discovery for testing
-        await DiscoveryQueue.updateOne(
-            { sourceUrl: "https://www.tournamentsoftware.com/sport/tournament.aspx?id=mock-123" },
-            { 
-                $setOnInsert: {
-                    sourceUrl: "https://www.tournamentsoftware.com/sport/tournament.aspx?id=mock-123",
-                    sourceType: 'TOURNAMENT_SOFTWARE',
-                    rawSnippet: "Registration is open for the Maryland State Badminton Championships 2026...",
-                    status: 'PENDING_AI_REVIEW'
-                }
-            },
-            { upsert: true }
-        );
-        return;
-    }
+    if (!process.env.APIFY_API_TOKEN || process.env.APIFY_API_TOKEN === 'placeholder_token') { console.error("[Hunter] FATAL: Missing Apify Token."); return; }
 
     try {
         const input = {
@@ -189,3 +171,4 @@ module.exports = {
     processDiscoveryQueue,
     huntGoogleForTournaments
 };
+

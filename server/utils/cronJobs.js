@@ -143,6 +143,10 @@ function startCronJobs() {
     assignTopContributorBadges();
     createMatchOfTheWeek();
     cleanupArchivedTournaments();
+    
+    // Automatically fetch tournaments on server start!
+    console.log("[Cron] Booting up... Fetching initial tournaments.");
+    runInstagramScraper();
 
     // Then run every hour
     setInterval(() => {

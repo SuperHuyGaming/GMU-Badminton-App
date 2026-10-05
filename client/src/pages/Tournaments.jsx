@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { 
+    Box, Typography, Card, CardContent, CardActions, Button, CircularProgress, 
+    Alert, Grid, Dialog, DialogTitle, DialogContent, ToggleButton, ToggleButtonGroup,
+    Drawer, Avatar, AvatarGroup, IconButton, FormGroup, FormControlLabel, Checkbox, Slider, Divider
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import EventIcon from '@mui/icons-material/Event';
 import ViewListIcon from '@mui/icons-material/ViewList';
@@ -18,7 +23,14 @@ export default function Tournaments() {
     const [nextCursor, setNextCursor] = useState(null);
     const [hasNext, setHasNext] = useState(false);
 
-    
+    // Detail Modal & RSVP
+    const [selectedTournament, setSelectedTournament] = useState(null);
+    const [rsvpStatus, setRsvpStatus] = useState({});
+
+    // Advanced Filters
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [filterWeekend, setFilterWeekend] = useState(false);
+    const [filterDistance, setFilterDistance] = useState(50);
 
     const [viewMode, setViewMode] = useState('list'); // list, calendar, map
 
@@ -159,7 +171,7 @@ END:VCALENDAR`;
                     <ToggleButton value="calendar" aria-label="calendar view"><EventIcon sx={{ mr: 1 }}/> Calendar</ToggleButton>
                     <ToggleButton value="map" aria-label="map view"><MapIcon sx={{ mr: 1 }}/> Map</ToggleButton>
                 </ToggleButtonGroup>
-                <Button startIcon={<FilterListIcon />} variant="outlined" onClick={() => { /* TODO: wire up filter drawer */ }}>
+                <Button startIcon={<FilterListIcon />} variant="outlined" onClick={() => setFiltersOpen(true)}>
                     Filters
                 </Button>
             </Box>
@@ -176,70 +188,113 @@ END:VCALENDAR`;
                 <EmptyTournaments />
             )}
 
-            <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-                {tournaments.map((tournament) => (
-                    <Grid size={{'xs': 12, 'md': 6}} key={tournament.id}>
-                        <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3 }}>
-                            {tournament.flyerImageUrl && (
-                                <Box sx={{ width: '100%', height: 200, overflow: 'hidden' }}>
-                                    <img src={tournament.flyerImageUrl} alt="Tournament Flyer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                </Box>
-                            )}
-                            <CardContent sx={{ flexGrow: 1 }}>
-                                <Typography variant="h6" fontWeight="bold" gutterBottom>
-                                    {tournament.tournamentName}
-                                </Typography>
-                                <Typography variant="body2" color="text.primary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <MapPinIcon width={16} height={16} /> {tournament.eventLocation}
-                                </Typography>
-                                <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
-                                    📅 {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString() : 'TBD'}
-                                </Typography>
-                                <Typography variant="body1">
-                                    {tournament.originalCaption ? tournament.originalCaption.substring(0, 150) + "..." : ""}
-                                </Typography>
-                            </CardContent>
-                            <CardActions sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                {tournament.registrationUrl ? (
-                                    <Button 
-                                        variant="contained" 
-                                        size="large" 
-                                        color="secondary"
-                                        href={tournament.registrationUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        aria-label={`Sign up for ${tournament.title || "tournament"} (opens in a new window)`}
-                                        fullWidth
-                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem', color: '#002f17' }}
-                                    >
-                                        SIGN UP HERE
-                                    </Button>
-                                ) : (
-                                    <Button 
-                                        variant="contained" 
-                                        size="large" 
-                                        disabled
-                                        fullWidth
-                                        sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem' }}
-                                    >
-                                        Registration Missing
-                                    </Button>
+            {viewMode === 'list' && (
+                <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
+                    {tournaments.map((tournament) => (
+                        <Grid size={{'xs': 12, 'md': 6}} key={tournament.id}>
+                            <Card 
+                                sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, cursor: 'pointer' }}
+                                onClick={() => setSelectedTournament(tournament)}
+                            >
+                                {tournament.flyerImageUrl && (
+                                    <Box sx={{ width: '100%', height: 200, overflow: 'hidden' }}>
+                                        <img src={tournament.flyerImageUrl} alt="Tournament Flyer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </Box>
                                 )}
-                                <Button 
-                                    variant="outlined" 
-                                    size="medium" 
-                                    color="primary"
-                                    onClick={() => handleExportICS(tournament)}
-                                    fullWidth
-                                    sx={{ borderRadius: 2, fontWeight: 'bold' }}
-                                >
-                                    📅 Add to Calendar
-                                </Button>
-                            </CardActions>
-                        </Card>
-                    </Grid>
-                ))}
-            </Grid>
+                                <CardContent sx={{ flexGrow: 1 }}>
+                                    <Typography variant="h6" fontWeight="bold" gutterBottom>
+                                        {tournament.tournamentName}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.primary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        <MapPinIcon width={16} height={16} /> {tournament.eventLocation}
+                                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                            (12 miles away)
+                                        </Typography>
+                                    </Typography>
+                                    <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
+                                        📅 {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString() : 'TBD'}
+                                    </Typography>
+                                    <Typography variant="body1">
+                                        {tournament.originalCaption ? tournament.originalCaption.substring(0, 150) + "..." : ""}
+                                    </Typography>
+                                </CardContent>
+                                <CardActions sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                    <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+                                        <Button 
+                                            variant={rsvpStatus[tournament.id] ? "contained" : "outlined"} 
+                                            color="secondary" 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setRsvpStatus(prev => ({...prev, [tournament.id]: !prev[tournament.id]}));
+                                            }}
+                                            sx={{ flex: 1, borderRadius: 2, fontWeight: 'bold' }}
+                                        >
+                                            {rsvpStatus[tournament.id] ? "Going!" : "I'm Going!"}
+                                        </Button>
+                                        <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 32, height: 32 }, alignSelf: 'center' }}>
+                                            <Avatar alt="Friend 1" src="https://i.pravatar.cc/150?img=1" />
+                                            <Avatar alt="Friend 2" src="https://i.pravatar.cc/150?img=2" />
+                                            <Avatar alt="Friend 3" src="https://i.pravatar.cc/150?img=3" />
+                                        </AvatarGroup>
+                                    </Box>
+                                    {tournament.registrationUrl ? (
+                                        <Button 
+                                            variant="contained" 
+                                            size="large" 
+                                            color="secondary"
+                                            onClick={(e) => e.stopPropagation()}
+                                            href={tournament.registrationUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            aria-label={`Sign up for ${tournament.title || "tournament"} (opens in a new window)`}
+                                            fullWidth
+                                            sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem', color: '#002f17' }}
+                                        >
+                                            SIGN UP HERE
+                                        </Button>
+                                    ) : (
+                                        <Button 
+                                            variant="contained" 
+                                            size="large" 
+                                            disabled
+                                            fullWidth
+                                            sx={{ borderRadius: 2, fontWeight: 'bold', py: 1.5, fontSize: '1.1rem' }}
+                                        >
+                                            Registration Missing
+                                        </Button>
+                                    )}
+                                    <Button 
+                                        variant="outlined" 
+                                        size="medium" 
+                                        color="primary"
+                                        onClick={(e) => { e.stopPropagation(); handleExportICS(tournament); }}
+                                        fullWidth
+                                        sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                                    >
+                                        📅 Add to Calendar
+                                    </Button>
+                                </CardActions>
+                            </Card>
+                        </Grid>
+                    ))}
+                </Grid>
+            )}
+
+            {viewMode === 'map' && (
+                <Box sx={{ width: '100%', height: 400, bgcolor: 'grey.300', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 2 }}>
+                    <Typography variant="h6" color="text.secondary">
+                        Mock Map View (Leaflet not installed)
+                    </Typography>
+                </Box>
+            )}
+
+            {viewMode === 'calendar' && (
+                <Box sx={{ width: '100%', height: 400, bgcolor: 'background.paper', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="h6" color="text.secondary">
+                        Mock Calendar Grid View
+                    </Typography>
+                </Box>
+            )}
 
             {hasNext && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -277,6 +332,102 @@ END:VCALENDAR`;
                     )}
                 </DialogContent>
             </Dialog>
+
+            <Dialog open={!!selectedTournament} onClose={() => setSelectedTournament(null)} maxWidth="md" fullWidth>
+                {selectedTournament && (
+                    <>
+                        <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="h5" fontWeight="bold">
+                                {selectedTournament.tournamentName}
+                            </Typography>
+                            <IconButton onClick={() => setSelectedTournament(null)}>
+                                <CloseIcon />
+                            </IconButton>
+                        </DialogTitle>
+                        <DialogContent dividers sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
+                            <Box sx={{ flex: 1 }}>
+                                {selectedTournament.flyerImageUrl ? (
+                                    <img src={selectedTournament.flyerImageUrl} alt="Flyer" style={{ width: '100%', borderRadius: 8 }} />
+                                ) : (
+                                    <Box sx={{ width: '100%', height: 200, bgcolor: 'grey.300', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 2 }}>
+                                        <Typography color="text.secondary">No Flyer Image</Typography>
+                                    </Box>
+                                )}
+                            </Box>
+                            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    📅 {selectedTournament.startDate ? new Date(selectedTournament.startDate).toLocaleDateString() : 'TBD'}
+                                </Typography>
+                                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <MapPinIcon width={16} height={16} /> {selectedTournament.eventLocation}
+                                </Typography>
+                                <Typography variant="body1">
+                                    {selectedTournament.originalCaption}
+                                </Typography>
+                                
+                                <Box sx={{ mt: 'auto', pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    {selectedTournament.registrationUrl ? (
+                                        <Button variant="contained" color="secondary" href={selectedTournament.registrationUrl} target="_blank" fullWidth sx={{ fontWeight: 'bold' }}>
+                                            Register Here
+                                        </Button>
+                                    ) : (
+                                        <Button variant="contained" disabled fullWidth sx={{ fontWeight: 'bold' }}>
+                                            Registration Missing
+                                        </Button>
+                                    )}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <Button 
+                                            variant={rsvpStatus[selectedTournament.id] ? "contained" : "outlined"} 
+                                            color="secondary" 
+                                            onClick={() => setRsvpStatus(prev => ({...prev, [selectedTournament.id]: !prev[selectedTournament.id]}))}
+                                            sx={{ flex: 1, fontWeight: 'bold' }}
+                                        >
+                                            {rsvpStatus[selectedTournament.id] ? "Going!" : "I'm Going!"}
+                                        </Button>
+                                        <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 32, height: 32 } }}>
+                                            <Avatar alt="Friend 1" src="https://i.pravatar.cc/150?img=1" />
+                                            <Avatar alt="Friend 2" src="https://i.pravatar.cc/150?img=2" />
+                                            <Avatar alt="Friend 3" src="https://i.pravatar.cc/150?img=3" />
+                                        </AvatarGroup>
+                                    </Box>
+                                </Box>
+                            </Box>
+                        </DialogContent>
+                    </>
+                )}
+            </Dialog>
+
+            <Drawer anchor="right" open={filtersOpen} onClose={() => setFiltersOpen(false)}>
+                <Box sx={{ width: 300, p: 3 }}>
+                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>Advanced Filters</Typography>
+                    <Divider sx={{ mb: 2 }} />
+                    
+                    <FormGroup>
+                        <FormControlLabel 
+                            control={<Checkbox checked={filterWeekend} onChange={(e) => setFilterWeekend(e.target.checked)} />} 
+                            label="This Weekend" 
+                        />
+                        <FormControlLabel control={<Checkbox />} label="Singles" />
+                        <FormControlLabel control={<Checkbox />} label="Doubles" />
+                    </FormGroup>
+
+                    <Typography variant="subtitle1" sx={{ mt: 3, mb: 1, fontWeight: 'bold' }}>Distance</Typography>
+                    <Slider 
+                        value={filterDistance} 
+                        onChange={(e, val) => setFilterDistance(val)} 
+                        valueLabelDisplay="auto" 
+                        step={10} 
+                        marks 
+                        min={0} 
+                        max={100} 
+                    />
+                    <Typography variant="body2" color="text.secondary">Within {filterDistance} miles</Typography>
+
+                    <Button variant="contained" color="primary" fullWidth sx={{ mt: 4, fontWeight: 'bold' }} onClick={() => setFiltersOpen(false)}>
+                        Apply Filters
+                    </Button>
+                </Box>
+            </Drawer>
         </Box>
     );
 }
