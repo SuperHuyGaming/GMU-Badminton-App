@@ -44,6 +44,14 @@ const llmMalformedJson = new promClient.Counter({
   name: 'llm_malformed_json_total',
   help: 'Total number of malformed JSON responses from LLM'
 });
+const tournamentsAutopublished = new promClient.Counter({
+  name: 'tournaments_autopublished_total',
+  help: 'Total number of tournaments auto-published bypassing the queue'
+});
+const tournamentsAutoupdated = new promClient.Counter({
+  name: 'tournaments_autoupdated_total',
+  help: 'Total number of live tournaments autonomously updated with deltas'
+});
 
 const brokers = process.env.KAFKA_BROKERS
     ? process.env.KAFKA_BROKERS.split(",").map((b) => b.trim())
@@ -72,7 +80,12 @@ const consumer = kafka.consumer({
 const parseScrapedTournamentMessage = (rawPayload) => {
     let data = rawPayload;
     if (typeof data === "string") {
-        data = JSON.parse(data);
+        try {
+            data = JSON.parse(data);
+        } catch (err) {
+            llmMalformedJson.inc();
+            throw new Error("Invalid JSON from LLM: " + err.message);
+        }
     }
 
     if (!data || typeof data !== "object") {
@@ -245,6 +258,7 @@ const handleMessage = async ({ topic, partition, message }) => {
                 if (hasChanges) {
                     existingTournament.scraperLastRun = now;
                     savedDoc = await existingTournament.save();
+                    tournamentsAutoupdated.inc();
                     
                     // Invalidate cache
                     const keys = await redis.keys('tournaments:*');
@@ -274,6 +288,7 @@ const handleMessage = async ({ topic, partition, message }) => {
                     scraperLastRun: now
                 });
                 savedDoc = await tournament.save();
+                tournamentsAutopublished.inc();
                 
                 // Invalidate cache
                 const keys = await redis.keys('tournaments:*');

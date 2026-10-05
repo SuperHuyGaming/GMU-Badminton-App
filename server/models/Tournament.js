@@ -25,4 +25,7 @@ const tournamentSchema = new mongoose.Schema({
     createdAt: Date
 }, { collection: "tournaments" }); // Match the Java service collection
 
+tournamentSchema.index({ tournamentName: 1 });
+tournamentSchema.index({ sourceUrl: 1 });
+
 module.exports = mongoose.model("Tournament", tournamentSchema);
