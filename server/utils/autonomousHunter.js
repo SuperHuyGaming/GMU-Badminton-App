@@ -128,6 +128,9 @@ async function huntGoogleForTournaments() {
             queries: SEARCH_QUERIES.join('\n'),
             resultsPerPage: 10,
             countryCode: "us",
+            proxyConfiguration: {
+                useApifyProxy: true
+            }
         };
 
         const run = await client.actor("apify/google-search-scraper").call(input);
