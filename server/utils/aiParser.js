@@ -46,7 +46,7 @@ async function parseInstagramPost(caption) {
         try {
             const safeCaption = caption.substring(0, 5000);
             const response = await ai.models.generateContent({
-                model: "gemini-1.5-flash-8b",
+                model: "gemini-flash-lite-latest",
                 contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
                 config: {
                     responseMimeType: "application/json",
