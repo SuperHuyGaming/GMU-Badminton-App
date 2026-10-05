@@ -38,7 +38,10 @@ class TournamentData(BaseModel):
         default=None,
         description="Public URL or local storage path of the tournament flyer image.",
     )
-
+    status: str = Field(
+        default="active",
+        description="The current status of the tournament. Can be 'active', 'sold_out', or 'canceled'. Infer 'sold_out' if the caption says registration is full or closed early. Infer 'canceled' if the event is called off.",
+    )
 
 class ScrapeJobRequest(BaseModel):
     """Request payload to manually trigger a scrape job for a collegiate club."""

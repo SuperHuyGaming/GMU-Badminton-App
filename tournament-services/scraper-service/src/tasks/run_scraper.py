@@ -52,7 +52,8 @@ async def process_posts(posts, source_handle, extractor, kafka_prod):
         "entryFee": getattr(tournament_data, 'entryFee', ''),
         "registrationLink": getattr(tournament_data, 'registrationLink', getattr(tournament_data, 'registration_url', '')),
         "skillLevels": getattr(tournament_data, 'skillLevels', []),
-        "registrationDeadline": getattr(tournament_data, 'registrationDeadline', getattr(tournament_data, 'registration_deadline', None))
+        "registrationDeadline": getattr(tournament_data, 'registrationDeadline', getattr(tournament_data, 'registration_deadline', None)),
+        "status": getattr(tournament_data, 'status', 'active')
     }
     kafka_prod.publish_scraped_tournament(payload)
 
