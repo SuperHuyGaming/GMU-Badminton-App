@@ -1,0 +1,101 @@
+[
+  {
+    "id": "gmu-badminton",
+    "name": "George Mason University Badminton Club",
+    "university": "George Mason University",
+    "city": "Fairfax",
+    "state": "VA",
+    "instagramHandle": "gmu_badminton",
+    "linktreeUrl": "https://linktr.ee/gmubadminton",
+    "websiteUrl": "https://mason360.gmu.edu/badminton",
+    "active": true
+  },
+  {
+    "id": "umd-badminton",
+    "name": "University of Maryland Badminton Club",
+    "university": "University of Maryland",
+    "city": "College Park",
+    "state": "MD",
+    "instagramHandle": "umd_badminton",
+    "linktreeUrl": "https://linktr.ee/umdbadminton",
+    "websiteUrl": "https://recwell.umd.edu/sports/club-sports/badminton",
+    "active": true
+  },
+  {
+    "id": "nova-badminton",
+    "name": "NOVA Badminton Club",
+    "university": "Northern Virginia Community College",
+    "city": "Sterling",
+    "state": "VA",
+    "instagramHandle": "nova_badminton",
+    "linktreeUrl": "https://linktr.ee/novabadminton",
+    "websiteUrl": "https://www.novabadminton.com",
+    "active": true
+  },
+  {
+    "id": "capital-badminton",
+    "name": "Capital Badminton Club",
+    "university": null,
+    "city": "Columbia",
+    "state": "MD",
+    "instagramHandle": "capitalbadminton",
+    "linktreeUrl": "https://linktr.ee/capitalbadminton",
+    "websiteUrl": "https://www.capitalbadminton.com",
+    "active": true
+  },
+  {
+    "id": "dc-badminton",
+    "name": "DC Badminton Club",
+    "university": null,
+    "city": "Washington",
+    "state": "DC",
+    "instagramHandle": "dcbadmintonclub",
+    "linktreeUrl": "https://linktr.ee/dcbadminton",
+    "websiteUrl": "https://www.dcbadminton.org",
+    "active": true
+  },
+  {
+    "id": "baltimore-badminton",
+    "name": "Baltimore Badminton Club",
+    "university": null,
+    "city": "Baltimore",
+    "state": "MD",
+    "instagramHandle": "baltimorebadminton",
+    "linktreeUrl": "https://linktr.ee/baltimorebadminton",
+    "websiteUrl": "https://www.baltimorebadminton.com",
+    "active": true
+  },
+  {
+    "id": "columbia-badminton",
+    "name": "Columbia Badminton Association",
+    "university": null,
+    "city": "Columbia",
+    "state": "MD",
+    "instagramHandle": "columbiabadminton",
+    "linktreeUrl": "https://linktr.ee/columbiabadminton",
+    "websiteUrl": "https://www.columbiabadminton.org",
+    "active": true
+  },
+  {
+    "id": "vt-badminton",
+    "name": "Virginia Tech Badminton Club",
+    "university": "Virginia Tech",
+    "city": "Blacksburg",
+    "state": "VA",
+    "instagramHandle": "vtbadminton",
+    "linktreeUrl": "https://linktr.ee/vtbadminton",
+    "websiteUrl": "https://recsports.vt.edu/sportclubs/badminton.html",
+    "active": true
+  },
+  {
+    "id": "vcu-badminton",
+    "name": "VCU Badminton Club",
+    "university": "Virginia Commonwealth University",
+    "city": "Richmond",
+    "state": "VA",
+    "instagramHandle": "vcubadminton",
+    "linktreeUrl": "https://linktr.ee/vcubadminton",
+    "websiteUrl": "https://recsports.vcu.edu/sport-clubs/badminton",
+    "active": true
+  }
+]
