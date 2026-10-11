@@ -802,7 +802,7 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                 tournamentName: "Delta Test Tournament",
                 sourceUrl: "https://delta-test.com",
                 location: "Fairfax VA",
-                date: new Date("2026-10-10"),
+                date: new Date("2027-10-10"),
                 registrationDeadline: new Date("2026-09-01"),
                 status: "active",
                 save: jest.fn().mockResolvedValue(true)
@@ -817,7 +817,7 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                     confidenceScore: 98,
                     registrationDeadline: "TBD", // Should become undefined
                     location: "Fairfax VA",
-                    date: "2026-10-10",
+                    date: "2027-10-10",
                     registrationLink: "https://delta-test.com"
                 }))
             };
@@ -841,14 +841,14 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                 tournamentName: "Delta Test Update Deadline",
                 sourceUrl: "https://delta-test-deadline.com",
                 location: "Fairfax VA",
-                date: new Date("2026-10-10"),
+                date: new Date("2027-10-10"),
                 registrationDeadline: new Date("2026-09-01"),
                 status: "active",
                 save: jest.fn().mockResolvedValue(true)
             };
 
             const findOneSpy = jest.spyOn(Tournament, 'findOne').mockResolvedValue(existingTournament);
-            const newDeadline = new Date("2026-09-15");
+            const newDeadline = new Date("2027-09-15");
 
             const message = {
                 value: Buffer.from(JSON.stringify({
@@ -857,7 +857,7 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                     confidenceScore: 98,
                     registrationDeadline: newDeadline.toISOString(),
                     location: "Fairfax VA",
-                    date: "2026-10-10",
+                    date: "2027-10-10",
                     registrationLink: "https://delta-test-deadline.com"
                 }))
             };
@@ -881,7 +881,7 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                 tournamentName: "Delta Test Sold Out",
                 sourceUrl: "https://delta-test-soldout.com",
                 location: "Fairfax VA",
-                date: new Date("2026-10-10"),
+                date: new Date("2027-10-10"),
                 status: "active",
                 isOpenTournament: true,
                 save: jest.fn().mockResolvedValue(true)
@@ -896,7 +896,7 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                     confidenceScore: 98,
                     status: "sold_out",
                     location: "Fairfax VA",
-                    date: "2026-10-10",
+                    date: "2027-10-10",
                     registrationLink: "https://delta-test-soldout.com"
                 }))
             };
