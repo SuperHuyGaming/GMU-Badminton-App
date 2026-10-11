@@ -86,7 +86,7 @@ async function createMatchOfTheWeek() {
 
 const cron = require('node-cron');
 const { runInstagramScraper } = require('./instagramScraper');
-const { huntGoogleForTournaments, processDiscoveryQueue } = require('./autonomousHunter');
+const { huntGoogleForTournaments, processDiscoveryQueue, runFullAutonomousHunt } = require('./autonomousHunter');
 const Tournament = require('../models/Tournament');
 const { sendPushToAllUsers } = require('./pushNotifications');
 
@@ -164,10 +164,10 @@ function startCronJobs() {
         timezone: "America/New_York"
     });
 
-    // Run Autonomous Web Search Hunter every Sunday at 2:00 AM EST
+    // Run Autonomous Tournament Hunter (TournamentSoftware + Web Search + AI Evaluation) every Sunday at 2:00 AM EST
     cron.schedule('0 2 * * 0', () => {
-        console.log("Running scheduled Autonomous Google Search Hunter...");
-        huntGoogleForTournaments();
+        console.log("Running scheduled Autonomous Tournament Hunter cycle...");
+        runFullAutonomousHunt();
     }, {
         timezone: "America/New_York"
     });

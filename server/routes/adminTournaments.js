@@ -3,9 +3,13 @@ const mongoose = require("mongoose");
 const xss = require("xss");
 const ProposedTournament = require("../models/ProposedTournament");
 const Tournament = require("../models/Tournament");
+const DiscoveryQueue = require("../models/DiscoveryQueue");
+const Notification = require("../models/Notification");
+const User = require("../models/User");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 const redis = require("../utils/redis");
 const rateLimit = require('express-rate-limit');
+const { runFullAutonomousHunt, processDiscoveryQueue } = require("../utils/autonomousHunter");
 
 const adminActionLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -114,6 +118,24 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
         const io = req.io || req.app?.get("io");
         if (io) {
             io.emit("tournamentApproved", tournament);
+        }
+
+        // Broadcast notification alerts to players for the newly discovered/approved tournament
+        if (mongoose.connection && mongoose.connection.readyState === 1) {
+            try {
+                const players = await User.find({}, '_id').limit(100);
+                if (players && players.length > 0) {
+                    const notifications = players.map(p => ({
+                        targetUserId: p._id.toString(),
+                        message: `🏆 New DMV Tournament Approved: "${tournament.tournamentName}"! Check the calendar and RSVP.`,
+                        link: "/tournaments",
+                        time: new Date()
+                    }));
+                    await Notification.insertMany(notifications);
+                }
+            } catch (notifErr) {
+                console.warn("[AdminTournaments] Non-fatal notification error:", notifErr.message);
+            }
         }
 
         return res.status(200).json({
@@ -314,6 +336,57 @@ router.post("/manual", async (req, res) => {
             return res.status(400).json({ message: err.message });
         }
         return res.status(500).json({ message: "Server error creating manual tournament", error: err.message });
+    }
+});
+
+/**
+ * GET /api/admin/tournaments/discovery-queue
+ * Retrieves items from DiscoveryQueue with optional status filter and pagination limit.
+ */
+router.get("/discovery-queue", async (req, res) => {
+    try {
+        const { status, limit = 50 } = req.query;
+        const query = status ? { status } : {};
+        const items = await DiscoveryQueue.find(query)
+            .sort({ discoveredAt: -1 })
+            .limit(Math.min(Number(limit) || 50, 100));
+        const totalCount = await DiscoveryQueue.countDocuments(query);
+        return res.status(200).json({ items, totalCount });
+    } catch (err) {
+        return res.status(500).json({ message: "Server error fetching discovery queue", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/discovery-queue/run-hunt
+ * Triggers the full autonomous hunter cycle (TournamentSoftware + Web search + Queue AI evaluation).
+ */
+router.post("/discovery-queue/run-hunt", adminActionLimiter, async (req, res) => {
+    try {
+        const result = await runFullAutonomousHunt();
+        return res.status(200).json({
+            message: "Autonomous Tournament Hunter completed cycle",
+            result
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to run autonomous hunt", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/discovery-queue/process
+ * Processes a batch of pending items in the discovery queue through AI evaluation and deduplication.
+ */
+router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => {
+    try {
+        const batchSize = Math.min(Number(req.body?.batchSize) || 10, 50);
+        const result = await processDiscoveryQueue(batchSize);
+        return res.status(200).json({
+            message: "Discovery queue processing complete",
+            result
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to process discovery queue", error: err.message });
     }
 });
 
