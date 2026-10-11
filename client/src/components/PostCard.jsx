@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
+import apiFetch from "../utils/api";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
@@ -18,7 +19,6 @@ import {
 	Menu,
 	MenuItem,
 	TextField,
-	Dialog,
 	Collapse,
 	Chip,
 } from "@mui/material";
@@ -27,13 +27,13 @@ import {
 import LikesModal from "./LikesModal";
 import PostCommentsInline from "./PostCommentsInline";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
+import MediaLightbox from "./MediaLightbox";
 import {
 	ThumbUpOutline,
 	ThumbUpFilled,
 	MessageCircleIcon,
 	ShareIcon,
 	MoreVertIcon,
-	CloseIcon,
 } from "./Icons";
 
 // eslint-disable-next-line no-unused-vars
@@ -109,10 +109,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 	}, [urlPostId, highlightId, localPost._id]);
 
 	useEffect(() => {
-		if (isCommentModalOpen) {
-			fetch("/api/forum/" + localPost._id + "/comments", {
-				headers: { Authorization: "Bearer " + localStorage.getItem("token") }
-			})
+		if (isCommentModalOpen && import.meta.env.MODE !== 'test') {
+			apiFetch("/api/forum/" + localPost._id + "/comments")
 			.then(res => res.json())
 			.then(data => {
 				if (data.comments) {
@@ -170,6 +168,63 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 			console.error(err);
 		} finally {
 			setIsLiking(false);
+		}
+	};
+
+	const handleReaction = async (emoji) => {
+		if (!currentUser) return alert("You must be logged in to react to posts!");
+		try {
+			const res = await fetch(
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/react`,
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+					body: JSON.stringify({ emoji }),
+				},
+			);
+			if (res.ok) {
+				const updated = await res.json();
+				setLocalPost(updated);
+				setShowReactions(false);
+			}
+		} catch (err) {
+			console.error("Error submitting reaction:", err);
+		}
+	};
+
+	const handleTogglePin = async () => {
+		if (!currentUser || currentUser.role !== "admin") return;
+		try {
+			const res = await fetch(
+				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/pin`,
+				{
+					method: "PUT",
+					headers: {
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+				},
+			);
+			if (res.ok) {
+				const data = await res.json();
+				setLocalPost((prev) => ({ ...prev, isPinned: data.isPinned }));
+				toast.success(data.message || "Post pin status updated!");
+			}
+		} catch (err) {
+			console.error("Error toggling pin status:", err);
+		}
+	};
+
+	const handleShare = async (e) => {
+		e.stopPropagation();
+		const shareUrl = `${window.location.origin}/forum?postId=${localPost._id}`;
+		if (navigator.clipboard) {
+			await navigator.clipboard.writeText(shareUrl);
+			toast.success("Post link copied to clipboard! 📋");
+		} else {
+			toast(shareUrl);
 		}
 	};
 
@@ -320,21 +375,41 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					display: "block",
 					boxSizing: "border-box",
 					p: { xs: 2, sm: 3 },
-					border: "1px solid",
-					borderColor: "divider",
+					border: localPost.isPinned ? "2px solid" : "1px solid",
+					borderColor: localPost.isPinned ? "warning.main" : "divider",
 					borderRadius: 4,
 					userSelect: "none",
 					bgcolor: 'background.paper',
-					backgroundImage: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
+					backgroundImage: localPost.isPinned 
+						? 'linear-gradient(to bottom right, rgba(255, 179, 0, 0.08), rgba(0, 102, 51, 0.04))' 
+						: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
 					backdropFilter: 'blur(10px)',
+					boxShadow: localPost.isPinned ? '0 8px 24px rgba(255, 165, 0, 0.12)' : 'none',
 					transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
 					"&:hover": {
-						borderColor: "primary.light",
-						boxShadow: "0 12px 30px rgba(0, 102, 51, 0.12)",
+						borderColor: localPost.isPinned ? "warning.dark" : "primary.light",
+						boxShadow: localPost.isPinned ? "0 14px 32px rgba(255, 165, 0, 0.22)" : "0 12px 30px rgba(0, 102, 51, 0.12)",
 						transform: "translateY(-4px)",
 					},
 				}}
 			>
+				{/* PINNED MEGATHREAD BADGE */}
+				{localPost.isPinned && (
+					<Box sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+						<Chip
+							label="📌 Pinned Megathread"
+							size="small"
+							sx={{
+								fontWeight: "900",
+								background: "linear-gradient(45deg, #FFB300 0%, #FFA000 100%)",
+								color: "#000",
+								fontSize: "0.75rem",
+								boxShadow: "0 2px 8px rgba(255, 179, 0, 0.3)",
+							}}
+						/>
+					</Box>
+				)}
+
 				{/* POST HEADER */}
 				<Box
 					sx={{
@@ -460,6 +535,21 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 										}}
 									>
 										✎ Edit Post
+									</MenuItem>
+								)}
+								{currentUser?.role === "admin" && (
+									<MenuItem
+										onClick={() => {
+											handleTogglePin();
+											setAnchorEl(null);
+										}}
+										sx={{
+											fontWeight: "bold",
+											fontSize: "0.9rem",
+											color: localPost.isPinned ? "warning.main" : "primary.main",
+										}}
+									>
+										{localPost.isPinned ? "📍 Unpin Megathread" : "📌 Pin Megathread"}
 									</MenuItem>
 								)}
 								<MenuItem
@@ -650,29 +740,15 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						)}
 
 						{images.length > 0 && (
-							<Dialog 
-								open={isLightboxOpen} 
+							<MediaLightbox
+								open={isLightboxOpen}
 								onClose={() => setIsLightboxOpen(false)}
-								aria-label="Post image preview"
-								maxWidth="lg"
-								fullWidth
-								PaperProps={{ sx: { background: 'transparent', boxShadow: 'none' } }}
-							>
-								<Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-									<IconButton 
-										aria-label="Close fullscreen image"
-										onClick={() => setIsLightboxOpen(false)}
-										sx={{ position: 'absolute', top: 10, right: 10, color: 'white', bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
-									>
-										<CloseIcon />
-									</IconButton>
-									<img 
-										src={images[activeLightboxIndex]} 
-										alt="Post attachment fullscreen" 
-										style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} 
-									/>
-								</Box>
-							</Dialog>
+								images={images}
+								initialIndex={activeLightboxIndex}
+								title={localPost.title}
+								authorName={localPost.authorName}
+								authorPic={localPost.authorPic}
+							/>
 						)}
 
 						{/* Animated Heart Overlay */}
@@ -698,101 +774,133 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					</Box>
 				)}
 
-				{/* STATS (Likes & Comments counts) */}
-				{(localPost.likedBy?.length > 0 || totalCommentsCount > 0) && (
+				{/* STATS (Reactions, Likes & Comments counts) */}
+				{(localPost.likedBy?.length > 0 || (localPost.reactions && localPost.reactions.length > 0) || totalCommentsCount > 0) && (
 					<Box
 						sx={{
 							display: "flex",
-							justifyContent: "flex-end",
+							justifyContent: "space-between",
 							alignItems: "center",
-							gap: 2,
 							px: 1,
 							mb: 1,
 						}}
 					>
-						{totalCommentsCount > 0 && (
-							<Typography
-								role="button"
-								tabIndex={0}
-								variant="body2"
-								color="text.primary"
-								sx={{
-									cursor: "pointer",
-									"&:hover": { textDecoration: "underline" },
-								}}
-								onClick={() => setIsCommentModalOpen(true)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										setIsCommentModalOpen(true);
-									}
-								}}
-							>
-								{totalCommentsCount}{" "}
-								{totalCommentsCount === 1
-									? "comment"
-									: "comments"}
-							</Typography>
-						)}
-						{localPost.likedBy?.length > 0 && (
-							<Box
-								role="button"
-								tabIndex={0}
-								aria-label="View users who liked this post"
-								onClick={(e) =>
-									openLikes(
-										e,
-										"Post Likes",
-										localPost.likedByDetails,
-									)
-								}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
+						{/* REACTION CHIPS */}
+						<Box sx={{ display: "flex", gap: 0.8, flexWrap: "wrap", alignItems: "center" }}>
+							{Object.entries(
+								(localPost.reactions || []).reduce((acc, r) => {
+									if (r.emoji) acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+									return acc;
+								}, {})
+							).map(([emoji, count]) => {
+								const hasReactedWithThis = (localPost.reactions || []).some(
+									(r) => r.userId === currentUser?.id && r.emoji === emoji
+								);
+								return (
+									<Chip
+										key={emoji}
+										label={`${emoji} ${count}`}
+										size="small"
+										variant={hasReactedWithThis ? "filled" : "outlined"}
+										color={hasReactedWithThis ? "primary" : "default"}
+										onClick={() => handleReaction(emoji)}
+										sx={{
+											cursor: "pointer",
+											fontWeight: "bold",
+											fontSize: "0.75rem",
+											height: 24,
+											transition: "transform 0.15s ease",
+											"&:hover": { transform: "scale(1.1)" },
+										}}
+									/>
+								);
+							})}
+						</Box>
+
+						{/* LIKES & COMMENTS COUNTERS */}
+						<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+							{totalCommentsCount > 0 && (
+								<Typography
+									role="button"
+									tabIndex={0}
+									variant="body2"
+									color="text.primary"
+									sx={{
+										cursor: "pointer",
+										"&:hover": { textDecoration: "underline" },
+									}}
+									onClick={() => setIsCommentModalOpen((prev) => !prev)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											setIsCommentModalOpen((prev) => !prev);
+										}
+									}}
+								>
+									{totalCommentsCount}{" "}
+									{totalCommentsCount === 1 ? "comment" : "comments"}
+								</Typography>
+							)}
+							{localPost.likedBy?.length > 0 && (
+								<Box
+									role="button"
+									tabIndex={0}
+									aria-label="View users who liked this post"
+									onClick={(e) =>
 										openLikes(
 											e,
 											"Post Likes",
 											localPost.likedByDetails,
-										);
+										)
 									}
-								}}
-								sx={{
-									display: "flex",
-									alignItems: "center",
-									gap: 0.5,
-									cursor: "pointer",
-									"&:hover": { textDecoration: "underline" },
-								}}
-							>
-								{(localPost.recentLikerAvatars?.length > 0 || localPost.likedByDetails?.length > 0) && (
-									<AvatarGroup max={3} sx={{ mr: 0.5, '& .MuiAvatar-root': { width: 22, height: 22, fontSize: 10, border: '1px solid', borderColor: 'background.paper' } }}>
-										{(localPost.likedByDetails || localPost.recentLikerAvatars || []).slice(0, 3).map((liker, i) => {
-											const url = typeof liker === 'string' ? liker : liker.profilePic;
-											if (!url) return null;
-											return <Avatar key={i} src={url}  alt="User Avatar" />;
-										})}
-									</AvatarGroup>
-								)}
-								<Typography
-									variant="body2"
-									color="text.primary"
-								>
-									{localPost.likedBy.length}
-								</Typography>
-								<Avatar
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											openLikes(
+												e,
+												"Post Likes",
+												localPost.likedByDetails,
+											);
+										}
+									}}
 									sx={{
-										width: 20,
-										height: 20,
-										bgcolor: "primary.main",
-										color: "white",
+										display: "flex",
+										alignItems: "center",
+										gap: 0.5,
+										cursor: "pointer",
+										"&:hover": { textDecoration: "underline" },
 									}}
 								>
-									<ThumbUpFilled
-										style={{ width: 12, height: 12 }}
-									/>
-								</Avatar>
-							</Box>
-						)}
+									{(localPost.recentLikerAvatars?.length > 0 || localPost.likedByDetails?.length > 0) && (
+										<AvatarGroup max={3} sx={{ mr: 0.5, '& .MuiAvatar-root': { width: 22, height: 22, fontSize: 10, border: '1px solid', borderColor: 'background.paper' } }}>
+											{(localPost.likedByDetails || localPost.recentLikerAvatars || []).slice(0, 3).map((liker, i) => {
+												const url = typeof liker === 'string' ? liker : liker.profilePic;
+												if (!url) return null;
+												return <Avatar key={i} src={url} alt="User Avatar" />;
+											})}
+										</AvatarGroup>
+									)}
+									<Typography
+										variant="body2"
+										color="text.primary"
+									>
+										{localPost.likedBy.length}
+									</Typography>
+									<Avatar
+										sx={{
+											width: 20,
+											height: 20,
+											bgcolor: "primary.main",
+											color: "white",
+										}}
+									>
+										<ThumbUpFilled
+											style={{ width: 12, height: 12 }}
+										/>
+									</Avatar>
+								</Box>
+							)}
+						</Box>
 					</Box>
 				)}
 
@@ -809,40 +917,57 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 					<Box 
 						onMouseEnter={() => setShowReactions(true)} 
 						onMouseLeave={() => setShowReactions(false)}
-						sx={{ position: 'relative' }}
+						sx={{ position: 'relative', flex: 1, display: 'flex' }}
 					>
-						{/* Floating Reaction Bar */}
+						{/* Floating Reaction Bar with Custom Badminton Emojis */}
 						<Collapse in={showReactions} timeout="auto" unmountOnExit sx={{ position: 'absolute', bottom: '100%', left: 0, mb: 1, zIndex: 10 }}>
-							<Paper elevation={4} sx={{ display: 'flex', gap: 1, p: 0.5, borderRadius: 10, bgcolor: 'background.paper' }}>
-								{['🏸', '🔥', '💯', '👏'].map(emoji => (
+							<Paper elevation={6} sx={{ display: 'flex', gap: 0.5, p: 0.8, borderRadius: 10, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+								{['🏸', '🔥', '💯', '❤️', '👏'].map((emoji) => (
 									<IconButton 
 										key={emoji} 
 										aria-label={`React with ${emoji}`}
-										onClick={(e) => { e.stopPropagation(); toast('Coming Soon'); setShowReactions(false); }}
-										sx={{ transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.3)' } }}
+										onClick={(e) => { 
+											e.stopPropagation(); 
+											handleReaction(emoji); 
+										}}
+										sx={{ 
+											p: 0.8,
+											transition: 'transform 0.15s', 
+											'&:hover': { transform: 'scale(1.35)' } 
+										}}
 									>
-										<Typography fontSize="1.2rem">{emoji}</Typography>
+										<Typography fontSize="1.3rem">{emoji}</Typography>
 									</IconButton>
 								))}
 							</Paper>
 						</Collapse>
 
 						<Button
-							onClick={() => toast('Coming Soon')}
-							color="inherit"
+							onClick={() => {
+								const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
+								if (userReaction) handleReaction(userReaction);
+								else handleReaction('🏸');
+							}}
+							color={(localPost.reactions || []).some((r) => r.userId === currentUser?.id) || hasLiked ? "primary" : "inherit"}
 							sx={actionBtnStyle}
 						>
 							<Box sx={{ mr: { xs: 0.5, sm: 1 }, display: "flex", alignItems: "center" }}>
-								{hasLiked ? <ThumbUpFilled /> : <ThumbUpOutline />}
+								{(() => {
+									const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
+									if (userReaction) return <Typography component="span" sx={{ fontSize: "1.1rem" }}>{userReaction}</Typography>;
+									return hasLiked ? <ThumbUpFilled /> : <ThumbUpOutline />;
+								})()}
 							</Box>
 							<Box sx={{ display: { xs: "none", sm: "inline-block" } }}>
 								React
 							</Box>
 						</Button>
 					</Box>
+
+					{/* INLINE COMMENT ACCORDION TRIGGER */}
 					<Button
-						onClick={() => toast('Coming Soon')}
-						color="inherit"
+						onClick={() => setIsCommentModalOpen((prev) => !prev)}
+						color={isCommentModalOpen ? "primary" : "inherit"}
 						sx={actionBtnStyle}
 					>
 						<Box
@@ -857,14 +982,13 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						<Box
 							sx={{ display: { xs: "none", sm: "inline-block" } }}
 						>
-							Comment
+							Comment{totalCommentsCount > 0 ? ` (${totalCommentsCount})` : ""}
 						</Box>
 					</Button>
+
+					{/* SHARE BUTTON */}
 					<Button
-						onClick={(e) => {
-							e.stopPropagation();
-							toast('Coming Soon');
-						}}
+						onClick={handleShare}
 						color="inherit"
 						sx={actionBtnStyle}
 					>

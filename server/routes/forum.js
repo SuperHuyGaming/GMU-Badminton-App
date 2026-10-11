@@ -263,7 +263,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility } = req.body;
+		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility, isPinned } = req.body;
 
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
@@ -294,6 +294,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 			imageUrl: cleanImageUrl,
 			imageUrls: cleanImageUrls,
 			tags: cleanTags,
+			isPinned: req.user.role === "admin" && Boolean(isPinned),
 			visibility: visibility || 'PUBLIC',
 			authorName,
 			targetDate: targetDate || "General",
@@ -887,6 +888,112 @@ router.put(
 		}
 	},
 );
+
+// ==========================================
+// PIN POST (ADMIN ONLY)
+// ==========================================
+router.put("/:postId/pin", authMiddleware, async (req, res) => {
+	try {
+		if (req.user.role !== "admin") {
+			return res.status(403).json({ message: "Only administrators can pin posts." });
+		}
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		post.isPinned = !post.isPinned;
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+
+		res.json({
+			success: true,
+			isPinned: post.isPinned,
+			post: hydratedPost,
+			message: post.isPinned ? "Post pinned successfully." : "Post unpinned."
+		});
+	} catch (error) {
+		console.error("Error toggling pin status:", error);
+		res.status(500).json({ message: "Error toggling pin status." });
+	}
+});
+
+// ==========================================
+// EMOJI REACTIONS (🏸, 🔥, 💯, ❤️, 👏)
+// ==========================================
+const ALLOWED_EMOJIS = ["🏸", "🔥", "💯", "❤️", "👏", "👍"];
+
+router.put("/:postId/react", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const { emoji } = req.body;
+		if (!emoji || !ALLOWED_EMOJIS.includes(emoji)) {
+			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
+		const userName = req.user.name || "Player";
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		if (!Array.isArray(post.reactions)) {
+			post.reactions = [];
+		}
+
+		const existingReactionIndex = post.reactions.findIndex(
+			(r) => r.userId && r.userId.toString() === userId.toString()
+		);
+
+		let action = "added";
+		if (existingReactionIndex !== -1) {
+			if (post.reactions[existingReactionIndex].emoji === emoji) {
+				// Same emoji clicked -> remove reaction (toggle off)
+				post.reactions.splice(existingReactionIndex, 1);
+				action = "removed";
+			} else {
+				// Different emoji clicked -> replace reaction
+				post.reactions[existingReactionIndex].emoji = emoji;
+				action = "updated";
+			}
+		} else {
+			// New reaction
+			post.reactions.push({
+				userId,
+				userName,
+				emoji,
+				createdAt: new Date(),
+			});
+			action = "added";
+		}
+
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) {
+			req.io.emit("postUpdated", hydratedPost);
+			if (action === "added" && post.authorId?.toString() !== userId.toString()) {
+				await sendNotification(
+					req.io,
+					post.authorId.toString(),
+					`${userName} reacted with ${emoji} to your post.`,
+					`/forum?postId=${post._id}`
+				);
+			}
+		}
+
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error handling reaction:", error);
+		res.status(500).json({ message: "Error updating reaction." });
+	}
+});
 
 module.exports = router;
 

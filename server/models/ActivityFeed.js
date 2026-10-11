@@ -31,14 +31,24 @@ const activityFeedSchema = new mongoose.Schema({
     
     // Scoring for personalization
     score: { type: Number, default: 0 },
+    isPinned: { type: Boolean, default: false },
+    reactions: [
+        {
+            userId: String,
+            userName: String,
+            emoji: String,
+        }
+    ],
 
     createdAt: { type: Date, default: Date.now },
     visibility: { type: String, enum: ['PUBLIC', 'FRIENDS_ONLY', 'ONLY_ME'], default: 'PUBLIC' },
 });
 
-// Index for fast chronological fetching
+// Index for fast chronological fetching (pinned posts first)
+activityFeedSchema.index({ isPinned: -1, createdAt: -1 });
 activityFeedSchema.index({ createdAt: -1 });
 // Index for algorithmic sorting
+activityFeedSchema.index({ isPinned: -1, score: -1, createdAt: -1 });
 activityFeedSchema.index({ score: -1, createdAt: -1 });
 // Ensure we don't duplicate events
 activityFeedSchema.index({ type: 1, referenceId: 1 }, { unique: true });
