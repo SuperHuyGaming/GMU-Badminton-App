@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+
 from kafka import KafkaProducer
 
 logger = logging.getLogger(__name__)
@@ -21,8 +22,9 @@ class ScraperKafkaProducer:
     def publish_scraped_tournament(self, data: dict):
         if not self.producer:
             logger.warning("Kafka Producer not initialized, falling back to HTTP ingest.")
-            import requests
             import json
+
+            import requests
             try:
                 # Use Render API URL in production, or localhost for local testing
                 api_url = os.getenv('API_URL', 'http://127.0.0.1:8080')

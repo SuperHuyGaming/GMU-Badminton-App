@@ -116,7 +116,7 @@ class TournamentExtractor:
         if self.use_mock:
             return self._mock_extraction(source_handle, posts[0].get("caption", "") if posts else "", posts[0].get("display_url", "") if posts else "")
 
-        prompt = f"""
+        prompt = """
         You are an expert sports data analyst. Analyze this series of recent Instagram posts from a collegiate badminton club.
         Synthesize the information across these multiple posts (which may include 'save the dates', rules, and final registrations) 
         into a single cohesive tournament record.
