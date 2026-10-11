@@ -47,9 +47,34 @@ describe('PostCard Component QA Tests', () => {
 
     it('prevents text selection during rapid double clicking', () => {
         const { container } = renderWithContext(mockPost, mockUser);
-        // The outer Paper component is usually what we click
         const cardArea = container.querySelector(`#post-${mockPost._id}`);
-        // Since we explicitly added userSelect: 'none' to the Card to prevent blue highlights
         expect(cardArea).toHaveStyle({ userSelect: 'none' });
+    });
+
+    it('renders pinned megathread badge when post.isPinned is true', () => {
+        const pinnedPost = { ...mockPost, isPinned: true };
+        renderWithContext(pinnedPost, mockUser);
+        expect(screen.getByText('📌 Pinned Megathread')).toBeInTheDocument();
+    });
+
+    it('renders interactive badminton emoji reaction chips', () => {
+        const postWithReactions = {
+            ...mockPost,
+            reactions: [
+                { userId: 'user-123', emoji: '🏸' },
+                { userId: 'user-456', emoji: '🏸' },
+                { userId: 'user-789', emoji: '🔥' },
+            ],
+        };
+        renderWithContext(postWithReactions, mockUser);
+        expect(screen.getByText('🏸 2')).toBeInTheDocument();
+        expect(screen.getByText('🔥 1')).toBeInTheDocument();
+    });
+
+    it('toggles comment accordion when Comment button is clicked', () => {
+        renderWithContext(mockPost, mockUser);
+        const commentButton = screen.getByRole('button', { name: /Comment/i });
+        expect(commentButton).toBeInTheDocument();
+        commentButton.click();
     });
 });

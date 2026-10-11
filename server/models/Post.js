@@ -16,6 +16,15 @@ const PostSchema = new mongoose.Schema({
 	imageUrl: { type: String, default: "" }, // Legacy
 	imageUrls: { type: [String], default: [] }, // NEW: Multiple images
 	tags: { type: [String], default: [] }, // NEW: Post categorization tags
+	isPinned: { type: Boolean, default: false }, // NEW: Pinned megathread by admins
+	reactions: [
+		{
+			userId: { type: String, required: true },
+			userName: { type: String, default: "Player" },
+			emoji: { type: String, required: true },
+			createdAt: { type: Date, default: Date.now },
+		},
+	],
 	comments: [
 		{
 			authorId: String,
@@ -78,12 +87,14 @@ PostSchema.post('save', async function(doc) {
 				image: doc.imageUrl,
 				images: doc.imageUrls || [],
 				tags: doc.tags || [],
+				isPinned: doc.isPinned || false,
+				reactions: doc.reactions || [],
 				likes: doc.likedBy?.length || 0,
 				recentLikerAvatars: recentLikerAvatars,
 				comments: doc.comments?.length || 0,
 				createdAt: doc.timestamp,
 				visibility: doc.visibility,
-				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3
+				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3 + (doc.reactions?.length || 0) * 2 + (doc.isPinned ? 1000 : 0)
 			},
 			{ upsert: true, new: true }
 		);

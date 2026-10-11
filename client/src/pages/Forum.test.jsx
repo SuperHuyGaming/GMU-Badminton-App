@@ -103,4 +103,19 @@ describe('Forum Page Component (Community Hub)', () => {
             expect(screen.getByText('Need a hitting partner.')).toBeInTheDocument();
         });
     });
+
+    it('renders the 3-tab navigation system and trending topic chips', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false })
+        });
+
+        renderWithProviders();
+
+        expect(screen.getByRole('tab', { name: /For You/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Top/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Latest/i })).toBeInTheDocument();
+        expect(screen.getByText('#Tournament')).toBeInTheDocument();
+        expect(screen.getByText('#RAC')).toBeInTheDocument();
+    });
 });
