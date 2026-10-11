@@ -33,6 +33,7 @@ const ProposedTournament = require("../models/ProposedTournament");
 const Tournament = require('../models/Tournament');
 const redis = require('./redis');
 const { sendPushToAllUsers } = require('./pushNotifications');
+const { uploadFlyerToCloudinary } = require('./cloudinaryHelper');
 const promClient = require('prom-client');
 const xss = require('xss');
 
@@ -171,6 +172,13 @@ const handleMessage = async ({ topic, partition, message }) => {
     try {
         const rawValue = message && message.value ? message.value.toString() : "{}";
         const parsedDoc = parseScrapedTournamentMessage(rawValue);
+
+        if (parsedDoc.scrapedImageUrls && parsedDoc.scrapedImageUrls.length > 0) {
+            const hostedUrl = await uploadFlyerToCloudinary(parsedDoc.scrapedImageUrls[0]);
+            if (hostedUrl) {
+                parsedDoc.scrapedImageUrls[0] = hostedUrl;
+            }
+        }
 
         let savedDoc;
         const now = new Date();
