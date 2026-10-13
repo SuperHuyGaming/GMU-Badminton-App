@@ -41,12 +41,12 @@ const schema = {
 async function parseInstagramPost(caption) {
     if (!caption || typeof caption !== "string" || caption.trim() === '') return null;
 
-    let retries = 5;
+    let retries = 2;
     while (retries > 0) {
         try {
             const safeCaption = caption.substring(0, 5000);
             const response = await ai.models.generateContent({
-                model: "gemini-flash-lite-latest",
+                model: "gemini-2.5-flash",
                 contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
                 config: {
                     responseMimeType: "application/json",
@@ -59,15 +59,14 @@ async function parseInstagramPost(caption) {
                 const data = JSON.parse(response.text);
                 return data;
             }
-            return null;
+            return fallbackRegexParser(caption);
         } catch (e) {
-            if (e.message && e.message.includes("503") && retries > 1) {
-                const waitTime = (6 - retries) * 5000; // 5s, 10s, 15s, 20s
-                console.warn(`[AIParser] High demand 503 error. Waiting ${waitTime/1000}s before retrying... (${retries - 1} attempts left)`);
-                retries--;
-                await new Promise(res => setTimeout(res, waitTime));
+            retries--;
+            if (retries > 0 && e.message && e.message.includes("503")) {
+                console.warn(`[AIParser] Gemini 503 busy error. Quick retry (1 attempt left)...`);
+                await new Promise(res => setTimeout(res, 800));
             } else {
-                console.error("[AIParser] AI failed entirely. Falling back to local Regex parser.", e.message);
+                console.warn("[AIParser] Gemini extraction unavailable. Using instant regex/heuristic parser:", e.message);
                 return fallbackRegexParser(caption);
             }
         }
@@ -138,11 +137,11 @@ const discoverySchema = {
 
 async function parseDiscoveredWebpage(rawText, url) {
     if (!rawText) return null;
-    let retries = 5;
+    let retries = 2;
     while (retries > 0) {
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-flash-lite-latest",
+                model: "gemini-2.5-flash",
                 contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.\n\nWebpage Text:\n${rawText.substring(0, 5000)}`,
                 config: {
                     responseMimeType: "application/json",
@@ -153,13 +152,12 @@ async function parseDiscoveredWebpage(rawText, url) {
             if (response.text) return JSON.parse(response.text);
             return fallbackWebpageParser(rawText, url);
         } catch (e) {
-            if (e.message && e.message.includes("503") && retries > 1) {
-                const waitTime = (6 - retries) * 5000;
-                console.warn(`[AIParser] High demand 503 error. Waiting ${waitTime/1000}s before retrying... (${retries - 1} attempts left)`);
-                retries--;
-                await new Promise(res => setTimeout(res, waitTime));
+            retries--;
+            if (retries > 0 && e.message && e.message.includes("503")) {
+                console.warn(`[AIParser] Gemini 503 busy error on webpage. Quick retry...`);
+                await new Promise(res => setTimeout(res, 800));
             } else {
-                console.warn("[AIParser] Web discovery parse failed, using heuristic regex fallback:", e.message);
+                console.warn("[AIParser] Web discovery parse error, using instant heuristic fallback:", e.message);
                 return fallbackWebpageParser(rawText, url);
             }
         }
@@ -226,6 +224,16 @@ function fallbackWebpageParser(rawText, url) {
         if (!isNaN(d.getTime())) registrationDeadline = d.toISOString().split('T')[0];
     }
 
+    let skillLevels = ["Open"];
+    if (/flight/i.test(lower)) {
+        if (/\ba\b/i.test(lower)) skillLevels.push("A");
+        if (/\bb\b/i.test(lower)) skillLevels.push("B");
+        if (/\bc\b/i.test(lower)) skillLevels.push("C");
+        if (/\bd\b/i.test(lower)) skillLevels.push("D");
+    }
+    if (/collegiate/i.test(lower)) skillLevels.push("Collegiate");
+    if (/intermediate/i.test(lower)) skillLevels.push("Intermediate");
+
     return {
         isValidDmvTournament: true,
         tournamentName,
@@ -233,6 +241,7 @@ function fallbackWebpageParser(rawText, url) {
         startDate: startDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         endDate: startDate || new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
         registrationDeadline,
+        skillLevels: [...new Set(skillLevels)],
         confidenceScore: 90
     };
 }

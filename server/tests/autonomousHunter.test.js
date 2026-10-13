@@ -22,7 +22,8 @@ const {
     isSafeExternalUrl,
     processDiscoveryQueue,
     huntGoogleForTournaments,
-    runFullAutonomousHunt
+    runFullAutonomousHunt,
+    ensureGuaranteedTournaments
 } = require("../utils/autonomousHunter");
 
 const {
@@ -297,6 +298,39 @@ describe("Autonomous Tournament Hunter Suite", () => {
 
             expect(res.status).toBe(200);
             expect(res.body.message).toContain("Discovery queue processing complete");
+        });
+    });
+
+    describe("6. Guaranteed Active Tournaments Initializer", () => {
+        test("returns 0 if mongoose is not connected", async () => {
+            const count = await ensureGuaranteedTournaments();
+            expect(count).toBe(0);
+        });
+
+        test("returns existing active tournament count if database already has tournaments", async () => {
+            const originalReadyState = mongoose.connection.readyState;
+            Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
+
+            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(3);
+
+            const count = await ensureGuaranteedTournaments();
+            expect(count).toBe(3);
+
+            Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
+        });
+
+        test("seeds guaranteed DMV tournaments if 0 active tournaments found", async () => {
+            const originalReadyState = mongoose.connection.readyState;
+            Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
+
+            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(0);
+            const mockUpsert = jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
+
+            const count = await ensureGuaranteedTournaments();
+            expect(count).toBe(4);
+            expect(mockUpsert).toHaveBeenCalledTimes(4);
+
+            Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
         });
     });
 });
