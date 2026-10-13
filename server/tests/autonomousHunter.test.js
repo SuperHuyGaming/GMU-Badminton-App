@@ -25,7 +25,8 @@ const {
     huntRegionalClubsAndEnqueue,
     runFullAutonomousHunt,
     getGuaranteedTournamentsList,
-    ensureGuaranteedTournaments
+    ensureGuaranteedTournaments,
+    wipeAndRestartTournamentSystem
 } = require("../utils/autonomousHunter");
 
 const {
@@ -328,6 +329,92 @@ describe("Autonomous Tournament Hunter Suite", () => {
             const count = await ensureGuaranteedTournaments();
             expect(count).toBe(4);
             expect(mockUpsert).toHaveBeenCalledTimes(4);
+
+            Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
+        });
+    });
+
+    describe("7. Queue Wipe & Date Sanitization", () => {
+        const { sanitizeParsedDate } = jest.requireActual("../utils/aiParser");
+
+        test("sanitizeParsedDate enforces 2026+ active year when given legacy 2001 or past dates", () => {
+            const sanitized2001 = sanitizeParsedDate("2001-04-12");
+            expect(new Date(sanitized2001).getFullYear()).toBeGreaterThanOrEqual(2026);
+
+            const sanitizedEmpty = sanitizeParsedDate(null, 4);
+            expect(new Date(sanitizedEmpty).getFullYear()).toBeGreaterThanOrEqual(2026);
+
+            const valid2026 = sanitizeParsedDate("2026-11-15");
+            expect(valid2026).toBe("2026-11-15");
+        });
+
+        test("wipeAndRestartTournamentSystem returns error if mongoose is disconnected", async () => {
+            const originalReadyState = mongoose.connection.readyState;
+            Object.defineProperty(mongoose.connection, "readyState", { value: 0, configurable: true });
+
+            const res = await wipeAndRestartTournamentSystem();
+            expect(res.success).toBe(false);
+            expect(res.message).toBe("Database not connected");
+
+            Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
+        });
+
+        test("wipeAndRestartTournamentSystem purges queues and pre-2026 tournaments, then re-seeds", async () => {
+            const originalReadyState = mongoose.connection.readyState;
+            Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
+
+            const mockDelQueue = jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 15 });
+            const mockDelProposed = jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 3 });
+            const mockDelTournaments = jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 2 });
+            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(0);
+            jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
+
+            const res = await wipeAndRestartTournamentSystem();
+            expect(res.success).toBe(true);
+            expect(res.clearedDiscoveryQueue).toBe(15);
+            expect(res.clearedProposedTournaments).toBe(3);
+            expect(res.purgedTournaments).toBe(2);
+            expect(res.activeGuaranteedCount).toBe(4);
+
+            expect(mockDelQueue).toHaveBeenCalledWith({});
+            expect(mockDelProposed).toHaveBeenCalledWith({});
+            expect(mockDelTournaments).toHaveBeenCalled();
+
+            Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
+        });
+    });
+
+    describe("8. Admin Wipe & Restart API Endpoint", () => {
+        test("POST /api/admin/tournaments/wipe-and-restart rejects unauthenticated users", async () => {
+            const res = await request(app).post("/api/admin/tournaments/wipe-and-restart");
+            expect(res.status).toBe(401);
+        });
+
+        test("POST /api/admin/tournaments/wipe-and-restart rejects non-admin users", async () => {
+            const res = await request(app)
+                .post("/api/admin/tournaments/wipe-and-restart")
+                .set("Authorization", `Bearer ${userToken}`);
+            expect(res.status).toBe(403);
+        });
+
+        test("POST /api/admin/tournaments/wipe-and-restart succeeds for admin", async () => {
+            const originalReadyState = mongoose.connection.readyState;
+            Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
+
+            jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 8 });
+            jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 2 });
+            jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 1 });
+            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(0);
+            jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
+
+            const res = await request(app)
+                .post("/api/admin/tournaments/wipe-and-restart")
+                .set("Authorization", `Bearer ${adminToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.message).toContain("wiped and restarted successfully");
+            expect(res.body.result.clearedDiscoveryQueue).toBe(8);
+            expect(res.body.result.purgedTournaments).toBe(1);
 
             Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
         });

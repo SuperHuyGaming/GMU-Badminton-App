@@ -37,6 +37,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { toast } from "react-hot-toast";
 
 import apiFetch from "../../utils/api";
@@ -127,6 +128,7 @@ export default function TournamentApprovals() {
     const [discoveryLoading, setDiscoveryLoading] = useState(false);
     const [discoveryStatusFilter, setDiscoveryStatusFilter] = useState("");
     const [processingQueue, setProcessingQueue] = useState(false);
+    const [wiping, setWiping] = useState(false);
 
     const handleSelectAllClick = (event) => {
         if (event.target.checked) {
@@ -263,6 +265,32 @@ export default function TournamentApprovals() {
             toast.error(err.message || "Failed to process discovery queue batch");
         } finally {
             setProcessingQueue(false);
+        }
+    };
+
+    const handleWipeAndRestart = async () => {
+        if (!window.confirm("Are you sure you want to completely wipe all tournament discovery queues and restart? This will purge pre-2026/invalid tournaments and re-seed verified 2026 tournaments.")) {
+            return;
+        }
+        try {
+            setWiping(true);
+            const res = await apiFetch("/api/admin/tournaments/wipe-and-restart", {
+                method: "POST"
+            });
+            const data = await res.json();
+            const result = data?.result;
+            const msg = result
+                ? `Wiped & restarted: Cleared ${result.clearedDiscoveryQueue} in queue, ${result.clearedProposedTournaments} proposals, purged ${result.purgedTournaments} invalid. Re-seeded ${result.activeGuaranteedCount} 2026 tournaments.`
+                : data?.message || "Queues wiped and restarted successfully";
+            toast.success(msg);
+            await fetchProposals();
+            if (currentTab === 1) {
+                await fetchDiscoveryQueue();
+            }
+        } catch (err) {
+            toast.error(err.message || "Failed to wipe and restart tournament system");
+        } finally {
+            setWiping(false);
         }
     };
 
@@ -490,6 +518,16 @@ export default function TournamentApprovals() {
                         sx={{ textTransform: "none", fontWeight: "bold" }}
                     >
                         {hunting ? "Hunting Tournaments..." : "Run Autonomous Hunter"}
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={wiping ? <CircularProgress size={16} color="inherit" /> : <RestartAltIcon />}
+                        onClick={handleWipeAndRestart}
+                        disabled={wiping || hunting || loading}
+                        sx={{ textTransform: "none", fontWeight: "bold" }}
+                    >
+                        {wiping ? "Wiping & Restarting..." : "Wipe & Restart Queues"}
                     </Button>
                     <Button
                         variant="outlined"

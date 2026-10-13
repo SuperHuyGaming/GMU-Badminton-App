@@ -9,7 +9,7 @@ const User = require("../models/User");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 const redis = require("../utils/redis");
 const rateLimit = require('express-rate-limit');
-const { runFullAutonomousHunt, processDiscoveryQueue } = require("../utils/autonomousHunter");
+const { runFullAutonomousHunt, processDiscoveryQueue, wipeAndRestartTournamentSystem } = require("../utils/autonomousHunter");
 
 const adminActionLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -387,6 +387,23 @@ router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => 
         });
     } catch (err) {
         return res.status(500).json({ message: "Failed to process discovery queue", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/wipe-and-restart
+ * Wipes discovery queue, proposed tournaments, purges invalid/past tournaments (e.g. 2001 VCU),
+ * and re-seeds verified live tournaments for 2026.
+ */
+router.post("/wipe-and-restart", adminActionLimiter, async (req, res) => {
+    try {
+        const result = await wipeAndRestartTournamentSystem();
+        return res.status(200).json({
+            message: "Tournament system wiped and restarted successfully",
+            result
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to wipe and restart tournament system", error: err.message });
     }
 });
 
