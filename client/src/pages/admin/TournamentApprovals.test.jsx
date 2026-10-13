@@ -414,4 +414,118 @@ describe("TournamentApprovals Admin Page Component", () => {
         ).toBeInTheDocument();
         expect(screen.getAllByRole("button", { name: /Refresh Queue/i })[0]).toBeInTheDocument();
     });
+
+    it("9. Clicking Run Autonomous Hunter calls /run-hunt and refreshes the proposals", async () => {
+        apiFetch.mockImplementation(async (url, options) => {
+            if (url === "/api/admin/tournaments/proposed") {
+                return {
+                    ok: true,
+                    json: async () => [],
+                };
+            }
+            if (url === "/api/admin/tournaments/discovery-queue/run-hunt" && options?.method === "POST") {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        message: "Autonomous Tournament Hunter completed cycle",
+                        result: {
+                            summary: {
+                                addedToQueue: 2,
+                                newProposalsCreated: 1,
+                            },
+                        },
+                    }),
+                };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("Review Queue is Empty")).toBeInTheDocument();
+        });
+
+        const hunterButtons = screen.getAllByRole("button", { name: /Run Autonomous Hunter/i });
+        expect(hunterButtons.length).toBeGreaterThan(0);
+        fireEvent.click(hunterButtons[0]);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                "/api/admin/tournaments/discovery-queue/run-hunt",
+                expect.objectContaining({ method: "POST" })
+            );
+            expect(toast.success).toHaveBeenCalledWith(
+                "Hunter complete: 2 queued, 1 proposed"
+            );
+        });
+    });
+
+    it("10. Switching to Discovery Queue tab renders discovered items and supports batch processing", async () => {
+        const mockDiscoveryItems = [
+            {
+                _id: "disc-1",
+                url: "https://www.tournamentsoftware.com/tournament/mid-atlantic",
+                source: "tournamentsoftware",
+                status: "pending",
+                discoveredAt: "2026-10-12T10:00:00.000Z",
+            },
+        ];
+
+        apiFetch.mockImplementation(async (url, options) => {
+            if (url === "/api/admin/tournaments/proposed") {
+                return { ok: true, json: async () => [] };
+            }
+            if (url.startsWith("/api/admin/tournaments/discovery-queue") && !url.includes("process") && !url.includes("run-hunt")) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        items: mockDiscoveryItems,
+                        totalCount: 1,
+                    }),
+                };
+            }
+            if (url === "/api/admin/tournaments/discovery-queue/process" && options?.method === "POST") {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        message: "Discovery queue processing complete",
+                        result: {
+                            processedCount: 1,
+                            proposalsCreated: 1,
+                        },
+                    }),
+                };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("Discovery Queue")).toBeInTheDocument();
+        });
+
+        // Click Discovery Queue tab
+        fireEvent.click(screen.getByText("Discovery Queue"));
+
+        await waitFor(() => {
+            expect(screen.getByText("https://www.tournamentsoftware.com/tournament/mid-atlantic")).toBeInTheDocument();
+        });
+
+        // Click Process Next Batch
+        const processBtn = screen.getByRole("button", { name: /Process Next Batch/i });
+        fireEvent.click(processBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                "/api/admin/tournaments/discovery-queue/process",
+                expect.objectContaining({ method: "POST" })
+            );
+            expect(toast.success).toHaveBeenCalledWith(
+                "Processed 1 items (1 proposals generated)"
+            );
+        });
+    });
 });
+

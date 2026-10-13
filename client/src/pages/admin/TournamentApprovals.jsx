@@ -24,6 +24,8 @@ import {
     Checkbox,
     Grid,
     Link,
+    Tabs,
+    Tab,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -33,6 +35,8 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import TravelExploreIcon from "@mui/icons-material/TravelExplore";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { toast } from "react-hot-toast";
 
 import apiFetch from "../../utils/api";
@@ -115,6 +119,15 @@ export default function TournamentApprovals() {
     const [manualForm, setManualForm] = useState(initialManualForm);
     const [submittingManual, setSubmittingManual] = useState(false);
 
+    // Autonomous Tournament Hunter & Discovery Queue state
+    const [hunting, setHunting] = useState(false);
+    const [currentTab, setCurrentTab] = useState(0);
+    const [discoveryItems, setDiscoveryItems] = useState([]);
+    const [discoveryTotal, setDiscoveryTotal] = useState(0);
+    const [discoveryLoading, setDiscoveryLoading] = useState(false);
+    const [discoveryStatusFilter, setDiscoveryStatusFilter] = useState("");
+    const [processingQueue, setProcessingQueue] = useState(false);
+
     const handleSelectAllClick = (event) => {
         if (event.target.checked) {
             const newSelecteds = proposals.map((n) => n._id);
@@ -181,10 +194,77 @@ export default function TournamentApprovals() {
         }
     }, []);
 
+    const fetchDiscoveryQueue = useCallback(async () => {
+        try {
+            setDiscoveryLoading(true);
+            const query = discoveryStatusFilter ? `?status=${encodeURIComponent(discoveryStatusFilter)}` : "";
+            const res = await apiFetch(`/api/admin/tournaments/discovery-queue${query}`);
+            const data = await res.json();
+            setDiscoveryItems(Array.isArray(data.items) ? data.items : []);
+            setDiscoveryTotal(data.totalCount || 0);
+        } catch (err) {
+            toast.error(err.message || "Failed to load discovery queue");
+        } finally {
+            setDiscoveryLoading(false);
+        }
+    }, [discoveryStatusFilter]);
+
     useEffect(() => {
-         
         fetchProposals();
     }, [fetchProposals]);
+
+    useEffect(() => {
+        if (currentTab === 1) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            fetchDiscoveryQueue();
+        }
+    }, [currentTab, fetchDiscoveryQueue]);
+
+    const handleRunHunter = async () => {
+        try {
+            setHunting(true);
+            const res = await apiFetch("/api/admin/tournaments/discovery-queue/run-hunt", {
+                method: "POST",
+            });
+            const data = await res.json();
+            const summary = data?.result?.summary;
+            const msg = summary
+                ? `Hunter complete: ${summary.addedToQueue} queued, ${summary.newProposalsCreated} proposed`
+                : data?.message || "Autonomous Hunter cycle completed!";
+            toast.success(msg);
+            await fetchProposals();
+            if (currentTab === 1) {
+                await fetchDiscoveryQueue();
+            }
+        } catch (err) {
+            toast.error(err.message || "Failed to execute autonomous hunter cycle");
+        } finally {
+            setHunting(false);
+        }
+    };
+
+    const handleProcessQueueBatch = async () => {
+        try {
+            setProcessingQueue(true);
+            const res = await apiFetch("/api/admin/tournaments/discovery-queue/process", {
+                method: "POST",
+                body: JSON.stringify({ batchSize: 10 }),
+            });
+            const data = await res.json();
+            const processed = data?.result?.processedCount ?? 0;
+            const proposalsCreated = data?.result?.proposalsCreated ?? 0;
+            const msg = data?.result
+                ? `Processed ${processed} items (${proposalsCreated} proposals generated)`
+                : data?.message || "Queue processing complete";
+            toast.success(msg);
+            await fetchDiscoveryQueue();
+            await fetchProposals();
+        } catch (err) {
+            toast.error(err.message || "Failed to process discovery queue batch");
+        } finally {
+            setProcessingQueue(false);
+        }
+    };
 
     const handleOpenReview = (proposal) => {
         setSelectedProposal(proposal);
@@ -390,8 +470,8 @@ export default function TournamentApprovals() {
                     </Typography>
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-                    {selectedIds.length > 0 && (
+                <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
+                    {selectedIds.length > 0 && currentTab === 0 && (
                         <>
                             <Button variant="contained" color="success" onClick={handleBulkApprove} sx={{ textTransform: "none", fontWeight: "bold" }}>
                                 Approve ({selectedIds.length})
@@ -402,13 +482,23 @@ export default function TournamentApprovals() {
                         </>
                     )}
                     <Button
-                        variant="outlined"
-                        startIcon={<RefreshIcon />}
-                        onClick={fetchProposals}
-                        disabled={loading}
+                        variant="contained"
+                        color="primary"
+                        startIcon={hunting ? <CircularProgress size={16} color="inherit" /> : <TravelExploreIcon />}
+                        onClick={handleRunHunter}
+                        disabled={hunting || loading}
                         sx={{ textTransform: "none", fontWeight: "bold" }}
                     >
-                        Refresh Queue
+                        {hunting ? "Hunting Tournaments..." : "Run Autonomous Hunter"}
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        startIcon={<RefreshIcon />}
+                        onClick={currentTab === 0 ? fetchProposals : fetchDiscoveryQueue}
+                        disabled={loading || discoveryLoading}
+                        sx={{ textTransform: "none", fontWeight: "bold" }}
+                    >
+                        Refresh
                     </Button>
                     <Button
                         variant="contained"
@@ -428,259 +518,490 @@ export default function TournamentApprovals() {
                 </Box>
             </Box>
 
-            {/* Low Confidence Queue-Wide Alert Banner */}
-            {!loading && hasLowConfidence && (
-                <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
-                    Low confidence proposals detected (below 80%). Please review flyer and caption context carefully before approving.
-                </Alert>
-            )}
+            {/* Navigation Tabs between Proposed Proposals and Raw Discovery Queue */}
+            <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+                <Tabs value={currentTab} onChange={(e, val) => setCurrentTab(val)} aria-label="admin tournament tabs">
+                    <Tab
+                        label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <span>Pending Approvals</span>
+                                {proposals.length > 0 && (
+                                    <Chip label={proposals.length} size="small" color="primary" sx={{ height: 20, fontSize: "0.75rem" }} />
+                                )}
+                            </Box>
+                        }
+                    />
+                    <Tab
+                        label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <span>Discovery Queue</span>
+                                {discoveryTotal > 0 && (
+                                    <Chip label={discoveryTotal} size="small" variant="outlined" sx={{ height: 20, fontSize: "0.75rem" }} />
+                                )}
+                            </Box>
+                        }
+                    />
+                </Tabs>
+            </Box>
 
-            {/* Review Queue Content */}
-            {loading ? (
-                <Box
-                    sx={{
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        minHeight: 280,
-                    }}
-                >
-                    <CircularProgress color="primary" />
-                </Box>
-            ) : proposals.length === 0 ? (
-                <Paper
-                    elevation={0}
-                    sx={{
-                        p: { xs: 4, md: 6 },
-                        textAlign: "center",
-                        borderRadius: 4,
-                        border: "1px solid",
-                        borderColor: "divider",
-                        bgcolor: "background.paper",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                    }}
-                >
-                    <Box sx={{ mb: 2, display: "flex", justifyContent: "center" }}>
-                        <svg
-                            width="80"
-                            height="80"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="#FFCC33"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                            <path d="M4 22h16" />
-                            <path d="M10 14.66V17c0 .55-.45 1-1 1H7" />
-                            <path d="M14 14.66V17c0 .55.45 1 1 1h2" />
-                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                        </svg>
-                    </Box>
-                    <Typography
-                        variant="h5"
-                        fontWeight="bold"
-                        gutterBottom
-                        color="text.primary"
-                    >
-                        Review Queue is Empty
-                    </Typography>
-                    <Typography
-                        variant="body1"
-                        color="text.secondary"
-                        sx={{ maxWidth: 500, mb: 3 }}
-                    >
-                        All scraped tournament proposals have been reviewed and processed. New proposals will appear here automatically when detected by the scraping engine.
-                    </Typography>
-                    <Box sx={{ display: "flex", gap: 2 }}>
-                        <Button
-                            variant="outlined"
-                            startIcon={<RefreshIcon />}
-                            onClick={fetchProposals}
-                            sx={{ textTransform: "none", fontWeight: "bold" }}
-                        >
-                            Refresh Queue
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            startIcon={<AddIcon />}
-                            onClick={() => setManualModalOpen(true)}
+            {/* TAB 0: Pending Approvals Queue */}
+            {currentTab === 0 && (
+                <>
+                    {/* Low Confidence Queue-Wide Alert Banner */}
+                    {!loading && hasLowConfidence && (
+                        <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+                            Low confidence proposals detected (below 80%). Please review flyer and caption context carefully before approving.
+                        </Alert>
+                    )}
+
+                    {/* Review Queue Content */}
+                    {loading ? (
+                        <Box
                             sx={{
-                                textTransform: "none",
-                                fontWeight: "bold",
-                                backgroundColor: "#FFCC33",
-                                color: "#1a202c",
-                                "&:hover": { backgroundColor: "#e6b800" },
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                minHeight: 280,
                             }}
                         >
-                            Manual Entry
-                        </Button>
-                    </Box>
-                </Paper>
-            ) : (
-                <TableContainer
-                    component={Paper}
-                    elevation={0}
-                    sx={{
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 3,
-                        overflow: "hidden",
-                    }}
-                >
-                    <Table aria-label="pending tournament proposals table">
-                        <TableHead sx={{ bgcolor: "background.default" }}>
-                            <TableRow>
-                                <TableCell padding="checkbox">
-                                    <Checkbox
-                                        color="primary"
-                                        indeterminate={selectedIds.length > 0 && selectedIds.length < proposals.length}
-                                        checked={proposals.length > 0 && selectedIds.length === proposals.length}
-                                        onChange={handleSelectAllClick}
-                                    />
-                                </TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Tournament Name</TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Date</TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Location</TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Fee</TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Source</TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Confidence</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                                    Actions
-                                </TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {proposals.map((proposal) => {
-                                const isLowConfidence = (proposal.confidenceScore ?? 0) < 80;
-                                const confidenceColor =
-                                    (proposal.confidenceScore ?? 0) >= 80
-                                        ? "success"
-                                        : (proposal.confidenceScore ?? 0) >= 60
-                                        ? "warning"
-                                        : "error";
-
-                                return (
-                                    <TableRow
-                                        key={proposal._id}
-                                        hover
-                                        sx={{
-                                            borderLeft: isLowConfidence
-                                                ? "4px solid #E65100"
-                                                : "4px solid transparent",
-                                            backgroundColor: isLowConfidence
-                                                ? "rgba(230, 81, 0, 0.04)"
-                                                : "inherit",
-                                        }}
-                                    >
+                            <CircularProgress color="primary" />
+                        </Box>
+                    ) : proposals.length === 0 ? (
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                p: { xs: 4, md: 6 },
+                                textAlign: "center",
+                                borderRadius: 4,
+                                border: "1px solid",
+                                borderColor: "divider",
+                                bgcolor: "background.paper",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <Box sx={{ mb: 2, display: "flex", justifyContent: "center" }}>
+                                <svg
+                                    width="80"
+                                    height="80"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#FFCC33"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                    <path d="M4 22h16" />
+                                    <path d="M10 14.66V17c0 .55-.45 1-1 1H7" />
+                                    <path d="M14 14.66V17c0 .55.45 1 1 1h2" />
+                                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                                </svg>
+                            </Box>
+                            <Typography
+                                variant="h5"
+                                fontWeight="bold"
+                                gutterBottom
+                                color="text.primary"
+                            >
+                                Review Queue is Empty
+                            </Typography>
+                            <Typography
+                                variant="body1"
+                                color="text.secondary"
+                                sx={{ maxWidth: 500, mb: 3 }}
+                            >
+                                All scraped tournament proposals have been reviewed and processed. Click &quot;Run Autonomous Hunter&quot; to crawl TournamentSoftware and GMU collegiate seeds.
+                            </Typography>
+                            <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    startIcon={hunting ? <CircularProgress size={16} color="inherit" /> : <TravelExploreIcon />}
+                                    onClick={handleRunHunter}
+                                    disabled={hunting || loading}
+                                    sx={{ textTransform: "none", fontWeight: "bold" }}
+                                >
+                                    {hunting ? "Hunting Tournaments..." : "Run Autonomous Hunter"}
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<RefreshIcon />}
+                                    onClick={fetchProposals}
+                                    sx={{ textTransform: "none", fontWeight: "bold" }}
+                                >
+                                    Refresh Queue
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    color="secondary"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => setManualModalOpen(true)}
+                                    sx={{
+                                        textTransform: "none",
+                                        fontWeight: "bold",
+                                        backgroundColor: "#FFCC33",
+                                        color: "#1a202c",
+                                        "&:hover": { backgroundColor: "#e6b800" },
+                                    }}
+                                >
+                                    Manual Entry
+                                </Button>
+                            </Box>
+                        </Paper>
+                    ) : (
+                        <TableContainer
+                            component={Paper}
+                            elevation={0}
+                            sx={{
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 3,
+                                overflow: "hidden",
+                            }}
+                        >
+                            <Table aria-label="pending tournament proposals table">
+                                <TableHead sx={{ bgcolor: "background.default" }}>
+                                    <TableRow>
                                         <TableCell padding="checkbox">
                                             <Checkbox
                                                 color="primary"
-                                                checked={selectedIds.indexOf(proposal._id) !== -1}
-                                                onChange={(event) => handleSelectClick(event, proposal._id)}
+                                                indeterminate={selectedIds.length > 0 && selectedIds.length < proposals.length}
+                                                checked={proposals.length > 0 && selectedIds.length === proposals.length}
+                                                onChange={handleSelectAllClick}
                                             />
                                         </TableCell>
-                                        <TableCell>
-                                            <Typography
-                                                variant="body1"
-                                                fontWeight="bold"
-                                                color="text.primary"
-                                            >
-                                                {proposal.tournamentName}
-                                            </Typography>
-                                            {isLowConfidence && (
-                                                <Typography
-                                                    variant="caption"
-                                                    color="warning.main"
-                                                    fontWeight="bold"
-                                                >
-                                                    Attention required
-                                                </Typography>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {formatDateForDisplay(proposal.date)}
-                                        </TableCell>
-                                        <TableCell>
-                                            {proposal.location || "TBD"}
-                                        </TableCell>
-                                        <TableCell>
-                                            {proposal.entryFee || "Free / Unspecified"}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={extractDomain(proposal.sourceUrl)}
-                                                size="small"
-                                                variant="outlined"
-                                                component="a"
-                                                href={proposal.sourceUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                clickable
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={`${proposal.confidenceScore ?? 0}%`}
-                                                color={confidenceColor}
-                                                size="small"
-                                                sx={{ fontWeight: "bold" }}
-                                            />
-                                        </TableCell>
-                                        <TableCell align="right">
-                                            <Box
-                                                sx={{
-                                                    display: "flex",
-                                                    justifyContent: "flex-end",
-                                                    gap: 1,
-                                                }}
-                                            >
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    color="primary"
-                                                    startIcon={<VisibilityIcon />}
-                                                    onClick={() => handleOpenReview(proposal)}
-                                                    sx={{ textTransform: "none", fontWeight: "bold" }}
-                                                >
-                                                    Review
-                                                </Button>
-                                                <Button
-                                                    size="small"
-                                                    variant="contained"
-                                                    color="success"
-                                                    startIcon={<CheckCircleIcon />}
-                                                    onClick={() => handleApprove(proposal._id)}
-                                                    disabled={submitting}
-                                                    sx={{ textTransform: "none", fontWeight: "bold" }}
-                                                >
-                                                    Approve
-                                                </Button>
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    color="error"
-                                                    startIcon={<HighlightOffIcon />}
-                                                    onClick={() => handleOpenRejectDialog(proposal._id)}
-                                                    disabled={submitting}
-                                                    sx={{ textTransform: "none", fontWeight: "bold" }}
-                                                >
-                                                    Reject
-                                                </Button>
-                                            </Box>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Tournament Name</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Date</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Location</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Fee</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Source</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Confidence</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                            Actions
                                         </TableCell>
                                     </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                                </TableHead>
+                                <TableBody>
+                                    {proposals.map((proposal) => {
+                                        const isLowConfidence = (proposal.confidenceScore ?? 0) < 80;
+                                        const confidenceColor =
+                                            (proposal.confidenceScore ?? 0) >= 80
+                                                ? "success"
+                                                : (proposal.confidenceScore ?? 0) >= 60
+                                                ? "warning"
+                                                : "error";
+
+                                        return (
+                                            <TableRow
+                                                key={proposal._id}
+                                                hover
+                                                sx={{
+                                                    borderLeft: isLowConfidence
+                                                        ? "4px solid #E65100"
+                                                        : "4px solid transparent",
+                                                    backgroundColor: isLowConfidence
+                                                        ? "rgba(230, 81, 0, 0.04)"
+                                                        : "inherit",
+                                                }}
+                                            >
+                                                <TableCell padding="checkbox">
+                                                    <Checkbox
+                                                        color="primary"
+                                                        checked={selectedIds.indexOf(proposal._id) !== -1}
+                                                        onChange={(event) => handleSelectClick(event, proposal._id)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography
+                                                        variant="body1"
+                                                        fontWeight="bold"
+                                                        color="text.primary"
+                                                    >
+                                                        {proposal.tournamentName}
+                                                    </Typography>
+                                                    {isLowConfidence && (
+                                                        <Typography
+                                                            variant="caption"
+                                                            color="warning.main"
+                                                            fontWeight="bold"
+                                                        >
+                                                            Attention required
+                                                        </Typography>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {formatDateForDisplay(proposal.date)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {proposal.location || "TBD"}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {proposal.entryFee || "Free / Unspecified"}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={extractDomain(proposal.sourceUrl)}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        component="a"
+                                                        href={proposal.sourceUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        clickable
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={`${proposal.confidenceScore ?? 0}%`}
+                                                        color={confidenceColor}
+                                                        size="small"
+                                                        sx={{ fontWeight: "bold" }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Box
+                                                        sx={{
+                                                            display: "flex",
+                                                            justifyContent: "flex-end",
+                                                            gap: 1,
+                                                        }}
+                                                    >
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            color="primary"
+                                                            startIcon={<VisibilityIcon />}
+                                                            onClick={() => handleOpenReview(proposal)}
+                                                            sx={{ textTransform: "none", fontWeight: "bold" }}
+                                                        >
+                                                            Review
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            variant="contained"
+                                                            color="success"
+                                                            startIcon={<CheckCircleIcon />}
+                                                            onClick={() => handleApprove(proposal._id)}
+                                                            disabled={submitting}
+                                                            sx={{ textTransform: "none", fontWeight: "bold" }}
+                                                        >
+                                                            Approve
+                                                        </Button>
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            color="error"
+                                                            startIcon={<HighlightOffIcon />}
+                                                            onClick={() => handleOpenRejectDialog(proposal._id)}
+                                                            disabled={submitting}
+                                                            sx={{ textTransform: "none", fontWeight: "bold" }}
+                                                        >
+                                                            Reject
+                                                        </Button>
+                                                    </Box>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
+                </>
+            )}
+
+            {/* TAB 1: Raw Discovery Queue View */}
+            {currentTab === 1 && (
+                <Box>
+                    <Box
+                        sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            mb: 2,
+                            flexWrap: "wrap",
+                            gap: 2,
+                        }}
+                    >
+                        {/* Status Filter Chips */}
+                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                            <Typography variant="body2" fontWeight="bold" color="text.secondary" sx={{ mr: 1 }}>
+                                Filter Status:
+                            </Typography>
+                            {[
+                                { label: "All", value: "" },
+                                { label: "Pending", value: "pending" },
+                                { label: "Processed", value: "processed" },
+                                { label: "Duplicate", value: "duplicate" },
+                                { label: "Failed", value: "failed" },
+                                { label: "Irrelevant", value: "irrelevant" },
+                            ].map((f) => (
+                                <Chip
+                                    key={f.label}
+                                    label={f.label}
+                                    clickable
+                                    color={discoveryStatusFilter === f.value ? "primary" : "default"}
+                                    variant={discoveryStatusFilter === f.value ? "filled" : "outlined"}
+                                    size="small"
+                                    onClick={() => setDiscoveryStatusFilter(f.value)}
+                                />
+                            ))}
+                        </Box>
+
+                        {/* Batch Process Trigger */}
+                        <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                startIcon={processingQueue ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+                                onClick={handleProcessQueueBatch}
+                                disabled={processingQueue || discoveryLoading}
+                                sx={{ textTransform: "none", fontWeight: "bold" }}
+                            >
+                                {processingQueue ? "Processing..." : "Process Next Batch"}
+                            </Button>
+                        </Box>
+                    </Box>
+
+                    {discoveryLoading ? (
+                        <Box
+                            sx={{
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                minHeight: 280,
+                            }}
+                        >
+                            <CircularProgress color="primary" />
+                        </Box>
+                    ) : discoveryItems.length === 0 ? (
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                p: 6,
+                                textAlign: "center",
+                                borderRadius: 4,
+                                border: "1px solid",
+                                borderColor: "divider",
+                                bgcolor: "background.paper",
+                            }}
+                        >
+                            <Typography variant="h6" fontWeight="bold" gutterBottom>
+                                No Discovered URLs Found
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                                {discoveryStatusFilter
+                                    ? `No items found matching the "${discoveryStatusFilter}" status filter.`
+                                    : "The discovery queue is empty. Run the Autonomous Hunter to discover new tournaments across TournamentSoftware and web portals."}
+                            </Typography>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<TravelExploreIcon />}
+                                onClick={handleRunHunter}
+                                disabled={hunting}
+                                sx={{ textTransform: "none", fontWeight: "bold" }}
+                            >
+                                {hunting ? "Hunting..." : "Run Autonomous Hunter Now"}
+                            </Button>
+                        </Paper>
+                    ) : (
+                        <TableContainer
+                            component={Paper}
+                            elevation={0}
+                            sx={{
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 3,
+                                overflow: "hidden",
+                            }}
+                        >
+                            <Table aria-label="discovery queue table">
+                                <TableHead sx={{ bgcolor: "background.default" }}>
+                                    <TableRow>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Discovered URL / Source</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Source Type</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Discovered At</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Details / Notes</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {discoveryItems.map((item) => {
+                                        const statusColor =
+                                            item.status === "processed"
+                                                ? "success"
+                                                : item.status === "pending"
+                                                ? "warning"
+                                                : item.status === "failed"
+                                                ? "error"
+                                                : "default";
+
+                                        return (
+                                            <TableRow key={item._id} hover>
+                                                <TableCell>
+                                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                                        <Link
+                                                            href={item.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            underline="hover"
+                                                            sx={{
+                                                                fontWeight: "bold",
+                                                                display: "inline-flex",
+                                                                alignItems: "center",
+                                                                gap: 0.5,
+                                                                wordBreak: "break-all",
+                                                            }}
+                                                        >
+                                                            {item.url}
+                                                            <OpenInNewIcon fontSize="inherit" />
+                                                        </Link>
+                                                    </Box>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={item.source || "web_search"}
+                                                        size="small"
+                                                        variant="outlined"
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    {formatDateForDisplay(item.discoveredAt || item.createdAt)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={item.status}
+                                                        color={statusColor}
+                                                        size="small"
+                                                        sx={{ fontWeight: "bold", textTransform: "capitalize" }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {item.errorMessage || item.notes || item.proposedTournamentId ? (
+                                                            item.proposedTournamentId ? (
+                                                                `Created proposal #${item.proposedTournamentId}`
+                                                            ) : (
+                                                                item.errorMessage || item.notes
+                                                            )
+                                                        ) : (
+                                                            "—"
+                                                        )}
+                                                    </Typography>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
+                </Box>
             )}
 
             {/* Split-Screen Reviewer Modal */}
