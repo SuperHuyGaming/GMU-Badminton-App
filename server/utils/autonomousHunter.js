@@ -103,6 +103,43 @@ function isSafeExternalUrl(urlString) {
 }
 
 /**
+ * Fast Zero-Quota Pre-Filter:
+ * Evaluates sourceUrl and rawSnippet to instantly reject obvious non-candidates
+ * (foreign websites, other sports, non-DMV global federations, explicit past years)
+ * BEFORE spending network bandwidth or Gemini API quota.
+ * @returns {string|null} Rejection reason string if rejected, or null if candidate should proceed
+ */
+function fastHeuristicPreFilter(sourceUrl = '', rawSnippet = '') {
+    const url = (sourceUrl || '').toLowerCase();
+    const snippet = (rawSnippet || '').toLowerCase();
+
+    // 1. Non-badminton sports or organizations (FIBA basketball, golf, volleyball, soccer, pickleball)
+    if (/fiba\.tournamentsoftware|golf|basketball|volleyball|soccer|football|pickleball/i.test(url) ||
+        (/\b(fiba|golf|basketball|volleyball|soccer|football|pickleball)\b/i.test(snippet) && !snippet.includes('badminton'))) {
+        return "Non-badminton sport (FIBA/basketball/golf/etc)";
+    }
+
+    // 2. Known international/continental bodies or foreign federations (non-DMV regional)
+    if (/badmintoneurope\.com|corporate\.bwfbadminton\.com|badmintonitalia|badmintonengland|badmintonasia/i.test(url)) {
+        return "International/overseas badminton federation (non-DMV)";
+    }
+
+    // 3. Foreign country top-level domains without explicit DMV mentions
+    const foreignTldMatch = url.match(/\.(it|de|uk|eu|in|my|sg|jp|cn|fr|es|nl|dk|se|no|fi|au|nz|ru|br)\b/);
+    const hasDmvMention = /\b(va|virginia|md|maryland|dc|washington\s*d\.?c\.?|fairfax|columbia|ashburn|rockville|college\s*park|richmond)\b/i.test(snippet);
+    if (foreignTldMatch && !hasDmvMention) {
+        return `Foreign domain (${foreignTldMatch[0]}) without DMV location`;
+    }
+
+    // 4. Explicit past tournament year in URL (e.g. 2025, 2024, etc.)
+    if (/\b(201\d|202[0-5])\b/.test(url)) {
+        return "Explicit past tournament year in URL";
+    }
+
+    return null;
+}
+
+/**
  * Processes pending items in DiscoveryQueue:
  * - Fetches webpage HTML using Axios/Cheerio
  * - Evaluates with Gemini AI (relevance & geo-filter gate)
@@ -131,6 +168,17 @@ async function processDiscoveryQueue(batchSize = 10) {
 
     for (const item of pendingItems) {
         try {
+            // Fast Zero-Quota Pre-Filter: instantly reject foreign domains, other sports, non-DMV federations, or past years
+            const preFilterReject = fastHeuristicPreFilter(item.sourceUrl, item.rawSnippet);
+            if (preFilterReject) {
+                console.log(`[Hunter] Zero-Quota Fast Reject (${preFilterReject}): ${item.sourceUrl}`);
+                item.status = 'REJECTED_BY_AI';
+                item.errorMessage = preFilterReject;
+                await item.save();
+                rejectedCount++;
+                continue;
+            }
+
             console.log(`[Hunter] Fetching URL: ${item.sourceUrl}`);
             let rawText = item.rawSnippet || '';
             
@@ -698,6 +746,7 @@ module.exports = {
     stringSimilarity,
     isDuplicateTournament,
     isSafeExternalUrl,
+    fastHeuristicPreFilter,
     processDiscoveryQueue,
     huntGoogleForTournaments,
     huntRegionalClubsAndEnqueue,
