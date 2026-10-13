@@ -50,12 +50,18 @@ const initializeGemini = () => {
     }
     try {
         genAI = new GoogleGenerativeAI(apiKey);
-        model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        model = genAI.getGenerativeModel({ model: "gemini-3.8-flash" });
         console.log("✅ Google Gemini AI Coach initialized successfully.");
         return true;
     } catch (error) {
-        console.error("❌ Failed to initialize Gemini:", error.message);
-        return false;
+        try {
+            model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            console.log("✅ Google Gemini AI Coach initialized successfully with fallback model.");
+            return true;
+        } catch (innerErr) {
+            console.error("❌ Failed to initialize Gemini:", innerErr.message);
+            return false;
+        }
     }
 };
 

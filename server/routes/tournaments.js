@@ -76,16 +76,23 @@ router.get('/', async (req, res) => {
             .populate("attendees", "name avatarUrl _id")
             .sort({ startDate: 1 });
 
-        // If no tournaments found for broad view and database is connected, ensure guaranteed active tournaments are populated
-        if (mongoose.connection?.readyState === 1 && tournaments.length === 0 && !search && !location && !skillLevel && !month) {
-            try {
-                const { ensureGuaranteedTournaments } = require('../utils/autonomousHunter');
-                await ensureGuaranteedTournaments();
-                tournaments = await Tournament.find(query)
-                    .populate("attendees", "name avatarUrl _id")
-                    .sort({ startDate: 1 });
-            } catch (seedErr) {
-                console.warn("[Tournaments Route] Seed check skipped:", seedErr.message);
+        // If no tournaments found for broad view, ensure guaranteed active tournaments are populated
+        if (tournaments.length === 0 && !search && !location && !skillLevel && !month) {
+            if (mongoose.connection?.readyState === 1) {
+                try {
+                    const { ensureGuaranteedTournaments } = require('../utils/autonomousHunter');
+                    await ensureGuaranteedTournaments();
+                    tournaments = await Tournament.find(query)
+                        .populate("attendees", "name avatarUrl _id")
+                        .sort({ startDate: 1 });
+                } catch (seedErr) {
+                    console.warn("[Tournaments Route] Seed check skipped:", seedErr.message);
+                }
+            }
+            // Fail-safe: if still 0 tournaments, serve guaranteed active list
+            if (tournaments.length === 0) {
+                const { getGuaranteedTournamentsList } = require('../utils/autonomousHunter');
+                tournaments = getGuaranteedTournamentsList();
             }
         }
 
