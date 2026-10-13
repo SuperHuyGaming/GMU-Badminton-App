@@ -54,14 +54,8 @@ const initializeGemini = () => {
         console.log("✅ Google Gemini AI Coach initialized successfully.");
         return true;
     } catch (error) {
-        try {
-            model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-            console.log("✅ Google Gemini AI Coach initialized successfully with fallback model.");
-            return true;
-        } catch (innerErr) {
-            console.error("❌ Failed to initialize Gemini:", innerErr.message);
-            return false;
-        }
+        console.error("❌ Failed to initialize Gemini AI Coach:", error.message);
+        return false;
     }
 };
 

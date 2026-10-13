@@ -52,8 +52,15 @@ async function runInstagramScraper() {
 
             if (profileData && profileData.recentPosts) {
                 for (const post of profileData.recentPosts) {
+                    const caption = post.caption || '';
+                    const lower = caption.toLowerCase();
+                    const isCandidate = /tournament|open|invitational|championship|classic|smash|bracket|badminton cup/i.test(lower);
+                    if (!isCandidate) {
+                        continue; // Skip non-tournament club updates to preserve Gemini API quota
+                    }
+
                     // Phase 3: Task 5 - LLM Integration
-                    const parsedData = await parseInstagramPost(post.caption);
+                    const parsedData = await parseInstagramPost(caption);
                     
                     if (parsedData && parsedData.isTournamentPost) {
                         console.log(`[InstagramScraper] Valid tournament found from @${club.handle}: ${parsedData.tournamentName || 'Unknown Name'}`);
