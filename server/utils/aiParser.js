@@ -63,6 +63,23 @@ const schema = {
     required: ["isTournamentPost", "skillLevels"]
 };
 
+function sanitizeParsedDate(dateStr, defaultWeeksAhead = 3) {
+    if (!dateStr) return new Date(Date.now() + defaultWeeksAhead * 7 * 86400000).toISOString().split('T')[0];
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) {
+        return new Date(Date.now() + defaultWeeksAhead * 7 * 86400000).toISOString().split('T')[0];
+    }
+    const year = d.getFullYear();
+    // Guard against historical club founding years (e.g. 2001) or far future anomalies
+    if (year < 2026 || year > 2028) {
+        d.setFullYear(2026);
+        if (d.getTime() < Date.now()) {
+            d.setFullYear(2027);
+        }
+    }
+    return d.toISOString().split('T')[0];
+}
+
 /**
  * Uses Gemini Flash to parse messy Instagram captions and extract structured tournament data
  * @param {string} caption - The raw text from the Instagram post
@@ -73,7 +90,14 @@ async function parseInstagramPost(caption) {
     try {
         const safeCaption = caption.substring(0, 5000);
         const text = await generateWithGemini({
-            contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
+            contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.
+CRITICAL RULES:
+1. Extract the EVENT DATE when matches will actually be played, NOT when the Instagram post was created.
+2. NEVER use club founding or establishment dates (e.g. 'Est. 2001' or 'Since 2005').
+3. Active tournaments must be in 2026 or 2027. If year is missing (e.g. 'Nov 14'), assume 2026.
+4. If the tournament already took place in past years, set isTournamentPost to false.
+
+Post Caption:\n${safeCaption}`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
@@ -82,7 +106,13 @@ async function parseInstagramPost(caption) {
         });
 
         if (text) {
-            return JSON.parse(text);
+            const data = JSON.parse(text);
+            if (data && data.isTournamentPost) {
+                if (data.startDate) data.startDate = sanitizeParsedDate(data.startDate, 3);
+                if (data.endDate) data.endDate = sanitizeParsedDate(data.endDate, 3);
+                if (data.registrationDeadline) data.registrationDeadline = sanitizeParsedDate(data.registrationDeadline, 2);
+            }
+            return data;
         }
         return fallbackRegexParser(caption);
     } catch (e) {
@@ -92,7 +122,9 @@ async function parseInstagramPost(caption) {
 }
 
 function fallbackRegexParser(caption) {
-    const lower = caption.toLowerCase();
+    // Strip historical establishment phrases (e.g. "est. 2001", "since 1998") before matching tournament dates
+    const cleaned = caption.replace(/\b(?:est\.?|established|since|founded|history|copyright|©)\s*(?:in\s*)?(?:19\d{2}|20[0-2][0-5])\b/gi, '');
+    const lower = cleaned.toLowerCase();
     const isTournament = /tournament|open|invitational|championship/i.test(lower);
     if (!isTournament) return null;
 
@@ -106,17 +138,19 @@ function fallbackRegexParser(caption) {
     if (skillLevels.length === 0) skillLevels = ["Open"];
 
     let tournamentName = "Collegiate Badminton Tournament";
-    const nameMatch = caption.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s(?:Open|Invitational|Tournament))/);
+    const nameMatch = cleaned.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s(?:Open|Invitational|Tournament))/);
     if (nameMatch) tournamentName = nameMatch[1];
 
     let startDate = null;
-    const dateMatch = caption.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}/i);
+    const dateMatch = cleaned.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}/i);
     if (dateMatch) {
-        const d = new Date(`${dateMatch[0]} ${new Date().getFullYear()}`);
-        if (!isNaN(d)) startDate = d.toISOString().split('T')[0];
+        const d = new Date(`${dateMatch[0]} 2026`);
+        startDate = sanitizeParsedDate(d.toISOString().split('T')[0], 3);
+    } else {
+        startDate = sanitizeParsedDate(null, 3);
     }
 
-    console.log("[AIParser] Regex fallback successfully extracted basic data.");
+    console.log("[AIParser] Regex fallback successfully extracted sanitized 2026 data.");
     return { isTournamentPost: true, tournamentName, skillLevels, startDate, endDate: startDate, registrationDeadline: null };
 }
 
@@ -156,14 +190,28 @@ async function parseDiscoveredWebpage(rawText, url) {
     if (!rawText) return null;
     try {
         const text = await generateWithGemini({
-            contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.\n\nWebpage Text:\n${rawText.substring(0, 5000)}`,
+            contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.
+CRITICAL RULES:
+1. Extract the actual EVENT DATE when tournament matches are played, NOT club founding dates, historical records, or webpage copyrights (e.g. 'Est. 2001' or 'Founded 1999').
+2. Active tournaments must take place in 2026 or 2027. If year is missing, assume 2026.
+3. If the event occurred in past years prior to 2026, set isValidDmvTournament to false.
+
+Webpage Text:\n${rawText.substring(0, 5000)}`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: discoverySchema,
                 temperature: 0.1
             }
         });
-        if (text) return JSON.parse(text);
+        if (text) {
+            const data = JSON.parse(text);
+            if (data && data.isValidDmvTournament) {
+                if (data.startDate) data.startDate = sanitizeParsedDate(data.startDate, 3);
+                if (data.endDate) data.endDate = sanitizeParsedDate(data.endDate, 3);
+                if (data.registrationDeadline) data.registrationDeadline = sanitizeParsedDate(data.registrationDeadline, 2);
+            }
+            return data;
+        }
         return fallbackWebpageParser(rawText, url);
     } catch (e) {
         console.warn("[AIParser] Fallback to webpage heuristic parser:", e.message);
@@ -214,20 +262,21 @@ function fallbackWebpageParser(rawText, url) {
         hostLocation = "Ritchie Coliseum, College Park, MD";
     }
 
-    // Extract dates
+    // Extract dates, stripping historical establishment phrases first
+    const cleanedText = rawText.replace(/\b(?:est\.?|established|since|founded|history|copyright|©)\s*(?:in\s*)?(?:19\d{2}|20[0-2][0-5])\b/gi, '');
     let startDate = null;
-    const dateMatch = rawText.match(/(\w{3,9}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
+    const dateMatch = cleanedText.match(/(\w{3,9}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
     if (dateMatch) {
         const cleanDateStr = dateMatch[0].split('-')[0].trim();
-        const d = new Date(cleanDateStr);
-        if (!isNaN(d.getTime())) startDate = d.toISOString().split('T')[0];
+        startDate = sanitizeParsedDate(cleanDateStr, 3);
+    } else {
+        startDate = sanitizeParsedDate(null, 3);
     }
 
     let registrationDeadline = null;
-    const deadlineMatch = rawText.match(/deadline[:\s]*(\w{3,9}\s+\d{1,2}(?:,\s*\d{4})?|\d{1,2}\/\d{1,2}\/\d{4})/i);
+    const deadlineMatch = cleanedText.match(/deadline[:\s]*(\w{3,9}\s+\d{1,2}(?:,\s*\d{4})?|\d{1,2}\/\d{1,2}\/\d{4})/i);
     if (deadlineMatch) {
-        const d = new Date(deadlineMatch[1].trim());
-        if (!isNaN(d.getTime())) registrationDeadline = d.toISOString().split('T')[0];
+        registrationDeadline = sanitizeParsedDate(deadlineMatch[1].trim(), 2);
     }
 
     let skillLevels = ["Open"];
@@ -255,5 +304,7 @@ function fallbackWebpageParser(rawText, url) {
 module.exports = {
     parseDiscoveredWebpage,
     parseInstagramPost,
-    fallbackWebpageParser
+    fallbackRegexParser,
+    fallbackWebpageParser,
+    sanitizeParsedDate
 };

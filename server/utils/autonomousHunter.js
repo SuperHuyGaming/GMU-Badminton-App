@@ -181,11 +181,21 @@ async function processDiscoveryQueue(batchSize = 10) {
             // Create ProposedTournament for Admin Review Queue
             console.log(`[Hunter] ✨ AI APPROVED: "${extracted.tournamentName}" -> Routing to Admin Review Queue.`);
             
+            // Enforce valid 2026/2027 date ranges (preventing historical dates like 2001)
+            let proposedDate = extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000);
+            if (isNaN(proposedDate.getTime()) || proposedDate.getFullYear() < 2026) {
+                proposedDate = new Date(Date.now() + 21 * 86400000);
+            }
+            let proposedDeadline = extracted.registrationDeadline ? new Date(extracted.registrationDeadline) : null;
+            if (proposedDeadline && (isNaN(proposedDeadline.getTime()) || proposedDeadline.getFullYear() < 2026)) {
+                proposedDeadline = new Date(proposedDate.getTime() - 7 * 86400000);
+            }
+
             await ProposedTournament.create({
                 tournamentName: extracted.tournamentName,
                 location: extracted.hostLocation || "DMV Area",
-                date: extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000),
-                registrationDeadline: extracted.registrationDeadline ? new Date(extracted.registrationDeadline) : null,
+                date: proposedDate,
+                registrationDeadline: proposedDeadline,
                 registrationLink: item.sourceUrl,
                 sourceUrl: item.sourceUrl,
                 rawCaption: rawText.substring(0, 600),
@@ -206,8 +216,14 @@ async function processDiscoveryQueue(batchSize = 10) {
 
                     if (!existingLive) {
                         console.log(`[Hunter] 🚀 Auto-publishing "${extracted.tournamentName}" directly to public Tournament feed!`);
-                        const startDate = extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000);
-                        const endDate = extracted.endDate ? new Date(extracted.endDate) : startDate;
+                        let startDate = extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000);
+                        if (isNaN(startDate.getTime()) || startDate.getFullYear() < 2026) {
+                            startDate = new Date(Date.now() + 21 * 86400000);
+                        }
+                        let endDate = extracted.endDate ? new Date(extracted.endDate) : startDate;
+                        if (isNaN(endDate.getTime()) || endDate.getFullYear() < 2026) {
+                            endDate = new Date(startDate.getTime() + 86400000);
+                        }
 
                         await Tournament.create({
                             tournamentName: extracted.tournamentName,
@@ -215,7 +231,7 @@ async function processDiscoveryQueue(batchSize = 10) {
                             hostUniversity: (extracted.hostLocation && extracted.hostLocation.includes("George Mason")) ? "George Mason University" : "Local Club",
                             startDate,
                             endDate,
-                            registrationDeadline: extracted.registrationDeadline ? new Date(extracted.registrationDeadline) : null,
+                            registrationDeadline: proposedDeadline,
                             registrationUrl: item.sourceUrl,
                             sourceUrl: item.sourceUrl,
                             flyerImageUrl: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000&auto=format&fit=crop",
@@ -595,6 +611,63 @@ async function ensureGuaranteedTournaments() {
     }
 }
 
+/**
+ * Completely wipes discovery queues, proposed tournament approval queue,
+ * purges invalid/past tournaments (including legacy 2001/pre-2026 entries),
+ * and re-seeds verified live tournaments.
+ */
+async function wipeAndRestartTournamentSystem() {
+    try {
+        if (mongoose.connection?.readyState !== 1) {
+            return { success: false, message: "Database not connected" };
+        }
+
+        console.log("🧹 [Hunter Wipe] Initiating full tournament queue wipe and restart...");
+
+        // 1. Wipe DiscoveryQueue completely
+        const deletedQueue = await DiscoveryQueue.deleteMany({});
+
+        // 2. Wipe ProposedTournament queue completely
+        const deletedProposed = await ProposedTournament.deleteMany({});
+
+        // 3. Purge invalid or pre-2026 tournaments (e.g. legacy 2001 entries, past dates)
+        const deletedTournaments = await Tournament.deleteMany({
+            $or: [
+                { startDate: { $lt: new Date('2026-01-01T00:00:00.000Z') } },
+                { endDate: { $lt: new Date('2026-01-01T00:00:00.000Z') } },
+                { tournamentName: /2001|2000|199\d|198\d/i },
+                { tournamentName: /public\s+vcu\s+open/i },
+                { originalCaption: /founded in 2001|est\. 2001/i }
+            ]
+        });
+
+        // 4. Invalidate Redis cache
+        try {
+            const redis = require('./redis');
+            const keys = await redis.keys('tournaments:*');
+            if (keys && keys.length > 0) await redis.del(keys);
+        } catch (redisErr) {
+            console.warn("[Hunter Wipe] Redis cache clear skipped:", redisErr.message);
+        }
+
+        // 5. Ensure verified 2026 tournaments are seeded and active
+        const guaranteedCount = await ensureGuaranteedTournaments();
+
+        console.log(`🧹 [Hunter Wipe] Complete: Cleared ${deletedQueue.deletedCount} DiscoveryQueue items, ${deletedProposed.deletedCount} ProposedTournaments, purged ${deletedTournaments.deletedCount} invalid/past tournaments. Re-seeded ${guaranteedCount} active 2026 tournaments.`);
+
+        return {
+            success: true,
+            clearedDiscoveryQueue: deletedQueue.deletedCount || 0,
+            clearedProposedTournaments: deletedProposed.deletedCount || 0,
+            purgedTournaments: deletedTournaments.deletedCount || 0,
+            activeGuaranteedCount: guaranteedCount
+        };
+    } catch (err) {
+        console.error("❌ [Hunter Wipe] Error wiping and restarting tournament system:", err.message);
+        return { success: false, error: err.message };
+    }
+}
+
 module.exports = {
     levenshteinDistance,
     stringSimilarity,
@@ -605,5 +678,6 @@ module.exports = {
     huntRegionalClubsAndEnqueue,
     runFullAutonomousHunt,
     getGuaranteedTournamentsList,
-    ensureGuaranteedTournaments
+    ensureGuaranteedTournaments,
+    wipeAndRestartTournamentSystem
 };
