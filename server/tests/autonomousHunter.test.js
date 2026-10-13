@@ -22,7 +22,9 @@ const {
     isSafeExternalUrl,
     processDiscoveryQueue,
     huntGoogleForTournaments,
+    huntRegionalClubsAndEnqueue,
     runFullAutonomousHunt,
+    getGuaranteedTournamentsList,
     ensureGuaranteedTournaments
 } = require("../utils/autonomousHunter");
 
@@ -307,23 +309,20 @@ describe("Autonomous Tournament Hunter Suite", () => {
             expect(count).toBe(0);
         });
 
-        test("returns existing active tournament count if database already has tournaments", async () => {
-            const originalReadyState = mongoose.connection.readyState;
-            Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
-
-            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(3);
-
-            const count = await ensureGuaranteedTournaments();
-            expect(count).toBe(3);
-
-            Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
+        test("getGuaranteedTournamentsList returns 4 active upcoming tournaments", () => {
+            const list = getGuaranteedTournamentsList();
+            expect(list).toHaveLength(4);
+            expect(list[0].tournamentName).toContain("2026 GMU Badminton Open");
+            expect(list[0].isOpenTournament).toBe(true);
+            expect(list[0].status).toBe("active");
+            expect(new Date(list[0].startDate).getTime()).toBeGreaterThan(Date.now());
         });
 
-        test("seeds guaranteed DMV tournaments if 0 active tournaments found", async () => {
+        test("ensures guaranteed active tournaments are upserted when database is connected", async () => {
             const originalReadyState = mongoose.connection.readyState;
             Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
 
-            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(0);
+            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(2);
             const mockUpsert = jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
 
             const count = await ensureGuaranteedTournaments();

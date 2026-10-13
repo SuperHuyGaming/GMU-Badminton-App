@@ -2,6 +2,42 @@ const { GoogleGenAI, Type } = require('@google/genai');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "dummy_key_to_prevent_crash_on_import" });
 
+const GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-flash"
+];
+
+async function generateWithFallbackModel({ contents, config }) {
+    let lastError = null;
+    for (const modelName of GEMINI_MODELS) {
+        try {
+            const response = await ai.models.generateContent({
+                model: modelName,
+                contents,
+                config
+            });
+            if (response && response.text) {
+                return response.text;
+            }
+        } catch (err) {
+            lastError = err;
+            if (err.message && (err.message.includes("404") || err.message.includes("not available") || err.message.includes("NOT_FOUND"))) {
+                console.warn(`[AIParser] Model ${modelName} not found/deprecated. Cascading to next available Gemini model...`);
+                continue;
+            }
+            if (err.message && err.message.includes("503")) {
+                console.warn(`[AIParser] Model ${modelName} returned 503 high demand. Trying next model...`);
+                await new Promise(r => setTimeout(r, 600));
+                continue;
+            }
+            break;
+        }
+    }
+    throw lastError || new Error("All Gemini models exhausted");
+}
+
 const schema = {
     type: Type.OBJECT,
     properties: {
@@ -41,37 +77,25 @@ const schema = {
 async function parseInstagramPost(caption) {
     if (!caption || typeof caption !== "string" || caption.trim() === '') return null;
 
-    let retries = 2;
-    while (retries > 0) {
-        try {
-            const safeCaption = caption.substring(0, 5000);
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: schema,
-                    temperature: 0.1
-                }
-            });
+    try {
+        const safeCaption = caption.substring(0, 5000);
+        const text = await generateWithFallbackModel({
+            contents: `You are a sports data extraction assistant. Read the following Instagram post from a collegiate badminton club. Determine if it is a tournament announcement. If it is, extract the tournament name, dates, deadlines, and skill levels.\n\nPost Caption:\n${safeCaption}`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                temperature: 0.1
+            }
+        });
 
-            if (response.text) {
-                const data = JSON.parse(response.text);
-                return data;
-            }
-            return fallbackRegexParser(caption);
-        } catch (e) {
-            retries--;
-            if (retries > 0 && e.message && e.message.includes("503")) {
-                console.warn(`[AIParser] Gemini 503 busy error. Quick retry (1 attempt left)...`);
-                await new Promise(res => setTimeout(res, 800));
-            } else {
-                console.warn("[AIParser] Gemini extraction unavailable. Using instant regex/heuristic parser:", e.message);
-                return fallbackRegexParser(caption);
-            }
+        if (text) {
+            return JSON.parse(text);
         }
+        return fallbackRegexParser(caption);
+    } catch (e) {
+        console.warn("[AIParser] Gemini extraction unavailable. Using instant regex/heuristic parser:", e.message);
+        return fallbackRegexParser(caption);
     }
-    return fallbackRegexParser(caption);
 }
 
 function fallbackRegexParser(caption) {
@@ -137,32 +161,21 @@ const discoverySchema = {
 
 async function parseDiscoveredWebpage(rawText, url) {
     if (!rawText) return null;
-    let retries = 2;
-    while (retries > 0) {
-        try {
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.\n\nWebpage Text:\n${rawText.substring(0, 5000)}`,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: discoverySchema,
-                    temperature: 0.1
-                }
-            });
-            if (response.text) return JSON.parse(response.text);
-            return fallbackWebpageParser(rawText, url);
-        } catch (e) {
-            retries--;
-            if (retries > 0 && e.message && e.message.includes("503")) {
-                console.warn(`[AIParser] Gemini 503 busy error on webpage. Quick retry...`);
-                await new Promise(res => setTimeout(res, 800));
-            } else {
-                console.warn("[AIParser] Web discovery parse error, using instant heuristic fallback:", e.message);
-                return fallbackWebpageParser(rawText, url);
+    try {
+        const text = await generateWithFallbackModel({
+            contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.\n\nWebpage Text:\n${rawText.substring(0, 5000)}`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: discoverySchema,
+                temperature: 0.1
             }
-        }
+        });
+        if (text) return JSON.parse(text);
+        return fallbackWebpageParser(rawText, url);
+    } catch (e) {
+        console.warn("[AIParser] Web discovery parse error, using instant heuristic fallback:", e.message);
+        return fallbackWebpageParser(rawText, url);
     }
-    return fallbackWebpageParser(rawText, url);
 }
 
 function fallbackWebpageParser(rawText, url) {
