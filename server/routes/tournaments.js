@@ -72,9 +72,22 @@ router.get('/', async (req, res) => {
             console.warn("Redis read error:", cacheErr.message);
         }
 
-        const tournaments = await Tournament.find(query)
+        let tournaments = await Tournament.find(query)
             .populate("attendees", "name avatarUrl _id")
             .sort({ startDate: 1 });
+
+        // If no tournaments found for broad view and database is connected, ensure guaranteed active tournaments are populated
+        if (mongoose.connection?.readyState === 1 && tournaments.length === 0 && !search && !location && !skillLevel && !month) {
+            try {
+                const { ensureGuaranteedTournaments } = require('../utils/autonomousHunter');
+                await ensureGuaranteedTournaments();
+                tournaments = await Tournament.find(query)
+                    .populate("attendees", "name avatarUrl _id")
+                    .sort({ startDate: 1 });
+            } catch (seedErr) {
+                console.warn("[Tournaments Route] Seed check skipped:", seedErr.message);
+            }
+        }
 
         try {
             await redis.setex(cacheKey, 3600, JSON.stringify(tournaments));

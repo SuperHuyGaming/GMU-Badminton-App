@@ -86,7 +86,7 @@ async function createMatchOfTheWeek() {
 
 const cron = require('node-cron');
 const { runInstagramScraper } = require('./instagramScraper');
-const { huntGoogleForTournaments, processDiscoveryQueue, runFullAutonomousHunt } = require('./autonomousHunter');
+const { huntGoogleForTournaments, processDiscoveryQueue, runFullAutonomousHunt, ensureGuaranteedTournaments } = require('./autonomousHunter');
 const Tournament = require('../models/Tournament');
 const { sendPushToAllUsers } = require('./pushNotifications');
 
@@ -144,9 +144,24 @@ function startCronJobs() {
     createMatchOfTheWeek();
     cleanupArchivedTournaments();
     
-    // Automatically fetch tournaments on server start!
-    console.log("[Cron] Booting up... Fetching initial tournaments.");
-    runInstagramScraper();
+    // 1. Immediately guarantee active tournaments exist on server start (in-memory & MongoDB check)
+    console.log("[Cron] Booting up... Ensuring guaranteed live tournaments.");
+    ensureGuaranteedTournaments().catch(e => console.error("[Cron] Error ensuring guaranteed tournaments:", e.message));
+
+    // 2. Launch autonomous background hunt (non-blocking)
+    setImmediate(async () => {
+        try {
+            console.log("[Cron] Booting up... Launching background autonomous tournament discovery.");
+            await runFullAutonomousHunt();
+        } catch (err) {
+            console.error("[Cron] Background autonomous hunt error:", err.message);
+        }
+    });
+
+    // 3. Run collegiate Instagram scraper in the background after server binds
+    setTimeout(() => {
+        runInstagramScraper().catch(e => console.error("[Cron] Background Instagram scraper error:", e.message));
+    }, 15000);
 
     // Then run every hour
     setInterval(() => {
