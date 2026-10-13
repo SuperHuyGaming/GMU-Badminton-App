@@ -346,7 +346,21 @@ router.post("/manual", async (req, res) => {
 router.get("/discovery-queue", async (req, res) => {
     try {
         const { status, limit = 50 } = req.query;
-        const query = status ? { status } : {};
+        let query = {};
+        if (status) {
+            const s = String(status).toUpperCase();
+            if (s === 'PENDING' || s === 'PENDING_AI_REVIEW') {
+                query = { status: 'PENDING_AI_REVIEW' };
+            } else if (s === 'APPROVED' || s === 'APPROVED_BY_AI') {
+                query = { status: 'APPROVED_BY_AI' };
+            } else if (s === 'REJECTED' || s === 'REJECTED_BY_AI' || s === 'DUPLICATE' || s === 'FAILED' || s === 'IRRELEVANT') {
+                query = { status: 'REJECTED_BY_AI' };
+            } else if (s === 'PROCESSED') {
+                query = { status: { $in: ['APPROVED_BY_AI', 'REJECTED_BY_AI', 'PROCESSED'] } };
+            } else {
+                query = { status };
+            }
+        }
         const items = await DiscoveryQueue.find(query)
             .sort({ discoveredAt: -1 })
             .limit(Math.min(Number(limit) || 50, 100));
@@ -379,7 +393,7 @@ router.post("/discovery-queue/run-hunt", adminActionLimiter, async (req, res) =>
  */
 router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => {
     try {
-        const batchSize = Math.min(Number(req.body?.batchSize) || 10, 50);
+        const batchSize = Math.min(Number(req.body?.batchSize) || 25, 50);
         const result = await processDiscoveryQueue(batchSize);
         return res.status(200).json({
             message: "Discovery queue processing complete",

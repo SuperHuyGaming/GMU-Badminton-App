@@ -250,7 +250,7 @@ export default function TournamentApprovals() {
             setProcessingQueue(true);
             const res = await apiFetch("/api/admin/tournaments/discovery-queue/process", {
                 method: "POST",
-                body: JSON.stringify({ batchSize: 10 }),
+                body: JSON.stringify({ batchSize: 25 }),
             });
             const data = await res.json();
             const processed = data?.result?.processedCount ?? 0;
@@ -650,9 +650,10 @@ export default function TournamentApprovals() {
                             <Typography
                                 variant="body1"
                                 color="text.secondary"
-                                sx={{ maxWidth: 500, mb: 3 }}
+                                sx={{ maxWidth: 540, mb: 3 }}
                             >
-                                All scraped tournament proposals have been reviewed and processed. Click &quot;Run Autonomous Hunter&quot; to crawl TournamentSoftware and GMU collegiate seeds.
+                                All scraped tournament proposals have been reviewed and processed. Active verified tournaments are already live on the public feed.
+                                {discoveryTotal > 0 && ` There are ${discoveryTotal} candidate URLs in the Discovery Queue tab awaiting review.`}
                             </Typography>
                             <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
                                 <Button
@@ -669,24 +670,34 @@ export default function TournamentApprovals() {
                                     variant="outlined"
                                     startIcon={<RefreshIcon />}
                                     onClick={fetchProposals}
+                                    disabled={loading}
                                     sx={{ textTransform: "none", fontWeight: "bold" }}
                                 >
                                     Refresh Queue
                                 </Button>
+                                {discoveryTotal > 0 && (
+                                    <Button
+                                        variant="contained"
+                                        color="secondary"
+                                        onClick={() => setCurrentTab(1)}
+                                        sx={{
+                                            textTransform: "none",
+                                            fontWeight: "bold",
+                                            backgroundColor: "#FFCC33",
+                                            color: "#1a202c",
+                                            "&:hover": { backgroundColor: "#e6b800" },
+                                        }}
+                                    >
+                                        View Discovery Queue ({discoveryTotal})
+                                    </Button>
+                                )}
                                 <Button
-                                    variant="contained"
-                                    color="secondary"
-                                    startIcon={<AddIcon />}
-                                    onClick={() => setManualModalOpen(true)}
-                                    sx={{
-                                        textTransform: "none",
-                                        fontWeight: "bold",
-                                        backgroundColor: "#FFCC33",
-                                        color: "#1a202c",
-                                        "&:hover": { backgroundColor: "#e6b800" },
-                                    }}
+                                    component={RouterLink}
+                                    to="/tournaments"
+                                    variant="outlined"
+                                    sx={{ textTransform: "none", fontWeight: "bold" }}
                                 >
-                                    Manual Entry
+                                    View Live Tournaments Feed
                                 </Button>
                             </Box>
                         </Paper>
@@ -872,11 +883,9 @@ export default function TournamentApprovals() {
                             </Typography>
                             {[
                                 { label: "All", value: "" },
-                                { label: "Pending", value: "pending" },
-                                { label: "Processed", value: "processed" },
-                                { label: "Duplicate", value: "duplicate" },
-                                { label: "Failed", value: "failed" },
-                                { label: "Irrelevant", value: "irrelevant" },
+                                { label: "Pending Evaluation", value: "PENDING_AI_REVIEW" },
+                                { label: "Approved by AI", value: "APPROVED_BY_AI" },
+                                { label: "Rejected by AI", value: "REJECTED_BY_AI" },
                             ].map((f) => (
                                 <Chip
                                     key={f.label}
@@ -900,7 +909,7 @@ export default function TournamentApprovals() {
                                 disabled={processingQueue || discoveryLoading}
                                 sx={{ textTransform: "none", fontWeight: "bold" }}
                             >
-                                {processingQueue ? "Processing..." : "Process Next Batch"}
+                                {processingQueue ? "Processing..." : "Process Next Batch (25)"}
                             </Button>
                         </Box>
                     </Box>
@@ -965,26 +974,36 @@ export default function TournamentApprovals() {
                                         <TableCell sx={{ fontWeight: "bold" }}>Source Type</TableCell>
                                         <TableCell sx={{ fontWeight: "bold" }}>Discovered At</TableCell>
                                         <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
-                                        <TableCell sx={{ fontWeight: "bold" }}>Details / Notes</TableCell>
+                                        <TableCell sx={{ fontWeight: "bold" }}>Snippet / Context</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {discoveryItems.map((item) => {
-                                        const statusColor =
-                                            item.status === "processed"
-                                                ? "success"
-                                                : item.status === "pending"
-                                                ? "warning"
-                                                : item.status === "failed"
-                                                ? "error"
-                                                : "default";
+                                        const url = item.sourceUrl || item.url || "#";
+                                        const isApproved = item.status === "APPROVED_BY_AI";
+                                        const isPending = item.status === "PENDING_AI_REVIEW";
+                                        const isRejected = item.status === "REJECTED_BY_AI";
+                                        const statusColor = isApproved
+                                            ? "success"
+                                            : isPending
+                                            ? "warning"
+                                            : isRejected
+                                            ? "error"
+                                            : "default";
+                                        const statusLabel = isApproved
+                                            ? "Approved by AI"
+                                            : isPending
+                                            ? "Pending Review"
+                                            : isRejected
+                                            ? "Rejected by AI"
+                                            : item.status || "Unknown";
 
                                         return (
                                             <TableRow key={item._id} hover>
-                                                <TableCell>
+                                                <TableCell sx={{ maxWidth: 320 }}>
                                                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                                                         <Link
-                                                            href={item.url}
+                                                            href={url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             underline="hover"
@@ -996,14 +1015,14 @@ export default function TournamentApprovals() {
                                                                 wordBreak: "break-all",
                                                             }}
                                                         >
-                                                            {item.url}
+                                                            {url}
                                                             <OpenInNewIcon fontSize="inherit" />
                                                         </Link>
                                                     </Box>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Chip
-                                                        label={item.source || "web_search"}
+                                                        label={item.sourceType || item.source || "GOOGLE_SEARCH"}
                                                         size="small"
                                                         variant="outlined"
                                                     />
@@ -1013,23 +1032,19 @@ export default function TournamentApprovals() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <Chip
-                                                        label={item.status}
+                                                        label={statusLabel}
                                                         color={statusColor}
                                                         size="small"
-                                                        sx={{ fontWeight: "bold", textTransform: "capitalize" }}
+                                                        sx={{ fontWeight: "bold" }}
                                                     />
                                                 </TableCell>
-                                                <TableCell>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        {item.errorMessage || item.notes || item.proposedTournamentId ? (
-                                                            item.proposedTournamentId ? (
-                                                                `Created proposal #${item.proposedTournamentId}`
-                                                            ) : (
-                                                                item.errorMessage || item.notes
-                                                            )
-                                                        ) : (
-                                                            "—"
-                                                        )}
+                                                <TableCell sx={{ maxWidth: 300 }}>
+                                                    <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-word" }}>
+                                                        {item.rawSnippet
+                                                            ? item.rawSnippet.length > 150
+                                                                ? `${item.rawSnippet.substring(0, 150)}...`
+                                                                : item.rawSnippet
+                                                            : item.errorMessage || "—"}
                                                     </Typography>
                                                 </TableCell>
                                             </TableRow>
