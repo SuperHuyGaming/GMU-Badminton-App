@@ -472,7 +472,7 @@ async function runFullAutonomousHunt() {
     const regionalResult = await huntRegionalClubsAndEnqueue();
     const tsResult = await huntTournamentSoftwareAndEnqueue();
     const googleResult = await huntGoogleForTournaments();
-    const processResult = await processDiscoveryQueue();
+    const processResult = await processDiscoveryQueue(25);
 
     return {
         timestamp: new Date(),
