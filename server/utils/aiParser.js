@@ -2,32 +2,63 @@ const { GoogleGenAI, Type } = require('@google/genai');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "dummy_key_to_prevent_crash_on_import" });
 
-const PRIMARY_MODEL = "gemini-3.8-flash";
+// Configurable primary model via GEMINI_MODEL.
+// Defaults to 'gemini-3.5-flash-lite' (high throughput, ~500-1000 requests/day on free tier)
+// with fallback cascade to 'gemini-3.8-flash'.
+const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+const CANDIDATE_MODELS = Array.from(new Set([
+    PRIMARY_MODEL,
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash"
+])).filter(Boolean);
+
+let quotaCooldownUntil = 0;
 
 async function generateWithGemini({ contents, config }) {
-    let attempts = 2;
-    while (attempts > 0) {
-        try {
-            const response = await ai.models.generateContent({
-                model: PRIMARY_MODEL,
-                contents,
-                config
-            });
-            if (response && response.text) {
-                return response.text;
-            }
-            return null;
-        } catch (err) {
-            attempts--;
-            if (err.message && err.message.includes("503") && attempts > 0) {
-                console.warn("[AIParser] Gemini 3.8 Flash high demand (503). Retrying in 1.2s...");
-                await new Promise(r => setTimeout(r, 1200));
-            } else {
-                console.warn("[AIParser] Gemini 3.8 Flash unavailable, using fast heuristic parser:", err.message);
+    // Zero-Quota Circuit Breaker: if all models are currently quota-exhausted, immediately bypass to heuristic parser
+    if (Date.now() < quotaCooldownUntil) {
+        return null;
+    }
+
+    for (const modelName of CANDIDATE_MODELS) {
+        let attempts = 2;
+        while (attempts > 0) {
+            try {
+                const response = await ai.models.generateContent({
+                    model: modelName,
+                    contents,
+                    config
+                });
+                if (response && response.text) {
+                    return response.text;
+                }
                 return null;
+            } catch (err) {
+                attempts--;
+                const errMsg = err?.message || '';
+                const isRateLimited = errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("quota");
+                const isHighDemand = errMsg.includes("503");
+
+                if (isHighDemand && attempts > 0) {
+                    console.warn(`[AIParser] Gemini ${modelName} high demand (503). Retrying in 1s...`);
+                    await new Promise(r => setTimeout(r, 1000));
+                    continue;
+                }
+
+                if (isRateLimited) {
+                    console.warn(`[AIParser] Gemini ${modelName} quota exceeded (429).`);
+                    break; // Move to next candidate model
+                }
+
+                console.warn(`[AIParser] Gemini ${modelName} unavailable: ${errMsg.substring(0, 100)}`);
+                break; // Try next model or fallback
             }
         }
     }
+
+    // All models quota-exhausted: activate circuit breaker cooldown for 5 minutes
+    quotaCooldownUntil = Date.now() + 5 * 60 * 1000;
+    console.warn("[AIParser] All Gemini models quota exhausted. Switching to zero-quota heuristic parser for 5m.");
     return null;
 }
 
@@ -393,5 +424,8 @@ module.exports = {
     parseInstagramPost,
     fallbackRegexParser,
     fallbackWebpageParser,
-    sanitizeParsedDate
+    sanitizeParsedDate,
+    PRIMARY_MODEL,
+    CANDIDATE_MODELS,
+    generateWithGemini
 };

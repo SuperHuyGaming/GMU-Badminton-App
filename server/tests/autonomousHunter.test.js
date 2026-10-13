@@ -20,6 +20,7 @@ const {
     stringSimilarity,
     isDuplicateTournament,
     isSafeExternalUrl,
+    fastHeuristicPreFilter,
     processDiscoveryQueue,
     huntGoogleForTournaments,
     huntRegionalClubsAndEnqueue,
@@ -120,6 +121,32 @@ describe("Autonomous Tournament Hunter Suite", () => {
             expect(isSafeExternalUrl("ftp://tournament.com")).toBe(false);
             expect(isSafeExternalUrl("not a url")).toBe(false);
             expect(isSafeExternalUrl(null)).toBe(false);
+        });
+    });
+
+    describe("2.5 Fast Zero-Quota Heuristic Pre-Filter", () => {
+        test("immediately rejects other sports without touching Gemini", () => {
+            expect(fastHeuristicPreFilter("https://fiba.tournamentsoftware.com/", "")).toContain("Non-badminton");
+            expect(fastHeuristicPreFilter("https://example.com/event", "17th Annual ITPA Golf Tournament")).toContain("Non-badminton");
+            expect(fastHeuristicPreFilter("https://example.com/game", "Police vs Firefighters Basketball")).toContain("Non-badminton");
+        });
+
+        test("immediately rejects foreign/international federations and overseas domains", () => {
+            expect(fastHeuristicPreFilter("https://badmintoneurope.com/web/calendar", "")).toContain("International");
+            expect(fastHeuristicPreFilter("https://corporate.bwfbadminton.com/events", "")).toContain("International");
+            expect(fastHeuristicPreFilter("https://www.badmintonitalia.it/it/", "")).toContain("International");
+            expect(fastHeuristicPreFilter("https://badminton.de/turniere", "")).toContain("Foreign domain");
+        });
+
+        test("immediately rejects explicit past tournament years in URL", () => {
+            expect(fastHeuristicPreFilter("https://example.com/tournaments/2024-open", "")).toContain("Explicit past");
+            expect(fastHeuristicPreFilter("https://example.com/spring-2025-championship", "")).toContain("Explicit past");
+        });
+
+        test("allows legitimate DMV collegiate & regional badminton candidate URLs", () => {
+            expect(fastHeuristicPreFilter("https://example.com/tournament-1", "GMU Terrapin Classic DMV 2027")).toBeNull();
+            expect(fastHeuristicPreFilter("https://usabadminton.tournamentsoftware.com/tournament/123", "2026 Mid-Atlantic Open")).toBeNull();
+            expect(fastHeuristicPreFilter("https://capitalbadminton.com/events", "Maryland Spring Badminton 2026")).toBeNull();
         });
     });
 

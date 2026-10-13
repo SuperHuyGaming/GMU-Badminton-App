@@ -48,10 +48,11 @@ const initializeGemini = () => {
         console.warn("⚠️ GEMINI_API_KEY not configured. AI Coach will use fallback responses.");
         return false;
     }
+    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
     try {
         genAI = new GoogleGenerativeAI(apiKey);
-        model = genAI.getGenerativeModel({ model: "gemini-3.8-flash" });
-        console.log("✅ Google Gemini AI Coach initialized successfully.");
+        model = genAI.getGenerativeModel({ model: modelName });
+        console.log(`✅ Google Gemini AI Coach initialized successfully (${modelName}).`);
         return true;
     } catch (error) {
         console.error("❌ Failed to initialize Gemini AI Coach:", error.message);
