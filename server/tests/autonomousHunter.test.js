@@ -419,4 +419,26 @@ describe("Autonomous Tournament Hunter Suite", () => {
             Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
         });
     });
+
+    describe("9. Past Tournament and Date Range Rejection Engine", () => {
+        const { fallbackWebpageParser, fallbackRegexParser } = jest.requireActual("../utils/aiParser");
+
+        test("fallbackWebpageParser rejects tournaments with past year in title (e.g. 2025 Capital NE Open)", () => {
+            const raw = "Join the 2025 Capital NE Open Local Championships at Capital Badminton Academy Columbia MD.";
+            const parsed = fallbackWebpageParser(raw, "https://capitalbadminton.com");
+            expect(parsed.isValidDmvTournament).toBe(false);
+        });
+
+        test("fallbackWebpageParser rejects tournaments with past event dates (e.g. April 19-20, 2026)", () => {
+            const raw = "Public VCU Open April 19-20, 2026 Location: Virginia Commonwealth University Richmond, VA Registration Ends March 13, 2026";
+            const parsed = fallbackWebpageParser(raw, "https://facebook.com/groups/NOVAbadminton");
+            expect(parsed.isValidDmvTournament).toBe(false);
+        });
+
+        test("fallbackRegexParser rejects captions with past year or past event dates", () => {
+            const caption = "VCU Badminton 2025 Spring Open was held in Richmond, VA.";
+            const parsed = fallbackRegexParser(caption);
+            expect(parsed).toBeNull();
+        });
+    });
 });

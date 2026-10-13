@@ -70,12 +70,9 @@ function sanitizeParsedDate(dateStr, defaultWeeksAhead = 3) {
         return new Date(Date.now() + defaultWeeksAhead * 7 * 86400000).toISOString().split('T')[0];
     }
     const year = d.getFullYear();
-    // Guard against historical club founding years (e.g. 2001) or far future anomalies
+    // Guard against historical club founding years (e.g. 2001) or far future anomalies (> 2028)
     if (year < 2026 || year > 2028) {
         d.setFullYear(2026);
-        if (d.getTime() < Date.now()) {
-            d.setFullYear(2027);
-        }
     }
     return d.toISOString().split('T')[0];
 }
@@ -94,8 +91,9 @@ async function parseInstagramPost(caption) {
 CRITICAL RULES:
 1. Extract the EVENT DATE when matches will actually be played, NOT when the Instagram post was created.
 2. NEVER use club founding or establishment dates (e.g. 'Est. 2001' or 'Since 2005').
-3. Active tournaments must be in 2026 or 2027. If year is missing (e.g. 'Nov 14'), assume 2026.
-4. If the tournament already took place in past years, set isTournamentPost to false.
+3. Active tournaments must be upcoming in 2026 or 2027. If year is missing (e.g. 'Nov 14'), assume 2026.
+4. If the tournament already took place in past years (2025, 2024, etc.) or past months of 2026, set isTournamentPost to false.
+5. If the tournament name explicitly contains a past year (e.g. '2025 Open'), set isTournamentPost to false.
 
 Post Caption:\n${safeCaption}`,
             config: {
@@ -108,6 +106,17 @@ Post Caption:\n${safeCaption}`,
         if (text) {
             const data = JSON.parse(text);
             if (data && data.isTournamentPost) {
+                // Reject past year in tournament name
+                if (/\b(201\d|202[0-5])\b/.test(data.tournamentName || '')) {
+                    return null;
+                }
+                // Reject if event already ended in the past
+                if (data.startDate) {
+                    const eD = data.endDate ? new Date(data.endDate) : new Date(data.startDate);
+                    if (!isNaN(eD.getTime()) && eD.getTime() < Date.now()) {
+                        return null;
+                    }
+                }
                 if (data.startDate) data.startDate = sanitizeParsedDate(data.startDate, 3);
                 if (data.endDate) data.endDate = sanitizeParsedDate(data.endDate, 3);
                 if (data.registrationDeadline) data.registrationDeadline = sanitizeParsedDate(data.registrationDeadline, 2);
@@ -128,6 +137,13 @@ function fallbackRegexParser(caption) {
     const isTournament = /tournament|open|invitational|championship/i.test(lower);
     if (!isTournament) return null;
 
+    let tournamentName = "Collegiate Badminton Tournament";
+    const nameMatch = cleaned.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s(?:Open|Invitational|Tournament))/);
+    if (nameMatch) tournamentName = nameMatch[1];
+
+    // Reject past year in tournament name or caption
+    if (/\b(201\d|202[0-5])\b/.test(tournamentName) || /\b(201\d|202[0-5])\b/.test(cleaned)) return null;
+
     let skillLevels = [];
     if (/flight/i.test(lower)) {
         if (/\ba\b/i.test(lower)) skillLevels.push("A");
@@ -137,21 +153,35 @@ function fallbackRegexParser(caption) {
     }
     if (skillLevels.length === 0) skillLevels = ["Open"];
 
-    let tournamentName = "Collegiate Badminton Tournament";
-    const nameMatch = cleaned.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s(?:Open|Invitational|Tournament))/);
-    if (nameMatch) tournamentName = nameMatch[1];
-
     let startDate = null;
-    const dateMatch = cleaned.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}/i);
-    if (dateMatch) {
-        const d = new Date(`${dateMatch[0]} 2026`);
-        startDate = sanitizeParsedDate(d.toISOString().split('T')[0], 3);
+    let endDate = null;
+    const rangeMatch = cleaned.match(/([A-Za-z]{3,9})\s+(\d{1,2})(?:\s*-\s*(\d{1,2}))?,\s*(\d{4})/i);
+    if (rangeMatch) {
+        const sD = new Date(`${rangeMatch[1]} ${rangeMatch[2]}, ${rangeMatch[4]}`);
+        const eD = new Date(`${rangeMatch[1]} ${rangeMatch[3] || rangeMatch[2]}, ${rangeMatch[4]}`);
+        if (!isNaN(sD.getTime())) startDate = sD.toISOString().split('T')[0];
+        if (!isNaN(eD.getTime())) endDate = eD.toISOString().split('T')[0];
     } else {
-        startDate = sanitizeParsedDate(null, 3);
+        const dateMatch = cleaned.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}/i);
+        if (dateMatch) {
+            const d = new Date(`${dateMatch[0]} 2026`);
+            if (!isNaN(d.getTime())) {
+                startDate = d.toISOString().split('T')[0];
+                endDate = startDate;
+            }
+        }
+    }
+
+    // Reject if tournament has already ended in the past
+    if (startDate) {
+        const checkEnd = endDate ? new Date(endDate) : new Date(startDate);
+        if (!isNaN(checkEnd.getTime()) && checkEnd.getTime() < Date.now()) {
+            return null;
+        }
     }
 
     console.log("[AIParser] Regex fallback successfully extracted sanitized 2026 data.");
-    return { isTournamentPost: true, tournamentName, skillLevels, startDate, endDate: startDate, registrationDeadline: null };
+    return { isTournamentPost: true, tournamentName, skillLevels, startDate, endDate: endDate || startDate, registrationDeadline: null };
 }
 
 
@@ -193,8 +223,9 @@ async function parseDiscoveredWebpage(rawText, url) {
             contents: `You are an autonomous tournament discovery AI. Read the text from this webpage (${url}) and determine if it describes a badminton tournament happening in the DMV area (DC, Maryland, Virginia) or nearby (PA, NC). If yes, extract details.
 CRITICAL RULES:
 1. Extract the actual EVENT DATE when tournament matches are played, NOT club founding dates, historical records, or webpage copyrights (e.g. 'Est. 2001' or 'Founded 1999').
-2. Active tournaments must take place in 2026 or 2027. If year is missing, assume 2026.
-3. If the event occurred in past years prior to 2026, set isValidDmvTournament to false.
+2. Active tournaments must take place in upcoming dates of 2026 or 2027. If year is missing, assume 2026.
+3. If the tournament already took place in past years (e.g. 2025, 2024, etc.) or past months of 2026, set isValidDmvTournament to false.
+4. If the tournament title contains past years (e.g. '2025 Capital NE Open'), set isValidDmvTournament to false.
 
 Webpage Text:\n${rawText.substring(0, 5000)}`,
             config: {
@@ -206,6 +237,17 @@ Webpage Text:\n${rawText.substring(0, 5000)}`,
         if (text) {
             const data = JSON.parse(text);
             if (data && data.isValidDmvTournament) {
+                // Reject past year in tournament title
+                if (/\b(201\d|202[0-5])\b/.test(data.tournamentName || '')) {
+                    return { isValidDmvTournament: false };
+                }
+                // Reject if event already concluded in the past
+                if (data.startDate) {
+                    const eD = data.endDate ? new Date(data.endDate) : new Date(data.startDate);
+                    if (!isNaN(eD.getTime()) && eD.getTime() < Date.now()) {
+                        return { isValidDmvTournament: false };
+                    }
+                }
                 if (data.startDate) data.startDate = sanitizeParsedDate(data.startDate, 3);
                 if (data.endDate) data.endDate = sanitizeParsedDate(data.endDate, 3);
                 if (data.registrationDeadline) data.registrationDeadline = sanitizeParsedDate(data.registrationDeadline, 2);
@@ -249,9 +291,15 @@ function fallbackWebpageParser(rawText, url) {
         if (titleMatch) tournamentName = titleMatch[1].trim();
     }
 
-    // Extract location
+    // Reject if tournament title contains an explicit past year (e.g. 2025, 2024, etc.)
+    if (/\b(201\d|202[0-5])\b/.test(tournamentName)) {
+        return { isValidDmvTournament: false, reason: "Past tournament year in title" };
+    }
+
+    // Extract location (clean boundary before registration or deadline metadata)
     let hostLocation = "DMV Area";
-    const locMatch = rawText.match(/Location:\s*([^|\n]+)/i) || rawText.match(/(?:Venue|Hosted at|at)\s*([^.,\n]+(?:Gym|Center|Club|Complex|Academy|University))/i);
+    const locMatch = rawText.match(/Location:\s*([^|\n]+?)(?=\s*(?:Registration|Deadline|Ends|Date|Fee|Skill|Cost|$))/i)
+        || rawText.match(/(?:Venue|Hosted at|at)\s*([^.,\n]+?(?:Gym|Center|Club|Complex|Academy|University))/i);
     if (locMatch) {
         hostLocation = locMatch[1].trim();
     } else if (lower.includes("fairfax") || lower.includes("rac") || lower.includes("gmu")) {
@@ -265,18 +313,57 @@ function fallbackWebpageParser(rawText, url) {
     // Extract dates, stripping historical establishment phrases first
     const cleanedText = rawText.replace(/\b(?:est\.?|established|since|founded|history|copyright|©)\s*(?:in\s*)?(?:19\d{2}|20[0-2][0-5])\b/gi, '');
     let startDate = null;
-    const dateMatch = cleanedText.match(/(\w{3,9}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
-    if (dateMatch) {
-        const cleanDateStr = dateMatch[0].split('-')[0].trim();
-        startDate = sanitizeParsedDate(cleanDateStr, 3);
+    let endDate = null;
+
+    // Pattern 1: Month Day(-Day)?, Year (e.g. "April 19-20, 2026" or "Nov 14, 2026")
+    const rangeMatch = cleanedText.match(/([A-Za-z]{3,9})\s+(\d{1,2})(?:\s*-\s*(\d{1,2}))?,\s*(\d{4})/i);
+    if (rangeMatch) {
+        const month = rangeMatch[1];
+        const startDay = rangeMatch[2];
+        const endDay = rangeMatch[3] || startDay;
+        const year = rangeMatch[4];
+        const sD = new Date(`${month} ${startDay}, ${year}`);
+        const eD = new Date(`${month} ${endDay}, ${year}`);
+        if (!isNaN(sD.getTime())) startDate = sD.toISOString().split('T')[0];
+        if (!isNaN(eD.getTime())) endDate = eD.toISOString().split('T')[0];
     } else {
-        startDate = sanitizeParsedDate(null, 3);
+        // Pattern 2: MM/DD/YYYY
+        const slashMatch = cleanedText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (slashMatch) {
+            const sD = new Date(`${slashMatch[3]}-${slashMatch[1].padStart(2, '0')}-${slashMatch[2].padStart(2, '0')}`);
+            if (!isNaN(sD.getTime())) {
+                startDate = sD.toISOString().split('T')[0];
+                endDate = startDate;
+            }
+        } else {
+            // Pattern 3: Month Day (no year, assume 2026)
+            const monthDayMatch = cleanedText.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:\s*-\s*(\d{1,2}))?/i);
+            if (monthDayMatch) {
+                const sD = new Date(`${monthDayMatch[0].split('-')[0].trim()} 2026`);
+                if (!isNaN(sD.getTime())) {
+                    startDate = sD.toISOString().split('T')[0];
+                    endDate = startDate;
+                }
+            }
+        }
+    }
+
+    // Critical: If the tournament's dates already concluded in the past (< today), reject it!
+    if (startDate) {
+        const checkEnd = endDate ? new Date(endDate) : new Date(startDate);
+        if (!isNaN(checkEnd.getTime()) && checkEnd.getTime() < Date.now()) {
+            return { isValidDmvTournament: false, reason: `Tournament already ended on ${endDate || startDate}` };
+        }
     }
 
     let registrationDeadline = null;
-    const deadlineMatch = cleanedText.match(/deadline[:\s]*(\w{3,9}\s+\d{1,2}(?:,\s*\d{4})?|\d{1,2}\/\d{1,2}\/\d{4})/i);
+    const deadlineMatch = cleanedText.match(/(?:registration\s*(?:ends|deadline|closes)|deadline)[:\s]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?|\d{1,2}\/\d{1,2}\/\d{4})/i);
     if (deadlineMatch) {
-        registrationDeadline = sanitizeParsedDate(deadlineMatch[1].trim(), 2);
+        const dStr = deadlineMatch[1].trim();
+        const dD = new Date(dStr.includes(',') || dStr.includes('/') ? dStr : `${dStr}, 2026`);
+        if (!isNaN(dD.getTime())) {
+            registrationDeadline = dD.toISOString().split('T')[0];
+        }
     }
 
     let skillLevels = ["Open"];
