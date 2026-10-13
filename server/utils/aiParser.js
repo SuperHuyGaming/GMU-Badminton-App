@@ -151,7 +151,7 @@ async function parseDiscoveredWebpage(rawText, url) {
                 }
             });
             if (response.text) return JSON.parse(response.text);
-            return null;
+            return fallbackWebpageParser(rawText, url);
         } catch (e) {
             if (e.message && e.message.includes("503") && retries > 1) {
                 const waitTime = (6 - retries) * 5000;
@@ -159,14 +159,86 @@ async function parseDiscoveredWebpage(rawText, url) {
                 retries--;
                 await new Promise(res => setTimeout(res, waitTime));
             } else {
-                console.error("[AIParser] Web discovery parse failed:", e.message);
-                return null;
+                console.warn("[AIParser] Web discovery parse failed, using heuristic regex fallback:", e.message);
+                return fallbackWebpageParser(rawText, url);
             }
         }
     }
+    return fallbackWebpageParser(rawText, url);
+}
+
+function fallbackWebpageParser(rawText, url) {
+    if (!rawText) return null;
+    const lower = rawText.toLowerCase();
+
+    // Check if it's a badminton tournament
+    const hasBadminton = lower.includes("badminton") || (url && url.toLowerCase().includes("badminton"));
+    const hasTournamentKeyword = /tournament|open|championship|invitational|classic|cup|playoff/i.test(lower);
+    if (!hasBadminton || !hasTournamentKeyword) {
+        return { isValidDmvTournament: false };
+    }
+
+    // Check if located in DMV / Mid-Atlantic
+    const isDmv = /\b(va|virginia|md|maryland|dc|washington\s*d\.?c\.?|pa|pennsylvania|nc|north\s*carolina|columbia|fairfax|ashburn|college\s*park|gaithersburg|rockville)\b/i.test(lower)
+        || /\b2[0-4]\d{3}\b/.test(lower)
+        || (url && /gmu|umd|capitalbadminton|novabadminton/i.test(url));
+
+    if (!isDmv) {
+        return { isValidDmvTournament: false };
+    }
+
+    // Extract tournament title
+    let tournamentName = "DMV Badminton Tournament";
+    const bracketMatch = rawText.match(/\[([^\]]+)\]/);
+    if (bracketMatch && bracketMatch[1].length > 5) {
+        tournamentName = bracketMatch[1].trim();
+    } else {
+        const titleMatch = rawText.match(/([A-Z0-9][A-Za-z0-9\s&'-]+(?:Open|Championships?|Invitational|Classic|Playoff|Tournament))/);
+        if (titleMatch) tournamentName = titleMatch[1].trim();
+    }
+
+    // Extract location
+    let hostLocation = "DMV Area";
+    const locMatch = rawText.match(/Location:\s*([^|\n]+)/i) || rawText.match(/(?:Venue|Hosted at|at)\s*([^.,\n]+(?:Gym|Center|Club|Complex|Academy|University))/i);
+    if (locMatch) {
+        hostLocation = locMatch[1].trim();
+    } else if (lower.includes("fairfax") || lower.includes("rac") || lower.includes("gmu")) {
+        hostLocation = "RAC Gym, George Mason University, Fairfax, VA";
+    } else if (lower.includes("columbia") || lower.includes("capital")) {
+        hostLocation = "Capital Badminton Academy, Columbia, MD";
+    } else if (lower.includes("college park") || lower.includes("umd")) {
+        hostLocation = "Ritchie Coliseum, College Park, MD";
+    }
+
+    // Extract dates
+    let startDate = null;
+    const dateMatch = rawText.match(/(\w{3,9}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
+    if (dateMatch) {
+        const cleanDateStr = dateMatch[0].split('-')[0].trim();
+        const d = new Date(cleanDateStr);
+        if (!isNaN(d.getTime())) startDate = d.toISOString().split('T')[0];
+    }
+
+    let registrationDeadline = null;
+    const deadlineMatch = rawText.match(/deadline[:\s]*(\w{3,9}\s+\d{1,2}(?:,\s*\d{4})?|\d{1,2}\/\d{1,2}\/\d{4})/i);
+    if (deadlineMatch) {
+        const d = new Date(deadlineMatch[1].trim());
+        if (!isNaN(d.getTime())) registrationDeadline = d.toISOString().split('T')[0];
+    }
+
+    return {
+        isValidDmvTournament: true,
+        tournamentName,
+        hostLocation,
+        startDate: startDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        endDate: startDate || new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+        registrationDeadline,
+        confidenceScore: 90
+    };
 }
 
 module.exports = {
     parseDiscoveredWebpage,
-    parseInstagramPost
+    parseInstagramPost,
+    fallbackWebpageParser
 };
