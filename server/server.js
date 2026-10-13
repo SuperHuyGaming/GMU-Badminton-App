@@ -11,10 +11,17 @@ const { initializeGemini } = require("./utils/aiCoach");
 
 mongoose
 	.connect(process.env.MONGO_URI)
-	.then(() => {
+	.then(async () => {
 		console.log("Successfully connected to MongoDB!");
 		initializeGemini();
 		require("./utils/seedFeed")();
+		try {
+			const { ensureGuaranteedTournaments } = require("./utils/autonomousHunter");
+			await ensureGuaranteedTournaments();
+			console.log("🏸 [Tournament Engine] Guaranteed active tournaments initialized on DB connect.");
+		} catch (err) {
+			console.error("❌ Failed to initialize guaranteed tournaments on DB connect:", err.message);
+		}
 	})
 	.catch((error) => console.error("MongoDB connection failed:", error));
 
