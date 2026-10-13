@@ -169,6 +169,29 @@ async function processDiscoveryQueue(batchSize = 10) {
                 continue;
             }
 
+            // Guard against past tournament year in title (e.g. 2025, 2024, etc.)
+            const pastYearMatch = (extracted.tournamentName || '').match(/\b(201\d|202[0-5])\b/);
+            if (pastYearMatch) {
+                console.log(`[Hunter] AI Rejected (Past Tournament Year ${pastYearMatch[0]}): "${extracted.tournamentName}"`);
+                item.status = 'REJECTED_BY_AI';
+                await item.save();
+                rejectedCount++;
+                continue;
+            }
+
+            // Guard against expired past tournaments (ended before today)
+            if (extracted.startDate) {
+                const sDate = new Date(extracted.startDate);
+                const eDate = extracted.endDate ? new Date(extracted.endDate) : sDate;
+                if (!isNaN(eDate.getTime()) && eDate.getTime() < Date.now()) {
+                    console.log(`[Hunter] AI Rejected (Event Ended ${extracted.endDate || extracted.startDate}): "${extracted.tournamentName}"`);
+                    item.status = 'REJECTED_BY_AI';
+                    await item.save();
+                    rejectedCount++;
+                    continue;
+                }
+            }
+
             // Fuzzy Deduplication
             if (isDuplicateTournament(extracted.tournamentName, allExisting)) {
                 console.log(`[Hunter] Duplicate detected via Levenshtein fuzzy match: "${extracted.tournamentName}"`);
@@ -630,12 +653,14 @@ async function wipeAndRestartTournamentSystem() {
         // 2. Wipe ProposedTournament queue completely
         const deletedProposed = await ProposedTournament.deleteMany({});
 
-        // 3. Purge invalid or pre-2026 tournaments (e.g. legacy 2001 entries, past dates)
+        // 3. Purge invalid or pre-2026 tournaments (e.g. legacy 2001 entries, past dates, past year names)
         const deletedTournaments = await Tournament.deleteMany({
             $or: [
                 { startDate: { $lt: new Date('2026-01-01T00:00:00.000Z') } },
                 { endDate: { $lt: new Date('2026-01-01T00:00:00.000Z') } },
                 { tournamentName: /2001|2000|199\d|198\d/i },
+                { tournamentName: /\b(201\d|202[0-5])\b/i },
+                { tournamentName: /capital\s+ne\s+open/i },
                 { tournamentName: /public\s+vcu\s+open/i },
                 { originalCaption: /founded in 2001|est\. 2001/i }
             ]
