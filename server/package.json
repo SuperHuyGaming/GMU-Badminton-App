@@ -2,7 +2,7 @@
   "name": "server",
   "version": "1.0.0",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --max-old-space-size=450 server.js",
     "dev": "nodemon server.js",
     "test": "cross-env NODE_ENV=test jest",
     "lint": "eslint ."

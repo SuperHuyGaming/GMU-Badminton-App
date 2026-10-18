@@ -148,20 +148,8 @@ function startCronJobs() {
     console.log("[Cron] Booting up... Ensuring guaranteed live tournaments.");
     ensureGuaranteedTournaments().catch(e => console.error("[Cron] Error ensuring guaranteed tournaments:", e.message));
 
-    // 2. Launch autonomous background hunt (non-blocking)
-    setImmediate(async () => {
-        try {
-            console.log("[Cron] Booting up... Launching background autonomous tournament discovery.");
-            await runFullAutonomousHunt();
-        } catch (err) {
-            console.error("[Cron] Background autonomous hunt error:", err.message);
-        }
-    });
-
-    // 3. Run collegiate Instagram scraper in the background after server binds
-    setTimeout(() => {
-        runInstagramScraper().catch(e => console.error("[Cron] Background Instagram scraper error:", e.message));
-    }, 15000);
+    // Note: Heavy scrapers (runFullAutonomousHunt and runInstagramScraper) are scheduled
+    // for off-peak nightly cron runs below or triggered on demand via Admin UI to keep boot memory lean.
 
     // Then run every hour
     setInterval(() => {
