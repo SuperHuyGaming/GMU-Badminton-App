@@ -96,7 +96,7 @@ PostSchema.post('save', async function(doc) {
 				visibility: doc.visibility,
 				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3 + (doc.reactions?.length || 0) * 2 + (doc.isPinned ? 1000 : 0)
 			},
-			{ upsert: true, new: true }
+			{ upsert: true, returnDocument: 'after' }
 		);
 	} catch (e) {
 		console.error("ActivityFeed sync error (Post):", e);

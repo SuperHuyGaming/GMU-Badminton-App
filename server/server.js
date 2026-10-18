@@ -16,11 +16,11 @@ mongoose
 		initializeGemini();
 		require("./utils/seedFeed")();
 		try {
-			const { wipeAndRestartTournamentSystem } = require("./utils/autonomousHunter");
-			await wipeAndRestartTournamentSystem();
-			console.log("🏸 [Tournament Engine] Full tournament queue wipe & verified 2026 tournaments initialized on DB connect.");
+			const { ensureGuaranteedTournaments } = require("./utils/autonomousHunter");
+			await ensureGuaranteedTournaments();
+			console.log("🏸 [Tournament Engine] Verified live tournaments initialized on DB connect.");
 		} catch (err) {
-			console.error("❌ Failed to wipe and initialize tournaments on DB connect:", err.message);
+			console.error("❌ Failed to initialize tournaments on DB connect:", err.message);
 		}
 	})
 	.catch((error) => console.error("MongoDB connection failed:", error));
