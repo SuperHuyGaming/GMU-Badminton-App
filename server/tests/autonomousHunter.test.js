@@ -337,9 +337,9 @@ describe("Autonomous Tournament Hunter Suite", () => {
             expect(count).toBe(0);
         });
 
-        test("getGuaranteedTournamentsList returns 4 active upcoming tournaments", () => {
+        test("getGuaranteedTournamentsList returns 5 active upcoming tournaments", () => {
             const list = getGuaranteedTournamentsList();
-            expect(list).toHaveLength(4);
+            expect(list).toHaveLength(5);
             expect(list[0].tournamentName).toContain("2026 GMU Badminton Open");
             expect(list[0].isOpenTournament).toBe(true);
             expect(list[0].status).toBe("active");
@@ -352,10 +352,11 @@ describe("Autonomous Tournament Hunter Suite", () => {
 
             jest.spyOn(Tournament, "countDocuments").mockResolvedValue(2);
             const mockUpsert = jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
+            const mockBulkWrite = jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
 
             const count = await ensureGuaranteedTournaments();
-            expect(count).toBe(4);
-            expect(mockUpsert).toHaveBeenCalledTimes(4);
+            expect(count).toBe(5);
+            expect(mockBulkWrite).toHaveBeenCalled();
 
             Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
         });
@@ -395,13 +396,14 @@ describe("Autonomous Tournament Hunter Suite", () => {
             const mockDelTournaments = jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 2 });
             jest.spyOn(Tournament, "countDocuments").mockResolvedValue(0);
             jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
+            jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
 
             const res = await wipeAndRestartTournamentSystem();
             expect(res.success).toBe(true);
             expect(res.clearedDiscoveryQueue).toBe(15);
             expect(res.clearedProposedTournaments).toBe(3);
             expect(res.purgedTournaments).toBe(2);
-            expect(res.activeGuaranteedCount).toBe(4);
+            expect(res.activeGuaranteedCount).toBe(5);
 
             expect(mockDelQueue).toHaveBeenCalledWith({});
             expect(mockDelProposed).toHaveBeenCalledWith({});

@@ -15,6 +15,16 @@ const tournamentSchema = new mongoose.Schema({
     attendees: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     entryFee: String,
     skillLevels: [String],
+    divisions: [{
+        name: { type: String, required: true },
+        code: { type: String, required: true },
+        category: { type: String, default: "Singles" },
+        maxDraw: { type: Number, default: 32 },
+        fee: { type: String, default: "$25" },
+        feeAmount: { type: Number, default: 25 },
+        eligibility: { type: String, default: "Open" },
+        bracketType: { type: String, default: "single_elimination" }
+    }],
     startDate: Date,
     endDate: Date,
     scraperLastRun: Date,

@@ -16,6 +16,14 @@ vi.mock('react-hot-toast', () => ({
     },
 }));
 
+vi.mock('../utils/socket', () => ({
+    default: {
+        emit: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn()
+    }
+}));
+
 const mockUser = {
     _id: 'user-current-1',
     name: 'Test Player',
@@ -183,6 +191,39 @@ describe('Public Tournaments Page Component', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/Our AI is Hunting/i)).toBeInTheDocument();
+        });
+    });
+
+    it('switches between Tournaments Directory, Interactive Bracket, Court Schedule, and Umpire Pad tabs', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        expect(screen.getByTestId('tab-tournaments-directory')).toBeInTheDocument();
+        expect(screen.getByTestId('tab-bracket-viewer')).toBeInTheDocument();
+        expect(screen.getByTestId('tab-court-schedule')).toBeInTheDocument();
+        expect(screen.getByTestId('tab-umpire-pad')).toBeInTheDocument();
+
+        // Switch to Interactive Bracket Viewer
+        fireEvent.click(screen.getByTestId('tab-bracket-viewer'));
+        expect(screen.getByTestId('tournament-bracket-engine')).toBeInTheDocument();
+
+        // Switch to RAC Court Schedule
+        fireEvent.click(screen.getByTestId('tab-court-schedule'));
+        expect(screen.getByTestId('court-queue-viewer')).toBeInTheDocument();
+        expect(screen.getByText(/RAC Gymnasium Courts 1–6 Scheduling Hub/i)).toBeInTheDocument();
+
+        // Switch to Umpire Digital Pad
+        fireEvent.click(screen.getByTestId('tab-umpire-pad'));
+        expect(screen.getByTestId('umpire-digital-pad')).toBeInTheDocument();
+        expect(screen.getByText(/Official Touch Umpire Pad/i)).toBeInTheDocument();
+
+        // Switch back to Directory
+        fireEvent.click(screen.getByTestId('tab-tournaments-directory'));
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
         });
     });
 });
