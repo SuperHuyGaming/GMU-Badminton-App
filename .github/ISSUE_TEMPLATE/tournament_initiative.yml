@@ -1,0 +1,150 @@
+name: Tournament Platform Initiative
+description: Track one of the 200 initiatives across the 50-sprint tournament enterprise roadmap
+title: "[INITIATIVE] <ROLE-ID>: <Title>"
+labels: ["initiative", "tournament-platform", "QA Pipeline"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Tournament Enterprise Platform 50-Sprint Initiative
+        Use this issue template to track work on the GMU Badminton Tournament Enterprise Platform across the 10 engineering roles and 5 strategic phases.
+  - type: dropdown
+    id: role
+    attributes:
+      label: Specialized Engineering Role
+      description: Select the specialized engineering job role owning this initiative.
+      options:
+        - "Full Stack Engineer (FSE)"
+        - "Backend & Distributed Systems Engineer (BSE)"
+        - "Frontend & Mobile Web Engineer (FME)"
+        - "AI & Machine Learning Engineer (AIM)"
+        - "UX/UI & Accessibility Designer (UXD)"
+        - "Security & Compliance Engineer (SEC)"
+        - "Software Test & QA Lead (QAE)"
+        - "DevOps & Platform Reliability Engineer (DOP)"
+        - "Data Architect & Analytics Engineer (DAA)"
+        - "Tournament Operations & Product Manager (TOP)"
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Strategic Phase
+      description: Select the strategic phase corresponding to this sprint.
+      options:
+        - "Phase 1: Clean Slate Seeding & Data Core (Sprints 1-10)"
+        - "Phase 2: Bracket Engine & Interactive Viewer (Sprints 11-20)"
+        - "Phase 3: RAC Court Queue Scheduling & Umpire Digital Pad (Sprints 21-30)"
+        - "Phase 4: Autonomous AI Hunter, Security & QA Hardening (Sprints 31-40)"
+        - "Phase 5: Collegiate League Ecosystem, Scale & Investor Pitch (Sprints 41-50)"
+    validations:
+      required: true
+  - type: dropdown
+    id: sprint
+    attributes:
+      label: Target Sprint (Sprints 1 - 50)
+      description: Target sprint for initiative completion.
+      options:
+        - "Sprint 1"
+        - "Sprint 2"
+        - "Sprint 3"
+        - "Sprint 4"
+        - "Sprint 5"
+        - "Sprint 6"
+        - "Sprint 7"
+        - "Sprint 8"
+        - "Sprint 9"
+        - "Sprint 10"
+        - "Sprint 11"
+        - "Sprint 12"
+        - "Sprint 13"
+        - "Sprint 14"
+        - "Sprint 15"
+        - "Sprint 16"
+        - "Sprint 17"
+        - "Sprint 18"
+        - "Sprint 19"
+        - "Sprint 20"
+        - "Sprint 21"
+        - "Sprint 22"
+        - "Sprint 23"
+        - "Sprint 24"
+        - "Sprint 25"
+        - "Sprint 26"
+        - "Sprint 27"
+        - "Sprint 28"
+        - "Sprint 29"
+        - "Sprint 30"
+        - "Sprint 31"
+        - "Sprint 32"
+        - "Sprint 33"
+        - "Sprint 34"
+        - "Sprint 35"
+        - "Sprint 36"
+        - "Sprint 37"
+        - "Sprint 38"
+        - "Sprint 39"
+        - "Sprint 40"
+        - "Sprint 41"
+        - "Sprint 42"
+        - "Sprint 43"
+        - "Sprint 44"
+        - "Sprint 45"
+        - "Sprint 46"
+        - "Sprint 47"
+        - "Sprint 48"
+        - "Sprint 49"
+        - "Sprint 50"
+    validations:
+      required: true
+  - type: input
+    id: initiative_id
+    attributes:
+      label: Initiative ID
+      description: Official Initiative ID from master plan (e.g. FSE-01, BSE-05, AIM-12).
+      placeholder: "e.g. FSE-01"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description & Technical Scope
+      description: Detailed specification of features, APIs, database models, or UI components delivered.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Technical & Initiative Dependencies
+      description: Other initiatives or external packages required before or alongside this work.
+      placeholder: "e.g. BSE-01, DAA-01"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria & Test Verification Commands
+      description: Concrete criteria that must pass for this initiative to be accepted.
+      value: |
+        - [ ] All automated unit and integration tests pass (e.g. `npm test` in client/ and server/)
+        - [ ] Lint checks pass with 0 errors (`npm run lint` in client/ and server/)
+        - [ ] Production build succeeds without errors (`npm run build` in client/)
+        - [ ] Real-time state synchronization verified across WebSocket connections
+    validations:
+      required: true
+  - type: checkboxes
+    id: qa_checklist
+    attributes:
+      label: Mandatory PR & QA Workflow Verification
+      description: Repository invariant checks per `.agents/rules/pr_workflow.md`.
+      options:
+        - label: Developed on dedicated feature branch (NEVER commit directly to develop or main)
+          required: true
+        - label: Pull Request opened targeting `develop` with labels `QA Pipeline` and `Automated`
+          required: true
+        - label: Automated QA Bot comment posted on PR announcing test pipeline start
+          required: true
+        - label: Autonomous QA Engineer subagent verified 100% test pass and posted review comment
+          required: true
+        - label: Squashed and merged to `develop` only after 100% QA PASS
+          required: true

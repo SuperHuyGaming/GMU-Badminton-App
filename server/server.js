@@ -138,6 +138,8 @@ const adminTournamentsRoutes = require("./routes/adminTournaments");
 app.use("/api/admin/tournaments", adminTournamentsRoutes);
 const tournamentRoutes = require("./routes/tournaments");
 app.use("/api/tournaments", tournamentRoutes);
+const courtRoutes = require("./routes/courts");
+app.use("/api/courts", courtRoutes);
 const adminRoutes = require("./routes/admin");
 app.use("/api/admin", adminRoutes);
 const announcementRoutes = require("./routes/announcements");

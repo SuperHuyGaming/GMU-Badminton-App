@@ -4,7 +4,7 @@ import {
     Alert, Grid, Dialog, DialogTitle, DialogContent, ToggleButton, ToggleButtonGroup,
     Drawer, Avatar, AvatarGroup, IconButton, FormGroup, FormControlLabel, Checkbox, 
     Divider, Chip, Tooltip, TextField, InputAdornment, Skeleton, Stack, Badge, Paper,
-    Switch
+    Switch, Tabs, Tab
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -18,11 +18,17 @@ import ClearIcon from '@mui/icons-material/Clear';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LaunchIcon from '@mui/icons-material/Launch';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import SportsTennisIcon from '@mui/icons-material/SportsTennis';
+import SportsScoreIcon from '@mui/icons-material/SportsScore';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
 import EmptyTournaments from '../components/EmptyTournaments';
 import MapPinIcon from '../components/MapPinIcon';
+import TournamentBracket from '../components/TournamentBracket';
+import CourtQueueViewer from '../components/CourtQueueViewer';
+import UmpireDigitalPad from '../components/UmpireDigitalPad';
 import apiFetch from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -40,6 +46,7 @@ export default function Tournaments() {
 
     // View state
     const [viewMode, setViewMode] = useState(searchParams.get('view') || 'list'); // 'list' | 'calendar'
+    const activeTab = searchParams.get('tab') || 'directory';
     const [selectedTournament, setSelectedTournament] = useState(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -298,6 +305,34 @@ END:VCALENDAR`;
                 </Typography>
             </Box>
 
+            {/* Top Navigation Tabs */}
+            <Paper 
+                elevation={1} 
+                sx={{ 
+                    mb: 3, 
+                    borderRadius: 3, 
+                    bgcolor: 'background.paper',
+                    overflow: 'hidden'
+                }}
+            >
+                <Tabs
+                    value={activeTab}
+                    onChange={(_, val) => updateFilters({ tab: val === 'directory' ? null : val })}
+                    indicatorColor="primary"
+                    textColor="primary"
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    aria-label="Tournament navigation tabs"
+                >
+                    <Tab icon={<EventIcon />} iconPosition="start" label="Tournaments Directory" value="directory" data-testid="tab-tournaments-directory" />
+                    <Tab icon={<AccountTreeIcon />} iconPosition="start" label="Interactive Bracket Viewer" value="bracket" data-testid="tab-bracket-viewer" />
+                    <Tab icon={<SportsTennisIcon />} iconPosition="start" label="RAC Court Schedule (Courts 1-6)" value="courts" data-testid="tab-court-schedule" />
+                    <Tab icon={<SportsScoreIcon />} iconPosition="start" label="Umpire Digital Pad" value="umpire" data-testid="tab-umpire-pad" />
+                </Tabs>
+            </Paper>
+
+            {activeTab === 'directory' && (
+                <>
             {/* Controls Bar: Search, View Switcher & Filter Toggle */}
             <Paper 
                 elevation={1} 
@@ -820,6 +855,33 @@ END:VCALENDAR`;
                         </Box>
                     )}
                 </Paper>
+            )}
+                </>
+            )}
+
+            {/* INTERACTIVE BRACKET VIEWER TAB */}
+            {activeTab === 'bracket' && (
+                <Box sx={{ mb: 4 }}>
+                    <TournamentBracket />
+                </Box>
+            )}
+
+            {/* RAC COURT SCHEDULE TAB */}
+            {activeTab === 'courts' && (
+                <Box sx={{ mb: 4 }}>
+                    <CourtQueueViewer 
+                        onSelectMatchForUmpire={(court) => updateFilters({ tab: 'umpire', court: court.courtNumber })} 
+                    />
+                </Box>
+            )}
+
+            {/* UMPIRE DIGITAL PAD TAB */}
+            {activeTab === 'umpire' && (
+                <Box sx={{ mb: 4 }}>
+                    <UmpireDigitalPad 
+                        initialCourtNumber={Number(searchParams.get('court')) || 1} 
+                    />
+                </Box>
             )}
 
             {/* TOURNAMENT DETAIL MODAL */}
