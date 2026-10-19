@@ -15,13 +15,23 @@ const MAX_HTML_PARSE_LENGTH = 200 * 1024;            // 200 KB
 const AXIOS_BODY_CAP_BYTES = 500 * 1024;             // 500 KB
 
 /**
- * Checks whether current V8 heap usage exceeds the 200MB threshold.
+ * Returns the effective heap limit threshold in bytes, respecting runtime HUNTER_HEAP_LIMIT_MB overrides.
+ * @returns {number}
+ */
+function getHeapPressureLimitBytes() {
+    return (parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || 200) * 1024 * 1024;
+}
+
+/**
+ * Checks whether current V8 heap usage exceeds the configured threshold (default 200MB).
+ * Dynamically evaluates process.env.HUNTER_HEAP_LIMIT_MB to support configurable thresholds in test and cloud environments.
  * @returns {{ isPressureHigh: boolean, heapUsedMB: string, heapUsedBytes: number }}
  */
 function checkHeapPressure() {
+    const limitBytes = getHeapPressureLimitBytes();
     const { heapUsed } = process.memoryUsage();
     return {
-        isPressureHigh: heapUsed > HEAP_PRESSURE_LIMIT_BYTES,
+        isPressureHigh: heapUsed > limitBytes,
         heapUsedMB: (heapUsed / 1024 / 1024).toFixed(2),
         heapUsedBytes: heapUsed
     };
@@ -1001,6 +1011,7 @@ module.exports = {
     ensureGuaranteedTournaments,
     wipeAndRestartTournamentSystem,
     checkHeapPressure,
+    getHeapPressureLimitBytes,
     yieldToEventLoop,
     pauseForGarbageCollection,
     HEAP_PRESSURE_LIMIT_BYTES,
