@@ -294,11 +294,21 @@ async function processDiscoveryQueue(batchSize = 5) {
                     $ = cheerio.load(htmlToParse);
                     $('script, style, noscript, nav, footer').remove();
                     const extractedText = $('body').text().replace(/\s+/g, ' ').trim();
-                    if (extractedText.length > 50) {
+                    const lowerExtracted = extractedText.toLowerCase();
+                    const isErrorOrLoginPage = /404|not found|page can't be found|login|sign in|campusgroups|session expired/i.test(lowerExtracted) && !lowerExtracted.includes('tournament');
+                    const hasBadminton = lowerExtracted.includes('badminton');
+
+                    if (extractedText.length > 50 && hasBadminton && !isErrorOrLoginPage) {
                         rawText = extractedText;
+                    } else if (item.rawSnippet) {
+                        // Preserve the rich snippet from Google Search / discovery seed
+                        rawText = `${item.rawSnippet}\n\n[Context]: ${extractedText.slice(0, 400)}`;
                     }
                 } catch (e) {
                     console.log(`[Hunter] Axios fetch failed for ${item.sourceUrl}. Falling back to snippet:`, e.message);
+                    if (item.rawSnippet) {
+                        rawText = item.rawSnippet;
+                    }
                 } finally {
                     $ = null;
                     data = null;
@@ -915,7 +925,7 @@ async function wipeAndRestartTournamentSystem() {
 
         console.log("🧹 [Hunter Wipe] Initiating atomic tournament queue wipe and restart...");
 
-        // 1, 2, 3: Atomic parallel purge of discovery queue, proposals, and stale pre-2026 entries
+        // 1, 2, 3: Atomic parallel purge of discovery queue, proposals, and stale pre-2026/trash entries
         const [deletedQueue, deletedProposed, deletedTournaments] = await Promise.all([
             DiscoveryQueue.deleteMany({}),
             ProposedTournament.deleteMany({}),
@@ -927,6 +937,16 @@ async function wipeAndRestartTournamentSystem() {
                     { tournamentName: /\b(201\d|202[0-5])\b/i },
                     { tournamentName: /capital\s+ne\s+open/i },
                     { tournamentName: /public\s+vcu\s+open/i },
+                    { tournamentName: /results pages/i },
+                    { tournamentName: /mascot competition/i },
+                    { tournamentName: /training packages/i },
+                    { tournamentName: /sign up now/i },
+                    { tournamentName: /drop-in booking/i },
+                    { tournamentName: /menu select/i },
+                    { tournamentName: /log in menu/i },
+                    { tournamentName: /recwell intramural/i },
+                    { tournamentName: /hoses basketball|golf tournament/i },
+                    { tournamentName: /skip to content navigation menu/i },
                     { originalCaption: /founded in 2001|est\. 2001/i }
                 ]
             })
