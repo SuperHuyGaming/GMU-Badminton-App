@@ -56,6 +56,7 @@ export default function MediaLightbox({
 		<Dialog
 			open={open}
 			onClose={onClose}
+			disableRestoreFocus
 			maxWidth={false}
 			fullScreen
 			PaperProps={{

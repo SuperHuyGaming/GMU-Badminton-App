@@ -61,6 +61,7 @@ export default function PWAInstallPrompt() {
 		<Dialog
 			open={open}
 			onClose={handleDismiss}
+			disableRestoreFocus
 			aria-labelledby="pwa-install-title"
 			PaperProps={{
 				sx: { borderRadius: 3, p: 1, maxWidth: 400 }

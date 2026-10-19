@@ -1,44 +1,47 @@
-// eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Box, Alert, AlertTitle, Button, CircularProgress } from '@mui/material';
 import apiFetch from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function PendingMatchesPrompt() {
     const { user } = useAuth();
+    const currentUserId = user?.id || user?._id;
     const [pendingMatches, setPendingMatches] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    const fetchPendingMatches = async () => {
-        if (!user) return;
+    const fetchPendingMatches = useCallback(async () => {
+        const token = localStorage.getItem("accessToken");
+        if (!currentUserId || !token) {
+            setPendingMatches([]);
+            return;
+        }
         try {
             const res = await apiFetch('/api/matches/pending');
-            if (!res.ok) return;
+            if (!res || !res.ok) return;
             const matches = await res.json();
             if (!Array.isArray(matches)) return;
-            const currentId = user.id || user._id;
             // Only show matches where the current user is NOT the submitter
             // i.e. the current user needs to confirm it
             const requiresConfirmation = matches.filter(
                 (m) => {
                     const submitterId = m?.submittedBy?._id || m?.submittedBy;
-                    return submitterId && submitterId !== currentId;
+                    return submitterId && submitterId !== currentUserId;
                 }
             );
             setPendingMatches(requiresConfirmation);
         } catch (error) {
-            console.error("Failed to fetch pending matches", error);
+            console.debug("Failed to fetch pending matches", error);
         }
-    };
+    }, [currentUserId]);
 
     useEffect(() => {
+        if (!currentUserId) return;
         // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchPendingMatches();
-        // optionally poll every 30 seconds
+        // Poll every 30 seconds
         const interval = setInterval(fetchPendingMatches, 30000);
         return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user]);
+    }, [currentUserId, fetchPendingMatches]);
 
     const handleConfirm = async (matchId) => {
         setLoading(true);
