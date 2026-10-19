@@ -896,6 +896,7 @@ END:VCALENDAR`;
             <Dialog 
                 open={!!selectedTournament} 
                 onClose={() => setSelectedTournament(null)} 
+                disableRestoreFocus
                 maxWidth="md" 
                 fullWidth
                 slotProps={{ paper: { sx: { borderRadius: 4, overflow: 'hidden' } } }}

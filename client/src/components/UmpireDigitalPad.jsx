@@ -776,7 +776,7 @@ export default function UmpireDigitalPad({
             </Stack>
 
             {/* Penalty Notice Dialog */}
-            <Dialog open={Boolean(penaltyNotice)} onClose={() => setPenaltyNotice(null)}>
+            <Dialog open={Boolean(penaltyNotice)} onClose={() => setPenaltyNotice(null)} disableRestoreFocus>
                 <DialogTitle>Umpire Disciplinary Action</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" gutterBottom>

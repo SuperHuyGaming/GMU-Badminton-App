@@ -683,6 +683,7 @@ export default function TournamentBracket({
             <Dialog
                 open={Boolean(activeMatchDialog)}
                 onClose={() => setActiveMatchDialog(null)}
+                disableRestoreFocus
                 maxWidth="xs"
                 fullWidth
                 data-testid="match-details-dialog"

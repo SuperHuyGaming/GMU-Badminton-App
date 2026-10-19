@@ -1087,6 +1087,7 @@ export default function TournamentApprovals() {
             <Dialog
                 open={Boolean(selectedProposal)}
                 onClose={handleCloseReview}
+                disableRestoreFocus
                 maxWidth="lg"
                 fullWidth
                 aria-labelledby="split-screen-reviewer-dialog-title"
@@ -1452,6 +1453,7 @@ export default function TournamentApprovals() {
             <Dialog
                 open={rejectDialogOpen}
                 onClose={() => !submitting && setRejectDialogOpen(false)}
+                disableRestoreFocus
                 maxWidth="sm"
                 fullWidth
                 aria-labelledby="reject-dialog-title"
@@ -1496,6 +1498,7 @@ export default function TournamentApprovals() {
             <Dialog
                 open={manualModalOpen}
                 onClose={() => !submittingManual && setManualModalOpen(false)}
+                disableRestoreFocus
                 maxWidth="md"
                 fullWidth
                 aria-labelledby="manual-entry-dialog-title"
