@@ -33,6 +33,7 @@ const mongoose = require("mongoose");
 const uploadLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
 	max: 30,
+	skip: (req) => req.method === "OPTIONS",
 	message: { message: "Too many upload requests, please try again later." },
 });
 

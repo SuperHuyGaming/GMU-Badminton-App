@@ -558,6 +558,7 @@ export default function Navbar() {
 										anchorEl={notifAnchorEl}
 										open={notifOpen}
 										onClose={handleNotifClose}
+										disableRestoreFocus
 										transformOrigin={{
 											horizontal: "right",
 											vertical: "top",
@@ -746,6 +747,7 @@ export default function Navbar() {
 										anchorEl={anchorEl}
 										open={open}
 										onClose={handleMenuClose}
+										disableRestoreFocus
 										transformOrigin={{
 											horizontal: "right",
 											vertical: "top",
@@ -839,6 +841,7 @@ export default function Navbar() {
 					anchor="left"
 					open={mobileOpen}
 					onClose={handleDrawerToggle}
+					ModalProps={{ disableRestoreFocus: true }}
 					sx={{
 						display: { xs: "block", md: "none" },
 						"& .MuiDrawer-paper": {

@@ -9,6 +9,7 @@ const rateLimit = require("express-rate-limit");
 const calendarLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 60,
+    skip: (req) => req.method === "OPTIONS",
     message: "Too many calendar requests, please try again later."
 });
 

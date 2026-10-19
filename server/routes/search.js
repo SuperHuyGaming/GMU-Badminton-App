@@ -26,6 +26,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 const searchLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
+    skip: (req) => req.method === "OPTIONS",
     message: { error: 'Too many search requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,

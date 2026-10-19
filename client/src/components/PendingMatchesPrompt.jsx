@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Box, Alert, AlertTitle, Button, CircularProgress } from '@mui/material';
 import apiFetch from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function PendingMatchesPrompt() {
     const { user } = useAuth();
-    const currentUserId = user?.id || user?._id;
+    const currentUserId = useMemo(() => user?._id || user?.id, [user?._id, user?.id]);
     const [pendingMatches, setPendingMatches] = useState([]);
     const [loading, setLoading] = useState(false);
 
     const fetchPendingMatches = useCallback(async () => {
-        const token = localStorage.getItem("accessToken");
+        const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
         if (!currentUserId || !token) {
             setPendingMatches([]);
             return;
@@ -25,7 +25,7 @@ export default function PendingMatchesPrompt() {
             const requiresConfirmation = matches.filter(
                 (m) => {
                     const submitterId = m?.submittedBy?._id || m?.submittedBy;
-                    return submitterId && submitterId !== currentUserId;
+                    return submitterId && String(submitterId) !== String(currentUserId);
                 }
             );
             setPendingMatches(requiresConfirmation);
@@ -35,8 +35,12 @@ export default function PendingMatchesPrompt() {
     }, [currentUserId]);
 
     useEffect(() => {
-        if (!currentUserId) return;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+        if (!currentUserId || !token) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setPendingMatches([]);
+            return;
+        }
         fetchPendingMatches();
         // Poll every 30 seconds
         const interval = setInterval(fetchPendingMatches, 30000);

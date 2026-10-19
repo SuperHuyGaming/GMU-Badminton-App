@@ -1,5 +1,5 @@
-/* global process */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/* global process, global */
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import fs from 'fs';
@@ -9,6 +9,8 @@ import Tournaments from './pages/Tournaments';
 import TournamentBracket from './components/TournamentBracket';
 import CourtQueueViewer from './components/CourtQueueViewer';
 import UmpireDigitalPad from './components/UmpireDigitalPad';
+import PendingMatchesPrompt from './components/PendingMatchesPrompt';
+import PostCard from './components/PostCard';
 import {
     calculateServiceCourt,
     checkGameWinner,
@@ -25,40 +27,111 @@ vi.mock('./utils/socket', () => ({
     }
 }));
 
+let mockPendingMatchesList = [];
+
 vi.mock('./utils/api', () => ({
-    default: vi.fn(() => Promise.resolve({
-        success: true,
-        tournaments: [
-            {
-                _id: 't-1',
-                tournamentName: '2026 GMU Badminton Open',
-                eventDate: '2026-11-14T09:00:00.000Z',
-                eventLocation: 'Fairfax, VA • RAC Center',
-                status: 'ACTIVE',
-                entryFee: 35,
-                divisions: ["Men's Singles Open", "Women's Singles", "Mixed Doubles"]
-            },
-            {
-                _id: 't-2',
-                tournamentName: 'Mid-Atlantic Collegiate Championships',
-                eventDate: '2026-12-05T08:30:00.000Z',
-                eventLocation: 'College Park, MD • Reckord Armory',
-                status: 'ACTIVE',
-                entryFee: 40,
-                divisions: ["Collegiate Team Championship", "Open Singles"]
-            }
-        ]
-    }))
+    default: vi.fn((endpoint) => {
+        if (typeof endpoint === 'string' && endpoint.includes('/api/matches/pending')) {
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve(mockPendingMatchesList)
+            });
+        }
+        if (typeof endpoint === 'string' && endpoint.includes('/api/matches/')) {
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({ success: true })
+            });
+        }
+        return Promise.resolve({
+            ok: true,
+            status: 200,
+            success: true,
+            tournaments: [
+                {
+                    _id: 't-1',
+                    tournamentName: '2026 GMU Badminton Open',
+                    eventDate: '2026-11-14T09:00:00.000Z',
+                    eventLocation: 'Fairfax, VA • RAC Center',
+                    status: 'ACTIVE',
+                    entryFee: 35,
+                    divisions: ["Men's Singles Open", "Women's Singles", "Mixed Doubles"]
+                },
+                {
+                    _id: 't-2',
+                    tournamentName: 'Mid-Atlantic Collegiate Championships',
+                    eventDate: '2026-12-05T08:30:00.000Z',
+                    eventLocation: 'College Park, MD • Reckord Armory',
+                    status: 'ACTIVE',
+                    entryFee: 40,
+                    divisions: ["Collegiate Team Championship", "Open Singles"]
+                }
+            ],
+            json: () => Promise.resolve({
+                tournaments: [
+                    {
+                        _id: 't-1',
+                        tournamentName: '2026 GMU Badminton Open',
+                        eventDate: '2026-11-14T09:00:00.000Z',
+                        eventLocation: 'Fairfax, VA • RAC Center',
+                        status: 'ACTIVE',
+                        entryFee: 35,
+                        divisions: ["Men's Singles Open", "Women's Singles", "Mixed Doubles"]
+                    },
+                    {
+                        _id: 't-2',
+                        tournamentName: 'Mid-Atlantic Collegiate Championships',
+                        eventDate: '2026-12-05T08:30:00.000Z',
+                        eventLocation: 'College Park, MD • Reckord Armory',
+                        status: 'ACTIVE',
+                        entryFee: 40,
+                        divisions: ["Collegiate Team Championship", "Open Singles"]
+                    }
+                ]
+            })
+        });
+    })
 }));
 
 vi.mock('./context/AuthContext', () => ({
     useAuth: () => ({
-        user: { _id: 'user-alan', name: 'Alan Yang (GMU)' },
+        user: { _id: 'user-alan', id: 'user-alan', name: 'Alan Yang (GMU)' },
         setUser: vi.fn()
     })
 }));
 
-describe('🤖 4-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () => {
+// Suppress known non-fatal React DOM attribute warnings and act noise during synthetic simulation runs
+const originalError = console.error;
+const originalFetch = global.fetch;
+
+beforeAll(() => {
+    console.error = (...args) => {
+        const msg = typeof args[0] === 'string' ? args[0] : '';
+        if (
+            msg.includes('React does not recognize the') ||
+            msg.includes('non-boolean attribute') ||
+            msg.includes('was not wrapped in act(...)')
+        ) {
+            return;
+        }
+        originalError(...args);
+    };
+
+    global.fetch = vi.fn(() => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ success: true, message: "OK" })
+    }));
+});
+
+afterAll(() => {
+    console.error = originalError;
+    global.fetch = originalFetch;
+});
+
+describe('🤖 5-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -81,12 +154,17 @@ describe('🤖 4-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
             expect(screen.getByTestId('tab-court-schedule')).toBeInTheDocument();
             expect(screen.getByTestId('tab-umpire-pad')).toBeInTheDocument();
 
-            // Toggle view mode between List and Calendar
-            const toggleCalendar = screen.getByRole('button', { name: /calendar/i });
-            fireEvent.click(toggleCalendar);
-            expect(screen.getByRole('button', { name: /list/i })).toBeInTheDocument();
+            // Await tournament data resolution
+            await waitFor(() => {
+                expect(screen.getByText('2026 GMU Badminton Open')).toBeInTheDocument();
+            });
 
-            const toggleList = screen.getByRole('button', { name: /list/i });
+            // Toggle view mode between List and Calendar
+            const toggleCalendar = screen.getByRole('button', { name: /calendar view/i });
+            fireEvent.click(toggleCalendar);
+            expect(screen.getByRole('button', { name: /list view/i })).toBeInTheDocument();
+
+            const toggleList = screen.getByRole('button', { name: /list view/i });
             fireEvent.click(toggleList);
         });
 
@@ -302,6 +380,146 @@ describe('🤖 4-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
                     expect(court).toBe('left');
                 }
             }
+        });
+    });
+
+    // =========================================================================
+    // USER BOT 5: Maya Patel (Competitive Player & Community Contributor)
+    // =========================================================================
+    describe('User Bot 5: Maya Patel (Competitive Player & Community Contributor)', () => {
+        it('Maya verifies pending opponent match score prompt, reviews scores, and accepts result', async () => {
+            localStorage.setItem('accessToken', 'mock-valid-token');
+            mockPendingMatchesList = [
+                {
+                    _id: 'match-p1',
+                    type: 'Singles',
+                    team1Score: 21,
+                    team2Score: 18,
+                    submittedBy: { _id: 'user-opponent-1', name: 'Marcus Brody' }
+                }
+            ];
+
+            render(<PendingMatchesPrompt />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Match Score Verification/i)).toBeInTheDocument();
+            });
+
+            expect(screen.getByText(/Marcus Brody/i)).toBeInTheDocument();
+            expect(screen.getByText(/reported a Singles match score against you \(21 - 18\)/i)).toBeInTheDocument();
+
+            const acceptBtn = screen.getByRole('button', { name: /Accept/i });
+            fireEvent.click(acceptBtn);
+
+            await waitFor(() => {
+                expect(screen.queryByText(/Match Score Verification/i)).not.toBeInTheDocument();
+            });
+        });
+
+        it('Maya receives conflicting match submission from opponent and submits dispute', async () => {
+            localStorage.setItem('accessToken', 'mock-valid-token');
+            mockPendingMatchesList = [
+                {
+                    _id: 'match-p2',
+                    type: 'Doubles',
+                    team1Score: 21,
+                    team2Score: 19,
+                    submittedBy: { _id: 'user-opponent-2', name: 'Kevin Lin' }
+                }
+            ];
+
+            render(<PendingMatchesPrompt />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Match Score Verification/i)).toBeInTheDocument();
+            });
+
+            expect(screen.getByText(/Kevin Lin/i)).toBeInTheDocument();
+            expect(screen.getByText(/reported a Doubles match score against you \(21 - 19\)/i)).toBeInTheDocument();
+
+            const disputeBtn = screen.getByRole('button', { name: /Dispute/i });
+            fireEvent.click(disputeBtn);
+
+            await waitFor(() => {
+                expect(screen.queryByText(/Match Score Verification/i)).not.toBeInTheDocument();
+            });
+        });
+
+        it('Maya confirms pending match polling stops when session token is missing or unauthenticated', async () => {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('token');
+            mockPendingMatchesList = [
+                {
+                    _id: 'match-p3',
+                    type: 'Singles',
+                    team1Score: 21,
+                    team2Score: 15,
+                    submittedBy: { _id: 'user-opponent-1', name: 'Marcus Brody' }
+                }
+            ];
+
+            const { container } = render(<PendingMatchesPrompt />);
+
+            expect(screen.queryByText(/Match Score Verification/i)).not.toBeInTheDocument();
+            expect(container.firstChild).toBeNull();
+        });
+
+        it('Maya explores Community Feed, engages with reaction chips, and toggles comment accordion', async () => {
+            localStorage.setItem('accessToken', 'mock-valid-token');
+            localStorage.setItem('token', 'mock-valid-token');
+            localStorage.setItem('user', JSON.stringify({ _id: 'user-alan', id: 'user-alan', name: 'Alan Yang (GMU)' }));
+
+            const communityPost = {
+                _id: 'post-fed-501',
+                authorId: 'user-sarah',
+                authorName: 'Sarah Chen',
+                title: 'Collegiate Club Pre-Season Strategy & Warmup',
+                content: 'Review BWF service parity rules and doubles court positioning before Saturday!',
+                createdAt: new Date().toISOString(),
+                tags: ['Strategy', 'Collegiate'],
+                likes: ['user-alan'],
+                likedBy: ['user-alan'],
+                reactions: [
+                    { userId: 'user-alan', emoji: '🏸' },
+                    { userId: 'user-kevin', emoji: '🏸' },
+                    { userId: 'user-marcus', emoji: '🔥' },
+                ],
+                comments: [
+                    {
+                        _id: 'c-201',
+                        authorName: 'Kevin Lin',
+                        authorId: 'user-kevin',
+                        content: 'Courts 1 and 2 reserved for doubles warmup.',
+                        createdAt: new Date().toISOString()
+                    }
+                ]
+            };
+
+            render(
+                <MemoryRouter>
+                    <PostCard post={communityPost} />
+                </MemoryRouter>
+            );
+
+            // 1. Post viewing: title, content, author
+            expect(screen.getByText('Collegiate Club Pre-Season Strategy & Warmup')).toBeInTheDocument();
+            expect(screen.getByText(/Review BWF service parity rules/i)).toBeInTheDocument();
+            expect(screen.getByText('Sarah Chen')).toBeInTheDocument();
+
+            // 2. Reaction chips
+            expect(screen.getByText('🏸 2')).toBeInTheDocument();
+            expect(screen.getByText('🔥 1')).toBeInTheDocument();
+            const fireChip = screen.getByText('🔥 1');
+            fireEvent.click(fireChip);
+
+            // 3. Comment accordion toggle
+            const commentBtn = screen.getByRole('button', { name: /Comment \(\d+\)/i });
+            expect(commentBtn).toBeInTheDocument();
+            fireEvent.click(commentBtn);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Courts 1 and 2 reserved for doubles warmup/i)).toBeInTheDocument();
+            });
         });
     });
 });

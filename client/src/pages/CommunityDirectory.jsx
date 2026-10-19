@@ -789,7 +789,7 @@ export default function CommunityDirectory() {
                 </>
             )}
 
-            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} ModalProps={{ disableRestoreFocus: true }}>
                 <Box sx={{ width: { xs: '100vw', sm: 340 }, p: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Advanced Filters</Typography>

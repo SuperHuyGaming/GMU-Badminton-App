@@ -31,6 +31,7 @@ const truncateText = (text, maxLength = 40) => {
 const postLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
 	max: 10,
+	skip: (req) => req.method === "OPTIONS",
 	message: {
 		message: "You are posting too fast. Please wait a few minutes.",
 	},

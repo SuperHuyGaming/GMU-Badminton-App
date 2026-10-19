@@ -9,8 +9,24 @@ if (rawUrl && !rawUrl.startsWith("http")) {
 const socket = io(rawUrl || window.location.origin, {
     transports: ["websocket", "polling"],
     withCredentials: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 2000,
+    reconnectionAttempts: 30,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 10000,
+    timeout: 20000,
+});
+
+socket.on("connect_error", (error) => {
+    const msg = error?.message || "";
+    if (
+        msg.includes("502") ||
+        msg.includes("Bad Gateway") ||
+        msg.includes("xhr poll error") ||
+        msg.includes("websocket error")
+    ) {
+        console.warn("[Socket.io] Backend cold start in progress or transient proxy error (reconnecting...):", msg);
+    } else {
+        console.warn("[Socket.io] Connection error:", msg);
+    }
 });
 
 export default socket;
