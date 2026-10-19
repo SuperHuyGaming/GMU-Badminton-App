@@ -84,6 +84,25 @@ describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
     // 1. Queue Batch Throttling & Clamping Stress Tests
     // =========================================================================
     describe('1. Adversarial Queue Batch Throttling (Strict Clamping to <= 10)', () => {
+        let memSpy = null;
+
+        beforeEach(() => {
+            // Isolate test runner memory so CI runner baseline heap (>200MB) does not trigger heap pressure guards
+            memSpy = jest.spyOn(process, 'memoryUsage').mockReturnValue({
+                heapUsed: 80 * 1024 * 1024,
+                heapTotal: 120 * 1024 * 1024,
+                rss: 160 * 1024 * 1024,
+                external: 5 * 1024 * 1024
+            });
+        });
+
+        afterEach(() => {
+            if (memSpy) {
+                memSpy.mockRestore();
+                memSpy = null;
+            }
+        });
+
         const largeBatchSizes = [11, 15, 25, 50, 100, 1000, 999999, '25', '100', Infinity];
 
         test.each(largeBatchSizes)(
