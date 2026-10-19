@@ -61,6 +61,4 @@ const courtSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-courtSchema.index({ courtNumber: 1 });
-
 module.exports = mongoose.model("Court", courtSchema);

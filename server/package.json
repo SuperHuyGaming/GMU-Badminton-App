@@ -4,7 +4,7 @@
   "scripts": {
     "start": "node --max-old-space-size=450 server.js",
     "dev": "nodemon server.js",
-    "test": "cross-env NODE_ENV=test jest",
+    "test": "cross-env NODE_ENV=test NODE_OPTIONS=--expose-gc jest",
     "lint": "eslint ."
   },
   "keywords": [],

@@ -20,43 +20,59 @@ async function getRacStatus() {
 
 	let finalStatus = "Live status unavailable. Please check the Mason Rec website.";
 
+	let response = null;
+	let rawHtml = null;
+	let $ = null;
+
 	try {
-		const response = await axios.get(
+		response = await axios.get(
 			"https://recreation.gmu.edu/facilities-hours/",
-			{ timeout: 5000 },
+			{
+				timeout: 5000,
+				maxContentLength: 500 * 1024,
+				maxBodyLength: 500 * 1024
+			},
 		);
-		const $ = cheerio.load(response.data);
+		rawHtml = typeof response.data === "string" ? response.data.slice(0, 200 * 1024) : "";
+		response = null;
 
-		// Check for alerts
-		const alertText = $(".alert, .notification").text().toLowerCase();
-		if (alertText.includes("closed") || alertText.includes("level 2")) {
-			finalStatus = "FACILITY CLOSED: University Alert Active";
-		} else {
-			// Check for specific Badminton text
-			let activeCourts = [];
-			$("li").each((index, element) => {
-				const text = $(element).text();
-				if (text.includes("Linn Gym") && text.includes("Badminton")) {
-					activeCourts.push(text.trim());
-				}
-			});
+		$ = cheerio.load(rawHtml);
+		rawHtml = null;
 
-			if (activeCourts.length > 0) {
-				finalStatus = `Badminton Active: ${activeCourts.join(" & ")}`;
+		try {
+			// Check for alerts
+			const alertText = $(".alert, .notification").text().toLowerCase();
+			if (alertText.includes("closed") || alertText.includes("level 2")) {
+				finalStatus = "FACILITY CLOSED: University Alert Active";
 			} else {
-				// Static Fallback Logic
-				const now = new Date();
-				const isDedicatedTime =
-					(now.getDay() === 2 || now.getDay() === 3) &&
-					now.getHours() >= 15 &&
-					now.getHours() <= 19;
+				// Check for specific Badminton text
+				let activeCourts = [];
+				$("li").each((index, element) => {
+					const text = $(element).text();
+					if (text.includes("Linn Gym") && text.includes("Badminton")) {
+						activeCourts.push(text.trim());
+					}
+				});
 
-				if (isDedicatedTime) {
-					finalStatus = "Badminton: Dedicated Play Active (Linn Gym Court B)";
+				if (activeCourts.length > 0) {
+					finalStatus = `Badminton Active: ${activeCourts.join(" & ")}`;
 				} else {
-					finalStatus = "Badminton: Open Rec (Check Linn Gym Court A/B availability)";
+					// Static Fallback Logic
+					const now = new Date();
+					const isDedicatedTime =
+						(now.getDay() === 2 || now.getDay() === 3) &&
+						now.getHours() >= 15 &&
+						now.getHours() <= 19;
+
+					if (isDedicatedTime) {
+						finalStatus = "Badminton: Dedicated Play Active (Linn Gym Court B)";
+					} else {
+						finalStatus = "Badminton: Open Rec (Check Linn Gym Court A/B availability)";
+					}
 				}
 			}
+		} finally {
+			$ = null;
 		}
 
 		if (redisEnabled) {
@@ -66,6 +82,10 @@ async function getRacStatus() {
 	} catch (error) {
 		console.error("Scraping failed:", error.message);
 		return finalStatus;
+	} finally {
+		$ = null;
+		response = null;
+		rawHtml = null;
 	}
 }
 

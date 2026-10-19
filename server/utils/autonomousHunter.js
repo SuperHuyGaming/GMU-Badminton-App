@@ -8,6 +8,45 @@ const Tournament = require('../models/Tournament');
 const { parseDiscoveredWebpage } = require('./aiParser');
 const { huntTournamentSoftwareAndEnqueue } = require('./tournamentSoftwareCrawler');
 
+// Heap pressure threshold for Render 512MB RAM container (200MB heap limit)
+const HEAP_PRESSURE_LIMIT_BYTES = 200 * 1024 * 1024; // 200 MB
+const MAX_HTML_PARSE_LENGTH = 200 * 1024;            // 200 KB
+const AXIOS_BODY_CAP_BYTES = 500 * 1024;             // 500 KB
+
+/**
+ * Checks whether current V8 heap usage exceeds the 200MB threshold.
+ * @returns {{ isPressureHigh: boolean, heapUsedMB: string, heapUsedBytes: number }}
+ */
+function checkHeapPressure() {
+    const { heapUsed } = process.memoryUsage();
+    return {
+        isPressureHigh: heapUsed > HEAP_PRESSURE_LIMIT_BYTES,
+        heapUsedMB: (heapUsed / 1024 / 1024).toFixed(2),
+        heapUsedBytes: heapUsed
+    };
+}
+
+/**
+ * Yields execution to the Node event loop (check phase) to allow V8 GC reclamation.
+ */
+function yieldToEventLoop() {
+    return new Promise(resolve => setImmediate(resolve));
+}
+
+/**
+ * Pauses execution gracefully and invokes V8 GC if exposed.
+ * @param {number} [pauseMs] Duration in milliseconds (default 1000ms, or 50ms in test env)
+ */
+async function pauseForGarbageCollection(pauseMs) {
+    const duration = pauseMs !== undefined ? pauseMs : (process.env.NODE_ENV === 'test' ? 50 : 1000);
+    if (typeof global.gc === 'function') {
+        try {
+            global.gc();
+        } catch (_) {}
+    }
+    await new Promise(resolve => setTimeout(resolve, duration));
+}
+
 /**
  * Computes Levenshtein Distance between two strings.
  * @param {string} a
@@ -146,13 +185,28 @@ function fastHeuristicPreFilter(sourceUrl = '', rawSnippet = '') {
  * - Checks for duplicate tournaments via Levenshtein matching
  * - Creates a ProposedTournament entry for Admin review queue
  */
-async function processDiscoveryQueue(batchSize = 10) {
+async function processDiscoveryQueue(batchSize = 5) {
     console.log("🧠 [Hunter] Starting AI Evaluation of Discovery Queue...");
     
-    const pendingItems = await DiscoveryQueue.find({ status: 'PENDING_AI_REVIEW' }).limit(batchSize);
+    // Clamp batch size to 5–10 items per cycle
+    const safeBatchSize = Math.min(Math.max(1, Number(batchSize) || 5), 10);
+
+    // Heap Pressure Guard: Check before batch execution
+    const initialHeap = checkHeapPressure();
+    if (initialHeap.isPressureHigh) {
+        console.warn(`⚠️ [Hunter Guard] High heap pressure before queue start: ${initialHeap.heapUsedMB} MB exceeds 200 MB limit. Pausing for GC...`);
+        await pauseForGarbageCollection();
+        const retryCheck = checkHeapPressure();
+        if (retryCheck.isPressureHigh) {
+            console.warn(`🛑 [Hunter Guard] Heap remains high (${retryCheck.heapUsedMB} MB). Skipping Discovery Queue cycle to prevent OOM.`);
+            return { processed: 0, approved: 0, rejected: 0, duplicates: 0, pausedDueToHeapPressure: true };
+        }
+    }
+
+    const pendingItems = await DiscoveryQueue.find({ status: 'PENDING_AI_REVIEW' }).limit(safeBatchSize);
     if (pendingItems.length === 0) {
         console.log("🧠 [Hunter] Queue is empty. Nothing to process.");
-        return { processed: 0, approved: 0, rejected: 0, duplicates: 0 };
+        return { processed: 0, approved: 0, rejected: 0, duplicates: 0, pausedDueToHeapPressure: false };
     }
 
     // Load both live tournaments and existing proposals for comprehensive deduplication
@@ -165,8 +219,22 @@ async function processDiscoveryQueue(batchSize = 10) {
     let approvedCount = 0;
     let rejectedCount = 0;
     let duplicateCount = 0;
+    let pausedEarly = false;
 
     for (const item of pendingItems) {
+        // Heap Pressure Guard: Check before each item
+        const itemHeap = checkHeapPressure();
+        if (itemHeap.isPressureHigh) {
+            console.warn(`⚠️ [Hunter Guard] Heap pressure high (${itemHeap.heapUsedMB} MB) at item ${item.sourceUrl}. Pausing...`);
+            await pauseForGarbageCollection();
+            const postPauseHeap = checkHeapPressure();
+            if (postPauseHeap.isPressureHigh) {
+                console.warn(`🛑 [Hunter Guard] Heap remains high (${postPauseHeap.heapUsedMB} MB). Gracefully pausing batch early.`);
+                pausedEarly = true;
+                break;
+            }
+        }
+
         try {
             // Fast Zero-Quota Pre-Filter: instantly reject foreign domains, other sports, non-DMV federations, or past years
             const preFilterReject = fastHeuristicPreFilter(item.sourceUrl, item.rawSnippet);
@@ -183,6 +251,8 @@ async function processDiscoveryQueue(batchSize = 10) {
             let rawText = item.rawSnippet || '';
             
             if (item.sourceType !== 'FACEBOOK' && isSafeExternalUrl(item.sourceUrl)) {
+                let data = null;
+                let $ = null;
                 try {
                     const reqHeaders = {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -191,11 +261,15 @@ async function processDiscoveryQueue(batchSize = 10) {
                         reqHeaders['Cookie'] = 'st=l=1033&c=1&cp=23; sport=2;';
                     }
 
-                    const { data } = await axios.get(item.sourceUrl, {
+                    const response = await axios.get(item.sourceUrl, {
                         headers: reqHeaders,
-                        timeout: 7000
+                        timeout: 7000,
+                        maxContentLength: AXIOS_BODY_CAP_BYTES,
+                        maxBodyLength: AXIOS_BODY_CAP_BYTES
                     });
-                    const $ = cheerio.load(data);
+                    data = response.data;
+                    const htmlToParse = typeof data === 'string' ? data.slice(0, MAX_HTML_PARSE_LENGTH) : '';
+                    $ = cheerio.load(htmlToParse);
                     $('script, style, noscript, nav, footer').remove();
                     const extractedText = $('body').text().replace(/\s+/g, ' ').trim();
                     if (extractedText.length > 50) {
@@ -203,6 +277,9 @@ async function processDiscoveryQueue(batchSize = 10) {
                     }
                 } catch (e) {
                     console.log(`[Hunter] Axios fetch failed for ${item.sourceUrl}. Falling back to snippet:`, e.message);
+                } finally {
+                    $ = null;
+                    data = null;
                 }
             }
 
@@ -337,15 +414,19 @@ async function processDiscoveryQueue(batchSize = 10) {
 
         } catch (err) {
             console.error(`[Hunter] Error evaluating ${item.sourceUrl}:`, err.message);
+        } finally {
+            // Microtask yielding between queue items
+            await yieldToEventLoop();
         }
     }
 
-    console.log(`🧠 [Hunter] Batch finished. Approved: ${approvedCount}, Rejected: ${rejectedCount}, Duplicates: ${duplicateCount}`);
+    console.log(`🧠 [Hunter] Batch finished. Approved: ${approvedCount}, Rejected: ${rejectedCount}, Duplicates: ${duplicateCount}${pausedEarly ? ' (Paused early due to heap pressure)' : ''}`);
     return {
-        processed: pendingItems.length,
+        processed: approvedCount + rejectedCount + duplicateCount,
         approved: approvedCount,
         rejected: rejectedCount,
-        duplicates: duplicateCount
+        duplicates: duplicateCount,
+        pausedDueToHeapPressure: pausedEarly
     };
 }
 
@@ -479,14 +560,20 @@ async function huntRegionalClubsAndEnqueue() {
 
     let count = 0;
     for (const target of targets) {
+        let data = null;
+        let $ = null;
         try {
-            const { data } = await axios.get(target.url, {
+            const response = await axios.get(target.url, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 },
-                timeout: 8000
+                timeout: 8000,
+                maxContentLength: AXIOS_BODY_CAP_BYTES,
+                maxBodyLength: AXIOS_BODY_CAP_BYTES
             });
-            const $ = cheerio.load(data);
+            data = response.data;
+            const htmlToParse = typeof data === 'string' ? data.slice(0, MAX_HTML_PARSE_LENGTH) : '';
+            $ = cheerio.load(htmlToParse);
             $('script, style, noscript, nav, footer').remove();
             const text = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 1000);
 
@@ -503,6 +590,10 @@ async function huntRegionalClubsAndEnqueue() {
             }
         } catch (e) {
             console.warn(`[Hunter] Regional club direct scrape skipped for ${target.name}:`, e.message);
+        } finally {
+            $ = null;
+            data = null;
+            await yieldToEventLoop();
         }
     }
     return { discovered: count };
@@ -518,9 +609,15 @@ async function huntRegionalClubsAndEnqueue() {
 async function runFullAutonomousHunt() {
     console.log("🚀 [Hunter] Launching full Autonomous Tournament Hunter cycle...");
     const regionalResult = await huntRegionalClubsAndEnqueue();
+    await yieldToEventLoop();
+
     const tsResult = await huntTournamentSoftwareAndEnqueue();
+    await yieldToEventLoop();
+
     const googleResult = await huntGoogleForTournaments();
-    const processResult = await processDiscoveryQueue(25);
+    await yieldToEventLoop();
+
+    const processResult = await processDiscoveryQueue(5);
 
     return {
         timestamp: new Date(),
@@ -887,5 +984,11 @@ module.exports = {
     runFullAutonomousHunt,
     getGuaranteedTournamentsList,
     ensureGuaranteedTournaments,
-    wipeAndRestartTournamentSystem
+    wipeAndRestartTournamentSystem,
+    checkHeapPressure,
+    yieldToEventLoop,
+    pauseForGarbageCollection,
+    HEAP_PRESSURE_LIMIT_BYTES,
+    MAX_HTML_PARSE_LENGTH,
+    AXIOS_BODY_CAP_BYTES
 };

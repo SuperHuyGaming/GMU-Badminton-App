@@ -38,76 +38,81 @@ function isDmvRegion(locationText) {
 function parseTournamentSoftwareHtml(html, baseUrl = TS_BASE_URL) {
     if (!html || typeof html !== 'string') return [];
 
-    const $ = cheerio.load(html);
+    const truncatedHtml = html.slice(0, 200 * 1024);
+    let $ = cheerio.load(truncatedHtml);
     const results = [];
 
-    // Check if this is an individual tournament detail page
-    const pageTitle = $('title').text().replace(/\|.*$/i, '').trim();
-    const isSingleTournamentPage = $('a[href*="/tournament/"], link[rel="canonical"]').length > 0 && pageTitle && !pageTitle.toLowerCase().includes('tournamentsoftware');
+    try {
+        // Check if this is an individual tournament detail page
+        const pageTitle = $('title').text().replace(/\|.*$/i, '').trim();
+        const isSingleTournamentPage = $('a[href*="/tournament/"], link[rel="canonical"]').length > 0 && pageTitle && !pageTitle.toLowerCase().includes('tournamentsoftware');
 
-    if (isSingleTournamentPage && pageTitle) {
-        const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
-        const locationElem = $('.location, .venue, .media-body small, .address, .sub-title, p:contains("Club"), p:contains("Center")').first();
-        const location = (locationElem.text() || 'Mid-Atlantic / DMV Region').trim();
-        
-        let dates = '';
-        const dateMatch = bodyText.match(/(\w{3,9}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
-        if (dateMatch) dates = dateMatch[0];
+        if (isSingleTournamentPage && pageTitle) {
+            const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
+            const locationElem = $('.location, .venue, .media-body small, .address, .sub-title, p:contains("Club"), p:contains("Center")').first();
+            const location = (locationElem.text() || 'Mid-Atlantic / DMV Region').trim();
+            
+            let dates = '';
+            const dateMatch = bodyText.match(/(\w{3,9}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
+            if (dateMatch) dates = dateMatch[0];
 
-        const isDmv = isDmvRegion(location) || isDmvRegion(bodyText) || isDmvRegion(pageTitle);
+            const isDmv = isDmvRegion(location) || isDmvRegion(bodyText) || isDmvRegion(pageTitle);
 
-        results.push({
-            tournamentName: pageTitle,
-            sourceUrl: baseUrl,
-            sourceType: 'TOURNAMENT_SOFTWARE',
-            location: location || 'Mid-Atlantic / DMV Region',
-            dates,
-            rawSnippet: bodyText.slice(0, 600),
-            isDmv
+            results.push({
+                tournamentName: pageTitle,
+                sourceUrl: baseUrl,
+                sourceType: 'TOURNAMENT_SOFTWARE',
+                location: location || 'Mid-Atlantic / DMV Region',
+                dates,
+                rawSnippet: bodyText.slice(0, 600),
+                isDmv
+            });
+        }
+
+        // TournamentSoftware find/list views typically render items in .media, .tournament-item, table rows, or list-items
+        $('.media, tr.tournament-row, .tournament-item, li.media').each((_, elem) => {
+            const el = $(elem);
+
+            // Extract title & link
+            const linkElem = el.find('a[href*="/tournament/"], a[href*="/sport/"], h4.media-heading a, .title a').first();
+            const title = (linkElem.text() || el.find('.media-heading, .title').text() || '').trim();
+            const relativeHref = linkElem.attr('href') || '';
+            if (!title || !relativeHref) return;
+
+            let absoluteUrl = relativeHref;
+            try {
+                absoluteUrl = new URL(relativeHref, baseUrl).toString();
+            } catch {
+                absoluteUrl = `${baseUrl}${relativeHref.startsWith('/') ? '' : '/'}${relativeHref}`;
+            }
+
+            // Extract dates and location
+            const textBlock = el.text().replace(/\s+/g, ' ').trim();
+            const locationElem = el.find('.location, .venue, .media-body small, .address');
+            const location = (locationElem.text() || '').trim();
+
+            // Extract dates
+            let dates = '';
+            const dateMatch = textBlock.match(/(\w{3}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
+            if (dateMatch) {
+                dates = dateMatch[0];
+            }
+
+            const isDmv = isDmvRegion(location) || isDmvRegion(textBlock) || isDmvRegion(title);
+
+            results.push({
+                tournamentName: title,
+                sourceUrl: absoluteUrl,
+                sourceType: 'TOURNAMENT_SOFTWARE',
+                location: location || 'Mid-Atlantic / DMV Region',
+                dates,
+                rawSnippet: textBlock.slice(0, 500),
+                isDmv
+            });
         });
+    } finally {
+        $ = null;
     }
-
-    // TournamentSoftware find/list views typically render items in .media, .tournament-item, table rows, or list-items
-    $('.media, tr.tournament-row, .tournament-item, li.media').each((_, elem) => {
-        const el = $(elem);
-
-        // Extract title & link
-        const linkElem = el.find('a[href*="/tournament/"], a[href*="/sport/"], h4.media-heading a, .title a').first();
-        const title = (linkElem.text() || el.find('.media-heading, .title').text() || '').trim();
-        const relativeHref = linkElem.attr('href') || '';
-        if (!title || !relativeHref) return;
-
-        let absoluteUrl = relativeHref;
-        try {
-            absoluteUrl = new URL(relativeHref, baseUrl).toString();
-        } catch {
-            absoluteUrl = `${baseUrl}${relativeHref.startsWith('/') ? '' : '/'}${relativeHref}`;
-        }
-
-        // Extract dates and location
-        const textBlock = el.text().replace(/\s+/g, ' ').trim();
-        const locationElem = el.find('.location, .venue, .media-body small, .address');
-        const location = (locationElem.text() || '').trim();
-
-        // Extract dates
-        let dates = '';
-        const dateMatch = textBlock.match(/(\w{3}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
-        if (dateMatch) {
-            dates = dateMatch[0];
-        }
-
-        const isDmv = isDmvRegion(location) || isDmvRegion(textBlock) || isDmvRegion(title);
-
-        results.push({
-            tournamentName: title,
-            sourceUrl: absoluteUrl,
-            sourceType: 'TOURNAMENT_SOFTWARE',
-            location: location || 'Mid-Atlantic / DMV Region',
-            dates,
-            rawSnippet: textBlock.slice(0, 500),
-            isDmv
-        });
-    });
 
     return results;
 }
@@ -118,19 +123,30 @@ function parseTournamentSoftwareHtml(html, baseUrl = TS_BASE_URL) {
  * @returns {Promise<Array<Object>>} Filtered list of DMV tournaments
  */
 async function crawlTournamentSoftware(query = 'Virginia') {
+    let response = null;
+    let data = null;
     try {
         const searchUrl = `${TS_BASE_URL}/sportselection/setsportselection/2?returnUrl=%2Ftournaments`;
-        const response = await axios.get(searchUrl, {
+        response = await axios.get(searchUrl, {
             headers: TS_HEADERS,
-            timeout: 10000
+            timeout: 10000,
+            maxContentLength: 500 * 1024,
+            maxBodyLength: 500 * 1024
         });
 
-        if (!response.data) return [];
-        const parsed = parseTournamentSoftwareHtml(response.data, TS_BASE_URL);
+        data = response.data;
+        response = null;
+
+        if (!data) return [];
+        const parsed = parseTournamentSoftwareHtml(data, TS_BASE_URL);
+        data = null;
         return parsed.filter(item => item.isDmv);
     } catch (err) {
         console.warn(`[TournamentSoftwareCrawler] Search for '${query}' encountered:`, err.message);
         return [];
+    } finally {
+        response = null;
+        data = null;
     }
 }
 
@@ -174,6 +190,7 @@ async function huntTournamentSoftwareAndEnqueue() {
                 candidates.push(item);
             }
         }
+        await new Promise(r => setImmediate(r));
     }
 
     let newlyEnqueued = 0;
@@ -195,6 +212,8 @@ async function huntTournamentSoftwareAndEnqueue() {
             }
         } catch (err) {
             console.error(`[TS Crawler] Failed to enqueue ${item.sourceUrl}:`, err.message);
+        } finally {
+            await new Promise(r => setImmediate(r));
         }
     }
 
