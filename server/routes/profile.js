@@ -87,6 +87,7 @@ const rateLimit = require("express-rate-limit");
 const profileLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
 	max: 20,
+	skip: (req) => req.method === "OPTIONS",
 	message: { message: "Too many profile updates, please try again later." },
 });
 

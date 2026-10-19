@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, renderHook } from '@testing-library/react';
 
 import {
     calculateServiceCourt,
@@ -12,6 +12,10 @@ import {
 import { computeBracketLayout } from './utils/bracketData';
 import TournamentBracket from './components/TournamentBracket';
 import UmpireDigitalPad from './components/UmpireDigitalPad';
+import PendingMatchesPrompt from './components/PendingMatchesPrompt';
+import { useNotifications } from './hooks/useNotifications';
+import apiFetch from './utils/api';
+import socket from './utils/socket';
 
 vi.mock('./utils/socket', () => ({
     default: {
@@ -21,9 +25,37 @@ vi.mock('./utils/socket', () => ({
     }
 }));
 
+let mockCurrentUser = { _id: 'user-alan', id: 'user-alan', name: 'Alan Yang' };
+const mockSetToastMessage = vi.fn();
+
+vi.mock('./context/AuthContext', () => ({
+    useAuth: () => ({
+        user: mockCurrentUser,
+        setToastMessage: mockSetToastMessage,
+    }),
+}));
+
+let mockApiFetchHandler = null;
+
+vi.mock('./utils/api', () => ({
+    default: vi.fn((endpoint, options) => {
+        if (mockApiFetchHandler) {
+            return mockApiFetchHandler(endpoint, options);
+        }
+        return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve([]),
+        });
+    }),
+}));
+
 describe('CHALLENGER EMPIRICAL ADVERSARIAL STRESS SUITE (M2)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockCurrentUser = { _id: 'user-alan', id: 'user-alan', name: 'Alan Yang' };
+        mockApiFetchHandler = null;
+        localStorage.clear();
     });
 
     // =========================================================================
@@ -515,4 +547,253 @@ describe('CHALLENGER EMPIRICAL ADVERSARIAL STRESS SUITE (M2)', () => {
             expect(screen.getByText('Official Pool Standings')).toBeInTheDocument();
         });
     });
+
+    // =========================================================================
+    // 6. COMPONENT LIFECYCLE, HOOK STABILITY & UNAUTHENTICATED POLLING GUARD
+    // =========================================================================
+    describe('6. Component Lifecycle, Hook Stability & Unauthenticated Polling Guard', () => {
+        it('ADVERSARIAL: PendingMatchesPrompt blocks polling and network requests when unauthenticated (no token)', async () => {
+            localStorage.clear();
+            mockCurrentUser = { _id: 'user-alan', id: 'user-alan' };
+
+            const { container } = render(<PendingMatchesPrompt />);
+
+            // Verify apiFetch was never invoked
+            expect(apiFetch).not.toHaveBeenCalled();
+            // Verify component renders null (no banner rendered)
+            expect(container.firstChild).toBeNull();
+            expect(screen.queryByText(/Match Score Verification/i)).not.toBeInTheDocument();
+        });
+
+        it('ADVERSARIAL: PendingMatchesPrompt blocks polling when user is null even if token exists', async () => {
+            localStorage.setItem('accessToken', 'valid-test-token');
+            mockCurrentUser = null;
+
+            const { container } = render(<PendingMatchesPrompt />);
+
+            expect(apiFetch).not.toHaveBeenCalled();
+            expect(container.firstChild).toBeNull();
+        });
+
+        it('ADVERSARIAL: 100 rapid re-renders with new object identity do not trigger extra API calls or interval leaks', async () => {
+            localStorage.setItem('accessToken', 'valid-test-token');
+            mockCurrentUser = { _id: 'user-alan', id: 'user-alan' };
+            
+            const setIntervalSpy = vi.spyOn(window, 'setInterval');
+            const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+
+            mockApiFetchHandler = vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve([])
+            });
+
+            const { rerender, unmount } = render(<PendingMatchesPrompt />);
+
+            // Initial render triggers exactly 1 API fetch
+            await waitFor(() => {
+                expect(mockApiFetchHandler).toHaveBeenCalledTimes(1);
+            });
+            const initialPollingIntervals = setIntervalSpy.mock.calls.filter(call => call[1] === 30000);
+            expect(initialPollingIntervals).toHaveLength(1);
+
+            // Re-render 100 times simulating parent state changes with new object identities
+            for (let i = 0; i < 100; i++) {
+                rerender(<PendingMatchesPrompt />);
+            }
+
+            // Empirical proof: fetch count and 30s interval count remain exactly 1
+            expect(mockApiFetchHandler).toHaveBeenCalledTimes(1);
+            const postRerenderPollingIntervals = setIntervalSpy.mock.calls.filter(call => call[1] === 30000);
+            expect(postRerenderPollingIntervals).toHaveLength(1);
+
+            // Unmount triggers interval cleanup
+            unmount();
+            expect(clearIntervalSpy).toHaveBeenCalled();
+
+            setIntervalSpy.mockRestore();
+            clearIntervalSpy.mockRestore();
+        });
+
+        it('ADVERSARIAL: Submitter exclusion correctly filters out self-submitted matches in both string and object formats', async () => {
+            localStorage.setItem('accessToken', 'valid-test-token');
+            mockCurrentUser = { _id: 'user-alan', id: 'user-alan' };
+
+            mockApiFetchHandler = vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve([
+                    {
+                        _id: 'match-self-string',
+                        type: 'Singles',
+                        team1Score: 21,
+                        team2Score: 19,
+                        submittedBy: 'user-alan' // Self as string
+                    },
+                    {
+                        _id: 'match-self-object',
+                        type: 'Singles',
+                        team1Score: 21,
+                        team2Score: 15,
+                        submittedBy: { _id: 'user-alan', name: 'Alan Yang' } // Self as object
+                    },
+                    {
+                        _id: 'match-opponent',
+                        type: 'Doubles',
+                        team1Score: 21,
+                        team2Score: 17,
+                        submittedBy: { _id: 'user-sarah', name: 'Sarah Chen' } // Opponent
+                    }
+                ])
+            });
+
+            render(<PendingMatchesPrompt />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Match Score Verification/i)).toBeInTheDocument();
+            });
+
+            // Sarah Chen's match should be rendered
+            expect(screen.getByText(/Sarah Chen/i)).toBeInTheDocument();
+            expect(screen.getByText(/reported a Doubles match score against you \(21 - 17\)/i)).toBeInTheDocument();
+
+            // Self-submitted matches must be completely filtered out
+            const alerts = screen.getAllByRole('alert');
+            expect(alerts).toHaveLength(1);
+        });
+
+        it('ADVERSARIAL: PendingMatchesPrompt handles malformed API responses (object, 500, network rejection) without crashing', async () => {
+            localStorage.setItem('accessToken', 'valid-test-token');
+            mockCurrentUser = { _id: 'user-alan', id: 'user-alan' };
+
+            // Scenario A: API returns non-array object
+            mockApiFetchHandler = vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({ error: 'Server busy', retryAfter: 30 })
+            });
+
+            const { rerender } = render(<PendingMatchesPrompt />);
+            await waitFor(() => {
+                expect(mockApiFetchHandler).toHaveBeenCalled();
+            });
+            expect(screen.queryByText(/Match Score Verification/i)).not.toBeInTheDocument();
+
+            // Scenario B: API throws network error (rejection)
+            mockApiFetchHandler = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+            rerender(<PendingMatchesPrompt />);
+            expect(screen.queryByText(/Match Score Verification/i)).not.toBeInTheDocument();
+        });
+
+        it('ADVERSARIAL: Action buttons disable while confirm or dispute is in flight to prevent double-submit', async () => {
+            localStorage.setItem('accessToken', 'valid-test-token');
+            mockCurrentUser = { _id: 'user-alan', id: 'user-alan' };
+
+            let resolveConfirm;
+            const confirmPromise = new Promise((resolve) => {
+                resolveConfirm = resolve;
+            });
+
+            mockApiFetchHandler = vi.fn((endpoint, options) => {
+                if (endpoint === '/api/matches/pending') {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        json: () => Promise.resolve([
+                            {
+                                _id: 'match-concur-1',
+                                type: 'Singles',
+                                team1Score: 21,
+                                team2Score: 14,
+                                submittedBy: { _id: 'user-opponent', name: 'Opponent' }
+                            }
+                        ])
+                    });
+                }
+                if (endpoint.includes('/confirm') && options?.method === 'PUT') {
+                    return confirmPromise;
+                }
+                return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+            });
+
+            render(<PendingMatchesPrompt />);
+
+            await waitFor(() => {
+                expect(screen.getByRole('button', { name: /Accept/i })).toBeInTheDocument();
+            });
+
+            const acceptBtn = screen.getByRole('button', { name: /Accept/i });
+            const disputeBtn = screen.getByRole('button', { name: /Dispute/i });
+
+            // Click Accept
+            fireEvent.click(acceptBtn);
+
+            // While request is in flight, both buttons must be disabled
+            await waitFor(() => {
+                expect(acceptBtn).toBeDisabled();
+                expect(disputeBtn).toBeDisabled();
+            });
+
+            // Resolve API request
+            resolveConfirm({ ok: true, status: 200, json: () => Promise.resolve({ success: true }) });
+
+            // After completion, match prompt is removed
+            await waitFor(() => {
+                expect(screen.queryByText(/Match Score Verification/i)).not.toBeInTheDocument();
+            });
+        });
+
+        it('ADVERSARIAL: useNotifications prevents socket thrashing when non-ID user properties change 50 times', async () => {
+            localStorage.setItem('accessToken', 'valid-test-token');
+            mockCurrentUser = { _id: 'user-alan', id: 'user-alan', rating: 1200, avatar: 'avatar1.png' };
+
+            mockApiFetchHandler = vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve([])
+            });
+
+            const { rerender } = renderHook(() => useNotifications());
+
+            await waitFor(() => {
+                expect(mockApiFetchHandler).toHaveBeenCalled();
+            });
+
+            // Initial mount should emit joinUserRoom once
+            expect(socket.emit).toHaveBeenCalledTimes(1);
+            expect(socket.emit).toHaveBeenCalledWith('joinUserRoom', 'user-alan');
+            expect(socket.on).toHaveBeenCalledWith('newNotification', expect.any(Function));
+            expect(socket.on).toHaveBeenCalledWith('privateMessage', expect.any(Function));
+
+            // Mutate user profile attributes 50 times (rating, avatar, name)
+            for (let i = 0; i < 50; i++) {
+                mockCurrentUser = {
+                    _id: 'user-alan',
+                    id: 'user-alan',
+                    rating: 1200 + i,
+                    avatar: `avatar_${i}.png`
+                };
+                rerender();
+            }
+
+            // Empirical proof: socket.emit and socket.on counts are strictly preserved (no thrashing)
+            expect(socket.emit).toHaveBeenCalledTimes(1);
+            // socket.off was not called during profile updates
+            expect(socket.off).not.toHaveBeenCalled();
+        });
+
+        it('ADVERSARIAL: useNotifications suppresses room joins and API calls when unauthenticated (no token)', async () => {
+            localStorage.clear();
+            mockCurrentUser = { _id: 'user-alan', id: 'user-alan' };
+
+            mockApiFetchHandler = vi.fn();
+
+            renderHook(() => useNotifications());
+
+            // Without token, socket room join must not be emitted and no API calls made
+            expect(socket.emit).not.toHaveBeenCalled();
+            expect(mockApiFetchHandler).not.toHaveBeenCalled();
+        });
+    });
 });
+

@@ -1043,7 +1043,7 @@ END:VCALENDAR`;
             </Dialog>
 
             {/* ADVANCED FILTERS DRAWER */}
-            <Drawer anchor="right" open={filtersOpen} onClose={() => setFiltersOpen(false)}>
+            <Drawer anchor="right" open={filtersOpen} onClose={() => setFiltersOpen(false)} ModalProps={{ disableRestoreFocus: true }}>
                 <Box sx={{ width: 320, p: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                         <Typography variant="h6" fontWeight="bold">Tournament Filters</Typography>

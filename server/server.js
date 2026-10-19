@@ -9,21 +9,23 @@ const { getRacStatus, getWeeklySchedule } = require("./services/scraper");
 
 const { initializeGemini } = require("./utils/aiCoach");
 
-mongoose
-	.connect(process.env.MONGO_URI)
-	.then(async () => {
-		console.log("Successfully connected to MongoDB!");
-		initializeGemini();
-		require("./utils/seedFeed")();
-		try {
-			const { ensureGuaranteedTournaments } = require("./utils/autonomousHunter");
-			await ensureGuaranteedTournaments();
-			console.log("🏸 [Tournament Engine] Verified live tournaments initialized on DB connect.");
-		} catch (err) {
-			console.error("❌ Failed to initialize tournaments on DB connect:", err.message);
-		}
-	})
-	.catch((error) => console.error("MongoDB connection failed:", error));
+if (process.env.NODE_ENV !== "test") {
+	mongoose
+		.connect(process.env.MONGO_URI)
+		.then(async () => {
+			console.log("Successfully connected to MongoDB!");
+			initializeGemini();
+			require("./utils/seedFeed")();
+			try {
+				const { ensureGuaranteedTournaments } = require("./utils/autonomousHunter");
+				await ensureGuaranteedTournaments();
+				console.log("🏸 [Tournament Engine] Verified live tournaments initialized on DB connect.");
+			} catch (err) {
+				console.error("❌ Failed to initialize tournaments on DB connect:", err.message);
+			}
+		})
+		.catch((error) => console.error("MongoDB connection failed:", error));
+}
 
 const helmet = require("helmet");
 const mongoSanitize = require("express-mongo-sanitize");
@@ -32,23 +34,39 @@ const rateLimit = require("express-rate-limit");
 const app = express();
 app.set('trust proxy', 1); // Trust the first proxy (Render's load balancer) for correct rate limiting IP detection
 
-const metricsMiddleware = promBundle({includeMethod: true});
-app.use(metricsMiddleware);
-
-// CORS Configuration - MUST precede security & rate-limiting middleware to ensure headers on all responses
-const allowedOrigins = [
+// CORS Configuration - MUST precede metrics & rate-limiting middleware
+const staticAllowedOrigins = [
 	"http://localhost:5173", 
 	"http://localhost:3000",
+	"http://localhost:4173",
+	"http://127.0.0.1:5173",
+	"http://127.0.0.1:3000",
+	"http://127.0.0.1:4173",
+	"https://gmu-frontend-staging.onrender.com",
+	"https://gmu-badminton-app.onrender.com",
 	"https://gmu-badminton-openplayschedule.onrender.com",
-	process.env.FRONTEND_URL
-].filter(Boolean);
+	"https://gmu-badminton.onrender.com"
+];
+
+const envOrigins = (process.env.FRONTEND_URL || "")
+	.split(",")
+	.map((s) => s.trim().replace(/\/+$/, ""))
+	.filter(Boolean);
+
+const additionalOrigins = (process.env.ADDITIONAL_ALLOWED_ORIGINS || "")
+	.split(",")
+	.map((s) => s.trim().replace(/\/+$/, ""))
+	.filter(Boolean);
+
+const allowedOrigins = [...new Set([...staticAllowedOrigins, ...envOrigins, ...additionalOrigins])];
 
 const isOriginAllowed = (origin) => {
 	if (!origin) return true;
 	const norm = origin.toLowerCase().trim().replace(/\/+$/, "");
-	if (allowedOrigins.some(o => o && o.toLowerCase().trim().replace(/\/+$/, "") === norm)) return true;
+	if (allowedOrigins.some((o) => o && o.toLowerCase().trim().replace(/\/+$/, "") === norm)) return true;
 	if (/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(norm)) return true;
-	if (/^https:\/\/([a-z0-9-]+\.)?gmu-[a-z0-9-]+\.onrender\.com$/.test(norm)) return true;
+	if (/^https:\/\/([a-z0-9-]+\.)*gmu-[a-z0-9-]+\.onrender\.com$/.test(norm)) return true;
+	if (/^https:\/\/([a-z0-9-]+\.)*[a-z0-9-]*(gmu|badminton|mason)[a-z0-9-]*\.onrender\.com$/.test(norm)) return true;
 	return false;
 };
 
@@ -57,14 +75,22 @@ const corsOptions = {
 		if (isOriginAllowed(origin)) {
 			callback(null, true);
 		} else {
-			callback(new Error('Not allowed by CORS'));
+			callback(null, false);
 		}
 	},
-	credentials: true
+	credentials: true,
+	methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+	allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "x-scraper-secret"],
+	exposedHeaders: ["Content-Range", "X-Content-Range"],
+	maxAge: 86400,
+	optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
+
+const metricsMiddleware = promBundle({includeMethod: true});
+app.use(metricsMiddleware);
 
 // 1. HTTP Security Headers
 app.use(helmet());
@@ -78,7 +104,7 @@ const RedisStore = require("rate-limit-redis").default;
 // 3. Global API Rate Limiting (Backed by Redis if available)
 const apiLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 1000, // Limit each IP to 1000 requests per `window`
+	max: Number(process.env.RATE_LIMIT_MAX) || 5000, // Limit each IP to 5000 requests per `window`
 	standardHeaders: true,
 	legacyHeaders: false,
 	skip: (req) => req.method === "OPTIONS", // Never rate limit CORS preflight requests
@@ -98,9 +124,15 @@ const server = http.createServer(app);
 const io = new Server(server, {
 	cors: {
 		origin: corsOptions.origin,
-		methods: ["GET", "POST", "PUT", "DELETE"],
+		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		credentials: true
 	},
+	transports: ["websocket", "polling"],
+	pingInterval: 10000,
+	pingTimeout: 5000,
+	connectTimeout: 20000,
+	allowUpgrades: true,
+	cookie: false
 });
 
 // Setup Socket.io Redis Adapter for multi-instance scaling
@@ -162,17 +194,36 @@ app.use("/api/search", require("./routes/search"));
 // Make io accessible globally
 app.set("io", io);
 
-const onlineUsers = new Set();
+// Multi-tab tracking: Map<userId, Set<socketId>>
+const onlineUsers = new Map();
 
 io.on("connection", (socket) => {
 	console.log("New socket connection:", socket.id);
 	
 	socket.on("joinUserRoom", async (userId) => {
+		if (!userId || typeof userId !== "string" || !userId.trim()) {
+			return;
+		}
+		userId = userId.trim();
+
+		// If socket previously joined under a different userId, clean up previous association
+		if (socket.userId && socket.userId !== userId && onlineUsers.has(socket.userId)) {
+			onlineUsers.get(socket.userId).delete(socket.id);
+			if (onlineUsers.get(socket.userId).size === 0) {
+				onlineUsers.delete(socket.userId);
+			}
+		}
+
 		socket.userId = userId;
 		socket.join(userId);
-		onlineUsers.add(userId);
-		io.emit("onlineUsersUpdate", Array.from(onlineUsers));
-		console.log(`User ${userId} joined their personal room`);
+
+		if (!onlineUsers.has(userId)) {
+			onlineUsers.set(userId, new Set());
+		}
+		onlineUsers.get(userId).add(socket.id);
+
+		io.emit("onlineUsersUpdate", Array.from(onlineUsers.keys()));
+		console.log(`User ${userId} joined their personal room (socket: ${socket.id})`);
 		
 		// Also update lastActive on connect just in case
 		try {
@@ -205,15 +256,21 @@ io.on("connection", (socket) => {
 
 	socket.on("disconnect", async () => {
 		if (socket.userId) {
-			onlineUsers.delete(socket.userId);
-			io.emit("onlineUsersUpdate", Array.from(onlineUsers));
-			socket.broadcast.emit("stopTyping", { senderId: socket.userId });
-			
-			try {
-				const User = require("./models/User");
-				await User.findByIdAndUpdate(socket.userId, { lastActive: Date.now() });
-			} catch (err) {
-				console.error("Error updating lastActive on disconnect:", err);
+			const userSockets = onlineUsers.get(socket.userId);
+			if (userSockets) {
+				userSockets.delete(socket.id);
+				if (userSockets.size === 0) {
+					onlineUsers.delete(socket.userId);
+					io.emit("onlineUsersUpdate", Array.from(onlineUsers.keys()));
+					socket.broadcast.emit("stopTyping", { senderId: socket.userId });
+					
+					try {
+						const User = require("./models/User");
+						await User.findByIdAndUpdate(socket.userId, { lastActive: Date.now() });
+					} catch (err) {
+						console.error("Error updating lastActive on disconnect:", err);
+					}
+				}
 			}
 		}
 		console.log("Socket disconnected:", socket.id);
@@ -243,8 +300,11 @@ app.get("/api/schedule/weekly", (req, res, next) => {
 // Global error handler must be defined after all other routes and middleware
 app.use(errorHandler);
 
-server.listen(PORT, () => {
-	console.log(`Server is running on port: ${PORT}`);
-});
+if (process.env.NODE_ENV !== "test") {
+	server.listen(PORT, () => {
+		console.log(`Server is running on port: ${PORT}`);
+	});
+	require('./utils/cronJobs')();
+}
 
-require('./utils/cronJobs')();
+module.exports = { app, server, io, isOriginAllowed, onlineUsers, corsOptions, apiLimiter };

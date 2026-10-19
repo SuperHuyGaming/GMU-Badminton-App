@@ -14,6 +14,7 @@ const { runFullAutonomousHunt, processDiscoveryQueue, wipeAndRestartTournamentSy
 const adminActionLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
+    skip: (req) => req.method === "OPTIONS",
     message: { message: "Too many admin actions from this IP, please try again after 15 minutes" }
 });
 
