@@ -263,6 +263,43 @@ router.put("/:id", async (req, res) => {
 });
 
 /**
+ * DELETE /api/admin/tournaments/:id
+ * Permanently removes a live tournament from the public directory.
+ * Flushes the Redis tournaments cache so the deletion is reflected immediately.
+ */
+router.delete("/:id", adminActionLimiter, async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid tournament ID format." });
+        }
+
+        const tournament = await Tournament.findByIdAndDelete(id);
+        if (!tournament) {
+            return res.status(404).json({ message: "Tournament not found." });
+        }
+
+        // Flush public tournaments cache
+        try {
+            const keys = await redis.keys("tournaments:*");
+            if (keys.length > 0) await redis.del(keys);
+        } catch (cacheErr) {
+            console.warn("[AdminTournaments] Non-fatal cache flush error on delete:", cacheErr.message);
+        }
+
+        // Emit real-time deletion event
+        const io = req.io || req.app?.get("io");
+        if (io) {
+            io.emit("tournamentDeleted", { _id: id });
+        }
+
+        return res.status(200).json({ message: "Tournament deleted successfully.", _id: id });
+    } catch (err) {
+        return res.status(500).json({ message: "Server error deleting tournament", error: err.message });
+    }
+});
+
+/**
  * POST /api/admin/tournaments/manual
  * Manually creates a new tournament in the tournaments collection with isOpenTournament: true.
  * Emits tournamentApproved event via Socket.io if available.

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
     Box, Typography, Card, CardContent, CardActions, Button, 
-    Alert, Grid, Dialog, DialogTitle, DialogContent, ToggleButton, ToggleButtonGroup,
+    Alert, Grid, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
+    ToggleButton, ToggleButtonGroup,
     Drawer, Avatar, AvatarGroup, IconButton, FormGroup, FormControlLabel, Checkbox, 
     Divider, Chip, Tooltip, TextField, InputAdornment, Skeleton, Stack, Badge, Paper,
     Switch, Tabs, Tab
@@ -21,6 +22,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import SportsTennisIcon from '@mui/icons-material/SportsTennis';
 import SportsScoreIcon from '@mui/icons-material/SportsScore';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
@@ -43,6 +45,10 @@ export default function Tournaments() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [rsvpLoading, setRsvpLoading] = useState({});
+
+    // Admin delete state
+    const [deleteConfirmTournament, setDeleteConfirmTournament] = useState(null); // tournament object awaiting deletion
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     // View state
     const [viewMode, setViewMode] = useState(searchParams.get('view') || 'list'); // 'list' | 'calendar'
@@ -238,7 +244,30 @@ END:VCALENDAR`;
         return attendees.some(a => (typeof a === 'string' ? a : a._id || a.id) === currentUserId);
     }, [user]);
 
+    // Admin: permanently delete a tournament
+    const handleAdminDelete = async () => {
+        if (!deleteConfirmTournament) return;
+        const tId = deleteConfirmTournament._id || deleteConfirmTournament.id;
+        setDeleteLoading(true);
+        try {
+            const res = await apiFetch(`/api/admin/tournaments/${tId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Delete failed');
+            toast.success(`"${deleteConfirmTournament.tournamentName}" deleted.`);
+            setTournaments(prev => prev.filter(t => (t._id || t.id) !== tId));
+            if (selectedTournament && (selectedTournament._id || selectedTournament.id) === tId) {
+                setSelectedTournament(null);
+            }
+        } catch (err) {
+            toast.error(err.message || 'Could not delete tournament.');
+        } finally {
+            setDeleteLoading(false);
+            setDeleteConfirmTournament(null);
+        }
+    };
+
     // Active filters count
+
     const activeFilterCount = (searchQuery ? 1 : 0) + 
                              (filterWeekend ? 1 : 0) + 
                              (!filterUpcoming ? 1 : 0) + 
@@ -568,10 +597,25 @@ END:VCALENDAR`;
                                     )}
 
                                     <CardContent sx={{ flexGrow: 1, pb: 1 }}>
-                                        {/* Host Club / University Tag */}
-                                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                            {tournament.hostUniversity || tournament.hostClubHandle || 'Collegiate Tournament'}
-                                        </Typography>
+                                        {/* Host Club / University Tag + Admin Delete */}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                                {tournament.hostUniversity || tournament.hostClubHandle || 'Collegiate Tournament'}
+                                            </Typography>
+                                            {user?.role === 'admin' && (
+                                                <Tooltip title="Admin: Delete this tournament">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="error"
+                                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmTournament(tournament); }}
+                                                        aria-label={`Delete tournament ${tournament.tournamentName}`}
+                                                        sx={{ ml: 1, opacity: 0.7, '&:hover': { opacity: 1 } }}
+                                                    >
+                                                        <DeleteForeverIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
+                                        </Box>
 
                                         {/* Tournament Title */}
                                         <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.3, mt: 0.5 }}>
@@ -1125,6 +1169,46 @@ END:VCALENDAR`;
                     </Stack>
                 </Box>
             </Drawer>
+            {/* Admin Delete Confirmation Dialog */}
+
+            <Dialog
+                open={Boolean(deleteConfirmTournament)}
+                onClose={() => !deleteLoading && setDeleteConfirmTournament(null)}
+                maxWidth="xs"
+                fullWidth
+                disableRestoreFocus
+            >
+                <DialogTitle sx={{ fontWeight: 700, color: 'error.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <DeleteForeverIcon /> Delete Tournament?
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to permanently delete{' '}
+                        <strong>"{deleteConfirmTournament?.tournamentName}"</strong>?
+                        {' '}This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+                    <Button
+                        onClick={() => setDeleteConfirmTournament(null)}
+                        disabled={deleteLoading}
+                        variant="outlined"
+                        sx={{ borderRadius: 2, fontWeight: 600 }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleAdminDelete}
+                        disabled={deleteLoading}
+                        variant="contained"
+                        color="error"
+                        startIcon={<DeleteForeverIcon />}
+                        sx={{ borderRadius: 2, fontWeight: 700 }}
+                    >
+                        {deleteLoading ? 'Deleting…' : 'Delete'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }
