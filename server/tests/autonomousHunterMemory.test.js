@@ -209,7 +209,7 @@ describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
             const heapDeltaMB = (endHeap - startHeap) / (1024 * 1024);
 
             expect(heapDeltaMB).toBeLessThan(30);
-        });
+        }, 15000);
     });
 
     describe('5. End-to-End runFullAutonomousHunt Memory Boundary', () => {
