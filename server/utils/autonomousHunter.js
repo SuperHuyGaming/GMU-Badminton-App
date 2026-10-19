@@ -7,6 +7,7 @@ const ProposedTournament = require('../models/ProposedTournament');
 const Tournament = require('../models/Tournament');
 const { parseDiscoveredWebpage } = require('./aiParser');
 const { huntTournamentSoftwareAndEnqueue } = require('./tournamentSoftwareCrawler');
+const { sanitizeScrapedTitle } = require('./sanitizeScrapedTitle');
 
 // Heap pressure threshold for Render 512MB RAM container (200MB heap limit default, configurable via env)
 const HEAP_PRESSURE_LIMIT_BYTES = (parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || 200) * 1024 * 1024; // 200 MB
@@ -294,7 +295,21 @@ async function processDiscoveryQueue(batchSize = 5) {
                 continue;
             }
 
+            // Sanitize tournament name: strip HTML nav boilerplate like "Skip to main content", etc.
+            if (extracted.tournamentName) {
+                const cleaned = sanitizeScrapedTitle(extracted.tournamentName);
+                if (!cleaned) {
+                    console.log(`[Hunter] AI Rejected (Garbage title after sanitization): "${extracted.tournamentName}" @ ${item.sourceUrl}`);
+                    item.status = 'REJECTED_BY_AI';
+                    await item.save();
+                    rejectedCount++;
+                    continue;
+                }
+                extracted.tournamentName = cleaned;
+            }
+
             // Guard against past tournament year in title (e.g. 2025, 2024, etc.)
+
             const pastYearMatch = (extracted.tournamentName || '').match(/\b(201\d|202[0-5])\b/);
             if (pastYearMatch) {
                 console.log(`[Hunter] AI Rejected (Past Tournament Year ${pastYearMatch[0]}): "${extracted.tournamentName}"`);
