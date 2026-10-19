@@ -208,6 +208,25 @@ describe("Autonomous Tournament Hunter Suite", () => {
     });
 
     describe("4. Discovery Queue Processing & AI Evaluation", () => {
+        let memSpy = null;
+
+        beforeEach(() => {
+            // Isolate test runner memory so CI or cumulative multi-suite memory (>200MB) does not trigger heap guards
+            memSpy = jest.spyOn(process, 'memoryUsage').mockReturnValue({
+                heapUsed: 80 * 1024 * 1024,
+                heapTotal: 120 * 1024 * 1024,
+                rss: 160 * 1024 * 1024,
+                external: 5 * 1024 * 1024
+            });
+        });
+
+        afterEach(() => {
+            if (memSpy) {
+                memSpy.mockRestore();
+                memSpy = null;
+            }
+        });
+
         test("processes discovery queue items and routes approved to ProposedTournament", async () => {
             const mockFind = jest.spyOn(DiscoveryQueue, "find").mockReturnValue({
                 limit: jest.fn().mockResolvedValue([

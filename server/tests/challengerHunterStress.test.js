@@ -184,12 +184,23 @@ describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
             jest.spyOn(ProposedTournament, 'find').mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
             jest.spyOn(ProposedTournament, 'create').mockResolvedValue({ _id: 'mock_created_proposal' });
 
-            const result = await processDiscoveryQueue(1);
+            const memSpy = jest.spyOn(process, 'memoryUsage').mockReturnValue({
+                heapUsed: 80 * 1024 * 1024,
+                heapTotal: 120 * 1024 * 1024,
+                rss: 160 * 1024 * 1024,
+                external: 5 * 1024 * 1024
+            });
 
-            // Item was still processed using snippet fallback despite >500KB external page
-            expect(result).toBeDefined();
-            expect(result.approved).toBe(1);
-            expect(mockItem.save).toHaveBeenCalled();
+            try {
+                const result = await processDiscoveryQueue(1);
+
+                // Item was still processed using snippet fallback despite >500KB external page
+                expect(result).toBeDefined();
+                expect(result.approved).toBe(1);
+                expect(mockItem.save).toHaveBeenCalled();
+            } finally {
+                memSpy.mockRestore();
+            }
         });
 
         test('crawlTournamentSoftware handles >500KB response error cleanly returning empty array', async () => {
@@ -540,21 +551,32 @@ describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
         });
 
         test('Safe batch size clamping prevents excessive heap allocation on extreme inputs', async () => {
-            const findSpy = jest.spyOn(DiscoveryQueue, 'find').mockReturnValue({
-                limit: jest.fn().mockResolvedValue([])
+            const memSpy = jest.spyOn(process, 'memoryUsage').mockReturnValue({
+                heapUsed: 80 * 1024 * 1024,
+                heapTotal: 120 * 1024 * 1024,
+                rss: 160 * 1024 * 1024,
+                external: 5 * 1024 * 1024
             });
 
-            // Oversized batch request (e.g. 50 or 100) must clamp to max 10
-            await processDiscoveryQueue(100);
-            expect(findSpy().limit).toHaveBeenCalledWith(10);
+            try {
+                const findSpy = jest.spyOn(DiscoveryQueue, 'find').mockReturnValue({
+                    limit: jest.fn().mockResolvedValue([])
+                });
 
-            // Negative or zero batch size must clamp to min 1 or default 5
-            await processDiscoveryQueue(-10);
-            expect(findSpy().limit).toHaveBeenCalledWith(1);
+                // Oversized batch request (e.g. 50 or 100) must clamp to max 10
+                await processDiscoveryQueue(100);
+                expect(findSpy().limit).toHaveBeenCalledWith(10);
 
-            // Non-numeric batch size must clamp to default 5
-            await processDiscoveryQueue("invalid");
-            expect(findSpy().limit).toHaveBeenCalledWith(5);
+                // Negative or zero batch size must clamp to min 1 or default 5
+                await processDiscoveryQueue(-10);
+                expect(findSpy().limit).toHaveBeenCalledWith(1);
+
+                // Non-numeric batch size must clamp to default 5
+                await processDiscoveryQueue("invalid");
+                expect(findSpy().limit).toHaveBeenCalledWith(5);
+            } finally {
+                memSpy.mockRestore();
+            }
         });
     });
 });

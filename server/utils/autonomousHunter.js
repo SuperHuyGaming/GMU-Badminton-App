@@ -19,7 +19,7 @@ const AXIOS_BODY_CAP_BYTES = 500 * 1024;             // 500 KB
  * @returns {number}
  */
 function getHeapPressureLimitBytes() {
-    return (parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || 200) * 1024 * 1024;
+    return Math.max(1, parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || 200) * 1024 * 1024;
 }
 
 /**
@@ -205,7 +205,8 @@ async function processDiscoveryQueue(batchSize = 5) {
     // Heap Pressure Guard: Check before batch execution
     const initialHeap = checkHeapPressure();
     if (initialHeap.isPressureHigh) {
-        console.warn(`⚠️ [Hunter Guard] High heap pressure before queue start: ${initialHeap.heapUsedMB} MB exceeds 200 MB limit. Pausing for GC...`);
+        const limitMB = (getHeapPressureLimitBytes() / 1024 / 1024).toFixed(0);
+        console.warn(`⚠️ [Hunter Guard] High heap pressure before queue start: ${initialHeap.heapUsedMB} MB exceeds ${limitMB} MB limit. Pausing for GC...`);
         await pauseForGarbageCollection();
         const retryCheck = checkHeapPressure();
         if (retryCheck.isPressureHigh) {
