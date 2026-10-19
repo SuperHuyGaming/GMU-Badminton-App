@@ -13,11 +13,17 @@ export default function PendingMatchesPrompt() {
         if (!user) return;
         try {
             const res = await apiFetch('/api/matches/pending');
+            if (!res.ok) return;
             const matches = await res.json();
+            if (!Array.isArray(matches)) return;
+            const currentId = user.id || user._id;
             // Only show matches where the current user is NOT the submitter
             // i.e. the current user needs to confirm it
             const requiresConfirmation = matches.filter(
-                (m) => m.submittedBy._id !== user.id && m.submittedBy._id !== user._id
+                (m) => {
+                    const submitterId = m?.submittedBy?._id || m?.submittedBy;
+                    return submitterId && submitterId !== currentId;
+                }
             );
             setPendingMatches(requiresConfirmation);
         } catch (error) {
