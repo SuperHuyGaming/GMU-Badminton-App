@@ -151,13 +151,15 @@ describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
                 data: '<html><body><h1>Tournament 2026</h1></body></html>'
             });
 
-            const result = await processDiscoveryQueue(25);
+            try {
+                const result = await processDiscoveryQueue(25);
 
-            expect(fetchedCount).toBe(10);
-            expect(result.approved).toBe(10);
-            expect(axiosSpy).toHaveBeenCalledTimes(10); // Exactly 10 calls, NOT 25
-
-            axiosSpy.mockRestore();
+                expect(fetchedCount).toBe(10);
+                expect(result.approved).toBe(10);
+                expect(axiosSpy).toHaveBeenCalledTimes(10); // Exactly 10 calls, NOT 25
+            } finally {
+                axiosSpy.mockRestore();
+            }
         });
 
         test('handles negative, zero, and malformed batch sizes gracefully', async () => {
@@ -239,20 +241,10 @@ describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
                 expect(heapGrowthMB).toBeLessThan(35);
 
                 // In fresh/isolated test runners (< 180MB initial heap), assert absolute nominal ceiling (< 200MB);
-                // in cumulative multi-suite CI runs, verify isolated nominal baseline under 200MB limit
+                // in cumulative multi-suite CI runs, differential growth delta (< 35MB) deterministically verifies bounded hunt memory.
                 if (initialHeap < 180 * 1024 * 1024) {
                     expect(peakHeapMB).toBeLessThan(200);
                     expect(peakHeapBytes).toBeLessThan(HEAP_PRESSURE_LIMIT_BYTES);
-                } else {
-                    const mockMemSpy = jest.spyOn(process, 'memoryUsage').mockReturnValue({
-                        heapUsed: 95 * 1024 * 1024,
-                        heapTotal: 140 * 1024 * 1024,
-                        rss: 190 * 1024 * 1024,
-                        external: 5 * 1024 * 1024
-                    });
-                    const mockHeapMB = process.memoryUsage().heapUsed / (1024 * 1024);
-                    expect(mockHeapMB).toBeLessThan(200);
-                    mockMemSpy.mockRestore();
                 }
             } finally {
                 if (originalHeapEnv !== undefined) {
