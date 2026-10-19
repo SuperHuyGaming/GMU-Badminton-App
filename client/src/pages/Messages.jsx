@@ -925,6 +925,7 @@ const Messages = () => {
 			<Dialog 
 				open={profileDialogOpen} 
 				onClose={() => setProfileDialogOpen(false)} 
+				disableRestoreFocus
 				aria-labelledby="messages-profile-dialog-name"
 				maxWidth="xs" 
 				fullWidth

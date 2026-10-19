@@ -35,36 +35,7 @@ app.set('trust proxy', 1); // Trust the first proxy (Render's load balancer) for
 const metricsMiddleware = promBundle({includeMethod: true});
 app.use(metricsMiddleware);
 
-app.disable('x-powered-by'); // Hide tech stack
-
-// 1. HTTP Security Headers
-app.use(helmet());
-
-// 2. Prevent NoSQL Injection
-app.use(mongoSanitize());
-
-const { redisClient, redisEnabled } = require("./config/redis");
-const RedisStore = require("rate-limit-redis").default;
-
-// 3. Global API Rate Limiting (Backed by Redis if available)
-const apiLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 500, // Limit each IP to 500 requests per `window`
-	standardHeaders: true,
-	legacyHeaders: false,
-    ...(redisEnabled && {
-        store: new RedisStore({
-            sendCommand: (...args) => redisClient.call(...args),
-        }),
-    }),
-	message: "Too many requests from this IP, please try again after 15 minutes."
-});
-app.use("/api/", apiLimiter);
-
-// FIX 1: Sidestep the stuck port by using 5005 locally!
-const PORT = process.env.PORT || 5005;
-const server = http.createServer(app);
-
+// CORS Configuration - MUST precede security & rate-limiting middleware to ensure headers on all responses
 const allowedOrigins = [
 	"http://localhost:5173", 
 	"http://localhost:3000",
@@ -74,9 +45,10 @@ const allowedOrigins = [
 
 const isOriginAllowed = (origin) => {
 	if (!origin) return true;
-	if (allowedOrigins.includes(origin)) return true;
-	if (/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(origin)) return true;
-	if (/^https:\/\/([a-z0-9-]+\.)?gmu-(badminton|frontend|social)(-[a-z0-9-]+)?\.onrender\.com$/.test(origin)) return true;
+	const norm = origin.toLowerCase().trim().replace(/\/+$/, "");
+	if (allowedOrigins.some(o => o && o.toLowerCase().trim().replace(/\/+$/, "") === norm)) return true;
+	if (/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(norm)) return true;
+	if (/^https:\/\/([a-z0-9-]+\.)?gmu-[a-z0-9-]+\.onrender\.com$/.test(norm)) return true;
 	return false;
 };
 
@@ -90,6 +62,38 @@ const corsOptions = {
 	},
 	credentials: true
 };
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+// 1. HTTP Security Headers
+app.use(helmet());
+
+// 2. Prevent NoSQL Injection
+app.use(mongoSanitize());
+
+const { redisClient, redisEnabled } = require("./config/redis");
+const RedisStore = require("rate-limit-redis").default;
+
+// 3. Global API Rate Limiting (Backed by Redis if available)
+const apiLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 1000, // Limit each IP to 1000 requests per `window`
+	standardHeaders: true,
+	legacyHeaders: false,
+	skip: (req) => req.method === "OPTIONS", // Never rate limit CORS preflight requests
+    ...(redisEnabled && {
+        store: new RedisStore({
+            sendCommand: (...args) => redisClient.call(...args),
+        }),
+    }),
+	message: "Too many requests from this IP, please try again after 15 minutes."
+});
+app.use("/api/", apiLimiter);
+
+// FIX 1: Sidestep the stuck port by using 5005 locally!
+const PORT = process.env.PORT || 5005;
+const server = http.createServer(app);
 
 const io = new Server(server, {
 	cors: {
@@ -123,8 +127,6 @@ app.use((req, res, next) => {
 	next();
 });
 
-// Explicitly trust the Vite frontend
-app.use(cors(corsOptions));
 app.use(express.json({ limit: "1mb" })); // Reduced to 1mb for security
 app.use(express.urlencoded({ limit: "1mb", extended: true }));
 

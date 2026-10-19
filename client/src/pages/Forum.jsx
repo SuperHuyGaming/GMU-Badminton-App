@@ -548,6 +548,7 @@ export default function Forum() {
 				fullScreen={fullScreen} 
 				open={isModalOpen} 
 				onClose={() => setIsModalOpen(false)} 
+				disableRestoreFocus
 				aria-labelledby="create-post-dialog-title"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 			>

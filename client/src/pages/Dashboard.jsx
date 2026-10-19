@@ -900,6 +900,7 @@ export default function Dashboard() {
 			<Dialog
 				open={!!deleteUpdateId}
 				onClose={() => setDeleteUpdateId(null)}
+				disableRestoreFocus
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 			>
 				<DialogTitle sx={{ fontWeight: "bold", color: "error.main" }}>

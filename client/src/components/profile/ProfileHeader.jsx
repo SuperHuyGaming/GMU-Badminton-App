@@ -471,6 +471,7 @@ export default function ProfileHeader({
 			<Dialog
 				open={!!viewerImage}
 				onClose={() => setViewerImage(null)}
+				disableRestoreFocus
 				aria-label="Profile image preview"
 				maxWidth="lg"
 				PaperProps={{
@@ -508,7 +509,7 @@ export default function ProfileHeader({
 			</Dialog>
 
 			{/* --- QR CODE MODAL --- */}
-			<Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)} aria-labelledby="qr-modal-title">
+			<Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)} disableRestoreFocus aria-labelledby="qr-modal-title">
 				<DialogTitle id="qr-modal-title" align="center" fontWeight="bold">Scan to Connect</DialogTitle>
 				<DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 4 }}>
 					<QRCodeSVG value={window.location.href} size={200} level="H" />

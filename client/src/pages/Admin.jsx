@@ -687,6 +687,7 @@ export default function Admin() {
 				onClose={() =>
 					setDeleteConfirm({ open: false, type: "", id: null })
 				}
+				disableRestoreFocus
 				aria-labelledby="admin-delete-title"
 				aria-describedby="admin-delete-desc"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
