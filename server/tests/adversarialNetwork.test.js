@@ -37,7 +37,7 @@ jest.mock('../services/scraper', () => ({
 }));
 
 const request = require("supertest");
-const ioClient = require("../../client/node_modules/socket.io-client");
+const ioClient = require("socket.io-client");
 const { app, server, isOriginAllowed, onlineUsers } = require("../server");
 
 describe("ADVERSARIAL SUITE 1: Burst OPTIONS Preflight Across Real Server Routes", () => {
