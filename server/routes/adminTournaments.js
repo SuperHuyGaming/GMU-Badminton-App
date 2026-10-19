@@ -371,18 +371,49 @@ router.get("/discovery-queue", async (req, res) => {
     }
 });
 
+let isHunting = false;
+
 /**
  * POST /api/admin/tournaments/discovery-queue/run-hunt
  * Triggers the full autonomous hunter cycle (TournamentSoftware + Web search + Queue AI evaluation).
+ * Runs asynchronously in the background to prevent Render reverse proxy 502 Bad Gateway timeouts.
  */
 router.post("/discovery-queue/run-hunt", adminActionLimiter, async (req, res) => {
     try {
-        const result = await runFullAutonomousHunt();
-        return res.status(200).json({
-            message: "Autonomous Tournament Hunter completed cycle",
-            result
+        if (isHunting) {
+            return res.status(200).json({
+                message: "Autonomous Tournament Hunter cycle is already running in background.",
+                status: "already_running"
+            });
+        }
+
+        isHunting = true;
+        res.status(202).json({
+            message: "Autonomous Tournament Hunter cycle started in background.",
+            status: "started"
+        });
+
+        setImmediate(async () => {
+            try {
+                console.log("🚀 [Hunter] Starting background Autonomous Tournament Hunter execution...");
+                const result = await runFullAutonomousHunt();
+                console.log("✅ [Hunter] Background Autonomous Tournament Hunter completed successfully.");
+                const io = req.io || req.app?.get("io");
+                if (io) {
+                    io.emit("hunterComplete", { success: true, result });
+                }
+            } catch (err) {
+                console.error("❌ [Hunter] Background autonomous hunt error:", err.message);
+                const io = req.io || req.app?.get("io");
+                if (io) {
+                    io.emit("hunterComplete", { success: false, error: err.message });
+                }
+            } finally {
+                isHunting = false;
+            }
         });
     } catch (err) {
+        isHunting = false;
         return res.status(500).json({ message: "Failed to run autonomous hunt", error: err.message });
     }
 });
@@ -393,7 +424,7 @@ router.post("/discovery-queue/run-hunt", adminActionLimiter, async (req, res) =>
  */
 router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => {
     try {
-        const batchSize = Math.min(Number(req.body?.batchSize) || 25, 50);
+        const batchSize = Math.min(Number(req.body?.batchSize) || 10, 20);
         const result = await processDiscoveryQueue(batchSize);
         return res.status(200).json({
             message: "Discovery queue processing complete",

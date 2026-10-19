@@ -41,6 +41,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { toast } from "react-hot-toast";
 
 import apiFetch from "../../utils/api";
+import socket from "../../utils/socket";
 
 const formatDateForInput = (dateVal) => {
     if (!dateVal) return "";
@@ -186,6 +187,10 @@ export default function TournamentApprovals() {
         try {
             setLoading(true);
             const res = await apiFetch("/api/admin/tournaments/proposed");
+            if (!res.ok) {
+                if (res.status === 0) return;
+                throw new Error(`Failed to load proposals (HTTP ${res.status})`);
+            }
             const data = await res.json();
             setProposals(Array.isArray(data) ? data : []);
             setSelectedIds([]);
@@ -201,9 +206,13 @@ export default function TournamentApprovals() {
             setDiscoveryLoading(true);
             const query = discoveryStatusFilter ? `?status=${encodeURIComponent(discoveryStatusFilter)}` : "";
             const res = await apiFetch(`/api/admin/tournaments/discovery-queue${query}`);
+            if (!res.ok) {
+                if (res.status === 0) return;
+                throw new Error(`Failed to load discovery queue (HTTP ${res.status})`);
+            }
             const data = await res.json();
-            setDiscoveryItems(Array.isArray(data.items) ? data.items : []);
-            setDiscoveryTotal(data.totalCount || 0);
+            setDiscoveryItems(Array.isArray(data?.items) ? data.items : []);
+            setDiscoveryTotal(data?.totalCount || 0);
         } catch (err) {
             toast.error(err.message || "Failed to load discovery queue");
         } finally {
@@ -222,6 +231,23 @@ export default function TournamentApprovals() {
         }
     }, [currentTab, fetchDiscoveryQueue]);
 
+    useEffect(() => {
+        const onHunterComplete = (payload) => {
+            if (payload?.success) {
+                toast.success("Autonomous Hunter completed background cycle! Discovery queue updated.");
+            } else if (payload?.error) {
+                toast.error(`Hunter background cycle finished with note: ${payload.error}`);
+            }
+            fetchProposals();
+            fetchDiscoveryQueue();
+        };
+
+        socket.on("hunterComplete", onHunterComplete);
+        return () => {
+            socket.off("hunterComplete", onHunterComplete);
+        };
+    }, [fetchProposals, fetchDiscoveryQueue]);
+
     const handleRunHunter = async () => {
         try {
             setHunting(true);
@@ -232,7 +258,7 @@ export default function TournamentApprovals() {
             const summary = data?.result?.summary;
             const msg = summary
                 ? `Hunter complete: ${summary.addedToQueue} queued, ${summary.newProposalsCreated} proposed`
-                : data?.message || "Autonomous Hunter cycle completed!";
+                : data?.message || "Autonomous Hunter cycle launched in background!";
             toast.success(msg);
             await fetchProposals();
             if (currentTab === 1) {
