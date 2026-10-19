@@ -221,3 +221,46 @@ You MUST follow the repository's mandatory PR & QA Workflow (.agents/rules/pr_wo
 8. Under NO circumstances merge `develop` into `main`.
 
 Acknowledge and adhere to this workflow for all deliverables.
+
+## 2026-10-19T04:15:39Z
+
+An autonomous multi-agent engineering team to eliminate backend JavaScript heap out of memory (OOM) crashes on Render (512MB RAM tier) caused by heavy Cheerio DOM parsing and unbounded web page scraping during Autonomous Tournament Hunter cycles.
+
+Working directory: D:/GMU Fall 2026/GMU-Badminton-App
+Integrity mode: development
+
+## Requirements
+
+### R1. Scraper Heap Memory & Cheerio DOM Optimization
+Enforce response body caps (maxContentLength: 500 * 1024, maxBodyLength: 500 * 1024) on all Axios calls in autonomousHunter.js, tournamentSoftwareCrawler.js, and scraper.js. Truncate raw HTML strings to 200KB prior to Cheerio parsing. Immediately dereference Cheerio DOM trees ($ = null, data = null) after extraction and yield microtasks (await new Promise(r => setImmediate(r))) between items to allow V8 garbage collection to reclaim memory.
+
+### R2. Discovery Queue Batch Throttling & Heap Pressure Guards
+Reduce processDiscoveryQueue batch size from 25 to 5–10 items per cycle. Add proactive heap checks (process.memoryUsage().heapUsed); if heap usage exceeds 200MB, pause processing to let the garbage collector catch up rather than crashing the Node process.
+
+### R3. Startup Memory Configuration & Mongoose Schema Cleanup
+In server.js, inspect memory configuration and handle low-heap environments gracefully. Remove redundant courtSchema.index({ courtNumber: 1 }) in server/models/Court.js to eliminate the Mongoose duplicate index warning on boot.
+
+### R4. Automated Memory Leak & Regression Verification
+Create an automated test suite in server/tests/ verifying that runFullAutonomousHunt and batch discovery queue processing execute without exceeding 200MB of heap memory, confirming zero OOM crashes.
+
+## Acceptance Criteria
+
+### Memory & System Resilience
+- [ ] Autonomous Tournament Hunter cycles (runFullAutonomousHunt and processDiscoveryQueue) complete without exceeding 200MB heap memory.
+- [ ] Zero FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory crashes.
+- [ ] Zero Mongoose duplicate index warnings on application startup.
+- [ ] All test suites pass cleanly:
+  - server/: npm test (100% passing suites), npm run lint (0 errors, 0 warnings).
+  - client/: npm test (100% passing files), npm run lint (0 errors, 0 warnings), npm run build (success).
+
+### Repository Workflow Compliance
+- [ ] All changes developed on a feature branch (fix/hunter-heap-oom-optimization) and merged via Pull Request following QA pipeline verification without direct commits to develop or main.
+
+## 2026-10-19T04:34:01Z
+
+CRITICAL ADDITIONAL USER REQUIREMENT:
+After the memory optimization and PR merge to `develop` are completed:
+1. Verify that Render logs show zero OOM crashes or heap limit errors.
+2. Delete/wipe all tournaments currently in the system using the admin wipe endpoint (`POST /api/admin/tournaments/wipe-and-restart`).
+3. Have a bot user with admin privileges trigger the Autonomous Tournament Hunter (`POST /api/admin/tournaments/discovery-queue/run-hunt`) to start finding tournaments from scratch.
+4. Verify that the hunter completes its full discovery cycle cleanly with zero memory spikes and zero errors.
