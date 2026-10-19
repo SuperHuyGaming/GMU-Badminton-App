@@ -8,8 +8,8 @@ const Tournament = require('../models/Tournament');
 const { parseDiscoveredWebpage } = require('./aiParser');
 const { huntTournamentSoftwareAndEnqueue } = require('./tournamentSoftwareCrawler');
 
-// Heap pressure threshold for Render 512MB RAM container (200MB heap limit)
-const HEAP_PRESSURE_LIMIT_BYTES = 200 * 1024 * 1024; // 200 MB
+// Heap pressure threshold for Render 512MB RAM container (200MB heap limit default, configurable via env)
+const HEAP_PRESSURE_LIMIT_BYTES = (parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || 200) * 1024 * 1024; // 200 MB
 const MAX_HTML_PARSE_LENGTH = 200 * 1024;            // 200 KB
 const AXIOS_BODY_CAP_BYTES = 500 * 1024;             // 500 KB
 
