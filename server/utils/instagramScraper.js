@@ -169,30 +169,48 @@ async function scrapeInstagramProfile(handle) {
  * Scrapes a Linktree or Beacons page to extract Google Forms
  */
 async function scrapeLinktree(url) {
+    let response = null;
+    let rawHtml = null;
+    let $ = null;
     try {
         if (!url || typeof url !== 'string') return [];
         const parsed = new URL(url);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return [];
 
-        const { data } = await axios.get(url, {
+        response = await axios.get(url, {
             timeout: 5000,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            },
+            maxContentLength: 500 * 1024,
+            maxBodyLength: 500 * 1024
         });
-        const $ = cheerio.load(data);
+        rawHtml = typeof response.data === 'string' ? response.data.slice(0, 200 * 1024) : '';
+        response = null;
+
+        $ = cheerio.load(rawHtml);
+        rawHtml = null;
+
         const formLinks = [];
 
-        // Extract all ahrefs
-        $('a').each((i, el) => {
-            const href = $(el).attr('href');
-            if (href && (href.includes('forms.gle') || href.includes('docs.google.com/forms'))) {
-                formLinks.push(href);
-            }
-        });
+        try {
+            // Extract all ahrefs
+            $('a').each((i, el) => {
+                const href = $(el).attr('href');
+                if (href && (href.includes('forms.gle') || href.includes('docs.google.com/forms'))) {
+                    formLinks.push(href);
+                }
+            });
+        } finally {
+            $ = null;
+        }
         return formLinks;
     } catch (e) {
         return [];
+    } finally {
+        $ = null;
+        response = null;
+        rawHtml = null;
     }
 }
 

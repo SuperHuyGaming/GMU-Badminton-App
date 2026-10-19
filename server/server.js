@@ -4,12 +4,46 @@ const promBundle = require("express-prom-bundle");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
+const v8 = require("v8");
 const { Server } = require("socket.io");
 const { getRacStatus, getWeeklySchedule } = require("./services/scraper");
 
 const { initializeGemini } = require("./utils/aiCoach");
 
+function inspectStartupMemory() {
+	const heapStats = v8.getHeapStatistics();
+	const heapLimitMB = Math.round(heapStats.heap_size_limit / (1024 * 1024));
+	const memUsage = process.memoryUsage();
+	const rssMB = Math.round(memUsage.rss / (1024 * 1024));
+	const heapUsedMB = Math.round(memUsage.heapUsed / (1024 * 1024));
+	const heapTotalMB = Math.round(memUsage.heapTotal / (1024 * 1024));
+	const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
+	const nodeOptions = process.env.NODE_OPTIONS || "";
+
+	console.log("==================================================");
+	console.log("📊 [Memory Monitor] Startup Memory Configuration:");
+	console.log(`   - V8 Heap Size Limit: ${heapLimitMB} MB`);
+	console.log(`   - Initial Heap Total:  ${heapTotalMB} MB (Used: ${heapUsedMB} MB)`);
+	console.log(`   - Initial Process RSS: ${rssMB} MB`);
+	console.log(`   - NODE_OPTIONS:        ${nodeOptions || "None"}`);
+	console.log(`   - Environment:         ${isRender ? "Render Cloud" : (process.env.NODE_ENV || "development")}`);
+
+	if (heapLimitMB <= 512 || isRender) {
+		console.log("⚠️ [Memory Monitor] Low-heap environment detected (<=512MB RAM tier).");
+		console.log("   - Autonomous scraper heap guards active (200MB ceiling).");
+		console.log("   - Cheerio DOM parsing caps & microtask GC yielding enabled.");
+		if (heapLimitMB > 450) {
+			console.warn("⚠️ [Memory Monitor] Warning: Heap limit > 450MB on 512MB RAM host risks container cgroup OOM kill.");
+			console.warn("   Recommendation: Configure NODE_OPTIONS='--max-old-space-size=300' for safe headroom.");
+		}
+	}
+	console.log("==================================================");
+
+	return { heapLimitMB, heapUsedMB, rssMB, isRender };
+}
+
 if (process.env.NODE_ENV !== "test") {
+	inspectStartupMemory();
 	mongoose
 		.connect(process.env.MONGO_URI)
 		.then(async () => {
@@ -307,4 +341,4 @@ if (process.env.NODE_ENV !== "test") {
 	require('./utils/cronJobs')();
 }
 
-module.exports = { app, server, io, isOriginAllowed, onlineUsers, corsOptions, apiLimiter };
+module.exports = { app, server, io, isOriginAllowed, onlineUsers, corsOptions, apiLimiter, inspectStartupMemory };
