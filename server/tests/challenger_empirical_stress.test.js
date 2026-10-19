@@ -12,6 +12,15 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const v8 = require('v8');
+const vm = require('vm');
+
+// Ensure V8 garbage collection is exposed even when runner lacks --expose-gc flag
+if (typeof global.gc !== 'function') {
+    try {
+        v8.setFlagsFromString('--expose_gc');
+        global.gc = vm.runInNewContext('gc');
+    } catch (_) {}
+}
 
 jest.mock('../utils/redis', () => ({
     keys: jest.fn().mockResolvedValue([]),
