@@ -54,6 +54,16 @@ async function pauseForGarbageCollection(pauseMs) {
         try {
             global.gc();
         } catch (_) {}
+    } else {
+        try {
+            const v8 = require('v8');
+            const vm = require('vm');
+            v8.setFlagsFromString('--expose_gc');
+            const gc = vm.runInNewContext('gc');
+            if (typeof gc === 'function') {
+                gc();
+            }
+        } catch (_) {}
     }
     await new Promise(resolve => setTimeout(resolve, duration));
 }
