@@ -5,6 +5,38 @@ const Tournament = require('../models/Tournament');
 const { authMiddleware } = require('../middleware/auth');
 const redis = require('../utils/redis');
 
+// Summary projection for public tournament directory listings
+const TOURNAMENT_DIRECTORY_PROJECTION = [
+    '_id',
+    'tournamentName',
+    'startDate',
+    'endDate',
+    'eventLocation',
+    'hostUniversity',
+    'hostClubHandle',
+    'entryFee',
+    'skillLevels',
+    'isOpenTournament',
+    'status',
+    'rsvpCount',
+    'attendees',
+    'registrationUrl',
+    'sourceUrl',
+    'flyerImageUrl',
+    'bannerUrl',
+    'linkStatus',
+    'fallbackRegistrationUrl',
+    'registrationDeadline',
+    'rideFormDeadline',
+    'originalCaption',
+    'divisions.name',
+    'divisions.code',
+    'divisions.category',
+    'divisions.maxDraw',
+    'divisions.fee',
+    'divisions.bracketType'
+].join(' ');
+
 router.get('/', async (req, res) => {
     try {
         const { month, location, skillLevel, upcoming, weekend, search, status, includeArchived } = req.query;
@@ -36,12 +68,16 @@ router.get('/', async (req, res) => {
                 // Evict cached tournaments if any records were modified
                 if (updateResult && updateResult.modifiedCount > 0) {
                     try {
-                        const keys = await redis.keys("tournaments:*");
-                        if (keys && keys.length > 0) {
-                            if (typeof redis.unlink === 'function') {
-                                await redis.unlink(keys);
-                            } else {
-                                await redis.del(keys);
+                        if (typeof redis.invalidateCacheTag === 'function') {
+                            await redis.invalidateCacheTag("tournaments:active_keys");
+                        } else {
+                            const keys = await redis.keys("tournaments:*");
+                            if (keys && keys.length > 0) {
+                                if (typeof redis.unlink === 'function') {
+                                    await redis.unlink(keys);
+                                } else {
+                                    await redis.del(keys);
+                                }
                             }
                         }
                     } catch (cacheErr) {
@@ -115,9 +151,17 @@ router.get('/', async (req, res) => {
             console.warn("Redis read error:", cacheErr.message);
         }
 
-        let tournaments = await Tournament.find(query)
-            .populate("attendees", "name avatarUrl _id")
-            .sort({ startDate: 1 });
+        let queryBuilder = Tournament.find(query);
+        if (typeof queryBuilder.select === 'function') {
+            queryBuilder = queryBuilder.select(TOURNAMENT_DIRECTORY_PROJECTION);
+        }
+        if (typeof queryBuilder.populate === 'function') {
+            queryBuilder = queryBuilder.populate("attendees", "name avatarUrl _id");
+        }
+        if (typeof queryBuilder.sort === 'function') {
+            queryBuilder = queryBuilder.sort({ startDate: 1 });
+        }
+        let tournaments = await queryBuilder;
 
         // If no tournaments found for broad view, ensure guaranteed active tournaments are populated
         if (tournaments.length === 0 && !search && !location && !skillLevel && !month) {
@@ -125,9 +169,17 @@ router.get('/', async (req, res) => {
                 try {
                     const { ensureGuaranteedTournaments } = require('../utils/autonomousHunter');
                     await ensureGuaranteedTournaments();
-                    tournaments = await Tournament.find(query)
-                        .populate("attendees", "name avatarUrl _id")
-                        .sort({ startDate: 1 });
+                    let retryBuilder = Tournament.find(query);
+                    if (typeof retryBuilder.select === 'function') {
+                        retryBuilder = retryBuilder.select(TOURNAMENT_DIRECTORY_PROJECTION);
+                    }
+                    if (typeof retryBuilder.populate === 'function') {
+                        retryBuilder = retryBuilder.populate("attendees", "name avatarUrl _id");
+                    }
+                    if (typeof retryBuilder.sort === 'function') {
+                        retryBuilder = retryBuilder.sort({ startDate: 1 });
+                    }
+                    tournaments = await retryBuilder;
                 } catch (seedErr) {
                     console.warn("[Tournaments Route] Seed check skipped:", seedErr.message);
                 }
@@ -141,6 +193,11 @@ router.get('/', async (req, res) => {
 
         try {
             await redis.setex(cacheKey, 3600, JSON.stringify(tournaments));
+            if (typeof redis.tagCacheKey === 'function') {
+                await redis.tagCacheKey("tournaments:active_keys", cacheKey);
+            } else if (typeof redis.sadd === 'function') {
+                await redis.sadd("tournaments:active_keys", cacheKey);
+            }
         } catch (cacheErr) {
             console.warn("Redis write error:", cacheErr.message);
         }
@@ -212,8 +269,12 @@ router.post('/:id/rsvp', authMiddleware, async (req, res) => {
         await tournament.populate("attendees", "name avatarUrl _id");
 
         try {
-            const keys = await redis.keys('tournaments:*');
-            if (keys && keys.length > 0) await redis.del(keys);
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag('tournaments:active_keys');
+            } else {
+                const keys = await redis.keys('tournaments:*');
+                if (keys && keys.length > 0) await redis.del(keys);
+            }
         } catch (cacheErr) {
             console.warn("Redis delete error:", cacheErr.message);
         }

@@ -30,6 +30,15 @@ describe("CORS Pipeline & Origin Whitelist Validation", () => {
         expect(isOriginAllowed("http://127.0.0.1:3000")).toBe(true);
     });
 
+    it("should allow official George Mason University academic domains", () => {
+        expect(isOriginAllowed("https://badminton.gmu.edu")).toBe(true);
+        expect(isOriginAllowed("https://connect.gmu.edu")).toBe(true);
+        expect(isOriginAllowed("https://gmu.edu")).toBe(true);
+        expect(isOriginAllowed("http://gmu.edu")).toBe(true);
+        expect(isOriginAllowed("https://masonlive2.gmu.edu")).toBe(true);
+        expect(isOriginAllowed("https://subdomain.dept.gmu.edu")).toBe(true);
+    });
+
     it("should allow staging, preview, and production Render deployments", () => {
         expect(isOriginAllowed("https://gmu-frontend-staging.onrender.com")).toBe(true);
         expect(isOriginAllowed("https://gmu-badminton-app.onrender.com")).toBe(true);
@@ -52,6 +61,9 @@ describe("CORS Pipeline & Origin Whitelist Validation", () => {
         expect(isOriginAllowed("https://evil-attacker.onrender.com")).toBe(false);
         expect(isOriginAllowed("https://unrelated-app.onrender.com")).toBe(false);
         expect(isOriginAllowed("https://random-tenant.onrender.com")).toBe(false);
+        expect(isOriginAllowed("https://evil-badminton.onrender.com")).toBe(false);
+        expect(isOriginAllowed("https://phishing-mason.onrender.com")).toBe(false);
+        expect(isOriginAllowed("https://fake-badminton-login.onrender.com")).toBe(false);
     });
 });
 

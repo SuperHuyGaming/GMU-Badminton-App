@@ -143,8 +143,16 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
         }
 
         // Invalidate public tournaments cache
-        const keys = await redis.keys("tournaments:*");
-        if (keys.length > 0) await redis.del(keys);
+        try {
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            } else {
+                const keys = await redis.keys("tournaments:*");
+                if (keys.length > 0) await redis.del(keys);
+            }
+        } catch (cacheErr) {
+            console.warn("[AdminTournaments] Cache flush error on approve:", cacheErr.message);
+        }
 
         proposed.status = "approved";
         proposed.approvedAt = new Date();
@@ -317,8 +325,12 @@ router.delete("/:id", adminActionLimiter, async (req, res) => {
 
         // Flush public tournaments cache
         try {
-            const keys = await redis.keys("tournaments:*");
-            if (keys.length > 0) await redis.del(keys);
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            } else {
+                const keys = await redis.keys("tournaments:*");
+                if (keys.length > 0) await redis.del(keys);
+            }
         } catch (cacheErr) {
             console.warn("[AdminTournaments] Non-fatal cache flush error on delete:", cacheErr.message);
         }
@@ -395,6 +407,18 @@ router.post("/manual", async (req, res) => {
         });
 
         await tournament.save();
+
+        // Invalidate public tournaments cache
+        try {
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            } else {
+                const keys = await redis.keys("tournaments:*");
+                if (keys.length > 0) await redis.del(keys);
+            }
+        } catch (cacheErr) {
+            console.warn("[AdminTournaments] Non-fatal cache flush error on manual tournament creation:", cacheErr.message);
+        }
 
         const io = req.io || req.app?.get("io");
         if (io) {

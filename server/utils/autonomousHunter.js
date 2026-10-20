@@ -9,32 +9,73 @@ const { parseDiscoveredWebpage } = require('./aiParser');
 const { huntTournamentSoftwareAndEnqueue } = require('./tournamentSoftwareCrawler');
 const { sanitizeScrapedTitle } = require('./sanitizeScrapedTitle');
 
-// Heap pressure threshold for Render 512MB RAM container (200MB heap limit default, configurable via env)
-const HEAP_PRESSURE_LIMIT_BYTES = (parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || 200) * 1024 * 1024; // 200 MB
+// Memory Threshold Constants
+const DEFAULT_SOFT_HEAP_MB = 200;
+const DEFAULT_HARD_HEAP_MB = 250;
+const HEAP_PRESSURE_LIMIT_BYTES = (parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || DEFAULT_SOFT_HEAP_MB) * 1024 * 1024; // 200 MB
 const MAX_HTML_PARSE_LENGTH = 200 * 1024;            // 200 KB
 const AXIOS_BODY_CAP_BYTES = 500 * 1024;             // 500 KB
 
 /**
- * Returns the effective heap limit threshold in bytes, respecting runtime HUNTER_HEAP_LIMIT_MB overrides.
+ * Returns the effective soft heap limit threshold in bytes, respecting runtime HUNTER_HEAP_LIMIT_MB overrides.
  * @returns {number}
  */
 function getHeapPressureLimitBytes() {
-    return Math.max(1, parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || 200) * 1024 * 1024;
+    return Math.max(1, parseInt(process.env.HUNTER_HEAP_LIMIT_MB, 10) || DEFAULT_SOFT_HEAP_MB) * 1024 * 1024;
 }
 
 /**
- * Checks whether current V8 heap usage exceeds the configured threshold (default 200MB).
- * Dynamically evaluates process.env.HUNTER_HEAP_LIMIT_MB to support configurable thresholds in test and cloud environments.
- * @returns {{ isPressureHigh: boolean, heapUsedMB: string, heapUsedBytes: number }}
+ * Returns the effective hard heap pause threshold in bytes (default 250MB or 1.25x soft limit).
+ * @returns {number}
  */
-function checkHeapPressure() {
-    const limitBytes = getHeapPressureLimitBytes();
+function getHardHeapPressureLimitBytes() {
+    const softLimit = getHeapPressureLimitBytes();
+    const configuredHardMB = parseInt(process.env.HUNTER_HARD_HEAP_LIMIT_MB, 10);
+    if (!isNaN(configuredHardMB) && configuredHardMB > 0) {
+        return configuredHardMB * 1024 * 1024;
+    }
+    return Math.max(softLimit * 1.25, DEFAULT_HARD_HEAP_MB * 1024 * 1024);
+}
+
+/**
+ * Checks current V8 heap pressure against two-tier soft ceiling (200MB) and hard pause (250MB).
+ * Returns { isHigh, isPressureHigh, heapUsed, heapUsedBytes, heapUsedMB, heapLimit, softLimitBytes, hardLimitBytes, action: 'continue' | 'throttle' | 'pause' }
+ */
+function checkHeapPressure(customSoftLimit, customHardLimit) {
+    const softLimitBytes = customSoftLimit || getHeapPressureLimitBytes();
+    const hardLimitBytes = customHardLimit || getHardHeapPressureLimitBytes();
     const { heapUsed } = process.memoryUsage();
+
+    let action = 'continue';
+    if (heapUsed >= hardLimitBytes) {
+        action = 'pause';
+    } else if (heapUsed >= softLimitBytes) {
+        action = 'throttle';
+    }
+
+    const isHigh = action !== 'continue';
+
     return {
-        isPressureHigh: heapUsed > limitBytes,
+        isHigh,
+        isPressureHigh: isHigh, // backward compatibility with existing tests
+        heapUsed,
+        heapUsedBytes: heapUsed,
         heapUsedMB: (heapUsed / 1024 / 1024).toFixed(2),
-        heapUsedBytes: heapUsed
+        heapLimit: softLimitBytes,
+        softLimitBytes,
+        hardLimitBytes,
+        action
     };
+}
+
+/**
+ * Executes a multi-iteration setImmediate yield loop to cycle event loop phases
+ * and allow V8 scavenge and concurrent mark phases to reclaim unreferenced memory.
+ */
+async function yieldGarbageCollectionLoop(iterations = 3) {
+    for (let i = 0; i < iterations; i++) {
+        await new Promise(resolve => setImmediate(resolve));
+    }
 }
 
 /**
@@ -45,7 +86,7 @@ function yieldToEventLoop() {
 }
 
 /**
- * Pauses execution gracefully and invokes V8 GC if exposed.
+ * Pauses execution gracefully, invokes V8 GC if exposed, and runs multi-iteration event loop yield.
  * @param {number} [pauseMs] Duration in milliseconds (default 1000ms, or 50ms in test env)
  */
 async function pauseForGarbageCollection(pauseMs) {
@@ -65,6 +106,7 @@ async function pauseForGarbageCollection(pauseMs) {
             }
         } catch (_) {}
     }
+    await yieldGarbageCollectionLoop(3);
     await new Promise(resolve => setTimeout(resolve, duration));
 }
 
@@ -147,11 +189,11 @@ async function processDiscoveryQueue(batchSize = 5) {
     const initialHeap = checkHeapPressure();
     if (initialHeap.isPressureHigh) {
         const limitMB = (getHeapPressureLimitBytes() / 1024 / 1024).toFixed(0);
-        console.warn(`⚠️ [Hunter Guard] High heap pressure before queue start: ${initialHeap.heapUsedMB} MB exceeds ${limitMB} MB limit. Pausing for GC...`);
+        console.warn(`⚠️ [Hunter Guard] High heap pressure before queue start: ${initialHeap.heapUsedMB} MB exceeds ${limitMB} MB limit (${initialHeap.action}). Pausing for GC...`);
         await pauseForGarbageCollection();
         const retryCheck = checkHeapPressure();
         if (retryCheck.isPressureHigh) {
-            console.warn(`🛑 [Hunter Guard] Heap remains high (${retryCheck.heapUsedMB} MB). Skipping Discovery Queue cycle to prevent OOM.`);
+            console.warn(`🛑 [Hunter Guard] Heap remains high (${retryCheck.heapUsedMB} MB, action: ${retryCheck.action}). Skipping Discovery Queue cycle to prevent OOM.`);
             return { processed: 0, approved: 0, rejected: 0, duplicates: 0, pausedDueToHeapPressure: true };
         }
     }
@@ -175,14 +217,19 @@ async function processDiscoveryQueue(batchSize = 5) {
     let pausedEarly = false;
 
     for (const item of pendingItems) {
-        // Heap Pressure Guard: Check before each item
+        // Heap Pressure Guard: Two-tier check before each item
         const itemHeap = checkHeapPressure();
-        if (itemHeap.isPressureHigh) {
-            console.warn(`⚠️ [Hunter Guard] Heap pressure high (${itemHeap.heapUsedMB} MB) at item ${item.sourceUrl}. Pausing...`);
+        if (itemHeap.action === 'pause') {
+            console.warn(`🛑 [Hunter Guard] Hard heap limit reached (${itemHeap.heapUsedMB} MB >= ${(itemHeap.hardLimitBytes / 1024 / 1024).toFixed(0)} MB). Pausing batch immediately.`);
             await pauseForGarbageCollection();
-            const postPauseHeap = checkHeapPressure();
-            if (postPauseHeap.isPressureHigh) {
-                console.warn(`🛑 [Hunter Guard] Heap remains high (${postPauseHeap.heapUsedMB} MB). Gracefully pausing batch early.`);
+            pausedEarly = true;
+            break;
+        } else if (itemHeap.action === 'throttle') {
+            console.warn(`⚠️ [Hunter Guard] Soft heap pressure (${itemHeap.heapUsedMB} MB). Throttling and running GC...`);
+            await pauseForGarbageCollection(process.env.NODE_ENV === 'test' ? 20 : 200);
+            const retryItemHeap = checkHeapPressure();
+            if (retryItemHeap.action === 'pause') {
+                console.warn(`🛑 [Hunter Guard] Heap climbed to hard ceiling (${retryItemHeap.heapUsedMB} MB) after GC. Pausing batch.`);
                 pausedEarly = true;
                 break;
             }
@@ -214,14 +261,16 @@ async function processDiscoveryQueue(batchSize = 5) {
                         reqHeaders['Cookie'] = 'st=l=1033&c=1&cp=23; sport=2;';
                     }
 
-                    const response = await axios.get(item.sourceUrl, {
+                    let response = await axios.get(item.sourceUrl, {
                         headers: reqHeaders,
                         timeout: 7000,
                         maxContentLength: AXIOS_BODY_CAP_BYTES,
                         maxBodyLength: AXIOS_BODY_CAP_BYTES
                     });
                     data = response.data;
+                    response = null; // Release Axios response object immediately
                     const htmlToParse = typeof data === 'string' ? data.slice(0, MAX_HTML_PARSE_LENGTH) : '';
+                    data = null; // Release full response string immediately before Cheerio loads DOM tree
                     $ = cheerio.load(htmlToParse);
                     $('script, style, noscript, nav, footer').remove();
                     const extractedText = $('body').text().replace(/\s+/g, ' ').trim();
@@ -1024,8 +1073,12 @@ module.exports = {
     wipeAndRestartTournamentSystem,
     checkHeapPressure,
     getHeapPressureLimitBytes,
+    getHardHeapPressureLimitBytes,
     yieldToEventLoop,
+    yieldGarbageCollectionLoop,
     pauseForGarbageCollection,
+    DEFAULT_SOFT_HEAP_MB,
+    DEFAULT_HARD_HEAP_MB,
     HEAP_PRESSURE_LIMIT_BYTES,
     MAX_HTML_PARSE_LENGTH,
     AXIOS_BODY_CAP_BYTES
