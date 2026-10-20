@@ -5,9 +5,11 @@ import {
     ToggleButton, ToggleButtonGroup,
     Drawer, Avatar, AvatarGroup, IconButton, FormGroup, FormControlLabel, Checkbox, 
     Divider, Chip, Tooltip, TextField, InputAdornment, Skeleton, Stack, Badge, Paper,
-    Switch, Tabs, Tab
+    Switch, Tabs, Tab, CircularProgress
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import EventIcon from '@mui/icons-material/Event';
 import ViewListIcon from '@mui/icons-material/ViewList';
@@ -49,6 +51,9 @@ export default function Tournaments() {
     // Admin delete state
     const [deleteConfirmTournament, setDeleteConfirmTournament] = useState(null); // tournament object awaiting deletion
     const [deleteLoading, setDeleteLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [clearDialogOpen, setClearDialogOpen] = useState(false);
+    const [clearing, setClearing] = useState(false);
 
     // View state
     const [viewMode, setViewMode] = useState(searchParams.get('view') || 'list'); // 'list' | 'calendar'
@@ -266,6 +271,36 @@ END:VCALENDAR`;
         }
     };
 
+    // Refresh tournaments list
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            await fetchTournaments();
+            toast.success("Tournaments refreshed!");
+        } catch {
+            toast.error("Failed to refresh tournaments");
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    // Clear invalid tournaments and reset to verified schedule
+    const handleClearAndReset = async () => {
+        setClearing(true);
+        try {
+            const res = await apiFetch("/api/tournaments/reset-seed", { method: "POST" });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || data.message || "Failed to reset tournaments");
+            toast.success(data.message || "Published tournaments cleared and reset to verified schedule!");
+            setClearDialogOpen(false);
+            await fetchTournaments();
+        } catch (err) {
+            toast.error(err.message || "Error resetting tournaments");
+        } finally {
+            setClearing(false);
+        }
+    };
+
     // Active filters count
 
     const activeFilterCount = (searchQuery ? 1 : 0) + 
@@ -443,6 +478,37 @@ END:VCALENDAR`;
                             Filters
                         </Button>
                     </Badge>
+
+                    {/* Refresh Button */}
+                    <Tooltip title="Refresh published tournaments">
+                        <Button
+                            variant="outlined"
+                            size="medium"
+                            aria-label="Refresh Tournaments"
+                            startIcon={refreshing ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
+                            onClick={handleRefresh}
+                            disabled={refreshing || loading}
+                            sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                        >
+                            {refreshing ? "Refreshing..." : "Refresh"}
+                        </Button>
+                    </Tooltip>
+
+                    {/* Clear & Reset Button */}
+                    <Tooltip title="Clear invalid tournaments and reset verified schedule">
+                        <Button
+                            variant="outlined"
+                            color="error"
+                            size="medium"
+                            aria-label="Clear & Reset"
+                            startIcon={clearing ? <CircularProgress size={18} color="inherit" /> : <RestartAltIcon />}
+                            onClick={() => setClearDialogOpen(true)}
+                            disabled={clearing || loading}
+                            sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                        >
+                            {clearing ? "Resetting..." : "Clear & Reset"}
+                        </Button>
+                    </Tooltip>
                 </Box>
             </Paper>
 
@@ -1206,6 +1272,44 @@ END:VCALENDAR`;
                         sx={{ borderRadius: 2, fontWeight: 700 }}
                     >
                         {deleteLoading ? 'Deleting…' : 'Delete'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Clear & Reset Confirmation Dialog */}
+            <Dialog
+                open={clearDialogOpen}
+                onClose={() => !clearing && setClearDialogOpen(false)}
+                maxWidth="xs"
+                fullWidth
+                disableRestoreFocus
+            >
+                <DialogTitle sx={{ fontWeight: 700, color: 'error.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <RestartAltIcon /> Reset Tournament Schedule?
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        This will purge invalid or stale tournament entries and reload the verified 2026–2027 collegiate tournament schedule.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+                    <Button
+                        onClick={() => setClearDialogOpen(false)}
+                        disabled={clearing}
+                        variant="outlined"
+                        sx={{ borderRadius: 2, fontWeight: 600 }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleClearAndReset}
+                        disabled={clearing}
+                        variant="contained"
+                        color="error"
+                        startIcon={clearing ? <CircularProgress size={16} color="inherit" /> : <RestartAltIcon />}
+                        sx={{ borderRadius: 2, fontWeight: 700 }}
+                    >
+                        {clearing ? 'Resetting…' : 'Reset Now'}
                     </Button>
                 </DialogActions>
             </Dialog>
