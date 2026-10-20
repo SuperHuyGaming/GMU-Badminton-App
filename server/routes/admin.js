@@ -53,9 +53,11 @@ router.delete("/users/:id", async (req, res) => {
 
 router.get("/flagged", async (req, res) => {
 	try {
-		const flaggedPosts = await Post.find({ isFlagged: true }).sort({
-			timestamp: -1,
-		});
+		const flaggedPosts = await Post.find({
+			$or: [{ isFlagged: true }, { status: "quarantined" }]
+		})
+			.populate("reports.reportedBy", "name profilePic email")
+			.sort({ timestamp: -1 });
 		res.json(flaggedPosts);
 	} catch (err) {
 		res.status(500).json({
@@ -70,16 +72,18 @@ router.put("/flagged/:id/approve", async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await Post.findByIdAndUpdate(
-			req.params.id,
-			{ isFlagged: false },
-			{ new: true },
-		);
+		const post = await Post.findById(req.params.id);
 		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		post.isFlagged = false;
+		post.status = "active";
+		post.reportCount = 0;
+		post.reports = [];
+		await post.save();
 
 		if (req.io) req.io.emit("postCreated", post);
 
-		res.json({ message: "Post approved", post });
+		res.json({ message: "Post approved and reinstated.", post });
 	} catch (err) {
 		res.status(500).json({ message: "Server error approving post" });
 	}
@@ -104,11 +108,14 @@ router.delete("/posts/:id", async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const deletedPost = await Post.findByIdAndDelete(req.params.id);
+		const deletedPost = await Post.findByIdAndUpdate(req.params.id, { status: "deleted" }, { new: true });
 		if (!deletedPost)
 			return res.status(404).json({ message: "Post not found" });
 
-		// NEW: Broadcast to everyone's browser to rip this post off the screen instantly!
+		const ActivityFeed = require("../models/ActivityFeed");
+		await ActivityFeed.deleteOne({ type: "post", referenceId: deletedPost._id });
+
+		// Broadcast to everyone's browser to remove post
 		if (req.io) {
 			req.io.emit("postDeleted", req.params.id);
 		}

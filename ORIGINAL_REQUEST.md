@@ -264,3 +264,32 @@ After the memory optimization and PR merge to `develop` are completed:
 2. Delete/wipe all tournaments currently in the system using the admin wipe endpoint (`POST /api/admin/tournaments/wipe-and-restart`).
 3. Have a bot user with admin privileges trigger the Autonomous Tournament Hunter (`POST /api/admin/tournaments/discovery-queue/run-hunt`) to start finding tournaments from scratch.
 4. Verify that the hunter completes its full discovery cycle cleanly with zero memory spikes and zero errors.
+
+
+## 2026-10-19T19:01:57Z
+
+This is a single self-contained fix; keep it small and focused.
+Diagnose and permanently resolve CI test failures and flakiness on the develop branch in `server/tests/challenger_empirical_stress.test.js`, where full test runner memory baselines in CI (>200MB) cause premature heap guard exits and failed queue batch assertions.
+
+Working directory: D:\GMU Fall 2026\GMU-Badminton-App
+Integrity mode: development
+
+## Requirements
+
+### R1. Test Runner Heap Pressure Isolation
+Ensure `server/tests/challenger_empirical_stress.test.js` isolates or mocks `checkHeapPressure` and heap threshold checks during batch queue testing, so assertions for queue clamping (`limit(10)`), item processing, and error handling run deterministically without being bypassed by the CI runner's baseline memory.
+
+### R2. Deterministic Memory Ceiling Assertions
+Update the memory boundary tests in `challenger_empirical_stress.test.js` to either measure heap growth delta (differential memory usage of the hunt cycle) or configure the heap limit threshold via environment/mock in test mode, preventing false positive failures caused by Jest module caching across prior test suites.
+
+### R3. Full-Suite Local & CI Verification
+Verify that running `npm test` across all server suites sequentially passes 100% (22/22 suites, 0 failed), client tests pass (21/21 files), and the fix is safely committed and merged via the standard PR and QA review workflow.
+
+## Acceptance Criteria
+
+### Test & CI Integrity
+- [ ] `npx jest tests/challenger_empirical_stress.test.js` passes 100% of tests (0 failed)
+- [ ] `npm test` in `server/` passes 100% of test suites (22/22 test suites, 0 failed) when executed as a full suite
+- [ ] `npm test` in `client/` passes 100% (21/21 files, 0 failed)
+- [ ] `npm run lint` and `npm run build` in `client/` pass with 0 errors
+- [ ] A PR is opened, verified by QA, and merged to `develop` with a green GitHub Actions CI run
