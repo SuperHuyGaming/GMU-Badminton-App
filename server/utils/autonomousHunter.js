@@ -947,6 +947,11 @@ async function wipeAndRestartTournamentSystem() {
                     { tournamentName: /recwell intramural/i },
                     { tournamentName: /hoses basketball|golf tournament/i },
                     { tournamentName: /skip to content navigation menu/i },
+                    { tournamentName: /skip to main content/i },
+                    { tournamentName: /loch raven.*smashing sport|home events upcoming/i },
+                    { tournamentName: /race to the finals.*\(or/i },
+                    { tournamentName: /a smashing sport/i },
+                    { tournamentName: /depending on standard naming|per text details/i },
                     { originalCaption: /founded in 2001|est\. 2001/i }
                 ]
             })

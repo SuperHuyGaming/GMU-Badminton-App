@@ -226,4 +226,74 @@ describe('Public Tournaments Page Component', () => {
             expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
         });
     });
+
+    it('triggers refresh action and re-fetches published tournaments', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        const refreshBtn = screen.getByRole('button', { name: /refresh/i });
+        expect(refreshBtn).toBeInTheDocument();
+
+        fireEvent.click(refreshBtn);
+
+        await waitFor(() => {
+            expect(toast.success).toHaveBeenCalledWith('Tournaments refreshed!');
+        });
+    });
+
+    it('opens clear & reset confirmation dialog and executes reset-seed call on confirm', async () => {
+        apiFetch.mockImplementation(async (url) => {
+            if (url === '/api/tournaments/reset-seed') {
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        success: true,
+                        message: 'Tournament system wiped and restarted successfully'
+                    })
+                };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({ tournaments: mockTournaments })
+            };
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        const clearBtn = screen.getByRole('button', { name: /clear & reset/i });
+        expect(clearBtn).toBeInTheDocument();
+
+        fireEvent.click(clearBtn);
+
+        // Dialog should open
+        await waitFor(() => {
+            expect(screen.getByText('Reset Tournament Schedule?')).toBeInTheDocument();
+        });
+
+        // Click confirm in dialog
+        const confirmBtn = screen.getByRole('button', { name: /reset now/i });
+        fireEvent.click(confirmBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/tournaments/reset-seed', { method: 'POST' });
+            expect(toast.success).toHaveBeenCalledWith('Tournament system wiped and restarted successfully');
+        });
+    });
 });
