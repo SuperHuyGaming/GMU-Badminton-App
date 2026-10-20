@@ -11,6 +11,24 @@ const PostSchema = new mongoose.Schema({
 	visibility: { type: String, enum: ['PUBLIC', 'FRIENDS_ONLY', 'ONLY_ME'], default: 'PUBLIC' },
 	likedBy: { type: [String], default: [] },
 	isFlagged: { type: Boolean, default: false },
+	status: {
+		type: String,
+		enum: ['active', 'quarantined', 'deleted'],
+		default: 'active',
+		index: true,
+	},
+	reportCount: {
+		type: Number,
+		default: 0,
+		index: true,
+	},
+	reports: [
+		{
+			reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+			reason: { type: String, trim: true, default: 'Spam/Abuse' },
+			timestamp: { type: Date, default: Date.now }
+		}
+	],
 	toxicityScore: { type: Number, default: 0 }, // NEW: Sentiment toxicity tracking
 	isEdited: { type: Boolean, default: false }, // NEW: Track post edits
 	imageUrl: { type: String, default: "" }, // Legacy
@@ -58,7 +76,7 @@ PostSchema.post('save', async function(doc) {
 	try {
 		const ActivityFeed = require('./ActivityFeed');
         
-        if (doc.isFlagged) {
+        if (doc.isFlagged || doc.status === 'quarantined' || doc.status === 'deleted') {
             await ActivityFeed.deleteOne({ type: "post", referenceId: doc._id });
             return;
         }

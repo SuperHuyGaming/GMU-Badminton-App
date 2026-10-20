@@ -141,6 +141,7 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
     const [courts, setCourts] = useState(INITIAL_COURTS);
     const [filterStatus, setFilterStatus] = useState('ALL'); // 'ALL' | 'IN_PROGRESS' | 'AVAILABLE' | 'WARMUP'
     const [lastUpdated, setLastUpdated] = useState(() => new Date());
+    const [courtAnnouncement, setCourtAnnouncement] = useState('');
 
     // Timer interval: advances match elapsed seconds, decrements warmup timers, and updates walkover timers
     useEffect(() => {
@@ -179,6 +180,9 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
     useEffect(() => {
         const handleCourtStatusUpdate = (update) => {
             if (!update || !update.courtNumber) return;
+            if (update.status) {
+                setCourtAnnouncement(`Court ${update.courtNumber} status updated to ${update.status.replace(/_/g, ' ')}`);
+            }
             setCourts(prev =>
                 prev.map(c => {
                     if (c.courtNumber === update.courtNumber) {
@@ -233,6 +237,8 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
 
         const handleWalkoverStarted = (data) => {
             if (!data || !data.courtNumber) return;
+            const target = data.targetPlayerName || data.playerName || 'Player';
+            setCourtAnnouncement(`Walkover forfeit timer initiated on Court ${data.courtNumber} for ${target}. 10 minutes remaining.`);
             setCourts(prev =>
                 prev.map(c => {
                     if (c.courtNumber === data.courtNumber) {
@@ -378,6 +384,27 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
 
     return (
         <Box sx={{ width: '100%' }} data-testid="court-queue-viewer">
+            {/* WCAG 2.1 AA Dynamic ARIA Live Region */}
+            <Box
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                sx={{
+                    position: 'absolute',
+                    width: '1px',
+                    height: '1px',
+                    padding: 0,
+                    margin: '-1px',
+                    overflow: 'hidden',
+                    clip: 'rect(0, 0, 0, 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                }}
+                data-testid="court-queue-live-announcer"
+            >
+                {courtAnnouncement}
+            </Box>
+
             {/* Top Bar Header */}
             <Paper
                 elevation={1}
@@ -634,6 +661,7 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
                                         onClick={() => handleCallNextMatch(court.courtNumber)}
                                         disabled={court.queue.length === 0}
                                         data-testid={`btn-call-next-${court.courtNumber}`}
+                                        aria-label={`Call next match for Court ${court.courtNumber}`}
                                         sx={{ textTransform: 'none', fontWeight: 'bold' }}
                                     >
                                         Call Next Match
@@ -646,6 +674,7 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
                                                 color="secondary"
                                                 onClick={() => onSelectMatchForUmpire(court)}
                                                 data-testid={`btn-umpire-court-${court.courtNumber}`}
+                                                aria-label={`Score match on Court ${court.courtNumber} in Umpire Pad`}
                                             >
                                                 <SportsTennisIcon fontSize="small" />
                                             </IconButton>

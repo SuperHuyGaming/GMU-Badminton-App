@@ -220,3 +220,250 @@ You MUST follow the repository's mandatory PR & QA Workflow (.agents/rules/pr_wo
 8. Under NO circumstances merge `develop` into `main`.
 
 Acknowledge and adhere to this workflow for all deliverables.
+
+## 2026-10-19T04:15:39Z
+
+An autonomous multi-agent engineering team to eliminate backend JavaScript heap out of memory (OOM) crashes on Render (512MB RAM tier) caused by heavy Cheerio DOM parsing and unbounded web page scraping during Autonomous Tournament Hunter cycles.
+
+Working directory: D:/GMU Fall 2026/GMU-Badminton-App
+Integrity mode: development
+
+## Requirements
+
+### R1. Scraper Heap Memory & Cheerio DOM Optimization
+Enforce response body caps (maxContentLength: 500 * 1024, maxBodyLength: 500 * 1024) on all Axios calls in autonomousHunter.js, tournamentSoftwareCrawler.js, and scraper.js. Truncate raw HTML strings to 200KB prior to Cheerio parsing. Immediately dereference Cheerio DOM trees ($ = null, data = null) after extraction and yield microtasks (await new Promise(r => setImmediate(r))) between items to allow V8 garbage collection to reclaim memory.
+
+### R2. Discovery Queue Batch Throttling & Heap Pressure Guards
+Reduce processDiscoveryQueue batch size from 25 to 5–10 items per cycle. Add proactive heap checks (process.memoryUsage().heapUsed); if heap usage exceeds 200MB, pause processing to let the garbage collector catch up rather than crashing the Node process.
+
+### R3. Startup Memory Configuration & Mongoose Schema Cleanup
+In server.js, inspect memory configuration and handle low-heap environments gracefully. Remove redundant courtSchema.index({ courtNumber: 1 }) in server/models/Court.js to eliminate the Mongoose duplicate index warning on boot.
+
+### R4. Automated Memory Leak & Regression Verification
+Create an automated test suite in server/tests/ verifying that runFullAutonomousHunt and batch discovery queue processing execute without exceeding 200MB of heap memory, confirming zero OOM crashes.
+
+## Acceptance Criteria
+
+### Memory & System Resilience
+- [ ] Autonomous Tournament Hunter cycles (runFullAutonomousHunt and processDiscoveryQueue) complete without exceeding 200MB heap memory.
+- [ ] Zero FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory crashes.
+- [ ] Zero Mongoose duplicate index warnings on application startup.
+- [ ] All test suites pass cleanly:
+  - server/: npm test (100% passing suites), npm run lint (0 errors, 0 warnings).
+  - client/: npm test (100% passing files), npm run lint (0 errors, 0 warnings), npm run build (success).
+
+### Repository Workflow Compliance
+- [ ] All changes developed on a feature branch (fix/hunter-heap-oom-optimization) and merged via Pull Request following QA pipeline verification without direct commits to develop or main.
+
+## 2026-10-19T04:34:01Z
+
+CRITICAL ADDITIONAL USER REQUIREMENT:
+After the memory optimization and PR merge to `develop` are completed:
+1. Verify that Render logs show zero OOM crashes or heap limit errors.
+2. Delete/wipe all tournaments currently in the system using the admin wipe endpoint (`POST /api/admin/tournaments/wipe-and-restart`).
+3. Have a bot user with admin privileges trigger the Autonomous Tournament Hunter (`POST /api/admin/tournaments/discovery-queue/run-hunt`) to start finding tournaments from scratch.
+4. Verify that the hunter completes its full discovery cycle cleanly with zero memory spikes and zero errors.
+
+
+## 2026-10-19T19:01:57Z
+
+This is a single self-contained fix; keep it small and focused.
+Diagnose and permanently resolve CI test failures and flakiness on the develop branch in `server/tests/challenger_empirical_stress.test.js`, where full test runner memory baselines in CI (>200MB) cause premature heap guard exits and failed queue batch assertions.
+
+Working directory: D:\GMU Fall 2026\GMU-Badminton-App
+Integrity mode: development
+
+## Requirements
+
+### R1. Test Runner Heap Pressure Isolation
+Ensure `server/tests/challenger_empirical_stress.test.js` isolates or mocks `checkHeapPressure` and heap threshold checks during batch queue testing, so assertions for queue clamping (`limit(10)`), item processing, and error handling run deterministically without being bypassed by the CI runner's baseline memory.
+
+### R2. Deterministic Memory Ceiling Assertions
+Update the memory boundary tests in `challenger_empirical_stress.test.js` to either measure heap growth delta (differential memory usage of the hunt cycle) or configure the heap limit threshold via environment/mock in test mode, preventing false positive failures caused by Jest module caching across prior test suites.
+
+### R3. Full-Suite Local & CI Verification
+Verify that running `npm test` across all server suites sequentially passes 100% (22/22 suites, 0 failed), client tests pass (21/21 files), and the fix is safely committed and merged via the standard PR and QA review workflow.
+
+## Acceptance Criteria
+
+### Test & CI Integrity
+- [ ] `npx jest tests/challenger_empirical_stress.test.js` passes 100% of tests (0 failed)
+- [ ] `npm test` in `server/` passes 100% of test suites (22/22 test suites, 0 failed) when executed as a full suite
+- [ ] `npm test` in `client/` passes 100% (21/21 files, 0 failed)
+- [ ] `npm run lint` and `npm run build` in `client/` pass with 0 errors
+- [ ] A PR is opened, verified by QA, and merged to `develop` with a green GitHub Actions CI run
+
+
+## 2026-10-19T22:56:50Z
+
+# Flagship Teamwork Project: Project Titan (20-Problem Enterprise Overhaul)
+
+> Status: Architecture Defined & Ready for Execution
+> Goal: Fix 20 major engineering issues across tournament intelligence, deduplication, past event archiving, broken links, memory/RAM optimization, BWF Umpire Pad, Glicko-2 MMR, and automated verification.
+> Requested team: Standard full multi-agent engineering team
+
+## Scope & Problem Catalog
+1. Fuzzy & semantic duplicate tournament detection & merging (Jaro-Winkler + date window).
+2. Strict temporal horizon & past tournament auto-archiving.
+3. Autonomous 404 / broken link healthcheck crawler.
+4. Scraping title sanitizer & navigation boilerplate reject filter.
+5. CampusGroups & Mason360 SSO gate bypass / calendar feed fallback.
+6. Scraper heap pressure ceiling & deterministic garbage collection triggers.
+7. Atomic Redis tagged invalidation ($O(1)$ set-based cache eviction).
+8. Database query projection & summary payload truncation.
+9. Client-side virtualized rendering & lazy flyer image decoupling.
+10. Optimistic concurrency locking on bracket match progression.
+11. Offline PWA resilience & IndexedDB local scoring ledger for Umpire Pad.
+12. Strict BWF official scoring rules enforcement (2-pt lead, 30-pt ceiling, interval timers).
+13. RAC Gymnasium Court 1-6 scheduling deadlock prevention.
+14. Glicko-2 Matchmaking Rating (MMR) & inactivity volatility decay.
+15. Bi-directional friend state idempotency & atomic transactional mutations.
+16. Community feed spam & abuse moderation quarantine pipeline.
+17. Atomic tournament RSVP capacity capping & FIFO waitlists.
+18. Dynamic CORS hardening & rate-limiting preflight isolation.
+19. Full WCAG 2.1 AA accessibility & color contrast compliance.
+20. 10-persona synthetic user bot simulation & memory leak harness.
+
+## 4-Phase Delivery Roadmap
+- Milestone 1 (M1): Data Quality & Ingestion Deduplication (Problems 1–5).
+- Milestone 2 (M2): Performance, RAM Governance & Scaling (Problems 6–9, 18).
+- Milestone 3 (M3): Interactive Systems & Fair Play (Problems 10–14).
+- Milestone 4 (M4): Community Integrity, Accessibility & 10-Bot QA (Problems 15–17, 19–20).
+
+
+## 2026-10-20T03:23:35Z
+
+# Teamwork Project Prompt — Draft
+
+> Status: Launched
+> Goal: Craft prompt → get user approval → delegate to teamwork_preview
+> Requested team: Full team (large-scale autonomous engineering team)
+
+Execute Project Titan: a comprehensive 20-problem engineering overhaul across the GMU Badminton Connect platform, resolving duplicate tournament ingestion, past event leaks, broken external links, scraper heap/RAM accumulation, BWF scoring compliance, court scheduling deadlocks, Glicko-2 ratings, and end-to-end synthetic testing.
+
+Working directory: D:\GMU Fall 2026\GMU-Badminton-App
+Integrity mode: development
+
+## Verification Resources
+- Master Architecture Blueprint: `PROJECT_TITAN_MASTER_PLAN.md`
+- PR Workflow rules: `.agents/rules/pr_workflow.md`
+- Server test suites: `server/tests/` (22 existing suites, including `cleanSlateSeed.test.js` and `challenger_empirical_stress.test.js`)
+- Client test suites: `client/src/` (21 existing files, including `Tournaments.test.jsx` and `userBotsSimulation.test.jsx`)
+
+## Requirements
+
+### R1. Tournament Intelligence & Ingestion Reliability
+Implement an automated ingestion pipeline that cleans, deduplicates, and validates all regional tournaments:
+- **Fuzzy Deduplication**: Match variant tournament titles using Jaro-Winkler / Levenshtein distance combined with a 48-hour date window ($>0.85$ threshold), automatically merging division draws, links, and attendee counts rather than creating duplicate cards.
+- **Strict Temporal Horizon**: Auto-archive elapsed tournaments where `endDate < Date.now()`, removing them from default public searches and recommendation queues while preserving match archives.
+- **Autonomous Link Healthcheck Crawler**: Routine `HEAD`/`GET` link health verifier that marks broken or 404 external registration links with a clear warning badge and falls back gracefully to the host club homepage.
+- **Title Sanitizer & SSO Bypass**: Strip navigation debris (*"Skip to main content"*, *"a smashing sport"*, *"Menu Select"*) and parse structured `.ics` feeds or public JSON APIs when encountering login walls.
+
+### R2. Performance, RAM Governance & Scaling
+Eliminate memory leaks and high-traffic Redis bottlenecks:
+- **Scraper Heap Pressure Ceiling**: Stream Cheerio DOM parsing with strict memory ceilings (`getHeapPressureLimitBytes()`) and concurrency throttling whenever heap usage exceeds 75% capacity.
+- **Atomic Redis Tagged Invalidation**: Replace linear `redis.keys('tournaments:*')` scans with Redis Set-based key tagging (`SADD tournaments:active_keys`) and non-blocking `UNLINK` pipelines.
+- **Database Query Projection**: Optimize directory queries to project only summary fields, deferring full division brackets and attendee arrays until detail modals open.
+- **Client-Side Virtualization**: Virtualize the tournament directory card grid (`react-window`) and decouple high-res flyer image rendering.
+
+### R3. Interactive Systems, BWF Umpire Pad & Fair Play
+Enhance real-time competitive tournament infrastructure:
+- **Bracket OCC Lock**: Implement Mongoose document versioning and WebSocket locks preventing race conditions during simultaneous bracket advances.
+- **Offline PWA IndexedDB Sync**: Store live umpire pad score states locally in IndexedDB, auto-replaying mutations to the server upon Wi-Fi reconnection.
+- **Strict BWF Rules Engine**: Enforce official 21-point rally scoring rules (deuce 2-point lead rule up to 29-29, golden point ceiling at 30, and side changes at 11 points in deciding sets).
+- **RAC Court Deadlock Prevention**: Dynamic match duration estimation, 10-minute walkover forfeit countdown, and automated queue auto-advancement across RAC Courts 1–6.
+- **Glicko-2 MMR Engine**: Calibrate player ratings tracking rating deviation ($RD$) and volatility ($\sigma$) with confidence decay for inactive accounts.
+
+### R4. Community Integrity, Accessibility & 10-Bot CI Harness
+Harden social features and automated quality assurance:
+- **Bi-Directional Social Integrity**: Atomic MongoDB transactional mutations for friend states and waitlist promotions upon RSVP cancellation.
+- **Feed Anti-Spam & Moderation**: Automated text spam analysis, rate limiting, and 3-report quarantine triggers.
+- **WCAG 2.1 AA Compliance**: Full contrast audit ($\ge 4.5:1$), keyboard navigation rings, and dynamic `aria-live` announcements.
+- **10-Persona Synthetic Bot Harness**: Expand end-to-end integration tests to 10 distinct collegiate personas exercising all 20 workflows under adversarial memory pressure.
+
+### R5. Standard PR Workflow & Zero-Regression Invariant
+All features and refactors must follow the project's PR workflow (`feature branch -> Pull Request -> CI verification -> squash-merge into develop`). Never commit directly to `develop` or `main`.
+
+## Acceptance Criteria
+
+### Automated Verification
+- [ ] Server test suite: `npm test` in `server/` passes 100% (all 22+ suites passing, zero memory leaks, bounded heap $<200$MB).
+- [ ] Client test suite: `npm test` in `client/` passes 100% (all 21+ files passing).
+- [ ] Linting & build: `npm run lint` and `npm run build` pass with 0 errors and 0 warnings in both `client/` and `server/`.
+- [ ] Deduplication test: Ingesting variant titles for the same event merges into 1 canonical tournament with combined division draws.
+- [ ] Link health test: Broken 404 links are detected and flagged with `linkStatus: 'expired'` without crashing the ingestion worker.
+- [ ] BWF scoring test: Umpire pad correctly halts scores at 30 points and enforces deuce rules.
+- [ ] 10-bot simulation: Synthetic user bots complete multi-user exploration without timeouts or unhandled promise rejections.
+
+### Agent-as-Judge & Deployment Verification
+- [ ] Staging verification: Changes deployed to Render staging (`https://gmu-frontend-staging.onrender.com/tournaments`) reflect clean deduplicated directory cards and active controls.
+- [ ] Victory Audit: Independent verification confirms zero regressions and 100% pass across all acceptance criteria.
+
+
+## 2026-10-19T23:49:40Z
+
+### CRITICAL USER CLARIFICATION: DATA SOURCES
+> "okay keep in mind mason 360 is not where u get data, it's from instagram and linktree"
+
+**Architectural Directives:**
+1. The primary data ingestion sources are **Instagram** posts/captions (via club handles like `@gmu_badminton`, `@cba_badminton`, `@nvbadminton`, etc.) and their **Linktree** (or Beacons/bio) URLs that link to Google Forms and registration pages.
+2. Mason360 is NOT an external data ingestion target. Do not waste cycles attempting to scrape or authenticate with Mason360 login portals.
+3. Treat Instagram post URLs and Linktree URLs as primary source and registration links in `instagramScraper.js`, `autonomousHunter.js`, and `deduplication.js`.
+
+
+## 2026-10-20T03:53:07Z
+
+### USER DIRECTIVE: DMV COLLEGIATE BADMINTON CLUBS TARGETING
+> "you can start with clubs around dmv area from colleges, try that and let me know"
+
+**Directives for orchestrator_8 and worker_m1_ingestion_8:**
+1. Target specifically collegiate badminton clubs in the DMV area:
+   - George Mason University: `@gmu_badminton` (Fairfax, VA)
+   - University of Maryland: `@umd_badminton` (College Park, MD)
+   - George Washington University: `@gwbadminton` (Washington, DC)
+   - Georgetown University: `@georgetownbadminton` (Washington, DC)
+   - Johns Hopkins University: `@jhubadminton` (Baltimore, MD)
+   - UMBC: `@umbcbadminton` (Catonsville, MD)
+   - University of Virginia: `@uvabadminton` (Charlottesville, VA)
+   - Virginia Tech: `@vtechbadminton` (Blacksburg, VA)
+   - VCU: `@vcu.badminton` (Richmond, VA)
+   - William & Mary: `@wmbadminton` (Williamsburg, VA)
+   - Plus regional training hubs: `@cba_badminton` and `@nvbadminton`.
+2. In `server/utils/instagramScraper.js`, prioritize these DMV college handles at the top of `TARGET_CLUBS`.
+3. Extract Linktree / bio links from these DMV college profiles, resolve Google Forms registration links, and parse post captions for 2026/2027 collegiate tournaments.
+4. Execute a test run of this collegiate hunt and report the discovered DMV collegiate tournaments.
+
+
+## 2026-10-19T23:55:21Z
+
+### USER DOMAIN INSIGHT: ON-CAMPUS VENUES & SPECIFIC EVENTS
+> "okay, like there is a gmu open in november and nvbc open in december, can you see that? also the hosts are sometimes on the school campus like gmu open is at the RAC"
+
+**Confirmed Tournament Milestones:**
+1. **GMU Badminton Open** (November) hosted on campus at George Mason University's **Recreation Athletic Complex (RAC)**.
+2. **NVBC Open** (December) hosted at **Northern Virginia Badminton Club (NVBC)** in Ashburn, VA.
+3. **On-Campus Venue Recognition**: Detect campus recreational facilities in venue metadata:
+   - GMU: Recreation Athletic Complex (RAC)
+   - UMD: University of Maryland SPH / Ritchie Coliseum
+   - UVA: Memorial Gymnasium / Slaughter Recreation Center
+   - Virginia Tech: McComas Hall / War Memorial Hall
+   - VCU: Cary Street Gymnasium
+   - JHU: Ralph S. O'Connor Recreation Center
+
+
+## 2026-10-20T03:59:55Z
+
+### USER DIRECTIVE: ML CANDIDATE PRUNING & SIMILARITY ENSEMBLE
+> "for the similarity do some prunning and apply ML topics to do that and let me know"
+
+**Directives for orchestrator_8 and worker_m1_ingestion_8:**
+1. Multi-Stage ML Candidate Pruning (`shouldPruneCandidate`):
+   - Stage 1: Temporal Window Pruning (drops $\Delta t > \text{windowHours}$ in $O(1)$)
+   - Stage 2: String Length Ratio Pruning (>3.5:1 ratio without substring containment)
+   - Stage 3: Informative Token Inverted Index Filter (requires shared non-stopword tokens or character trigram overlap)
+2. Machine Learning TF-IDF Cosine Vectorizer (`computeTfIdfVector`, `cosineSimilarity`):
+   - Computes term frequency and inverse document frequency with sub-word character trigram shingles
+   - Assigns high IDF weights to distinctive collegiate terms and downweights generic sports terms
+3. Hybrid ML Ensemble (`computeTitleSimilarity`):
+   - Fuses Cosine Similarity (40%), Jaro-Winkler (35%), and Levenshtein (25%)
+Ensure `worker_m1_ingestion_8` includes tests for `shouldPruneCandidate`, `computeTfIdfVector`, `cosineSimilarity`, and the ensemble similarity in `server/tests/titan_m1_ingestion_dedup.test.js`.

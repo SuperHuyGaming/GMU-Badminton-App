@@ -260,12 +260,26 @@ export default function CommunityDirectory() {
             setRecommended(prev => prev.map(p => p._id === userId ? { ...p, friendshipStatus: 'friends' } : p));
         };
 
+        const handleFriendRequestDeclined = ({ userId }) => {
+            setMatches(prev => prev.map(p => p._id === userId ? { ...p, friendshipStatus: 'none' } : p));
+            setRecommended(prev => prev.map(p => p._id === userId ? { ...p, friendshipStatus: 'none' } : p));
+        };
+
+        const handleFriendRemoved = ({ friendId }) => {
+            setMatches(prev => prev.map(p => p._id === friendId ? { ...p, friendshipStatus: 'none' } : p));
+            setRecommended(prev => prev.map(p => p._id === friendId ? { ...p, friendshipStatus: 'none' } : p));
+        };
+
         socket.on('friendRequestReceived', handleFriendRequestReceived);
         socket.on('friendRequestAccepted', handleFriendRequestAccepted);
+        socket.on('friendRequestDeclined', handleFriendRequestDeclined);
+        socket.on('friendRemoved', handleFriendRemoved);
 
         return () => {
             socket.off('friendRequestReceived', handleFriendRequestReceived);
             socket.off('friendRequestAccepted', handleFriendRequestAccepted);
+            socket.off('friendRequestDeclined', handleFriendRequestDeclined);
+            socket.off('friendRemoved', handleFriendRemoved);
         };
     }, []);
 
@@ -471,7 +485,7 @@ export default function CommunityDirectory() {
                                             )}
                                             {/* UX UI Tweak #2: Instant "Clear" Button */}
                                             {searchQuery && (
-                                                <IconButton aria-label="icon button" 
+                                                <IconButton aria-label="Clear search input" 
                                                     size="small" 
                                                     onClick={(e) => { 
                                                         e.stopPropagation(); 
@@ -557,7 +571,7 @@ export default function CommunityDirectory() {
                                                           <SearchIcon color="action" fontSize="small" />
                                                           <Typography fontWeight="500">{term}</Typography>
                                                       </Box>
-                                                      <IconButton aria-label="icon button" size="small" onClick={(e) => removeRecentSearch(e, term)}>
+                                                      <IconButton aria-label={`Remove recent search ${term}`} size="small" onClick={(e) => removeRecentSearch(e, term)}>
                                                           <CloseIcon fontSize="small" />
                                                       </IconButton>
                                                   </MenuItem>
@@ -793,7 +807,7 @@ export default function CommunityDirectory() {
                 <Box sx={{ width: { xs: '100vw', sm: 340 }, p: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Advanced Filters</Typography>
-                        <IconButton aria-label="icon button" onClick={() => setDrawerOpen(false)}>
+                        <IconButton aria-label="Close filter drawer" onClick={() => setDrawerOpen(false)}>
                             <CloseIcon />
                         </IconButton>
                     </Box>

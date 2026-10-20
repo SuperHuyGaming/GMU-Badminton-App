@@ -89,7 +89,7 @@ const PeopleYouMayKnow = ({ user }) => {
             </Typography>
             <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 {recommended.length > 3 && (
-                    <IconButton aria-label="icon button" 
+                    <IconButton aria-label="Scroll people you may know left" 
                         size="small" 
                         onClick={() => document.getElementById('pymk-scroll')?.scrollBy({ left: -250, behavior: 'smooth' })}
                         sx={{ position: 'absolute', left: -16, zIndex: 2, bgcolor: 'background.paper', boxShadow: 3, '&:hover': { bgcolor: 'action.hover' } }}
@@ -114,7 +114,7 @@ const PeopleYouMayKnow = ({ user }) => {
                     ))}
                 </Box>
                 {recommended.length > 3 && (
-                    <IconButton aria-label="icon button" 
+                    <IconButton aria-label="Scroll people you may know right" 
                         size="small" 
                         onClick={() => document.getElementById('pymk-scroll')?.scrollBy({ left: 250, behavior: 'smooth' })}
                         sx={{ position: 'absolute', right: -16, zIndex: 2, bgcolor: 'background.paper', boxShadow: 3, '&:hover': { bgcolor: 'action.hover' } }}

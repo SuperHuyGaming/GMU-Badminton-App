@@ -61,6 +61,9 @@ export default function UmpireDigitalPad({
     // Penalty / warning dialog
     const [penaltyNotice, setPenaltyNotice] = useState(null);
 
+    // WCAG 2.1 AA Dynamic ARIA Live screen reader announcements
+    const [screenReaderAnnouncement, setScreenReaderAnnouncement] = useState('');
+
     // Problem 11: Offline Ledger and Connectivity Sync state
     const [syncStatus, setSyncStatus] = useState(
         typeof navigator !== 'undefined' && !navigator.onLine ? 'OFFLINE' : 'ONLINE'
@@ -242,6 +245,11 @@ export default function UmpireDigitalPad({
         setScore2(nextScore2);
         setCurrentServer(nextServer);
 
+        const scorer = team === 1 ? player1Name : player2Name;
+        setScreenReaderAnnouncement(
+            `Point scored by ${scorer}. Current score: ${player1Name} ${nextScore1}, ${player2Name} ${nextScore2}.`
+        );
+
         // Problem 11: Local ledger persistence and offline queuing
         const idempotencyKey = `court-${courtNumber}-pt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
         offlineScoreLedger.saveMatchState({
@@ -274,6 +282,7 @@ export default function UmpireDigitalPad({
         if (Math.max(nextScore1, nextScore2) === 11 && Math.min(nextScore1, nextScore2) < 11) {
             setIntervalType('TECHNICAL_11');
             setIntervalCountdown(60);
+            setScreenReaderAnnouncement('60-second technical interval reached.');
         }
 
         // Check if game has ended
@@ -293,6 +302,7 @@ export default function UmpireDigitalPad({
                 setMatchStatus('MATCH_OVER');
                 setMatchWinner(mWinner);
                 setIntervalCountdown(0);
+                setScreenReaderAnnouncement(`Match concluded. Winner: ${mWinner}.`);
 
                 emitScoreUpdate(nextScore1, nextScore2, nextGW1, nextGW2, currentGame, nextServer, nextGameScores, 'MATCH_OVER');
                 if (onMatchComplete) onMatchComplete({ winner: mWinner, scores: nextGameScores });
@@ -303,6 +313,7 @@ export default function UmpireDigitalPad({
                 setMatchStatus('GAME_OVER');
                 setIntervalType('GAME_BREAK_120');
                 setIntervalCountdown(120);
+                setScreenReaderAnnouncement(`Game ${currentGame} concluded.`);
 
                 emitScoreUpdate(nextScore1, nextScore2, nextGW1, nextGW2, currentGame, nextServer, nextGameScores, 'GAME_OVER');
             }
@@ -406,6 +417,7 @@ export default function UmpireDigitalPad({
         setScore2(0);
         setCurrentGame(prev => prev + 1);
         setMatchStatus('IN_PROGRESS');
+        setScreenReaderAnnouncement(`Game ${currentGame + 1} started.`);
         // Winner of previous game serves first in next game
         emitScoreUpdate(0, 0, gamesWon1, gamesWon2, currentGame + 1, currentServer, completedGameScores, 'IN_PROGRESS');
     }, [matchStatus, pushHistory, gamesWon1, gamesWon2, currentGame, currentServer, completedGameScores, emitScoreUpdate]);
@@ -516,6 +528,27 @@ export default function UmpireDigitalPad({
                     </Button>
                 </Stack>
             </Paper>
+
+            {/* WCAG 2.1 AA Dynamic ARIA Live Region */}
+            <Box
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                sx={{
+                    position: 'absolute',
+                    width: '1px',
+                    height: '1px',
+                    padding: 0,
+                    margin: '-1px',
+                    overflow: 'hidden',
+                    clip: 'rect(0, 0, 0, 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                }}
+                data-testid="umpire-aria-live-announcer"
+            >
+                {screenReaderAnnouncement}
+            </Box>
 
             {/* Critical Alert Banners: Match Point, Game Point, Deuce, Interval */}
             {intervalCountdown > 0 && (
@@ -662,7 +695,7 @@ export default function UmpireDigitalPad({
 
                     {/* Middle VS and Sets Divider */}
                     <Grid item xs={2} textAlign="center">
-                        <Typography variant="h5" sx={{ opacity: 0.4, fontWeight: 900 }}>
+                        <Typography variant="h5" sx={{ opacity: 0.7, fontWeight: 900 }}>
                             VS
                         </Typography>
                         {completedGameScores.length > 0 && (
@@ -745,7 +778,12 @@ export default function UmpireDigitalPad({
                     }}
                     data-testid="service-court-svg"
                 >
-                    <svg viewBox="0 0 600 300" style={{ width: '100%', height: '100%' }}>
+                    <svg 
+                        viewBox="0 0 600 300" 
+                        role="img" 
+                        aria-label={`Badminton service court visualizer: ${currentServer === 1 ? player1Name : player2Name} serving from ${serverCourt} court`}
+                        style={{ width: '100%', height: '100%' }}
+                    >
                         {/* Court Outer Boundary (Doubles Line) */}
                         <rect x="20" y="20" width="560" height="260" fill="none" stroke="#ffffff" strokeWidth="3" />
 
@@ -889,6 +927,7 @@ export default function UmpireDigitalPad({
                         onClick={() => handleScorePoint(1)}
                         disabled={matchStatus === 'MATCH_OVER' || matchStatus === 'GAME_OVER'}
                         data-testid="btn-score-team1"
+                        aria-label={`Award 1 point to ${player1Name}`}
                         sx={{
                             minHeight: { xs: 80, sm: 96 },
                             borderRadius: 3,
@@ -916,6 +955,7 @@ export default function UmpireDigitalPad({
                         onClick={() => handleScorePoint(2)}
                         disabled={matchStatus === 'MATCH_OVER' || matchStatus === 'GAME_OVER'}
                         data-testid="btn-score-team2"
+                        aria-label={`Award 1 point to ${player2Name}`}
                         sx={{
                             minHeight: { xs: 80, sm: 96 },
                             borderRadius: 3,

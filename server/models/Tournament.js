@@ -12,7 +12,15 @@ const tournamentSchema = new mongoose.Schema({
     sourceUrl: String,
     flyerImageUrl: String,
     rsvpCount: { type: Number, default: 0 },
+    maxCapacity: { type: Number, default: 64, min: 1 },
     attendees: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    waitlist: [
+        {
+            userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+            registeredAt: { type: Date, default: Date.now },
+            idempotencyKey: { type: String, trim: true }
+        }
+    ],
     entryFee: String,
     skillLevels: [String],
     divisions: [{
@@ -46,5 +54,7 @@ tournamentSchema.index({ sourceUrl: 1 });
 tournamentSchema.index({ status: 1, endDate: 1 });
 tournamentSchema.index({ status: 1, startDate: 1 });
 tournamentSchema.index({ linkStatus: 1 });
+tournamentSchema.index({ "waitlist.userId": 1 });
+tournamentSchema.index({ "waitlist.idempotencyKey": 1 }, { sparse: true });
 
 module.exports = mongoose.model("Tournament", tournamentSchema);

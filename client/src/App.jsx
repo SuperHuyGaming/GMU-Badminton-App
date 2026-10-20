@@ -315,7 +315,7 @@ function App() {
 				? { main: "#B00020", contrastText: "#ffffff" }
 				: { main: "#ef5350", contrastText: "#000000" },
 			warning: mode === "light"
-				? { main: "#E65100", contrastText: "#ffffff" }
+				? { main: "#c43c00", contrastText: "#ffffff" }
 				: { main: "#ff9800", contrastText: "#000000" },
 			info: mode === "light"
 				? { main: "#01579B", contrastText: "#ffffff" }
@@ -349,6 +349,31 @@ function App() {
 			}
 		},
 		components: {
+			MuiCssBaseline: {
+				styleOverrides: {
+					'*:focus-visible': {
+						outline: mode === 'dark' ? '2px solid #38bdf8 !important' : '2px solid #004d26 !important',
+						outlineOffset: '2px !important',
+					},
+					'button:focus-visible, a:focus-visible, [role="button"]:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex="0"]:focus-visible': {
+						outline: mode === 'dark' ? '2px solid #38bdf8 !important' : '2px solid #004d26 !important',
+						outlineOffset: '2px !important',
+					}
+				}
+			},
+			MuiButtonBase: {
+				defaultProps: {
+					disableRipple: false,
+				},
+				styleOverrides: {
+					root: {
+						'&.Mui-focusVisible': {
+							outline: mode === 'dark' ? '2px solid #38bdf8 !important' : '2px solid #004d26 !important',
+							outlineOffset: '2px !important',
+						}
+					}
+				}
+			},
 
 			MuiInputBase: {
 				styleOverrides: {
@@ -500,7 +525,20 @@ function App() {
 				<BrowserRouter>
 					<Navbar />
 
-					<Toaster position="top-center" reverseOrder={false} />
+					<Toaster 
+						position="top-center" 
+						reverseOrder={false}
+						containerAriaProps={{
+							'aria-live': 'polite',
+							role: 'status'
+						}}
+						toastOptions={{
+							ariaProps: {
+								role: 'status',
+								'aria-live': 'polite'
+							}
+						}}
+					/>
 
 					<Container 
 						maxWidth="lg" 

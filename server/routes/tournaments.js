@@ -23,7 +23,10 @@ const TOURNAMENT_DIRECTORY_PROJECTION = [
     'isOpenTournament',
     'status',
     'rsvpCount',
+    'maxCapacity',
     'attendees',
+    'waitlist.userId',
+    'waitlist.registeredAt',
     'registrationUrl',
     'sourceUrl',
     'flyerImageUrl',
@@ -236,6 +239,98 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+async function promoteNextFromWaitlist(tournamentId, io) {
+    let promotedUser = null;
+    const Notification = require('../models/Notification');
+
+    while (true) {
+        const tournament = await Tournament.findById(tournamentId);
+        if (!tournament || !tournament.waitlist || tournament.waitlist.length === 0) {
+            break;
+        }
+        const maxCap = tournament.maxCapacity || 64;
+        if (tournament.attendees && tournament.attendees.length >= maxCap) {
+            break;
+        }
+
+        // Sort waitlist strictly FIFO by registeredAt ascending
+        const sortedWaitlist = [...tournament.waitlist].sort(
+            (a, b) => new Date(a.registeredAt).getTime() - new Date(b.registeredAt).getTime()
+        );
+        const candidate = sortedWaitlist[0];
+
+        // Atomic dequeuing and promotion conditioned on capacity
+        let updated = null;
+        if (mongoose.connection.readyState === 1) {
+            updated = await Tournament.findOneAndUpdate(
+                {
+                    _id: tournamentId,
+                    "waitlist.userId": candidate.userId,
+                    $expr: {
+                        $lt: [
+                            { $size: { $ifNull: ["$attendees", []] } },
+                            { $ifNull: ["$maxCapacity", 64] }
+                        ]
+                    }
+                },
+                {
+                    $pull: { waitlist: { userId: candidate.userId } },
+                    $push: { attendees: candidate.userId },
+                    $inc: { rsvpCount: 1 }
+                },
+                { new: true }
+            );
+        } else {
+            const wIdx = tournament.waitlist.findIndex(w => w.userId.toString() === candidate.userId.toString());
+            if (wIdx > -1) {
+                tournament.waitlist.splice(wIdx, 1);
+                tournament.attendees.push(candidate.userId);
+                tournament.rsvpCount = (tournament.rsvpCount || 0) + 1;
+                if (typeof tournament.save === 'function') await tournament.save();
+                updated = tournament;
+            }
+        }
+
+        if (updated) {
+            promotedUser = candidate.userId;
+            try {
+                await Notification.create({
+                    targetUserId: candidate.userId,
+                    message: `A spot opened up for ${updated.tournamentName || "the tournament"}! You have been promoted from the waitlist to attending.`,
+                    link: `/tournaments?highlight=${tournamentId}`
+                });
+            } catch (nErr) {
+                console.warn("Notification creation error on waitlist promotion:", nErr.message);
+            }
+
+            if (io) {
+                io.emit("tournament:waitlistPromoted", {
+                    tournamentId: tournamentId.toString(),
+                    userId: candidate.userId.toString(),
+                    tournamentName: updated.tournamentName
+                });
+                io.emit("tournament:rsvpUpdated", {
+                    tournamentId: tournamentId.toString(),
+                    rsvpCount: updated.rsvpCount
+                });
+            }
+            break;
+        }
+    }
+
+    const finalDoc = await Tournament.findById(tournamentId);
+    if (finalDoc && finalDoc.attendees && finalDoc.attendees.length < (finalDoc.maxCapacity || 64) && finalDoc.status === 'sold_out') {
+        if (mongoose.connection.readyState === 1) {
+            await Tournament.updateOne({ _id: tournamentId }, { $set: { status: 'active' } });
+        } else {
+            finalDoc.status = 'active';
+            if (typeof finalDoc.save === 'function') await finalDoc.save();
+        }
+    }
+
+    return promotedUser;
+}
+
 router.post('/:id/rsvp', authMiddleware, async (req, res) => {
     try {
         const tournamentId = req.params.id;
@@ -248,50 +343,400 @@ router.post('/:id/rsvp', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: "Tournament not found" });
         }
 
-        const userId = req.user._id || req.user.id;
+        const userId = req.user._id || req.user.id || req.user.userId;
         if (!tournament.attendees) {
             tournament.attendees = [];
         }
 
         const userIndex = tournament.attendees.findIndex(id => id.toString() === userId.toString());
-        let isRsvped = false;
-        let message = "";
 
+        // 1. Backward-compatible toggle OFF if already attending
         if (userIndex > -1) {
             tournament.attendees.splice(userIndex, 1);
             tournament.rsvpCount = Math.max(0, (tournament.rsvpCount || 1) - 1);
-            isRsvped = false;
-            message = "RSVP removed";
-        } else {
-            tournament.attendees.push(userId);
-            tournament.rsvpCount = (tournament.rsvpCount || 0) + 1;
-            isRsvped = true;
-            message = "Successfully RSVP'd";
+            if (typeof tournament.save === 'function') await tournament.save();
+            if (typeof tournament.populate === 'function') await tournament.populate("attendees", "name avatarUrl _id");
+
+            const io = req.io || req.app?.get('io');
+            await promoteNextFromWaitlist(tournamentId, io);
+
+            try {
+                if (typeof redis.invalidateCacheTag === 'function') {
+                    await redis.invalidateCacheTag('tournaments:active_keys');
+                } else {
+                    const keys = await redis.keys('tournaments:*');
+                    if (keys && keys.length > 0) await redis.del(keys);
+                }
+            } catch (cacheErr) {
+                console.warn("Redis delete error:", cacheErr.message);
+            }
+
+            return res.json({
+                message: "RSVP removed",
+                rsvpCount: tournament.rsvpCount,
+                isRsvped: false,
+                attendees: tournament.attendees
+            });
         }
 
-        await tournament.save();
-        await tournament.populate("attendees", "name avatarUrl _id");
+        // 2. Check if already on waitlist
+        const inWaitlist = tournament.waitlist && tournament.waitlist.some(w => w.userId.toString() === userId.toString());
+        if (inWaitlist) {
+            const pos = tournament.waitlist.findIndex(w => w.userId.toString() === userId.toString()) + 1;
+            return res.json({
+                message: "Tournament is full. You have been added to the waitlist.",
+                isRsvped: false,
+                isWaitlisted: true,
+                waitlistPosition: pos,
+                rsvpCount: tournament.rsvpCount
+            });
+        }
+
+        // 3. Conditional atomic RSVP if capacity allows
+        let rsvped = null;
+        if (mongoose.connection.readyState === 1) {
+            rsvped = await Tournament.findOneAndUpdate(
+                {
+                    _id: tournamentId,
+                    attendees: { $ne: userId },
+                    $expr: {
+                        $lt: [
+                            { $size: { $ifNull: ["$attendees", []] } },
+                            { $ifNull: ["$maxCapacity", 64] }
+                        ]
+                    }
+                },
+                {
+                    $addToSet: { attendees: userId },
+                    $inc: { rsvpCount: 1 }
+                },
+                { new: true }
+            );
+        } else {
+            const maxCap = tournament.maxCapacity || 64;
+            if (tournament.attendees.length < maxCap) {
+                tournament.attendees.push(userId);
+                tournament.rsvpCount = (tournament.rsvpCount || 0) + 1;
+                if (typeof tournament.save === 'function') await tournament.save();
+                rsvped = tournament;
+            }
+        }
+
+        if (rsvped) {
+            if (rsvped.attendees.length >= (rsvped.maxCapacity || 64)) {
+                if (mongoose.connection.readyState === 1) {
+                    await Tournament.updateOne({ _id: tournamentId }, { $set: { status: 'sold_out' } });
+                } else {
+                    rsvped.status = 'sold_out';
+                }
+            }
+            if (typeof rsvped.populate === 'function') {
+                await rsvped.populate("attendees", "name avatarUrl _id");
+            }
+            if (typeof tournament.save === 'function' && tournament !== rsvped) {
+                await tournament.save();
+            }
+
+            try {
+                if (typeof redis.invalidateCacheTag === 'function') {
+                    await redis.invalidateCacheTag('tournaments:active_keys');
+                } else {
+                    const keys = await redis.keys('tournaments:*');
+                    if (keys && keys.length > 0) await redis.del(keys);
+                }
+            } catch (cacheErr) {
+                console.warn("Redis delete error:", cacheErr.message);
+            }
+
+            return res.json({
+                message: "Successfully RSVP'd",
+                rsvpCount: rsvped.rsvpCount,
+                isRsvped: true,
+                attendees: rsvped.attendees
+            });
+        }
+
+        // 4. Capacity reached -> enroll into waitlist
+        let waitlisted = null;
+        if (mongoose.connection.readyState === 1) {
+            waitlisted = await Tournament.findOneAndUpdate(
+                {
+                    _id: tournamentId,
+                    attendees: { $ne: userId },
+                    "waitlist.userId": { $ne: userId }
+                },
+                {
+                    $push: {
+                        waitlist: {
+                            userId: userId,
+                            registeredAt: new Date(),
+                            idempotencyKey: req.body?.idempotencyKey || null
+                        }
+                    },
+                    $set: { status: 'sold_out' }
+                },
+                { new: true }
+            );
+        } else {
+            if (!tournament.waitlist) tournament.waitlist = [];
+            tournament.waitlist.push({
+                userId: userId,
+                registeredAt: new Date(),
+                idempotencyKey: req.body?.idempotencyKey || null
+            });
+            tournament.status = 'sold_out';
+            if (typeof tournament.save === 'function') await tournament.save();
+            waitlisted = tournament;
+        }
+
+        const waitlistArr = waitlisted?.waitlist || tournament.waitlist || [];
+        const pos = waitlistArr.findIndex(w => w.userId.toString() === userId.toString()) + 1;
 
         try {
             if (typeof redis.invalidateCacheTag === 'function') {
                 await redis.invalidateCacheTag('tournaments:active_keys');
-            } else {
-                const keys = await redis.keys('tournaments:*');
-                if (keys && keys.length > 0) await redis.del(keys);
             }
-        } catch (cacheErr) {
-            console.warn("Redis delete error:", cacheErr.message);
-        }
+        } catch (cacheErr) {}
 
-        res.json({
-            message,
-            rsvpCount: tournament.rsvpCount,
-            isRsvped,
-            attendees: tournament.attendees
+        return res.status(200).json({
+            message: "Tournament is full. You have been added to the waitlist.",
+            isRsvped: false,
+            isWaitlisted: true,
+            waitlistPosition: pos,
+            rsvpCount: waitlisted?.rsvpCount || tournament.rsvpCount
         });
     } catch (error) {
         console.error("Error RSVPing to tournament:", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+router.post('/:id/cancel-rsvp', authMiddleware, async (req, res) => {
+    try {
+        const tournamentId = req.params.id;
+        const userId = req.user._id || req.user.id || req.user.userId;
+
+        if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const tournament = await Tournament.findById(tournamentId);
+        if (!tournament) {
+            return res.status(404).json({ error: "Tournament not found" });
+        }
+
+        // 1. Check if user is in waitlist
+        const inWaitlist = tournament.waitlist && tournament.waitlist.some(w => w.userId.toString() === userId.toString());
+        if (inWaitlist) {
+            let waitlistPull = null;
+            if (mongoose.connection.readyState === 1) {
+                waitlistPull = await Tournament.findOneAndUpdate(
+                    { _id: tournamentId, "waitlist.userId": userId },
+                    { $pull: { waitlist: { userId: userId } } },
+                    { new: true }
+                );
+            } else {
+                tournament.waitlist = tournament.waitlist.filter(w => w.userId.toString() !== userId.toString());
+                if (typeof tournament.save === 'function') await tournament.save();
+                waitlistPull = tournament;
+            }
+
+            return res.status(200).json({
+                message: "Removed from tournament waitlist.",
+                isWaitlisted: false,
+                isRsvped: false,
+                rsvpCount: waitlistPull?.rsvpCount || tournament.rsvpCount
+            });
+        }
+
+        // 2. Check if user is in attendees
+        const inAttendees = tournament.attendees && tournament.attendees.some(id => id.toString() === userId.toString());
+        if (!inAttendees) {
+            return res.status(400).json({ error: "User is not currently attending this tournament." });
+        }
+
+        let cancelled = null;
+        if (mongoose.connection.readyState === 1) {
+            cancelled = await Tournament.findOneAndUpdate(
+                { _id: tournamentId, attendees: userId },
+                {
+                    $pull: { attendees: userId },
+                    $inc: { rsvpCount: -1 }
+                },
+                { new: true }
+            );
+        } else {
+            const idx = tournament.attendees.findIndex(id => id.toString() === userId.toString());
+            if (idx > -1) tournament.attendees.splice(idx, 1);
+            tournament.rsvpCount = Math.max(0, (tournament.rsvpCount || 1) - 1);
+            if (typeof tournament.save === 'function') await tournament.save();
+            cancelled = tournament;
+        }
+
+        if (!cancelled) {
+            return res.status(400).json({ error: "User is not currently attending this tournament." });
+        }
+
+        // 3. Trigger FIFO Waitlist Auto-Promotion
+        const io = req.io || req.app?.get('io');
+        const promotedUserId = await promoteNextFromWaitlist(tournamentId, io);
+
+        // 4. Redis cache eviction
+        try {
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            }
+        } catch (cErr) {
+            console.warn("Redis eviction error:", cErr.message);
+        }
+
+        const freshTournament = await Tournament.findById(tournamentId);
+        if (freshTournament && typeof freshTournament.populate === 'function') {
+            await freshTournament.populate("attendees", "name avatarUrl _id");
+        }
+
+        return res.status(200).json({
+            message: "RSVP removed",
+            isRsvped: false,
+            rsvpCount: freshTournament?.rsvpCount ?? cancelled.rsvpCount,
+            attendees: freshTournament?.attendees ?? cancelled.attendees,
+            promotedUserId: promotedUserId ? promotedUserId.toString() : null
+        });
+    } catch (err) {
+        console.error("Cancel RSVP error:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+router.post('/:id/waitlist', authMiddleware, async (req, res) => {
+    try {
+        const tournamentId = req.params.id;
+        const userId = req.user._id || req.user.id || req.user.userId;
+
+        if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const tournament = await Tournament.findById(tournamentId);
+        if (!tournament) {
+            return res.status(404).json({ error: "Tournament not found" });
+        }
+
+        if (tournament.attendees && tournament.attendees.some(id => id.toString() === userId.toString())) {
+            return res.status(400).json({ error: "User is already attending this tournament." });
+        }
+
+        const existingIdx = tournament.waitlist ? tournament.waitlist.findIndex(w => w.userId.toString() === userId.toString()) : -1;
+        if (existingIdx > -1) {
+            return res.status(200).json({
+                message: "Already on waitlist",
+                waitlistPosition: existingIdx + 1,
+                waitlistCount: tournament.waitlist.length
+            });
+        }
+
+        let updated = null;
+        if (mongoose.connection.readyState === 1) {
+            updated = await Tournament.findOneAndUpdate(
+                { _id: tournamentId, "waitlist.userId": { $ne: userId } },
+                {
+                    $push: {
+                        waitlist: {
+                            userId: userId,
+                            registeredAt: new Date(),
+                            idempotencyKey: req.body?.idempotencyKey || null
+                        }
+                    }
+                },
+                { new: true }
+            );
+        } else {
+            if (!tournament.waitlist) tournament.waitlist = [];
+            tournament.waitlist.push({
+                userId: userId,
+                registeredAt: new Date(),
+                idempotencyKey: req.body?.idempotencyKey || null
+            });
+            if (typeof tournament.save === 'function') await tournament.save();
+            updated = tournament;
+        }
+
+        const pos = updated.waitlist.findIndex(w => w.userId.toString() === userId.toString()) + 1;
+        return res.status(200).json({
+            message: "Added to waitlist",
+            waitlistPosition: pos,
+            waitlistCount: updated.waitlist.length
+        });
+    } catch (err) {
+        console.error("Waitlist join error:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+router.get('/:id/waitlist', authMiddleware, async (req, res) => {
+    try {
+        const tournamentId = req.params.id;
+        const userId = req.user._id || req.user.id || req.user.userId;
+
+        if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const tournament = await Tournament.findById(tournamentId);
+        if (!tournament) {
+            return res.status(404).json({ error: "Tournament not found" });
+        }
+
+        const waitlist = tournament.waitlist || [];
+        const pos = waitlist.findIndex(w => w.userId.toString() === userId.toString()) + 1;
+
+        return res.status(200).json({
+            waitlistCount: waitlist.length,
+            myPosition: pos > 0 ? pos : null,
+            isWaitlisted: pos > 0
+        });
+    } catch (err) {
+        console.error("Waitlist fetch error:", err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+router.delete('/:id/waitlist', authMiddleware, async (req, res) => {
+    try {
+        const tournamentId = req.params.id;
+        const userId = req.user._id || req.user.id || req.user.userId;
+
+        if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        let updated = null;
+        if (mongoose.connection.readyState === 1) {
+            updated = await Tournament.findOneAndUpdate(
+                { _id: tournamentId, "waitlist.userId": userId },
+                { $pull: { waitlist: { userId: userId } } },
+                { new: true }
+            );
+        } else {
+            const tournament = await Tournament.findById(tournamentId);
+            if (tournament && tournament.waitlist) {
+                tournament.waitlist = tournament.waitlist.filter(w => w.userId.toString() !== userId.toString());
+                if (typeof tournament.save === 'function') await tournament.save();
+                updated = tournament;
+            }
+        }
+
+        if (!updated) {
+            return res.status(400).json({ error: "User is not on the waitlist." });
+        }
+
+        return res.status(200).json({
+            message: "Removed from waitlist",
+            waitlistCount: updated.waitlist?.length || 0
+        });
+    } catch (err) {
+        console.error("Waitlist delete error:", err);
+        return res.status(500).json({ error: "Internal server error" });
     }
 });
 

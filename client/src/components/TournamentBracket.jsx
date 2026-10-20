@@ -49,10 +49,16 @@ export default function TournamentBracket({
 
     // Active distributed locks for live matches
     const [activeLocks, setActiveLocks] = useState({});
+    const [bracketAnnouncement, setBracketAnnouncement] = useState('');
 
     useEffect(() => {
         const handleLockUpdate = (data) => {
             if (!data || !data.matchId) return;
+            if (data.isLocked) {
+                setBracketAnnouncement(`Match ${data.matchId} locked by ${data.lockedBy || 'Official'}`);
+            } else {
+                setBracketAnnouncement(`Match ${data.matchId} unlocked`);
+            }
             setActiveLocks(prev => ({
                 ...prev,
                 [data.matchId]: {
@@ -198,6 +204,27 @@ export default function TournamentBracket({
 
     return (
         <Box sx={{ width: '100%', userSelect: 'none' }} data-testid="tournament-bracket-engine">
+            {/* WCAG 2.1 AA Dynamic ARIA Live Region */}
+            <Box
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                sx={{
+                    position: 'absolute',
+                    width: '1px',
+                    height: '1px',
+                    padding: 0,
+                    margin: '-1px',
+                    overflow: 'hidden',
+                    clip: 'rect(0, 0, 0, 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                }}
+                data-testid="bracket-live-announcer"
+            >
+                {bracketAnnouncement}
+            </Box>
+
             {/* Header Control Bar */}
             <Paper
                 elevation={1}
@@ -279,6 +306,7 @@ export default function TournamentBracket({
                         indicatorColor="primary"
                         variant="scrollable"
                         scrollButtons="auto"
+                        aria-label="Double elimination bracket navigation"
                     >
                         <Tab label="Winners Bracket" value="winners" data-testid="tab-winners" />
                         <Tab label="Losers Bracket (Re-entry)" value="losers" data-testid="tab-losers" />
@@ -295,6 +323,7 @@ export default function TournamentBracket({
                         onChange={handleMobileRoundSelect}
                         variant="scrollable"
                         scrollButtons="auto"
+                        aria-label="Tournament rounds navigation"
                         sx={{ minHeight: 36 }}
                     >
                         {currentRounds.map((r, idx) => (
@@ -508,6 +537,8 @@ export default function TournamentBracket({
                     >
                         {/* SVG Connectors Layer */}
                         <svg
+                            aria-hidden="true"
+                            focusable="false"
                             style={{
                                 position: 'absolute',
                                 top: 0,
@@ -526,7 +557,7 @@ export default function TournamentBracket({
                                     stroke={
                                         conn.isWinnerPath
                                             ? theme.palette.primary.main
-                                            : theme.palette.mode === 'dark' ? '#2d3748' : '#cbd5e1'
+                                            : '#64748b'
                                     }
                                     strokeWidth={conn.isWinnerPath ? 2.5 : 1.5}
                                     strokeLinecap="round"
@@ -573,9 +604,18 @@ export default function TournamentBracket({
                                         key={match.id}
                                         elevation={isLive ? 4 : 2}
                                         data-testid={`match-node-${match.id}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Match ${match.id}: ${match.team1?.name || 'TBD'} score ${match.team1?.score ?? '-'} versus ${match.team2?.name || 'TBD'} score ${match.team2?.score ?? '-'}, Status: ${match.status}, Court: ${match.court || 'unassigned'}`}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleMatchClick(match);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                handleMatchClick(match);
+                                            }
                                         }}
                                         sx={{
                                             position: 'absolute',
