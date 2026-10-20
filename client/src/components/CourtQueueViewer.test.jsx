@@ -99,4 +99,58 @@ describe('RAC Courts 1-6 Queue Viewer Component', () => {
         // Live score on Court 1 updated
         expect(screen.getByText('20')).toBeInTheDocument();
     });
+
+    it('renders dynamic match pacing and duration estimates on active matches', () => {
+        render(<CourtQueueViewer />);
+
+        // Court 1 is MATCH_IN_PROGRESS
+        const pacingEl = screen.getByTestId('pacing-estimate-court-1');
+        expect(pacingEl).toBeInTheDocument();
+        expect(pacingEl).toHaveTextContent(/Est\. ~18 mins remaining \(28s\/pt pacing\)/i);
+    });
+
+    it('renders live walkover countdown chip upon walkoverTimerStarted event', () => {
+        render(<CourtQueueViewer />);
+
+        // Initially no walkover chip
+        expect(screen.queryByTestId('walkover-chip-court-2')).not.toBeInTheDocument();
+
+        // Simulate walkover timer start on Court 2
+        act(() => {
+            if (socketListeners.walkoverTimerStarted) {
+                socketListeners.walkoverTimerStarted({
+                    courtNumber: 2,
+                    targetTeam: 'team2',
+                    targetPlayerName: 'Chloe Zhang',
+                    durationSeconds: 600
+                });
+            }
+        });
+
+        const walkoverChip = screen.getByTestId('walkover-chip-court-2');
+        expect(walkoverChip).toBeInTheDocument();
+        expect(walkoverChip).toHaveTextContent(/WALKOVER: Chloe Zhang/i);
+    });
+
+    it('renders deadlock warning badge when a court is stalled', () => {
+        render(<CourtQueueViewer />);
+
+        // Initially no deadlock alert
+        expect(screen.queryByTestId('deadlock-alert-court-4')).not.toBeInTheDocument();
+
+        // Simulate stall update on Court 4
+        act(() => {
+            if (socketListeners.courtStatusUpdate) {
+                socketListeners.courtStatusUpdate({
+                    courtNumber: 4,
+                    isStalled: true,
+                    stallReason: 'No scoring activity for >30 minutes'
+                });
+            }
+        });
+
+        const deadlockAlert = screen.getByTestId('deadlock-alert-court-4');
+        expect(deadlockAlert).toBeInTheDocument();
+        expect(deadlockAlert).toHaveTextContent(/Stalled: No scoring activity for >30 minutes/i);
+    });
 });

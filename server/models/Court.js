@@ -55,6 +55,20 @@ const courtSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    walkoverTimer: {
+        active: { type: Boolean, default: false },
+        targetTeam: { type: String, enum: ['team1', 'team2', 'both', null], default: null },
+        targetPlayerName: { type: String, default: '' },
+        startedAt: { type: Date, default: null },
+        expiresAt: { type: Date, default: null },
+        durationSeconds: { type: Number, default: 600 } // 10 minutes
+    },
+    estimatedDurationMinutes: { type: Number, default: 35 },
+    estimatedEndTime: { type: Date, default: null },
+    pacingSecondsPerPoint: { type: Number, default: 28 },
+    lastActivityAt: { type: Date, default: Date.now },
+    isStalled: { type: Boolean, default: false },
+    stallReason: { type: String, default: null },
     updatedAt: {
         type: Date,
         default: Date.now

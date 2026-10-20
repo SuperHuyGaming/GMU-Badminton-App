@@ -149,4 +149,32 @@ describe('Interactive Tournament Bracket Engine Component', () => {
         expect(screen.getByTestId('tournament-bracket-engine')).toBeInTheDocument();
         expect(screen.getAllByText(/Alice Smith/i).length).toBeGreaterThan(0);
     });
+
+    it('renders gold lock chip when match is actively locked by an umpire', () => {
+        const customBracket = {
+            tournamentName: 'Locked Match Draw',
+            rounds: [
+                {
+                    id: 'r-1',
+                    name: 'Finals',
+                    matches: [
+                        {
+                            id: 'm-locked-1',
+                            team1: { name: 'Player A', score: 11 },
+                            team2: { name: 'Player B', score: 9 },
+                            status: 'IN_PROGRESS',
+                            lock: { isLocked: true, lockedByUmpireName: 'Umpire Sarah' }
+                        }
+                    ]
+                }
+            ]
+        };
+
+        render(<TournamentBracket bracketData={customBracket} />);
+
+        const lockChip = screen.getByTestId('match-lock-m-locked-1');
+        expect(lockChip).toBeInTheDocument();
+        expect(lockChip).toHaveTextContent('Umpire Sarah');
+    });
 });
+

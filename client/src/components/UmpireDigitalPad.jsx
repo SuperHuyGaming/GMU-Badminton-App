@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Box, Typography, Paper, Grid, Button, Stack, Chip,
     Dialog, DialogTitle, DialogContent, DialogActions,
@@ -10,7 +10,12 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import SportsScoreIcon from '@mui/icons-material/SportsScore';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import WifiIcon from '@mui/icons-material/Wifi';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import SyncIcon from '@mui/icons-material/Sync';
+import TimerIcon from '@mui/icons-material/Timer';
 import socket from '../utils/socket';
+import offlineScoreLedger from '../utils/offlineScoreLedger';
 import {
     calculateServiceCourt,
     isDeuce,
@@ -55,6 +60,113 @@ export default function UmpireDigitalPad({
 
     // Penalty / warning dialog
     const [penaltyNotice, setPenaltyNotice] = useState(null);
+
+    // Problem 11: Offline Ledger and Connectivity Sync state
+    const [syncStatus, setSyncStatus] = useState(
+        typeof navigator !== 'undefined' && !navigator.onLine ? 'OFFLINE' : 'ONLINE'
+    );
+    const [pendingCount, setPendingCount] = useState(0);
+
+    // Problem 12: BWF Intervals (60s technical at 11, 120s between games)
+    const [intervalCountdown, setIntervalCountdown] = useState(0);
+    const [intervalType, setIntervalType] = useState(null); // 'TECHNICAL_11' | 'GAME_BREAK_120'
+
+    // Side swap for Game 3 at 11 points (BWF Law 8.1.3)
+    const isSideSwapped = useMemo(() => {
+        return currentGame === 3 && (score1 >= 11 || score2 >= 11);
+    }, [currentGame, score1, score2]);
+
+    const flushOfflineQueue = useCallback(async () => {
+        try {
+            const pending = await offlineScoreLedger.getPendingMutations(courtNumber);
+            if (!pending || pending.length === 0) {
+                setSyncStatus('ONLINE');
+                setPendingCount(0);
+                return;
+            }
+
+            setSyncStatus('SYNCING');
+            setPendingCount(pending.length);
+
+            for (const mutation of pending) {
+                try {
+                    if (typeof fetch !== 'undefined') {
+                        await fetch(`/api/courts/${courtNumber}/score/point`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                scoringTeam: mutation.payload?.team === 1 ? 'team1' : 'team2',
+                                idempotencyKey: mutation.idempotencyKey
+                            })
+                        }).catch(() => {});
+                    }
+                    socket.emit('liveScoreUpdate', {
+                        courtNumber,
+                        idempotencyKey: mutation.idempotencyKey,
+                        ...mutation.payload
+                    });
+                    await offlineScoreLedger.markMutationSynced(mutation.mutationId);
+                } catch (mutErr) {
+                    console.warn('[OfflineLedger] Replay mutation error:', mutErr);
+                }
+            }
+
+            const remaining = await offlineScoreLedger.getPendingMutations(courtNumber);
+            setPendingCount(remaining.length);
+            setSyncStatus(remaining.length === 0 ? 'ONLINE' : 'OFFLINE');
+        } catch (err) {
+            console.warn('[OfflineLedger] Flush error:', err);
+            setSyncStatus('OFFLINE');
+        }
+    }, [courtNumber]);
+
+    // Network & Sync status listeners
+    useEffect(() => {
+        const handleOnline = async () => {
+            setSyncStatus('SYNCING');
+            await flushOfflineQueue();
+        };
+
+        const handleOffline = () => {
+            setSyncStatus('OFFLINE');
+        };
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+        }
+
+        offlineScoreLedger.getPendingMutations(courtNumber).then(pending => {
+            if (pending && pending.length > 0) {
+                setPendingCount(pending.length);
+                if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                    setSyncStatus('OFFLINE');
+                }
+            }
+        }).catch(() => {});
+
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('online', handleOnline);
+                window.removeEventListener('offline', handleOffline);
+            }
+        };
+    }, [courtNumber, flushOfflineQueue]);
+
+    // Interval countdown timer tick
+    useEffect(() => {
+        if (intervalCountdown <= 0) return;
+        const timer = setInterval(() => {
+            setIntervalCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [intervalCountdown]);
 
     // Calculated BWF rule helpers
     const serverScore = currentServer === 1 ? score1 : score2;
@@ -111,6 +223,7 @@ export default function UmpireDigitalPad({
     // Point scoring action
     const handleScorePoint = useCallback((team) => {
         if (matchStatus === 'MATCH_OVER' || matchStatus === 'GAME_OVER') return;
+        if (score1 >= 30 || score2 >= 30) return;
 
         pushHistory();
         setRedoStack([]);
@@ -129,6 +242,40 @@ export default function UmpireDigitalPad({
         setScore2(nextScore2);
         setCurrentServer(nextServer);
 
+        // Problem 11: Local ledger persistence and offline queuing
+        const idempotencyKey = `court-${courtNumber}-pt-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        offlineScoreLedger.saveMatchState({
+            courtNumber,
+            score1: nextScore1,
+            score2: nextScore2,
+            gamesWon1,
+            gamesWon2,
+            currentGame,
+            currentServer: nextServer,
+            matchStatus
+        }).catch(() => {});
+
+        if (typeof navigator !== 'undefined' && (!navigator.onLine || syncStatus === 'OFFLINE')) {
+            offlineScoreLedger.enqueueMutation({
+                courtNumber,
+                matchId: `m-rac-court-${courtNumber}`,
+                idempotencyKey,
+                actionType: 'SCORE_POINT',
+                payload: { team, score1: nextScore1, score2: nextScore2, currentGame }
+            }).then(() => {
+                offlineScoreLedger.getPendingMutations(courtNumber).then(muts => {
+                    setPendingCount(muts.length);
+                    setSyncStatus('OFFLINE');
+                });
+            }).catch(() => {});
+        }
+
+        // Problem 12: 60s Technical interval at 11 points (Law 16.2.1)
+        if (Math.max(nextScore1, nextScore2) === 11 && Math.min(nextScore1, nextScore2) < 11) {
+            setIntervalType('TECHNICAL_11');
+            setIntervalCountdown(60);
+        }
+
         // Check if game has ended
         const winner = checkGameWinner(nextScore1, nextScore2);
         if (winner) {
@@ -145,21 +292,24 @@ export default function UmpireDigitalPad({
                 setGamesWon2(nextGW2);
                 setMatchStatus('MATCH_OVER');
                 setMatchWinner(mWinner);
+                setIntervalCountdown(0);
 
                 emitScoreUpdate(nextScore1, nextScore2, nextGW1, nextGW2, currentGame, nextServer, nextGameScores, 'MATCH_OVER');
                 if (onMatchComplete) onMatchComplete({ winner: mWinner, scores: nextGameScores });
             } else {
-                // Game Won, waiting for next game
+                // Game Won, waiting for next game: 120s Game Break Interval (Law 16.2.2)
                 setGamesWon1(nextGW1);
                 setGamesWon2(nextGW2);
                 setMatchStatus('GAME_OVER');
+                setIntervalType('GAME_BREAK_120');
+                setIntervalCountdown(120);
 
                 emitScoreUpdate(nextScore1, nextScore2, nextGW1, nextGW2, currentGame, nextServer, nextGameScores, 'GAME_OVER');
             }
         } else {
             emitScoreUpdate(nextScore1, nextScore2, gamesWon1, gamesWon2, currentGame, nextServer, completedGameScores, 'IN_PROGRESS');
         }
-    }, [score1, score2, gamesWon1, gamesWon2, completedGameScores, currentGame, matchStatus, player1Name, player2Name, pushHistory, emitScoreUpdate, onMatchComplete]);
+    }, [score1, score2, gamesWon1, gamesWon2, completedGameScores, currentGame, matchStatus, player1Name, player2Name, pushHistory, emitScoreUpdate, onMatchComplete, courtNumber, syncStatus]);
 
     // Undo last action
     const handleUndo = useCallback(() => {
@@ -313,6 +463,34 @@ export default function UmpireDigitalPad({
                 </Box>
 
                 <Stack direction="row" spacing={1.5} alignItems="center">
+                    {syncStatus === 'ONLINE' && (
+                        <Chip
+                            icon={<WifiIcon />}
+                            label="Online (RAC Wi-Fi)"
+                            color="success"
+                            size="small"
+                            data-testid="sync-status-online"
+                        />
+                    )}
+                    {syncStatus === 'SYNCING' && (
+                        <Chip
+                            icon={<SyncIcon />}
+                            label={`Syncing ${pendingCount} points...`}
+                            color="warning"
+                            size="small"
+                            data-testid="sync-status-syncing"
+                        />
+                    )}
+                    {syncStatus === 'OFFLINE' && (
+                        <Chip
+                            icon={<WifiOffIcon />}
+                            label={`Offline (${pendingCount} queued in Ledger)`}
+                            color="error"
+                            size="small"
+                            data-testid="sync-status-offline"
+                        />
+                    )}
+
                     <FormControl size="small" sx={{ minWidth: 150 }}>
                         <InputLabel id="court-select-label">RAC Court</InputLabel>
                         <Select
@@ -340,6 +518,34 @@ export default function UmpireDigitalPad({
             </Paper>
 
             {/* Critical Alert Banners: Match Point, Game Point, Deuce, Interval */}
+            {intervalCountdown > 0 && (
+                <Alert
+                    severity="info"
+                    icon={<TimerIcon />}
+                    action={
+                        <Button color="inherit" size="small" onClick={() => setIntervalCountdown(0)}>
+                            Resume Early
+                        </Button>
+                    }
+                    sx={{ mb: 2, fontWeight: 'bold', py: 0.5 }}
+                    data-testid="interval-countdown-timer"
+                >
+                    ⏱️ {intervalType === 'GAME_BREAK_120' ? '120s Game Break Interval' : '60s Technical Interval (11 Points)'}: {intervalCountdown}s remaining
+                </Alert>
+            )}
+
+            {isSideSwapped && (
+                <Alert severity="warning" sx={{ mb: 2, fontWeight: 'bold', py: 0.5 }} data-testid="game3-side-change-banner">
+                    🔄 DECIDING GAME: CHANGE OF ENDS (11 Points)! Sides have been switched.
+                </Alert>
+            )}
+
+            {score1 === 29 && score2 === 29 && (
+                <Alert severity="error" sx={{ mb: 2, fontWeight: 'bold', py: 0.5 }} data-testid="golden-point-banner">
+                    🔥 GOLDEN POINT (29-29) — Sudden death! Next point wins!
+                </Alert>
+            )}
+
             {matchStatus === 'MATCH_OVER' ? (
                 <Alert
                     severity="success"
@@ -577,94 +783,97 @@ export default function UmpireDigitalPad({
                               Bottom quadrant (Y: 150 to 280): LEFT Service Court
                         */}
 
-                        {/* TEAM 1 SIDE QUADRANTS */}
-                        {/* Left Service Court (Top) */}
-                        <rect
-                            x="20"
-                            y="20"
-                            width="225"
-                            height="130"
-                            fill={
-                                (currentServer === 1 && serverCourt === 'left')
-                                    ? 'rgba(74, 222, 128, 0.4)'
-                                    : (currentServer === 2 && receiverCourt === 'left')
-                                        ? 'rgba(56, 189, 248, 0.35)'
-                                        : 'transparent'
-                            }
-                        />
-                        {/* Right Service Court (Bottom) */}
-                        <rect
-                            x="20"
-                            y="150"
-                            width="225"
-                            height="130"
-                            fill={
-                                (currentServer === 1 && serverCourt === 'right')
-                                    ? 'rgba(74, 222, 128, 0.4)'
-                                    : (currentServer === 2 && receiverCourt === 'right')
-                                        ? 'rgba(56, 189, 248, 0.35)'
-                                        : 'transparent'
-                            }
-                        />
+                        {/* TEAM 1 & TEAM 2 QUADRANTS (ROTATES ON GAME 3 11-POINT SIDE CHANGE) */}
+                        <g transform={isSideSwapped ? "rotate(180 300 150)" : undefined}>
+                            {/* TEAM 1 SIDE QUADRANTS */}
+                            {/* Left Service Court (Top) */}
+                            <rect
+                                x="20"
+                                y="20"
+                                width="225"
+                                height="130"
+                                fill={
+                                    (currentServer === 1 && serverCourt === 'left')
+                                        ? 'rgba(74, 222, 128, 0.4)'
+                                        : (currentServer === 2 && receiverCourt === 'left')
+                                            ? 'rgba(56, 189, 248, 0.35)'
+                                            : 'transparent'
+                                }
+                            />
+                            {/* Right Service Court (Bottom) */}
+                            <rect
+                                x="20"
+                                y="150"
+                                width="225"
+                                height="130"
+                                fill={
+                                    (currentServer === 1 && serverCourt === 'right')
+                                        ? 'rgba(74, 222, 128, 0.4)'
+                                        : (currentServer === 2 && receiverCourt === 'right')
+                                            ? 'rgba(56, 189, 248, 0.35)'
+                                            : 'transparent'
+                                }
+                            />
 
-                        {/* TEAM 2 SIDE QUADRANTS (DIAGONAL RECEIVING TARGETS) */}
-                        {/* Right Service Court (Top - diagonal to Team 1 Right) */}
-                        <rect
-                            x="355"
-                            y="20"
-                            width="225"
-                            height="130"
-                            fill={
-                                (currentServer === 2 && serverCourt === 'right')
-                                    ? 'rgba(74, 222, 128, 0.4)'
-                                    : (currentServer === 1 && receiverCourt === 'right')
-                                        ? 'rgba(56, 189, 248, 0.35)'
-                                        : 'transparent'
-                            }
-                        />
-                        {/* Left Service Court (Bottom - diagonal to Team 1 Left) */}
-                        <rect
-                            x="355"
-                            y="150"
-                            width="225"
-                            height="130"
-                            fill={
-                                (currentServer === 2 && serverCourt === 'left')
-                                    ? 'rgba(74, 222, 128, 0.4)'
-                                    : (currentServer === 1 && receiverCourt === 'left')
-                                        ? 'rgba(56, 189, 248, 0.35)'
-                                        : 'transparent'
-                            }
-                        />
+                            {/* TEAM 2 SIDE QUADRANTS (DIAGONAL RECEIVING TARGETS) */}
+                            {/* Right Service Court (Top - diagonal to Team 1 Right) */}
+                            <rect
+                                x="355"
+                                y="20"
+                                width="225"
+                                height="130"
+                                fill={
+                                    (currentServer === 2 && serverCourt === 'right')
+                                        ? 'rgba(74, 222, 128, 0.4)'
+                                        : (currentServer === 1 && receiverCourt === 'right')
+                                            ? 'rgba(56, 189, 248, 0.35)'
+                                            : 'transparent'
+                                }
+                            />
+                            {/* Left Service Court (Bottom - diagonal to Team 1 Left) */}
+                            <rect
+                                x="355"
+                                y="150"
+                                width="225"
+                                height="130"
+                                fill={
+                                    (currentServer === 2 && serverCourt === 'left')
+                                        ? 'rgba(74, 222, 128, 0.4)'
+                                        : (currentServer === 1 && receiverCourt === 'left')
+                                            ? 'rgba(56, 189, 248, 0.35)'
+                                            : 'transparent'
+                                }
+                            />
 
-                        {/* Active Serving Shuttlecock Graphic */}
-                        {currentServer === 1 && (
-                            <g transform={`translate(${serverCourt === 'right' ? 120 : 120}, ${serverCourt === 'right' ? 205 : 75})`}>
-                                <circle cx="0" cy="0" r="14" fill="#fbbf24" opacity="0.9" />
-                                <text x="0" y="5" textAnchor="middle" fontSize="13" fill="#000">🏸</text>
-                            </g>
-                        )}
-                        {currentServer === 2 && (
-                            <g transform={`translate(${serverCourt === 'right' ? 470 : 470}, ${serverCourt === 'right' ? 75 : 205})`}>
-                                <circle cx="0" cy="0" r="14" fill="#fbbf24" opacity="0.9" />
-                                <text x="0" y="5" textAnchor="middle" fontSize="13" fill="#000">🏸</text>
-                            </g>
-                        )}
+                            {/* Active Serving Shuttlecock Graphic */}
+                            {currentServer === 1 && (
+                                <g transform={`translate(${serverCourt === 'right' ? 120 : 120}, ${serverCourt === 'right' ? 205 : 75})`}>
+                                    <circle cx="0" cy="0" r="14" fill="#fbbf24" opacity="0.9" />
+                                    <text x="0" y="5" textAnchor="middle" fontSize="13" fill="#000">🏸</text>
+                                </g>
+                            )}
+                            {currentServer === 2 && (
+                                <g transform={`translate(${serverCourt === 'right' ? 470 : 470}, ${serverCourt === 'right' ? 75 : 205})`}>
+                                    <circle cx="0" cy="0" r="14" fill="#fbbf24" opacity="0.9" />
+                                    <text x="0" y="5" textAnchor="middle" fontSize="13" fill="#000">🏸</text>
+                                </g>
+                            )}
 
-                        {/* Player Labels in quadrants */}
-                        <text x="120" y="90" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 1 && serverCourt === 'left' ? 1 : 0.6}>
-                            {currentServer === 1 ? 'Left Court (Odd)' : 'Receiver (Odd)'}
-                        </text>
-                        <text x="120" y="220" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 1 && serverCourt === 'right' ? 1 : 0.6}>
-                            {currentServer === 1 ? 'Right Court (Even)' : 'Receiver (Even)'}
-                        </text>
+                            {/* Player Labels in quadrants */}
+                            <text x="120" y="90" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 1 && serverCourt === 'left' ? 1 : 0.6}>
+                                {currentServer === 1 ? 'Left Court (Odd)' : 'Receiver (Odd)'}
+                            </text>
+                            <text x="120" y="220" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 1 && serverCourt === 'right' ? 1 : 0.6}>
+                                {currentServer === 1 ? 'Right Court (Even)' : 'Receiver (Even)'}
+                            </text>
 
-                        <text x="470" y="90" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 2 && serverCourt === 'right' ? 1 : 0.6}>
-                            {currentServer === 2 ? 'Right Court (Even)' : 'Receiver (Even)'}
-                        </text>
-                        <text x="470" y="220" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 2 && serverCourt === 'left' ? 1 : 0.6}>
-                            {currentServer === 2 ? 'Left Court (Odd)' : 'Receiver (Odd)'}
-                        </text>
+                            <text x="470" y="90" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 2 && serverCourt === 'right' ? 1 : 0.6}>
+                                {currentServer === 2 ? 'Right Court (Even)' : 'Receiver (Even)'}
+                            </text>
+                            <text x="470" y="220" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold" opacity={currentServer === 2 && serverCourt === 'left' ? 1 : 0.6}>
+                                {currentServer === 2 ? 'Left Court (Odd)' : 'Receiver (Odd)'}
+                            </text>
+                        </g>
                     </svg>
                 </Box>
             </Paper>

@@ -2,8 +2,12 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Tournament = require('../models/Tournament');
+const TournamentMatch = require('../models/TournamentMatch');
+const BracketLockCoordinator = require('../utils/bracketLockCoordinator');
 const { authMiddleware } = require('../middleware/auth');
 const redis = require('../utils/redis');
+
+const bracketLockCoordinator = new BracketLockCoordinator(redis);
 
 // Summary projection for public tournament directory listings
 const TOURNAMENT_DIRECTORY_PROJECTION = [
@@ -329,5 +333,171 @@ router.post('/reset-seed', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/tournaments/:tournamentId/matches/:matchId/advance
+ * Advances the winner of a completed bracket match to the feeder slot in nextMatchId.
+ * Protected by Mongoose Optimistic Concurrency Control (__v) and returns HTTP 409 on collision.
+ */
+router.post('/:tournamentId/matches/:matchId/advance', async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const { expectedVersion, winner, umpireName } = req.body;
+
+        if (!winner || !['team1', 'team2'].includes(winner)) {
+            return res.status(400).json({ success: false, error: "Valid winner ('team1' or 'team2') is required" });
+        }
+
+        const match = await TournamentMatch.findById(matchId);
+        if (!match) {
+            return res.status(404).json({ success: false, error: "Match not found" });
+        }
+
+        // Fast-fail precondition check if client provided expectedVersion
+        if (expectedVersion !== undefined && match.__v !== expectedVersion) {
+            return res.status(409).json({
+                success: false,
+                code: "CONCURRENCY_CONFLICT",
+                error: "Match has already been updated by another coordinator or umpire.",
+                currentVersion: match.__v,
+                submittedVersion: expectedVersion,
+                currentMatch: match
+            });
+        }
+
+        // Set winner and status
+        match.winner = winner;
+        match.matchStatus = 'COMPLETED';
+        if (umpireName) {
+            match.umpireName = umpireName;
+        }
+        match.endTime = match.endTime || new Date();
+
+        if (winner === 'team1' && match.team1GamesWon < 2) {
+            match.team1GamesWon = Math.max(match.team1GamesWon, 2);
+        } else if (winner === 'team2' && match.team2GamesWon < 2) {
+            match.team2GamesWon = Math.max(match.team2GamesWon, 2);
+        }
+
+        // Advance to next bracket slot if linked
+        let nextMatch = null;
+        if (match.nextMatchId && match.nextMatchSlot) {
+            nextMatch = await TournamentMatch.findById(match.nextMatchId);
+            if (nextMatch) {
+                const winningRoster = winner === 'team1' ? match.team1 : match.team2;
+                nextMatch[match.nextMatchSlot] = winningRoster;
+                await nextMatch.save(); // Also guarded by OCC
+            }
+        }
+
+        await match.save(); // Throws mongoose.Error.VersionError if concurrent mutation occurred
+
+        // Broadcast bracket progression over Socket.io
+        const io = req.io || req.app?.get('io');
+        if (io) {
+            io.emit('bracket:matchAdvanced', {
+                tournamentId: match.tournamentId,
+                matchId: match._id,
+                bracketSlotId: match.bracketSlotId,
+                winner,
+                winnerRoster: winner === 'team1' ? match.team1 : match.team2,
+                nextMatchId: match.nextMatchId,
+                nextMatchSlot: match.nextMatchSlot,
+                version: match.__v
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Match winner advanced successfully",
+            match,
+            nextMatch
+        });
+    } catch (err) {
+        if (err.name === 'VersionError' || err instanceof mongoose.Error.VersionError) {
+            let freshDoc = null;
+            try {
+                freshDoc = await TournamentMatch.findById(req.params.matchId).lean();
+            } catch {}
+            return res.status(409).json({
+                success: false,
+                code: "CONCURRENCY_CONFLICT",
+                error: "Bracket match progression conflict: another official submitted an update simultaneously.",
+                currentVersion: freshDoc ? freshDoc.__v : null,
+                currentMatch: freshDoc
+            });
+        }
+        console.error("Bracket advance error:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/tournaments/:tournamentId/matches/:matchId/lock
+ * Acquire or refresh an exclusive 60s lease for scoring an active match
+ */
+router.post('/:tournamentId/matches/:matchId/lock', async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const { umpireName = "RAC Official Umpire", socketId = "http-lease" } = req.body;
+        const result = await bracketLockCoordinator.acquireLock(matchId, umpireName, socketId);
+
+        if (result.success) {
+            const io = req.io || req.app?.get('io');
+            if (io) {
+                io.emit('bracket:lockStatusUpdate', {
+                    matchId,
+                    isLocked: true,
+                    lockedBy: umpireName,
+                    expiresAt: result.expiresAt
+                });
+            }
+            return res.status(200).json({ success: true, ...result });
+        } else {
+            return res.status(423).json({ success: false, message: "Match locked by another official", ...result });
+        }
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/tournaments/:tournamentId/matches/:matchId/unlock
+ * Explicitly release lease on match
+ */
+router.post('/:tournamentId/matches/:matchId/unlock', async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const { socketId = "http-lease" } = req.body;
+        await bracketLockCoordinator.releaseLock(matchId, socketId);
+
+        const io = req.io || req.app?.get('io');
+        if (io) {
+            io.emit('bracket:lockStatusUpdate', {
+                matchId,
+                isLocked: false,
+                lockedBy: null
+            });
+        }
+        return res.status(200).json({ success: true, message: "Lock released" });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/tournaments/:tournamentId/matches/:matchId/lock
+ * Query lock status
+ */
+router.get('/:tournamentId/matches/:matchId/lock', async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const lockInfo = await bracketLockCoordinator.getLock(matchId);
+        return res.status(200).json({ success: true, lock: lockInfo });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
+
 

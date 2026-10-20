@@ -63,9 +63,24 @@ const userSchema = new mongoose.Schema({
 		default: 'Public',
 	},
 
-	// Elo Ranking System
+	// Elo & Glicko-2 MMR Engine
 	singlesElo: { type: Number, default: 1200 },
 	doublesElo: { type: Number, default: 1200 },
+
+	glicko: {
+		singles: {
+			rating: { type: Number, default: 1200 },
+			rd: { type: Number, default: 350 },
+			volatility: { type: Number, default: 0.06 },
+			lastMatchDate: { type: Date, default: Date.now }
+		},
+		doubles: {
+			rating: { type: Number, default: 1200 },
+			rd: { type: Number, default: 350 },
+			volatility: { type: Number, default: 0.06 },
+			lastMatchDate: { type: Date, default: Date.now }
+		}
+	},
 
 	// Web Push Subscriptions for Notifications
 	pushSubscriptions: { type: Array, default: [] },
@@ -92,6 +107,24 @@ userSchema.index({ location: "2dsphere" });
 userSchema.index({ name: 1 });
 userSchema.index({ homeUniversity: 1, lastActive: -1 });
 userSchema.index({ skillLevel: 1, lastActive: -1 });
+
+userSchema.virtual('rating').get(function() {
+	return this.singlesElo;
+});
+
+userSchema.virtual('elo').get(function() {
+	return this.singlesElo;
+});
+
+userSchema.pre('save', function(next) {
+	if (this.glicko?.singles?.rating !== undefined) {
+		this.singlesElo = Math.round(this.glicko.singles.rating);
+	}
+	if (this.glicko?.doubles?.rating !== undefined) {
+		this.doublesElo = Math.round(this.glicko.doubles.rating);
+	}
+	if (typeof next === 'function') next();
+});
 
 const { publishEvent } = require("../utils/kafkaProducer");
 

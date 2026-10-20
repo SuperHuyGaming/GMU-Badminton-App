@@ -21,6 +21,11 @@ const INITIAL_COURTS = [
         division: "Men's Singles Open - Semifinals",
         elapsedSeconds: 1695, // ~28 mins
         warmupRemaining: 0,
+        estimatedDurationMinutes: 18,
+        pacingSecondsPerPoint: 28,
+        walkoverTimer: { active: false },
+        isStalled: false,
+        stallReason: null,
         currentMatch: {
             id: 'm-rac-01',
             player1: { name: 'Alan Yang (GMU)', seed: 1, score: 18, isServing: true },
@@ -40,6 +45,11 @@ const INITIAL_COURTS = [
         division: "Women's Singles - Championship Final",
         elapsedSeconds: 0,
         warmupRemaining: 142, // 2m 22s
+        estimatedDurationMinutes: 35,
+        pacingSecondsPerPoint: 28,
+        walkoverTimer: { active: false },
+        isStalled: false,
+        stallReason: null,
         currentMatch: {
             id: 'm-rac-02',
             player1: { name: 'Rachel Adams (GMU)', seed: 1, score: 0, isServing: true },
@@ -58,6 +68,11 @@ const INITIAL_COURTS = [
         division: "Mixed Doubles - Quarterfinals",
         elapsedSeconds: 0,
         warmupRemaining: 0,
+        estimatedDurationMinutes: 30,
+        pacingSecondsPerPoint: 28,
+        walkoverTimer: { active: false },
+        isStalled: false,
+        stallReason: null,
         currentMatch: null,
         queue: [
             { id: 'q-04', match: 'Yang / Adams (GMU) vs Lin / Patel (UMD)', division: "Mixed Doubles QF", estTime: 'Immediate' },
@@ -71,6 +86,11 @@ const INITIAL_COURTS = [
         division: "Men's Singles Consolation",
         elapsedSeconds: 760, // ~12m 40s
         warmupRemaining: 0,
+        estimatedDurationMinutes: 25,
+        pacingSecondsPerPoint: 28,
+        walkoverTimer: { active: false },
+        isStalled: false,
+        stallReason: null,
         currentMatch: {
             id: 'm-rac-04',
             player1: { name: 'David Nguyen (VT)', seed: 8, score: 14, isServing: false },
@@ -89,6 +109,11 @@ const INITIAL_COURTS = [
         division: "Men's Doubles Open",
         elapsedSeconds: 0,
         warmupRemaining: 0,
+        estimatedDurationMinutes: 35,
+        pacingSecondsPerPoint: 28,
+        walkoverTimer: { active: false },
+        isStalled: false,
+        stallReason: null,
         currentMatch: null,
         queue: [
             { id: 'q-07', match: 'Tran / Wu vs Song / Zhao', division: "Men's Doubles Round 1", estTime: 'Immediate' }
@@ -101,6 +126,11 @@ const INITIAL_COURTS = [
         division: 'Net Inspection & Floor Calibration',
         elapsedSeconds: 0,
         warmupRemaining: 0,
+        estimatedDurationMinutes: 0,
+        pacingSecondsPerPoint: 28,
+        walkoverTimer: { active: false },
+        isStalled: false,
+        stallReason: null,
         currentMatch: null,
         queue: []
     }
@@ -112,22 +142,32 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
     const [filterStatus, setFilterStatus] = useState('ALL'); // 'ALL' | 'IN_PROGRESS' | 'AVAILABLE' | 'WARMUP'
     const [lastUpdated, setLastUpdated] = useState(() => new Date());
 
-    // Timer interval: advances match elapsed seconds and decrements warmup timers
+    // Timer interval: advances match elapsed seconds, decrements warmup timers, and updates walkover timers
     useEffect(() => {
         const timer = setInterval(() => {
             setCourts(prevCourts =>
                 prevCourts.map(court => {
+                    let updated = { ...court };
                     if (court.status === 'MATCH_IN_PROGRESS') {
-                        return { ...court, elapsedSeconds: court.elapsedSeconds + 1 };
+                        updated.elapsedSeconds = court.elapsedSeconds + 1;
                     }
                     if (court.status === 'WARMUP' && court.warmupRemaining > 0) {
                         const nextWarmup = court.warmupRemaining - 1;
                         if (nextWarmup === 0) {
-                            return { ...court, status: 'MATCH_IN_PROGRESS', warmupRemaining: 0, elapsedSeconds: 1 };
+                            updated.status = 'MATCH_IN_PROGRESS';
+                            updated.warmupRemaining = 0;
+                            updated.elapsedSeconds = 1;
+                        } else {
+                            updated.warmupRemaining = nextWarmup;
                         }
-                        return { ...court, warmupRemaining: nextWarmup };
                     }
-                    return court;
+                    if (court.walkoverTimer?.active) {
+                        const remaining = court.walkoverTimer.expiresAt
+                            ? Math.max(0, Math.floor((new Date(court.walkoverTimer.expiresAt) - Date.now()) / 1000))
+                            : Math.max(0, (court.walkoverTimer.remainingSeconds !== undefined ? court.walkoverTimer.remainingSeconds : (court.walkoverTimer.durationSeconds || 600)) - 1);
+                        updated.walkoverTimer = { ...court.walkoverTimer, remainingSeconds: remaining };
+                    }
+                    return updated;
                 })
             );
         }, 1000);
@@ -147,7 +187,12 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
                             status: update.status || c.status,
                             currentMatch: update.currentMatch !== undefined ? update.currentMatch : c.currentMatch,
                             warmupRemaining: update.warmupRemaining !== undefined ? update.warmupRemaining : c.warmupRemaining,
-                            elapsedSeconds: update.elapsedSeconds !== undefined ? update.elapsedSeconds : c.elapsedSeconds
+                            elapsedSeconds: update.elapsedSeconds !== undefined ? update.elapsedSeconds : c.elapsedSeconds,
+                            estimatedDurationMinutes: update.estimatedDurationMinutes !== undefined ? update.estimatedDurationMinutes : c.estimatedDurationMinutes,
+                            pacingSecondsPerPoint: update.pacingSecondsPerPoint !== undefined ? update.pacingSecondsPerPoint : c.pacingSecondsPerPoint,
+                            walkoverTimer: update.walkoverTimer !== undefined ? update.walkoverTimer : c.walkoverTimer,
+                            isStalled: update.isStalled !== undefined ? update.isStalled : c.isStalled,
+                            stallReason: update.stallReason !== undefined ? update.stallReason : c.stallReason
                         };
                     }
                     return c;
@@ -186,12 +231,58 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
             setLastUpdated(new Date());
         };
 
+        const handleWalkoverStarted = (data) => {
+            if (!data || !data.courtNumber) return;
+            setCourts(prev =>
+                prev.map(c => {
+                    if (c.courtNumber === data.courtNumber) {
+                        return {
+                            ...c,
+                            walkoverTimer: {
+                                active: true,
+                                targetTeam: data.targetTeam,
+                                targetPlayerName: data.targetPlayerName || data.playerName,
+                                startedAt: data.startedAt,
+                                expiresAt: data.expiresAt,
+                                durationSeconds: data.durationSeconds || 600,
+                                remainingSeconds: data.durationSeconds || 600
+                            }
+                        };
+                    }
+                    return c;
+                })
+            );
+            setLastUpdated(new Date());
+        };
+
+        const handleWalkoverEnded = (data) => {
+            if (!data || !data.courtNumber) return;
+            setCourts(prev =>
+                prev.map(c => {
+                    if (c.courtNumber === data.courtNumber) {
+                        return {
+                            ...c,
+                            walkoverTimer: { active: false }
+                        };
+                    }
+                    return c;
+                })
+            );
+            setLastUpdated(new Date());
+        };
+
         socket.on('courtStatusUpdate', handleCourtStatusUpdate);
         socket.on('liveScoreUpdate', handleLiveScoreUpdate);
+        socket.on('walkoverTimerStarted', handleWalkoverStarted);
+        socket.on('walkoverTimerCancelled', handleWalkoverEnded);
+        socket.on('walkoverDeclared', handleWalkoverEnded);
 
         return () => {
             socket.off('courtStatusUpdate', handleCourtStatusUpdate);
             socket.off('liveScoreUpdate', handleLiveScoreUpdate);
+            socket.off('walkoverTimerStarted', handleWalkoverStarted);
+            socket.off('walkoverTimerCancelled', handleWalkoverEnded);
+            socket.off('walkoverDeclared', handleWalkoverEnded);
         };
     }, []);
 
@@ -396,12 +487,42 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
                                     />
                                 </Box>
 
-                                {/* Active Timer Badge */}
+                                {/* Walkover Countdown Badge */}
+                                {court.walkoverTimer?.active && (
+                                    <Box sx={{ mb: 1.5 }}>
+                                        <Chip
+                                            color="error"
+                                            size="small"
+                                            icon={<AccessTimeIcon />}
+                                            label={`WALKOVER: ${court.walkoverTimer.targetPlayerName || court.walkoverTimer.targetTeam || 'Player'} (${formatTime(court.walkoverTimer.remainingSeconds !== undefined ? court.walkoverTimer.remainingSeconds : (court.walkoverTimer.durationSeconds || 600))})`}
+                                            data-testid={`walkover-chip-court-${court.courtNumber}`}
+                                            sx={{ fontWeight: 'bold' }}
+                                        />
+                                    </Box>
+                                )}
+
+                                {/* Deadlock Stalled Alert */}
+                                {court.isStalled && (
+                                    <Alert
+                                        severity="error"
+                                        sx={{ mb: 1.5, py: 0.5, fontWeight: 'bold' }}
+                                        data-testid={`deadlock-alert-court-${court.courtNumber}`}
+                                    >
+                                        ⚠️ Stalled: {court.stallReason || '>30m no score'}
+                                    </Alert>
+                                )}
+
+                                {/* Active Timer & Dynamic Pacing Badge */}
                                 {court.status === 'MATCH_IN_PROGRESS' && (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-                                        <AccessTimeIcon fontSize="small" color="info" />
-                                        <Typography variant="body2" fontWeight="bold" color="info.main">
-                                            Match Elapsed: {formatTime(court.elapsedSeconds)}
+                                    <Box sx={{ mb: 1.5 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                            <AccessTimeIcon fontSize="small" color="info" />
+                                            <Typography variant="body2" fontWeight="bold" color="info.main">
+                                                Match Elapsed: {formatTime(court.elapsedSeconds)}
+                                            </Typography>
+                                        </Box>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }} data-testid={`pacing-estimate-court-${court.courtNumber}`}>
+                                            Est. ~{court.estimatedDurationMinutes || 18} mins remaining ({court.pacingSecondsPerPoint || 28}s/pt pacing)
                                         </Typography>
                                     </Box>
                                 )}
