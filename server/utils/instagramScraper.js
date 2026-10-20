@@ -1,8 +1,11 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const mongoose = require('mongoose');
 const Tournament = require('../models/Tournament');
 const { ApifyClient } = require('apify-client');
 const { parseInstagramPost } = require('./aiParser');
+const { deduplicateTournament, mergeTournamentData } = require('./deduplication');
+const { resolveBioLinkRegistration } = require('./campusGroupsBypass');
 
 const client = new ApifyClient({
     token: process.env.APIFY_API_TOKEN || 'placeholder_token',
@@ -10,26 +13,33 @@ const client = new ApifyClient({
 
 // Target DMV collegiate clubs with their approximate coordinates
 const TARGET_CLUBS = [
-    { handle: "uvabadminton", name: "University of Virginia", location: "Charlottesville, VA", coordinates: [-78.5079, 38.0335] },
-    { handle: "vtechbadminton", name: "Virginia Tech", location: "Blacksburg, VA", coordinates: [-80.4139, 37.2284] },
+    // Primary DMV Collegiate Badminton Clubs
+    { handle: "gmu_badminton", name: "George Mason University", location: "Fairfax, VA", coordinates: [-77.3075, 38.8315] },
     { handle: "umd_badminton", name: "University of Maryland", location: "College Park, MD", coordinates: [-76.9425, 38.9869] },
-    { handle: "dukebadminton", name: "Duke University", location: "Durham, NC", coordinates: [-78.9382, 35.9940] },
-    { handle: "vcu.badminton", name: "Virginia Commonwealth University", location: "Richmond, VA", coordinates: [-77.4526, 37.5482] },
-    { handle: "wmbadminton", name: "William & Mary", location: "Williamsburg, VA", coordinates: [-76.7144, 37.2709] },
-    { handle: "psubadminton", name: "Penn State University", location: "State College, PA", coordinates: [-77.8600, 40.7982] },
-    { handle: "rutgersbadminton", name: "Rutgers University", location: "New Brunswick, NJ", coordinates: [-74.4518, 40.4862] },
-    { handle: "jhubadminton", name: "Johns Hopkins University", location: "Baltimore, MD", coordinates: [-76.6200, 39.3299] },
     { handle: "gwbadminton", name: "George Washington University", location: "Washington, DC", coordinates: [-77.0469, 38.8997] },
     { handle: "georgetownbadminton", name: "Georgetown University", location: "Washington, DC", coordinates: [-77.0722, 38.9076] },
+    { handle: "jhubadminton", name: "Johns Hopkins University", location: "Baltimore, MD", coordinates: [-76.6200, 39.3299] },
+    { handle: "umbcbadminton", name: "UMBC", location: "Catonsville, MD", coordinates: [-76.7139, 39.2556] },
+    { handle: "uvabadminton", name: "University of Virginia", location: "Charlottesville, VA", coordinates: [-78.5079, 38.0335] },
+    { handle: "vtechbadminton", name: "Virginia Tech", location: "Blacksburg, VA", coordinates: [-80.4139, 37.2284] },
+    { handle: "vcu.badminton", name: "Virginia Commonwealth University", location: "Richmond, VA", coordinates: [-77.4526, 37.5482] },
+    { handle: "wmbadminton", name: "William & Mary", location: "Williamsburg, VA", coordinates: [-76.7144, 37.2709] },
+    { handle: "jmubadminton", name: "James Madison University", location: "Harrisonburg, VA", coordinates: [-78.8697, 38.4350] },
+    { handle: "towsonbadminton", name: "Towson University", location: "Towson, MD", coordinates: [-76.6042, 39.3934] },
+    // Regional DMV Tournament & Training Hubs
+    { handle: "cba_badminton", name: "Capital Badminton Academy", location: "Columbia, MD", coordinates: [-76.8289, 39.2037] },
+    { handle: "nvbadminton", name: "Northern Virginia Badminton Club", location: "Ashburn, VA", coordinates: [-77.4875, 39.0438] },
+    // Mid-Atlantic Circuit Competitors
+    { handle: "dukebadminton", name: "Duke University", location: "Durham, NC", coordinates: [-78.9382, 35.9940] },
+    { handle: "psubadminton", name: "Penn State University", location: "State College, PA", coordinates: [-77.8600, 40.7982] },
+    { handle: "rutgersbadminton", name: "Rutgers University", location: "New Brunswick, NJ", coordinates: [-74.4518, 40.4862] },
     { handle: "ncsubadminton", name: "NC State University", location: "Raleigh, NC", coordinates: [-78.6750, 35.7846] },
     { handle: "uncbadminton", name: "UNC Chapel Hill", location: "Chapel Hill, NC", coordinates: [-79.0469, 35.9049] },
     { handle: "upennbadminton", name: "University of Pennsylvania", location: "Philadelphia, PA", coordinates: [-75.1932, 39.9522] },
     { handle: "cmubadminton", name: "Carnegie Mellon University", location: "Pittsburgh, PA", coordinates: [-79.9425, 40.4424] },
     { handle: "udbadminton", name: "University of Delaware", location: "Newark, DE", coordinates: [-75.7496, 39.6780] },
     { handle: "templebadminton", name: "Temple University", location: "Philadelphia, PA", coordinates: [-75.1531, 39.9806] },
-    { handle: "pittbadminton", name: "University of Pittsburgh", location: "Pittsburgh, PA", coordinates: [-79.9608, 40.4443] },
-    { handle: "jmubadminton", name: "James Madison University", location: "Harrisonburg, VA", coordinates: [-78.8697, 38.4350] },
-    { handle: "towsonbadminton", name: "Towson University", location: "Towson, MD", coordinates: [-76.6042, 39.3934] }
+    { handle: "pittbadminton", name: "University of Pittsburgh", location: "Pittsburgh, PA", coordinates: [-79.9608, 40.4443] }
 ];
 
 /**
@@ -44,9 +54,14 @@ async function runInstagramScraper() {
             
             let registrationUrl = "";
             if (profileData && profileData.linktreeUrl) {
-                const forms = await scrapeLinktree(profileData.linktreeUrl);
-                if (forms.length > 0) {
-                    registrationUrl = forms[0];
+                const bioForms = await resolveBioLinkRegistration(profileData.linktreeUrl);
+                if (bioForms && bioForms.length > 0) {
+                    registrationUrl = bioForms[0];
+                } else {
+                    const forms = await scrapeLinktree(profileData.linktreeUrl);
+                    if (forms.length > 0) {
+                        registrationUrl = forms[0];
+                    }
                 }
             }
 
@@ -65,41 +80,63 @@ async function runInstagramScraper() {
                     if (parsedData && parsedData.isTournamentPost) {
                         console.log(`[InstagramScraper] Valid tournament found from @${club.handle}: ${parsedData.tournamentName || 'Unknown Name'}`);
 
-                        // Phase 3: Task 6 - Deduplication Engine
-                        // Check if we already have a tournament for this club with roughly the same dates or the exact same post URL
-                        const existingTournament = await Tournament.findOne({
-                            $or: [
-                                { instagramPostUrl: post.postUrl },
-                                { hostClubHandle: club.handle, startDate: parsedData.startDate ? new Date(parsedData.startDate) : { $exists: true } }
-                            ]
-                        });
+                        const candidateTourney = {
+                            tournamentName: parsedData.tournamentName || `${club.name} Open Tournament`,
+                            hostUniversity: club.name,
+                            eventLocation: club.location, // Static Geo-Tagging
+                            registrationDeadline: parsedData.registrationDeadline ? new Date(parsedData.registrationDeadline) : null,
+                            isOpenTournament: true,
+                            registrationUrl: registrationUrl,
+                            instagramPostUrl: post.postUrl,
+                            flyerImageUrl: post.imageUrl,
+                            hostClubHandle: club.handle,
+                            originalCaption: post.caption,
+                            skillLevels: parsedData.skillLevels || [],
+                            startDate: parsedData.startDate ? new Date(parsedData.startDate) : null,
+                            endDate: parsedData.endDate ? new Date(parsedData.endDate) : null,
+                            scraperLastRun: new Date()
+                        };
+
+                        let existingTournament = null;
+                        if (mongoose.connection?.readyState === 1) {
+                            const activeTournaments = await Tournament.find({ status: { $ne: 'archived' } }).lean();
+                            const dedup = deduplicateTournament(candidateTourney, activeTournaments, {
+                                titleThreshold: 0.85,
+                                windowHours: 48
+                            });
+                            if (dedup.isDuplicate && dedup.canonicalId) {
+                                existingTournament = await Tournament.findById(dedup.canonicalId);
+                            }
+                            if (!existingTournament) {
+                                existingTournament = await Tournament.findOne({
+                                    $or: [
+                                        { instagramPostUrl: post.postUrl },
+                                        { hostClubHandle: club.handle, startDate: parsedData.startDate ? new Date(parsedData.startDate) : { $exists: true } }
+                                    ]
+                                });
+                            }
+                        }
 
                         if (!existingTournament) {
                             const newTourney = new Tournament({
-                                tournamentName: parsedData.tournamentName || `${club.name} Open Tournament`,
-                                hostUniversity: club.name,
-                                eventLocation: club.location, // Phase 3: Task 7 - Static Geo-Tagging
-                                registrationDeadline: parsedData.registrationDeadline ? new Date(parsedData.registrationDeadline) : null,
-                                isOpenTournament: true,
-                                registrationUrl: registrationUrl,
-                                instagramPostUrl: post.postUrl,
-                                flyerImageUrl: post.imageUrl,
-                                hostClubHandle: club.handle,
-                                originalCaption: post.caption,
-                                skillLevels: parsedData.skillLevels || [],
-                                startDate: parsedData.startDate ? new Date(parsedData.startDate) : null,
-                                endDate: parsedData.endDate ? new Date(parsedData.endDate) : null,
-                                scraperLastRun: new Date(),
+                                ...candidateTourney,
                                 createdAt: new Date()
                             });
                             await newTourney.save();
                             console.log(`[InstagramScraper] Saved new tournament: ${newTourney.tournamentName}`);
                         } else {
-                            console.log(`[InstagramScraper] Duplicate found, updating existing tournament.`);
-                            // Upsert logic
+                            console.log(`[InstagramScraper] Duplicate found, merging tournament data.`);
+                            const merged = mergeTournamentData(existingTournament, candidateTourney);
                             existingTournament.scraperLastRun = new Date();
+                            if (merged.divisions && merged.divisions.length > 0) existingTournament.divisions = merged.divisions;
+                            if (merged.registrationUrl) existingTournament.registrationUrl = merged.registrationUrl;
+                            if (merged.sourceLinks && merged.sourceLinks.length > 0) existingTournament.sourceLinks = merged.sourceLinks;
+                            if (merged.skillLevels && merged.skillLevels.length > 0) existingTournament.skillLevels = merged.skillLevels;
+                            if (merged.startDate) existingTournament.startDate = merged.startDate;
+                            if (merged.endDate) existingTournament.endDate = merged.endDate;
                             if (parsedData.registrationDeadline) existingTournament.registrationDeadline = new Date(parsedData.registrationDeadline);
-                            if (registrationUrl && !existingTournament.registrationUrl) existingTournament.registrationUrl = registrationUrl;
+                            if (!existingTournament.instagramPostUrl && post.postUrl) existingTournament.instagramPostUrl = post.postUrl;
+                            if (!existingTournament.flyerImageUrl && post.imageUrl) existingTournament.flyerImageUrl = post.imageUrl;
                             await existingTournament.save();
                         }
                     }

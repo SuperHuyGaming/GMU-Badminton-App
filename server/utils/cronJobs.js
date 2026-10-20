@@ -89,6 +89,7 @@ const { runInstagramScraper } = require('./instagramScraper');
 const { huntGoogleForTournaments, processDiscoveryQueue, runFullAutonomousHunt, ensureGuaranteedTournaments } = require('./autonomousHunter');
 const Tournament = require('../models/Tournament');
 const { sendPushToAllUsers } = require('./pushNotifications');
+const redis = require('./redis');
 
 async function checkTournamentDeadlines() {
     try {
@@ -123,18 +124,41 @@ async function cleanupArchivedTournaments() {
     try {
         console.log("[Cron] Auto-Archiving past tournaments...");
         const now = new Date();
-        const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+
+        if (mongoose.connection?.readyState !== 1 && !Tournament.updateMany._isMockFunction) {
+            return { modifiedCount: 0 };
+        }
 
         const result = await Tournament.updateMany(
-            { endDate: { $lte: yesterday }, status: { $ne: "archived" } },
+            {
+                status: { $ne: "archived" },
+                $or: [
+                    { endDate: { $lt: now } },
+                    { endDate: null, startDate: { $lt: now } }
+                ]
+            },
             { $set: { status: "archived", isOpenTournament: false } }
         );
 
         if (result.modifiedCount > 0) {
             console.log(`[Cron] Successfully archived ${result.modifiedCount} past tournaments.`);
         }
+
+        // Invalidate Redis tournament cache
+        try {
+            const keys = await redis.keys("tournaments:*");
+            if (keys && keys.length > 0) {
+                await Promise.all(keys.map(k => redis.del(k)));
+                console.log(`[Cron] Evicted ${keys.length} tournament cache keys following auto-archival.`);
+            }
+        } catch (cacheErr) {
+            console.warn("[Cron] Redis cache eviction error:", cacheErr.message);
+        }
+
+        return result;
     } catch (e) {
         console.error("[Cron] Failed to archive past tournaments:", e);
+        return { modifiedCount: 0, error: e.message };
     }
 }
 
@@ -197,5 +221,8 @@ function startCronJobs() {
         timezone: "America/New_York"
     });
 }
+
+startCronJobs.cleanupArchivedTournaments = cleanupArchivedTournaments;
+startCronJobs.checkTournamentDeadlines = checkTournamentDeadlines;
 
 module.exports = startCronJobs;

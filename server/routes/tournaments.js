@@ -7,8 +7,51 @@ const redis = require('../utils/redis');
 
 router.get('/', async (req, res) => {
     try {
-        const { month, location, skillLevel, upcoming, weekend, search } = req.query;
+        const { month, location, skillLevel, upcoming, weekend, search, status, includeArchived } = req.query;
         let query = {};
+
+        // Strict Temporal Horizon & Archiving Invariant:
+        // Exclude archived tournaments from public directory unless explicitly requested
+        if (status) {
+            query.status = status;
+        } else if (includeArchived !== 'true') {
+            query.status = { $ne: 'archived' };
+        }
+
+        // Proactively auto-archive elapsed tournaments when connected to MongoDB
+        if (mongoose.connection?.readyState === 1 && !status && includeArchived !== 'true') {
+            try {
+                const now = new Date();
+                const updateResult = await Tournament.updateMany(
+                    {
+                        status: { $ne: "archived" },
+                        $or: [
+                            { endDate: { $lt: now } },
+                            { endDate: null, startDate: { $lt: now } }
+                        ]
+                    },
+                    { $set: { status: "archived", isOpenTournament: false } }
+                );
+
+                // Evict cached tournaments if any records were modified
+                if (updateResult && updateResult.modifiedCount > 0) {
+                    try {
+                        const keys = await redis.keys("tournaments:*");
+                        if (keys && keys.length > 0) {
+                            if (typeof redis.unlink === 'function') {
+                                await redis.unlink(keys);
+                            } else {
+                                await redis.del(keys);
+                            }
+                        }
+                    } catch (cacheErr) {
+                        console.warn("[Tournaments Route] Redis cache eviction error on auto-archive:", cacheErr.message);
+                    }
+                }
+            } catch {
+                // Non-blocking
+            }
+        }
 
         if (month) {
             const startDate = new Date(month + "-01T00:00:00.000Z");
@@ -105,6 +148,29 @@ router.get('/', async (req, res) => {
         res.json({ tournaments, cached: false });
     } catch (error) {
         console.error("Error fetching tournaments:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/tournaments/:id
+ * Retrieves tournament details by ID, preserving access to archived and active events.
+ */
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const tournament = await Tournament.findById(id).populate("attendees", "name avatarUrl _id");
+        if (!tournament) {
+            return res.status(404).json({ error: "Tournament not found" });
+        }
+
+        res.json({ tournament });
+    } catch (error) {
+        console.error("Error fetching tournament by ID:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 });

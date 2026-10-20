@@ -68,84 +68,15 @@ async function pauseForGarbageCollection(pauseMs) {
     await new Promise(resolve => setTimeout(resolve, duration));
 }
 
-/**
- * Computes Levenshtein Distance between two strings.
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
-function levenshteinDistance(a, b) {
-    if (!a) return b ? b.length : 0;
-    if (!b) return a.length;
-
-    const m = a.length;
-    const n = b.length;
-    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            const cost = a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1;
-            dp[i][j] = Math.min(
-                dp[i - 1][j] + 1,      // deletion
-                dp[i][j - 1] + 1,      // insertion
-                dp[i - 1][j - 1] + cost // substitution
-            );
-        }
-    }
-    return dp[m][n];
-}
-
-/**
- * Computes normalized similarity ratio between 0.0 and 1.0.
- * @param {string} str1
- * @param {string} str2
- * @returns {number}
- */
-function stringSimilarity(str1, str2) {
-    if (!str1 || !str2) return 0;
-    const s1 = str1.trim().toLowerCase();
-    const s2 = str2.trim().toLowerCase();
-    if (s1 === s2) return 1.0;
-
-    const maxLen = Math.max(s1.length, s2.length);
-    if (maxLen === 0) return 1.0;
-
-    const dist = levenshteinDistance(s1, s2);
-    return 1 - (dist / maxLen);
-}
-
-/**
- * Checks if a new tournament name duplicates an existing tournament using Levenshtein distance
- * and substring checks against live and proposed tournaments.
- * @param {string} newName
- * @param {Array<{ tournamentName: string }>} existingList
- * @param {number} threshold Similarity threshold (default 0.75)
- * @returns {boolean}
- */
-function isDuplicateTournament(newName, existingList = [], threshold = 0.75) {
-    if (!newName || !Array.isArray(existingList) || existingList.length === 0) return false;
-    const normalize = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const n1 = normalize(newName);
-    if (!n1) return false;
-
-    for (const item of existingList) {
-        const itemRaw = item.tournamentName || '';
-        const n2 = normalize(itemRaw);
-        if (!n2) continue;
-
-        // Exact normalized match or strong substring containment
-        if (n1 === n2) return true;
-        if (n1.length > 8 && n2.length > 8 && (n1.includes(n2) || n2.includes(n1))) return true;
-
-        // Levenshtein fuzzy similarity
-        const sim = stringSimilarity(n1, n2);
-        if (sim >= threshold) return true;
-    }
-    return false;
-}
+const {
+    levenshteinDistance,
+    stringSimilarity,
+    computeTitleSimilarity,
+    isWithinDateWindow,
+    mergeTournamentData,
+    deduplicateTournament,
+    isDuplicateTournament
+} = require('./deduplication');
 
 // SSRF prevention: ensure URLs do not target internal networks or cloud metadata
 function isSafeExternalUrl(urlString) {
@@ -233,8 +164,8 @@ async function processDiscoveryQueue(batchSize = 5) {
 
     // Load both live tournaments and existing proposals for comprehensive deduplication
     const [liveTournaments, proposedTournaments] = await Promise.all([
-        Tournament.find({}, 'tournamentName').lean(),
-        ProposedTournament.find({}, 'tournamentName').lean()
+        Tournament.find({}, 'tournamentName startDate endDate divisions registrationUrl sourceUrl sourceLinks attendees rsvpCount skillLevels').lean(),
+        ProposedTournament.find({}, 'tournamentName date divisions registrationLink sourceUrl sourceLinks skillLevels').lean()
     ]);
     const allExisting = [...liveTournaments, ...proposedTournaments];
 
@@ -363,10 +294,51 @@ async function processDiscoveryQueue(batchSize = 5) {
                 }
             }
 
-            // Fuzzy Deduplication
-            if (isDuplicateTournament(extracted.tournamentName, allExisting)) {
-                console.log(`[Hunter] Duplicate detected via Levenshtein fuzzy match: "${extracted.tournamentName}"`);
-                item.status = 'REJECTED_BY_AI';
+            // Fuzzy & Semantic Deduplication (Jaro-Winkler + 48h Date Window > 0.85 threshold)
+            const dedupResult = deduplicateTournament(extracted, allExisting, { titleThreshold: 0.85, windowHours: 48 });
+            if (dedupResult.isDuplicate) {
+                console.log(`[Hunter] Duplicate detected via Jaro-Winkler match (${dedupResult.matchScore.toFixed(3)}): "${extracted.tournamentName}" matches canonical "${dedupResult.canonicalTournament?.tournamentName}"`);
+                
+                if (dedupResult.canonicalTournament && mongoose.connection?.readyState === 1) {
+                    try {
+                        const canonicalId = dedupResult.canonicalId;
+                        let liveDoc = await Tournament.findById(canonicalId);
+                        if (liveDoc) {
+                            const updated = mergeTournamentData(liveDoc, extracted);
+                            await Tournament.findByIdAndUpdate(canonicalId, {
+                                $set: {
+                                    divisions: updated.divisions,
+                                    registrationUrl: updated.registrationUrl,
+                                    attendees: updated.attendees,
+                                    rsvpCount: updated.rsvpCount,
+                                    sourceLinks: updated.sourceLinks,
+                                    startDate: updated.startDate,
+                                    endDate: updated.endDate,
+                                    skillLevels: updated.skillLevels
+                                }
+                            });
+                            console.log(`[Hunter] 🔀 Merged variant draws/links into live canonical tournament: ${canonicalId}`);
+                        } else {
+                            let proposedDoc = await ProposedTournament.findById(canonicalId);
+                            if (proposedDoc) {
+                                const updated = mergeTournamentData(proposedDoc, extracted);
+                                await ProposedTournament.findByIdAndUpdate(canonicalId, {
+                                    $set: {
+                                        divisions: updated.divisions,
+                                        registrationLink: updated.registrationUrl || proposedDoc.registrationLink,
+                                        sourceLinks: updated.sourceLinks,
+                                        date: updated.startDate || proposedDoc.date
+                                    }
+                                });
+                                console.log(`[Hunter] 🔀 Merged variant draws/links into proposed canonical tournament: ${canonicalId}`);
+                            }
+                        }
+                    } catch (mergeErr) {
+                        console.warn("[Hunter] Error merging duplicate into canonical tournament:", mergeErr.message);
+                    }
+                }
+
+                item.status = 'DUPLICATE_MERGED';
                 await item.save();
                 duplicateCount++;
                 continue;
@@ -422,7 +394,7 @@ async function processDiscoveryQueue(batchSize = 5) {
                         await Tournament.create({
                             tournamentName: extracted.tournamentName,
                             eventLocation: extracted.hostLocation || "DMV Area",
-                            hostUniversity: (extracted.hostLocation && extracted.hostLocation.includes("George Mason")) ? "George Mason University" : "Local Club",
+                            hostUniversity: extracted.hostUniversity || ((extracted.hostLocation && extracted.hostLocation.includes("George Mason")) ? "George Mason University" : "Collegiate / Local Club"),
                             startDate,
                             endDate,
                             registrationDeadline: proposedDeadline,
@@ -490,8 +462,8 @@ const SEARCH_QUERIES = [
 // Verified DMV badminton collegiate & club discovery seeds
 const VERIFIED_DMV_SEEDS = [
     {
-        url: 'https://mason360.gmu.edu/badminton/gmu-open-2026',
-        snippet: '[2026 GMU Badminton Open] Hosted by George Mason Club Badminton at the RAC Gym, Fairfax VA. Singles, Doubles, Mixed. Competition in November 2026. Register via Mason360 / Linktree.'
+        url: 'https://linktr.ee/gmubadminton',
+        snippet: '[2026 GMU Badminton Open] Hosted by George Mason Club Badminton at the RAC Gym, Fairfax VA. Singles, Doubles, Mixed. Competition in November 2026. Register via Linktree / Google Forms.'
     },
     {
         url: 'https://www.tournamentsoftware.com/tournament/29B5BFFA-ED41-49F5-8294-1E1F54A8D8A5',
@@ -692,8 +664,8 @@ function getGuaranteedTournamentsList() {
             rideFormDeadline: new Date("2026-11-02T23:59:59.000Z"),
             isOpenTournament: true,
             status: "active",
-            registrationUrl: "https://mason360.gmu.edu/badminton/gmu-open-2026",
-            sourceUrl: "https://mason360.gmu.edu/badminton/gmu-open-2026",
+            registrationUrl: "https://linktr.ee/gmubadminton",
+            sourceUrl: "https://www.instagram.com/gmu_badminton/",
             flyerImageUrl: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000&auto=format&fit=crop",
             skillLevels: ["Open", "Flight A", "Flight B", "Flight C", "Collegiate"],
             entryFee: "$25/event, $40/doubles pair",
@@ -809,8 +781,8 @@ function getGuaranteedTournamentsList() {
             rideFormDeadline: new Date("2027-02-08T23:59:59.000Z"),
             isOpenTournament: true,
             status: "active",
-            registrationUrl: "https://mason360.gmu.edu/badminton/winter-invitational-2027",
-            sourceUrl: "https://mason360.gmu.edu/badminton/winter-invitational-2027",
+            registrationUrl: "https://linktr.ee/gmubadminton",
+            sourceUrl: "https://www.instagram.com/gmu_badminton/",
             flyerImageUrl: "https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?q=80&w=1000&auto=format&fit=crop",
             skillLevels: ["Collegiate Flight A", "Collegiate Flight B", "Collegiate Flight C", "Open Flights"],
             entryFee: "$25/event, $100/team",
@@ -1036,6 +1008,10 @@ async function wipeAndRestartTournamentSystem() {
 module.exports = {
     levenshteinDistance,
     stringSimilarity,
+    computeTitleSimilarity,
+    isWithinDateWindow,
+    mergeTournamentData,
+    deduplicateTournament,
     isDuplicateTournament,
     isSafeExternalUrl,
     fastHeuristicPreFilter,

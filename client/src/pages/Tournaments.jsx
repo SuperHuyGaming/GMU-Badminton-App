@@ -25,6 +25,7 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import SportsTennisIcon from '@mui/icons-material/SportsTennis';
 import SportsScoreIcon from '@mui/icons-material/SportsScore';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
@@ -756,8 +757,36 @@ END:VCALENDAR`;
                                         </Box>
 
                                         {/* Outbound Link & Calendar Buttons */}
+                                        {tournament.linkStatus === 'expired' && (
+                                            <Box sx={{ width: '100%', mb: 0.5 }}>
+                                                <Chip 
+                                                    icon={<WarningAmberIcon sx={{ fontSize: '1rem !important' }} />} 
+                                                    label="Link Expired / Host Fallback" 
+                                                    color="warning" 
+                                                    size="small" 
+                                                    sx={{ fontWeight: 700, fontSize: '0.72rem', height: 22 }} 
+                                                />
+                                            </Box>
+                                        )}
                                         <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
-                                            {tournament.registrationUrl ? (
+                                            {tournament.linkStatus === 'expired' ? (
+                                                <Tooltip title="Original registration link is expired. Redirecting to verified host club homepage.">
+                                                    <Button 
+                                                        variant="contained" 
+                                                        color="warning"
+                                                        fullWidth
+                                                        size="medium"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        href={tournament.fallbackRegistrationUrl || tournament.sourceUrl || tournament.registrationUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
+                                                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                                                    >
+                                                        Visit Host Club
+                                                    </Button>
+                                                </Tooltip>
+                                            ) : tournament.registrationUrl ? (
                                                 <Button 
                                                     variant="contained" 
                                                     color="primary"
@@ -1119,7 +1148,18 @@ END:VCALENDAR`;
                                         </Box>
 
                                         {/* Action buttons */}
-                                        <Stack direction="row" spacing={1.5} sx={{ pt: 2 }}>
+                                        {selectedTournament.linkStatus === 'expired' && (
+                                            <Box sx={{ pt: 1 }}>
+                                                <Chip 
+                                                    icon={<WarningAmberIcon />} 
+                                                    label="Link Expired / Host Fallback" 
+                                                    color="warning" 
+                                                    size="small" 
+                                                    sx={{ fontWeight: 700 }} 
+                                                />
+                                            </Box>
+                                        )}
+                                        <Stack direction="row" spacing={1.5} sx={{ pt: 1.5 }}>
                                             <Button 
                                                 variant={isUserAttending(selectedTournament) ? "contained" : "outlined"}
                                                 color={isUserAttending(selectedTournament) ? "success" : "primary"}
@@ -1133,14 +1173,15 @@ END:VCALENDAR`;
                                             {selectedTournament.registrationUrl && (
                                                 <Button 
                                                     variant="contained" 
-                                                    color="primary"
-                                                    href={selectedTournament.registrationUrl}
+                                                    color={selectedTournament.linkStatus === 'expired' ? "warning" : "primary"}
+                                                    href={selectedTournament.linkStatus === 'expired' ? (selectedTournament.fallbackRegistrationUrl || selectedTournament.sourceUrl || selectedTournament.registrationUrl) : selectedTournament.registrationUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     endIcon={<LaunchIcon />}
+                                                    startIcon={selectedTournament.linkStatus === 'expired' ? <WarningAmberIcon /> : null}
                                                     sx={{ flex: 1.5, fontWeight: 700, borderRadius: 2 }}
                                                 >
-                                                    Register Online
+                                                    {selectedTournament.linkStatus === 'expired' ? "Visit Host Club" : "Register Online"}
                                                 </Button>
                                             )}
                                         </Stack>
