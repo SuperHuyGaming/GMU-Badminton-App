@@ -37,7 +37,9 @@ const {
     isWithinDateWindow,
     mergeTournamentData,
     deduplicateTournament,
-    isDuplicateTournament
+    isDuplicateTournament,
+    hasConflictingCollegiateEntities,
+    normalizeDivisionKey
 } = require("../utils/deduplication");
 
 const {
@@ -267,6 +269,83 @@ describe("Milestone 1 (Project Titan) — Ingestion Deduplication & Data Quality
             expect(merged.registrationUrl).toBe("https://forms.gle/xyz");
             expect(merged.eventLocation).toBe("Recreation Athletic Complex (RAC), Fairfax, VA");
             expect(merged.hostUniversity).toBe("George Mason University");
+        });
+
+        test("Collegiate Entity Conflict Guard: distinct institutions on same date are NEVER merged (GMU vs UMD)", () => {
+            const existing = [
+                {
+                    _id: "gmu_canon_1",
+                    tournamentName: "2026 GMU Badminton Open",
+                    startDate: new Date("2026-11-07T09:00:00Z"),
+                    eventLocation: "RAC Gym, Fairfax, VA"
+                }
+            ];
+
+            const candidate = {
+                tournamentName: "2026 UMD Badminton Open",
+                startDate: new Date("2026-11-07T09:00:00Z"),
+                eventLocation: "Ritchie Coliseum, College Park, MD"
+            };
+
+            const result = deduplicateTournament(candidate, existing);
+            expect(result.isDuplicate).toBe(false);
+            expect(result.canonicalId).toBeNull();
+            expect(result.matchScore).toBe(0);
+        });
+
+        test("Collegiate Entity Conflict Guard: distinct institutions on same date are NEVER merged (UVA vs VT)", () => {
+            const existing = [
+                {
+                    _id: "vt_canon_1",
+                    tournamentName: "2026 VT Badminton Open",
+                    startDate: new Date("2026-11-07T09:00:00Z"),
+                    eventLocation: "McComas Hall, Blacksburg, VA"
+                }
+            ];
+
+            const candidate = {
+                tournamentName: "2026 UVA Badminton Open",
+                startDate: new Date("2026-11-07T09:00:00Z"),
+                eventLocation: "Mem Gym, Charlottesville, VA"
+            };
+
+            const result = deduplicateTournament(candidate, existing);
+            expect(result.isDuplicate).toBe(false);
+            expect(result.canonicalId).toBeNull();
+            expect(result.matchScore).toBe(0);
+        });
+
+        test("Stage 3 Token Pruning: year tokens (2026) do not prevent pruning unrelated tournaments", () => {
+            const pruneResult = shouldPruneCandidate("2026 Duke Table Tennis", null, "2026 UVA Badminton Open", null, 48);
+            expect(pruneResult.prune).toBe(true);
+            expect(pruneResult.reason).toBe("zero_informative_tokens");
+        });
+
+        test("Division draw normalization: MS_OPEN and Men Singles Open merge cleanly without duplicate draws", () => {
+            const existing = {
+                divisions: [
+                    { code: "MS_OPEN", name: "Men's Singles Open", maxDraw: 32, fee: "$25" }
+                ]
+            };
+
+            const incoming = {
+                divisions: [
+                    { name: "Men Singles Open", maxDraw: 64, fee: "$30" },
+                    { name: "Women Singles Open", maxDraw: 32, fee: "$30" }
+                ]
+            };
+
+            const merged = mergeTournamentData(existing, incoming);
+            expect(merged.divisions).toHaveLength(2);
+
+            const msDiv = merged.divisions.find(d => d.code === "MS_OPEN");
+            expect(msDiv).toBeDefined();
+            expect(msDiv.maxDraw).toBe(64);
+            expect(msDiv.fee).toBe("$30");
+
+            const wsDiv = merged.divisions.find(d => d.code === "WS_OPEN");
+            expect(wsDiv).toBeDefined();
+            expect(wsDiv.maxDraw).toBe(32);
         });
     });
 

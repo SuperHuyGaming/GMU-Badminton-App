@@ -26,6 +26,10 @@ if (process.env.REDIS_URL) {
             const keysArray = Array.isArray(keys) ? keys : [keys];
             keysArray.forEach(k => memCache.delete(k));
         },
+        unlink: async (keys) => {
+            const keysArray = Array.isArray(keys) ? keys : [keys];
+            keysArray.forEach(k => memCache.delete(k));
+        },
         on: (event, handler) => {}
     };
 }

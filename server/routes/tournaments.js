@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
         if (mongoose.connection?.readyState === 1 && !status && includeArchived !== 'true') {
             try {
                 const now = new Date();
-                await Tournament.updateMany(
+                const updateResult = await Tournament.updateMany(
                     {
                         status: { $ne: "archived" },
                         $or: [
@@ -32,6 +32,22 @@ router.get('/', async (req, res) => {
                     },
                     { $set: { status: "archived", isOpenTournament: false } }
                 );
+
+                // Evict cached tournaments if any records were modified
+                if (updateResult && updateResult.modifiedCount > 0) {
+                    try {
+                        const keys = await redis.keys("tournaments:*");
+                        if (keys && keys.length > 0) {
+                            if (typeof redis.unlink === 'function') {
+                                await redis.unlink(keys);
+                            } else {
+                                await redis.del(keys);
+                            }
+                        }
+                    } catch (cacheErr) {
+                        console.warn("[Tournaments Route] Redis cache eviction error on auto-archive:", cacheErr.message);
+                    }
+                }
             } catch {
                 // Non-blocking
             }
