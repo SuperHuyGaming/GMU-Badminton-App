@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Court = require('../models/Court');
 const TournamentMatch = require('../models/TournamentMatch');
+const bwfRules = require('../utils/bwfRules');
 
 /**
  * Safely emit updates over Socket.io
@@ -20,6 +21,12 @@ function emitUpdates(req, court, match, scorePayload = null) {
             currentMatch: court.currentMatch,
             queue: court.queue,
             warmupStartTime: court.warmupStartTime,
+            walkoverTimer: court.walkoverTimer,
+            estimatedDurationMinutes: court.estimatedDurationMinutes,
+            estimatedEndTime: court.estimatedEndTime,
+            pacingSecondsPerPoint: court.pacingSecondsPerPoint,
+            isStalled: court.isStalled,
+            stallReason: court.stallReason,
             updatedAt: court.updatedAt
         });
     }
@@ -82,168 +89,102 @@ function buildMatchSnapshot(match) {
 }
 
 /**
- * Applies official BWF best-of-3 scoring algorithm
+ * Computes live point pacing and dynamic remaining match duration
+ */
+function computeMatchPacingAndDuration(court, match) {
+    if (!match || match.matchStatus === 'COMPLETED' || match.matchStatus === 'SCHEDULED') {
+        return;
+    }
+    const startTime = match.startTime ? new Date(match.startTime).getTime() : (court.warmupStartTime ? new Date(court.warmupStartTime).getTime() : Date.now());
+    const elapsedSeconds = Math.max(1, Math.floor((Date.now() - startTime) / 1000));
+
+    // Count total points played across all games so far
+    let pointsPlayed = (match.team1Score || 0) + (match.team2Score || 0);
+    if (match.games && match.games.length > 0) {
+        for (const g of match.games) {
+            if (g.isFinished) {
+                pointsPlayed += (g.team1Score || 0) + (g.team2Score || 0);
+            }
+        }
+    }
+
+    let livePacing = 28;
+    if (pointsPlayed >= 5) {
+        livePacing = Math.min(55, Math.max(18, Math.round(elapsedSeconds / pointsPlayed)));
+    }
+    court.pacingSecondsPerPoint = livePacing;
+
+    // Remaining points estimation
+    const currentG = match.currentGame || 1;
+    const currentMax = Math.max(match.team1Score || 0, match.team2Score || 0);
+    const currGameRem = Math.max(0, 21 - currentMax);
+    const needGame3 = (match.team1GamesWon === 1 && match.team2GamesWon === 1) || (currentG < 3 && match.team1GamesWon === 0 && match.team2GamesWon === 0);
+    const estimatedRemPoints = currGameRem + (needGame3 && currentG < 3 ? 38 : 0);
+
+    const remSeconds = estimatedRemPoints * livePacing + 60; // 60s buffer for intervals
+    const remMinutes = Math.max(2, Math.ceil(remSeconds / 60));
+    court.estimatedDurationMinutes = remMinutes;
+    court.estimatedEndTime = new Date(Date.now() + remMinutes * 60 * 1000);
+    court.lastActivityAt = new Date();
+}
+
+/**
+ * Automatically advances the court queue when a match completes or walkover is declared.
+ */
+async function autoAdvanceCourt(court, req) {
+    if (!court.queue || court.queue.length === 0) {
+        court.status = 'AVAILABLE';
+        court.currentMatch = null;
+        court.warmupStartTime = null;
+        court.estimatedDurationMinutes = 0;
+        court.estimatedEndTime = null;
+        court.isStalled = false;
+        court.stallReason = null;
+        court.updatedAt = new Date();
+        await court.save();
+        emitUpdates(req, court, null);
+        return null;
+    }
+
+    const nextMatchId = court.queue.shift();
+    const nextMatch = await TournamentMatch.findById(nextMatchId);
+    if (!nextMatch) {
+        court.status = 'AVAILABLE';
+        court.currentMatch = null;
+        court.warmupStartTime = null;
+        court.updatedAt = new Date();
+        await court.save();
+        emitUpdates(req, court, null);
+        return null;
+    }
+
+    nextMatch.courtNumber = court.courtNumber;
+    nextMatch.matchStatus = 'WARMUP';
+    nextMatch.startTime = new Date();
+    await nextMatch.save();
+
+    court.status = 'WARMUP';
+    court.warmupStartTime = new Date();
+    court.lastActivityAt = new Date();
+    court.isStalled = false;
+    court.stallReason = null;
+    court.currentMatch = buildMatchSnapshot(nextMatch);
+    court.updatedAt = new Date();
+    await court.save();
+
+    emitUpdates(req, court, nextMatch);
+    const io = req.io || req.app?.get('io');
+    if (io) {
+        io.emit('matchCalled', { courtNumber: court.courtNumber, matchId: nextMatch._id, match: nextMatch });
+    }
+    return nextMatch;
+}
+
+/**
+ * Delegates official BWF best-of-3 scoring algorithm to bwfRules engine
  */
 function applyBWFPoint(match, scoringTeam) {
-    const prev = {
-        currentGame: match.currentGame,
-        team1Score: match.team1Score,
-        team2Score: match.team2Score,
-        team1GamesWon: match.team1GamesWon,
-        team2GamesWon: match.team2GamesWon,
-        servingCourt: match.servingCourt,
-        currentServer: match.currentServer,
-        shuttlePossession: match.shuttlePossession,
-        matchStatus: match.matchStatus,
-        winner: match.winner,
-        isGamePoint: match.isGamePoint,
-        isMatchPoint: match.isMatchPoint,
-        isDeuce: match.isDeuce,
-        games: JSON.parse(JSON.stringify(match.games || []))
-    };
-
-    let t1 = match.team1Score;
-    let t2 = match.team2Score;
-    const cg = match.currentGame;
-
-    if (scoringTeam === 'team1') {
-        t1 += 1;
-        match.shuttlePossession = 'team1';
-        match.currentServer = match.team1?.[0]?.name || 'Team 1';
-        // BWF Service Court Rule: Even score = Right court, Odd score = Left court
-        match.servingCourt = (t1 % 2 === 0) ? 'RIGHT' : 'LEFT';
-    } else {
-        t2 += 1;
-        match.shuttlePossession = 'team2';
-        match.currentServer = match.team2?.[0]?.name || 'Team 2';
-        match.servingCourt = (t2 % 2 === 0) ? 'RIGHT' : 'LEFT';
-    }
-
-    match.team1Score = t1;
-    match.team2Score = t2;
-
-    // Check if the game is won
-    // BWF Rule: First to 21 with lead of 2, deuce from 20-20 up to 29-29, 30th point wins directly
-    let isGameWon = false;
-    let gameWinner = null;
-
-    if (t1 >= 21 && (t1 - t2 >= 2)) {
-        isGameWon = true;
-        gameWinner = 'team1';
-    } else if (t2 >= 21 && (t2 - t1 >= 2)) {
-        isGameWon = true;
-        gameWinner = 'team2';
-    } else if (t1 === 30) {
-        isGameWon = true;
-        gameWinner = 'team1';
-    } else if (t2 === 30) {
-        isGameWon = true;
-        gameWinner = 'team2';
-    }
-
-    // Ensure games array has entry for current game
-    if (!match.games) match.games = [];
-    while (match.games.length < cg) {
-        match.games.push({
-            gameNumber: match.games.length + 1,
-            team1Score: 0,
-            team2Score: 0,
-            winner: null,
-            isFinished: false
-        });
-    }
-
-    if (isGameWon) {
-        match.games[cg - 1] = {
-            gameNumber: cg,
-            team1Score: t1,
-            team2Score: t2,
-            winner: gameWinner,
-            isFinished: true
-        };
-
-        if (gameWinner === 'team1') {
-            match.team1GamesWon += 1;
-        } else {
-            match.team2GamesWon += 1;
-        }
-
-        // Check if match is won (best 2 of 3)
-        if (match.team1GamesWon === 2 || match.team2GamesWon === 2) {
-            match.matchStatus = 'COMPLETED';
-            match.winner = gameWinner;
-            match.endTime = new Date();
-            match.isGamePoint = false;
-            match.isMatchPoint = false;
-            match.isDeuce = false;
-        } else {
-            // Next game setup
-            match.currentGame = cg + 1;
-            match.team1Score = 0;
-            match.team2Score = 0;
-            match.shuttlePossession = gameWinner;
-            match.currentServer = (gameWinner === 'team1') ? (match.team1?.[0]?.name || 'Team 1') : (match.team2?.[0]?.name || 'Team 2');
-            match.servingCourt = 'RIGHT'; // 0 is even -> Right court
-            match.isDeuce = false;
-            match.isGamePoint = false;
-            match.isMatchPoint = false;
-
-            match.games.push({
-                gameNumber: match.currentGame,
-                team1Score: 0,
-                team2Score: 0,
-                winner: null,
-                isFinished: false
-            });
-        }
-    } else {
-        match.games[cg - 1] = {
-            gameNumber: cg,
-            team1Score: t1,
-            team2Score: t2,
-            winner: null,
-            isFinished: false
-        };
-
-        // Deuce detection
-        match.isDeuce = (t1 >= 20 && t2 >= 20 && t1 === t2 && t1 < 29);
-
-        // Game point detection
-        const t1GP = (t1 >= 20 && t1 - t2 >= 1) || (t1 === 29 && t2 === 29);
-        const t2GP = (t2 >= 20 && t2 - t1 >= 1) || (t1 === 29 && t2 === 29);
-        match.isGamePoint = t1GP || t2GP;
-
-        // Match point detection (at game point and already won 1 game, or in game 3)
-        const t1MP = t1GP && (match.team1GamesWon === 1 || cg === 3);
-        const t2MP = t2GP && (match.team2GamesWon === 1 || cg === 3);
-        match.isMatchPoint = t1MP || t2MP;
-    }
-
-    const nextState = {
-        currentGame: match.currentGame,
-        team1Score: match.team1Score,
-        team2Score: match.team2Score,
-        team1GamesWon: match.team1GamesWon,
-        team2GamesWon: match.team2GamesWon,
-        servingCourt: match.servingCourt,
-        currentServer: match.currentServer,
-        shuttlePossession: match.shuttlePossession,
-        matchStatus: match.matchStatus,
-        winner: match.winner,
-        isGamePoint: match.isGamePoint,
-        isMatchPoint: match.isMatchPoint,
-        isDeuce: match.isDeuce,
-        games: JSON.parse(JSON.stringify(match.games || []))
-    };
-
-    if (!match.pointHistory) match.pointHistory = [];
-    match.pointHistory.push({
-        pointIndex: match.pointHistory.length + 1,
-        scoringTeam,
-        previousState: prev,
-        newState: nextState,
-        timestamp: new Date()
-    });
+    return bwfRules.applyBWFPoint(match, scoringTeam);
 }
 
 /**
@@ -285,6 +226,118 @@ router.post('/initialize', async (req, res) => {
         });
     } catch (err) {
         console.error("Error initializing courts:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/courts/deadlocks
+ * Scans all RAC Courts 1-6 for stall conditions:
+ * - Warmup stalls > 12 minutes
+ * - Inactivity stalls > 30 minutes without points
+ * - Overrun matches > 60 minutes with waiting queues while other courts sit idle
+ */
+router.get('/deadlocks', async (req, res) => {
+    try {
+        const courts = await Court.find({ courtNumber: { $gte: 1, $lte: 6 } }).populate('queue');
+        const now = Date.now();
+        const deadlocks = [];
+
+        const hasAvailableCourt = courts.some(c => c.status === 'AVAILABLE' && (!c.queue || c.queue.length === 0));
+
+        for (const court of courts) {
+            let isStalled = false;
+            let reason = null;
+
+            if (court.status === 'WARMUP' && court.warmupStartTime) {
+                const warmupMins = (now - new Date(court.warmupStartTime).getTime()) / (60 * 1000);
+                if (warmupMins > 12) {
+                    isStalled = true;
+                    reason = `WARMUP_EXCEEDED_12M (${Math.round(warmupMins)}m in warmup)`;
+                }
+            } else if (court.status === 'MATCH_IN_PROGRESS') {
+                const lastActivity = court.lastActivityAt ? new Date(court.lastActivityAt).getTime() : (court.warmupStartTime ? new Date(court.warmupStartTime).getTime() : now);
+                const inactiveMins = (now - lastActivity) / (60 * 1000);
+                if (inactiveMins > 30) {
+                    isStalled = true;
+                    reason = `INACTIVITY_EXCEEDED_30M (${Math.round(inactiveMins)}m since last score)`;
+                } else if (hasAvailableCourt && court.queue && court.queue.length >= 2) {
+                    const matchStart = court.warmupStartTime ? new Date(court.warmupStartTime).getTime() : now;
+                    const elapsedMins = (now - matchStart) / (60 * 1000);
+                    if (elapsedMins > 60) {
+                        isStalled = true;
+                        reason = `OVERRUN_QUEUE_STARVATION (${Math.round(elapsedMins)}m with ${court.queue.length} matches queued)`;
+                    }
+                }
+            }
+
+            court.isStalled = isStalled;
+            court.stallReason = reason;
+            await court.save();
+
+            if (isStalled) {
+                deadlocks.push({
+                    courtNumber: court.courtNumber,
+                    courtName: court.courtName,
+                    status: court.status,
+                    reason,
+                    queueLength: court.queue ? court.queue.length : 0
+                });
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            totalStalled: deadlocks.length,
+            deadlocks
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/courts/rebalance-queues
+ * Shifts queued matches from congested or stalled courts to available RAC courts.
+ */
+router.post('/rebalance-queues', async (req, res) => {
+    try {
+        const courts = await Court.find({ courtNumber: { $gte: 1, $lte: 6 } }).sort({ courtNumber: 1 });
+        const availableCourts = courts.filter(c => c.status === 'AVAILABLE' && (!c.queue || c.queue.length === 0));
+        let rebalancedCount = 0;
+        const rebalancedMatches = [];
+
+        if (availableCourts.length > 0) {
+            for (const congested of courts) {
+                if (congested.queue && congested.queue.length >= 2) {
+                    while (congested.queue.length > 1 && availableCourts.length > 0) {
+                        const targetCourt = availableCourts.shift();
+                        const shiftedMatchId = congested.queue.pop();
+
+                        targetCourt.queue = [shiftedMatchId];
+                        await targetCourt.save();
+                        await congested.save();
+
+                        // Advance the target court to WARMUP with the new match
+                        await autoAdvanceCourt(targetCourt, req);
+
+                        rebalancedCount++;
+                        rebalancedMatches.push({
+                            matchId: shiftedMatchId,
+                            fromCourt: congested.courtNumber,
+                            toCourt: targetCourt.courtNumber
+                        });
+                    }
+                }
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            rebalancedCount,
+            rebalancedMatches
+        });
+    } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -413,7 +466,7 @@ router.post('/:courtNumber/score/point', async (req, res) => {
             return res.status(400).json({ success: false, error: "Court number must be between 1 and 6" });
         }
 
-        const { scoringTeam } = req.body;
+        const { scoringTeam, idempotencyKey } = req.body;
         if (scoringTeam !== 'team1' && scoringTeam !== 'team2') {
             return res.status(400).json({ success: false, error: "scoringTeam must be 'team1' or 'team2'" });
         }
@@ -428,18 +481,44 @@ router.post('/:courtNumber/score/point', async (req, res) => {
             return res.status(404).json({ success: false, error: "Tournament match not found" });
         }
 
+        // Problem 11: Idempotency check against pointHistory
+        if (idempotencyKey && match.pointHistory && match.pointHistory.length > 0) {
+            const existing = match.pointHistory.find(p => p.idempotencyKey === idempotencyKey);
+            if (existing) {
+                return res.status(200).json({
+                    success: true,
+                    idempotentReplay: true,
+                    message: "Point already recorded (idempotent response)",
+                    scorePayload: {
+                        courtNumber,
+                        matchId: match._id,
+                        ...(existing.newState || {})
+                    },
+                    court,
+                    match
+                });
+            }
+        }
+
         if (match.matchStatus === 'COMPLETED') {
             return res.status(400).json({ success: false, error: "Match has already concluded" });
         }
 
         // Apply BWF scoring
-        applyBWFPoint(match, scoringTeam);
+        const bwfResult = applyBWFPoint(match, scoringTeam);
+        if (idempotencyKey && match.pointHistory && match.pointHistory.length > 0) {
+            match.pointHistory[match.pointHistory.length - 1].idempotencyKey = idempotencyKey;
+        }
 
         // Transition court status if it was in WARMUP
         if (court.status === 'WARMUP') {
             court.status = 'MATCH_IN_PROGRESS';
             match.matchStatus = 'MATCH_IN_PROGRESS';
+            if (!match.startTime) match.startTime = new Date();
         }
+
+        // Update match duration estimation and pacing
+        computeMatchPacingAndDuration(court, match);
 
         await match.save();
 
@@ -463,11 +542,37 @@ router.post('/:courtNumber/score/point', async (req, res) => {
             isDeuce: match.isDeuce,
             isGamePoint: match.isGamePoint,
             isMatchPoint: match.isMatchPoint,
+            isGoldenPoint: match.isGoldenPoint,
             matchStatus: match.matchStatus,
             winner: match.winner
         };
 
         emitUpdates(req, court, match, scorePayload);
+
+        const io = req.io || req.app?.get('io');
+        if (io) {
+            if (bwfResult.intervalStarted) {
+                io.emit('intervalStarted', {
+                    courtNumber,
+                    matchId: match._id,
+                    ...bwfResult.intervalStarted
+                });
+            }
+            if (bwfResult.sideChangeRequired) {
+                io.emit('sideChangeRequired', {
+                    courtNumber,
+                    matchId: match._id,
+                    currentGame: match.currentGame,
+                    team1CourtSide: match.team1CourtSide,
+                    team2CourtSide: match.team2CourtSide
+                });
+            }
+        }
+
+        // If match concluded, auto-advance court to next match in queue if one is waiting
+        if (match.matchStatus === 'COMPLETED' && court.queue && court.queue.length > 0) {
+            await autoAdvanceCourt(court, req);
+        }
 
         return res.status(200).json({
             success: true,
@@ -662,4 +767,167 @@ router.post('/:courtNumber/queue', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/courts/:courtNumber/walkover/start
+ * Starts a 10-minute forfeit countdown timer for an un-reported team/player.
+ */
+router.post('/:courtNumber/walkover/start', async (req, res) => {
+    try {
+        const courtNumber = parseInt(req.params.courtNumber, 10);
+        if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
+            return res.status(400).json({ success: false, error: "Court number must be between 1 and 6" });
+        }
+
+        const court = await Court.findOne({ courtNumber });
+        if (!court || !court.currentMatch) {
+            return res.status(400).json({ success: false, error: "No active match on this court" });
+        }
+
+        const { targetTeam = 'team1', targetPlayerName = '', durationSeconds = 600 } = req.body;
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + durationSeconds * 1000);
+
+        court.walkoverTimer = {
+            active: true,
+            targetTeam,
+            targetPlayerName,
+            startedAt: now,
+            expiresAt,
+            durationSeconds
+        };
+        court.updatedAt = new Date();
+        await court.save();
+
+        const io = req.io || req.app?.get('io');
+        if (io) {
+            io.emit('walkoverTimerStarted', {
+                courtNumber,
+                matchId: court.currentMatch.matchId,
+                walkoverTimer: court.walkoverTimer
+            });
+        }
+        emitUpdates(req, court, null);
+
+        return res.status(200).json({
+            success: true,
+            message: "Walkover countdown started",
+            walkoverTimer: court.walkoverTimer
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/courts/:courtNumber/walkover/cancel
+ * Cancels an active walkover forfeit timer.
+ */
+router.post('/:courtNumber/walkover/cancel', async (req, res) => {
+    try {
+        const courtNumber = parseInt(req.params.courtNumber, 10);
+        const court = await Court.findOne({ courtNumber });
+        if (!court) {
+            return res.status(404).json({ success: false, error: "Court not found" });
+        }
+
+        court.walkoverTimer = {
+            active: false,
+            targetTeam: null,
+            targetPlayerName: '',
+            startedAt: null,
+            expiresAt: null,
+            durationSeconds: 600
+        };
+        court.updatedAt = new Date();
+        await court.save();
+
+        const io = req.io || req.app?.get('io');
+        if (io) {
+            io.emit('walkoverTimerCancelled', { courtNumber });
+        }
+        emitUpdates(req, court, null);
+
+        return res.status(200).json({
+            success: true,
+            message: "Walkover timer cancelled successfully"
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/courts/:courtNumber/walkover/forfeit
+ * Finalizes walkover forfeiture: awards victory to opponent, closes match, and auto-advances the court.
+ */
+router.post('/:courtNumber/walkover/forfeit', async (req, res) => {
+    try {
+        const courtNumber = parseInt(req.params.courtNumber, 10);
+        const court = await Court.findOne({ courtNumber });
+        if (!court || !court.currentMatch || !court.currentMatch.matchId) {
+            return res.status(400).json({ success: false, error: "No active match on this court" });
+        }
+
+        const match = await TournamentMatch.findById(court.currentMatch.matchId);
+        if (!match) {
+            return res.status(404).json({ success: false, error: "Match not found" });
+        }
+
+        const forfeitingTeam = court.walkoverTimer?.targetTeam || req.body.targetTeam || 'team1';
+        const winningTeam = forfeitingTeam === 'team1' ? 'team2' : 'team1';
+
+        match.matchStatus = 'WALKOVER';
+        match.winner = winningTeam;
+        match.walkoverForfeitTeam = forfeitingTeam;
+        match.endTime = new Date();
+
+        if (winningTeam === 'team1') {
+            match.team1GamesWon = 2;
+            match.team2GamesWon = 0;
+            match.team1Score = 21;
+            match.team2Score = 0;
+        } else {
+            match.team1GamesWon = 0;
+            match.team2GamesWon = 2;
+            match.team1Score = 0;
+            match.team2Score = 21;
+        }
+
+        await match.save();
+
+        court.walkoverTimer = {
+            active: false,
+            targetTeam: null,
+            targetPlayerName: '',
+            startedAt: null,
+            expiresAt: null,
+            durationSeconds: 600
+        };
+
+        const io = req.io || req.app?.get('io');
+        if (io) {
+            io.emit('walkoverDeclared', {
+                courtNumber,
+                matchId: match._id,
+                forfeitingTeam,
+                winningTeam
+            });
+        }
+
+        // Auto advance queue
+        await autoAdvanceCourt(court, req);
+
+        return res.status(200).json({
+            success: true,
+            message: `Walkover declared. Victory awarded to ${winningTeam}`,
+            winner: winningTeam,
+            match
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
+
+

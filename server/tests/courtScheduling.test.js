@@ -469,4 +469,183 @@ describe("R3 Backend: Court Scheduling Engine & Umpire Digital Pad Suite", () =>
             expect(mockCourt.queue).toContain(queuedMatchId.toString());
         });
     });
+
+    describe("6. Problem 11 & 13: Walkover Timers, Deadlocks, Rebalancing & Idempotency", () => {
+        test("POST /score/point returns existing score without double-increment on repeated idempotencyKey", async () => {
+            const matchId = new mongoose.Types.ObjectId();
+            const mockMatch = {
+                _id: matchId,
+                courtNumber: 1,
+                currentGame: 1,
+                team1Score: 10,
+                team2Score: 9,
+                team1GamesWon: 0,
+                team2GamesWon: 0,
+                matchStatus: "MATCH_IN_PROGRESS",
+                pointHistory: [
+                    {
+                        pointIndex: 1,
+                        idempotencyKey: "test-idempotency-key-12345",
+                        scoringTeam: "team1",
+                        newState: {
+                            currentGame: 1,
+                            team1Score: 10,
+                            team2Score: 9
+                        }
+                    }
+                ],
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const mockCourt = {
+                courtNumber: 1,
+                status: "MATCH_IN_PROGRESS",
+                currentMatch: { matchId },
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            jest.spyOn(Court, "findOne").mockResolvedValue(mockCourt);
+            jest.spyOn(TournamentMatch, "findById").mockResolvedValue(mockMatch);
+
+            const res = await request(app)
+                .post('/api/courts/1/score/point')
+                .send({ scoringTeam: 'team1', idempotencyKey: 'test-idempotency-key-12345' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.idempotentReplay).toBe(true);
+            expect(res.body.scorePayload.team1Score).toBe(10);
+            // Verify match was NOT saved with a new increment
+            expect(mockMatch.team1Score).toBe(10);
+        });
+
+        test("POST /walkover/start initiates 10-minute forfeit countdown and emits walkoverTimerStarted", async () => {
+            const matchId = new mongoose.Types.ObjectId();
+            const mockCourt = {
+                courtNumber: 2,
+                status: "WARMUP",
+                currentMatch: { matchId },
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            jest.spyOn(Court, "findOne").mockResolvedValue(mockCourt);
+
+            const res = await request(app)
+                .post('/api/courts/2/walkover/start')
+                .send({ targetTeam: 'team2', targetPlayerName: 'Late Player', durationSeconds: 600 });
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(mockCourt.walkoverTimer.active).toBe(true);
+            expect(mockCourt.walkoverTimer.targetTeam).toBe('team2');
+            expect(mockCourt.walkoverTimer.targetPlayerName).toBe('Late Player');
+            expect(mockIo.emit).toHaveBeenCalledWith('walkoverTimerStarted', expect.objectContaining({
+                courtNumber: 2
+            }));
+        });
+
+        test("POST /walkover/cancel cancels active forfeit countdown", async () => {
+            const mockCourt = {
+                courtNumber: 2,
+                walkoverTimer: { active: true },
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            jest.spyOn(Court, "findOne").mockResolvedValue(mockCourt);
+
+            const res = await request(app).post('/api/courts/2/walkover/cancel');
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(mockCourt.walkoverTimer.active).toBe(false);
+            expect(mockIo.emit).toHaveBeenCalledWith('walkoverTimerCancelled', expect.objectContaining({
+                courtNumber: 2
+            }));
+        });
+
+        test("POST /walkover/forfeit records forfeit victory and auto-advances court", async () => {
+            const matchId = new mongoose.Types.ObjectId();
+            const nextMatchId = new mongoose.Types.ObjectId();
+
+            const mockMatch = {
+                _id: matchId,
+                matchStatus: "WARMUP",
+                winner: null,
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const mockNextMatch = {
+                _id: nextMatchId,
+                matchStatus: "QUEUED",
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const mockCourt = {
+                courtNumber: 3,
+                status: "WARMUP",
+                currentMatch: { matchId },
+                queue: [nextMatchId],
+                walkoverTimer: { active: true, targetTeam: 'team1' },
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            jest.spyOn(Court, "findOne").mockResolvedValue(mockCourt);
+            jest.spyOn(TournamentMatch, "findById")
+                .mockResolvedValueOnce(mockMatch)
+                .mockResolvedValueOnce(mockNextMatch);
+
+            const res = await request(app).post('/api/courts/3/walkover/forfeit');
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(mockMatch.matchStatus).toBe('WALKOVER');
+            expect(mockMatch.winner).toBe('team2'); // Non-forfeiting team wins
+            expect(mockCourt.status).toBe('WARMUP'); // Auto-advanced to next match in queue
+            expect(mockIo.emit).toHaveBeenCalledWith('walkoverDeclared', expect.objectContaining({
+                courtNumber: 3,
+                winningTeam: 'team2'
+            }));
+        });
+
+        test("GET /deadlocks detects stalled courts and POST /rebalance-queues rebalances matches", async () => {
+            const stalledCourt = {
+                courtNumber: 1,
+                courtName: "RAC Court 1",
+                status: "WARMUP",
+                warmupStartTime: new Date(Date.now() - 15 * 60 * 1000), // 15 mins in warmup
+                queue: [new mongoose.Types.ObjectId(), new mongoose.Types.ObjectId()],
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            const availableCourt = {
+                courtNumber: 4,
+                courtName: "RAC Court 4",
+                status: "AVAILABLE",
+                queue: [],
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            jest.spyOn(Court, "find").mockReturnValue({
+                populate: jest.fn().mockResolvedValue([stalledCourt, availableCourt]),
+                sort: jest.fn().mockResolvedValue([stalledCourt, availableCourt])
+            });
+            jest.spyOn(TournamentMatch, "findById").mockResolvedValue({
+                _id: new mongoose.Types.ObjectId(),
+                matchStatus: "QUEUED",
+                save: jest.fn().mockResolvedValue(true)
+            });
+
+            // 1. Check deadlocks
+            const resDeadlocks = await request(app).get('/api/courts/deadlocks');
+            expect(resDeadlocks.status).toBe(200);
+            expect(resDeadlocks.body.totalStalled).toBeGreaterThan(0);
+            expect(stalledCourt.isStalled).toBe(true);
+
+            // 2. Rebalance queues
+            const resRebalance = await request(app).post('/api/courts/rebalance-queues');
+            expect(resRebalance.status).toBe(200);
+            expect(resRebalance.body.success).toBe(true);
+            expect(resRebalance.body.rebalancedCount).toBeGreaterThan(0);
+        });
+    });
 });
+

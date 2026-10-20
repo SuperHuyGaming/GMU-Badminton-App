@@ -215,4 +215,102 @@ describe('Mobile-Optimized Touch Umpire Pad Component', () => {
         expect(screen.getByTestId('score-team1')).toHaveTextContent('0');
         expect(undoBtn).toBeDisabled();
     });
+
+    it('triggers technical interval countdown banner when a player reaches 11 points', () => {
+        render(
+            <UmpireDigitalPad
+                initialPlayer1="Alan Yang"
+                initialPlayer2="Kevin Lin"
+            />
+        );
+
+        const btnTeam1 = screen.getByTestId('btn-score-team1');
+        for (let i = 0; i < 11; i++) {
+            fireEvent.click(btnTeam1);
+        }
+
+        expect(screen.getByTestId('interval-countdown-timer')).toBeInTheDocument();
+        expect(screen.getByText(/60s Technical Interval/i)).toBeInTheDocument();
+    });
+
+    it('displays golden point sudden death banner at 29-29 score', () => {
+        render(
+            <UmpireDigitalPad
+                initialPlayer1="Alan Yang"
+                initialPlayer2="Kevin Lin"
+            />
+        );
+
+        const btnTeam1 = screen.getByTestId('btn-score-team1');
+        const btnTeam2 = screen.getByTestId('btn-score-team2');
+
+        for (let i = 0; i < 29; i++) {
+            fireEvent.click(btnTeam1);
+            fireEvent.click(btnTeam2);
+        }
+
+        expect(screen.getByTestId('golden-point-banner')).toBeInTheDocument();
+        expect(screen.getByText(/GOLDEN POINT \(29-29\) — Sudden death!/i)).toBeInTheDocument();
+    });
+
+    it('triggers Game 3 side change banner when leading score reaches 11 in Game 3', () => {
+        render(
+            <UmpireDigitalPad
+                initialPlayer1="Alan Yang"
+                initialPlayer2="Kevin Lin"
+            />
+        );
+
+        const btnTeam1 = screen.getByTestId('btn-score-team1');
+        const btnTeam2 = screen.getByTestId('btn-score-team2');
+
+        // Team 1 wins Game 1
+        for (let i = 0; i < 21; i++) fireEvent.click(btnTeam1);
+        fireEvent.click(screen.getByTestId('btn-start-next-game'));
+
+        // Team 2 wins Game 2
+        for (let i = 0; i < 21; i++) fireEvent.click(btnTeam2);
+        fireEvent.click(screen.getByTestId('btn-start-next-game'));
+
+        // Now in Game 3
+        expect(screen.getByText(/GAME 3 OF 3/i)).toBeInTheDocument();
+
+        // Score 11 points in Game 3
+        for (let i = 0; i < 11; i++) fireEvent.click(btnTeam1);
+
+        expect(screen.getByTestId('game3-side-change-banner')).toBeInTheDocument();
+        expect(screen.getByText(/DECIDING GAME: CHANGE OF ENDS/i)).toBeInTheDocument();
+    });
+
+    it('persists score offline and replays mutations upon reconnection', async () => {
+        const originalOnLine = navigator.onLine;
+        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true, writable: true });
+
+        render(
+            <UmpireDigitalPad
+                initialCourtNumber={2}
+                initialPlayer1="Alan Yang"
+                initialPlayer2="Kevin Lin"
+            />
+        );
+
+        expect(screen.getByTestId('sync-status-offline')).toBeInTheDocument();
+
+        const btnTeam1 = screen.getByTestId('btn-score-team1');
+        fireEvent.click(btnTeam1);
+
+        await waitFor(() => {
+            expect(screen.getByTestId('sync-status-offline')).toBeInTheDocument();
+        });
+
+        // Trigger reconnect
+        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true, writable: true });
+        fireEvent(window, new Event('online'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('sync-status-online')).toBeInTheDocument();
+        });
+
+        Object.defineProperty(navigator, 'onLine', { value: originalOnLine, configurable: true, writable: true });
+    });
 });

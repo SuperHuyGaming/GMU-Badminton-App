@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
     Box, Typography, Paper, Chip, Button, ButtonGroup, Tooltip,
     Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -12,6 +12,7 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import SportsScoreIcon from '@mui/icons-material/SportsScore';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import GridOnIcon from '@mui/icons-material/GridOn';
+import LockIcon from '@mui/icons-material/Lock';
 import { motion } from 'framer-motion';
 
 import {
@@ -45,6 +46,29 @@ export default function TournamentBracket({
 
     // Selected match dialog state
     const [activeMatchDialog, setActiveMatchDialog] = useState(null);
+
+    // Active distributed locks for live matches
+    const [activeLocks, setActiveLocks] = useState({});
+
+    useEffect(() => {
+        const handleLockUpdate = (data) => {
+            if (!data || !data.matchId) return;
+            setActiveLocks(prev => ({
+                ...prev,
+                [data.matchId]: {
+                    isLocked: Boolean(data.isLocked),
+                    lockedBy: data.lockedBy || 'Official'
+                }
+            }));
+        };
+
+        if (typeof window !== 'undefined' && window.socket) {
+            window.socket.on('bracket:lockStatusUpdate', handleLockUpdate);
+            return () => {
+                window.socket.off('bracket:lockStatusUpdate', handleLockUpdate);
+            };
+        }
+    }, []);
 
     // Active draw data
     const activeData = useMemo(() => {
@@ -581,35 +605,49 @@ export default function TournamentBracket({
                                         }}
                                     >
                                         {/* Status Header */}
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
                                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
                                                 {match.court || 'Court Pending'}
                                             </Typography>
-                                            {match.isChampion && (
-                                                <Chip
-                                                    size="small"
-                                                    icon={<EmojiEventsIcon sx={{ fontSize: '0.9rem !important' }} />}
-                                                    label="CHAMPION"
-                                                    color="warning"
-                                                    sx={{ height: 16, fontSize: '0.6rem', fontWeight: 'bold' }}
-                                                />
-                                            )}
-                                            {isLive && (
-                                                <Chip
-                                                    size="small"
-                                                    label="LIVE"
-                                                    color="error"
-                                                    sx={{ height: 16, fontSize: '0.6rem', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}
-                                                />
-                                            )}
-                                            {isFinal && !match.isChampion && (
-                                                <Chip
-                                                    size="small"
-                                                    label="FINAL"
-                                                    color="default"
-                                                    sx={{ height: 16, fontSize: '0.6rem' }}
-                                                />
-                                            )}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                {(match.lock?.isLocked || activeLocks[match.id]?.isLocked || match.isLocked) && (
+                                                    <Tooltip title={`Currently locked by Umpire: ${match.lock?.lockedByUmpireName || activeLocks[match.id]?.lockedBy || match.lockedBy || 'Official'}`}>
+                                                        <Chip
+                                                            size="small"
+                                                            icon={<LockIcon sx={{ fontSize: '0.8rem !important' }} />}
+                                                            label={match.lock?.lockedByUmpireName || activeLocks[match.id]?.lockedBy || match.lockedBy || 'Locked'}
+                                                            color="warning"
+                                                            sx={{ height: 18, fontSize: '0.6rem', fontWeight: 'bold' }}
+                                                            data-testid={`match-lock-${match.id}`}
+                                                        />
+                                                    </Tooltip>
+                                                )}
+                                                {match.isChampion && (
+                                                    <Chip
+                                                        size="small"
+                                                        icon={<EmojiEventsIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                                        label="CHAMPION"
+                                                        color="warning"
+                                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 'bold' }}
+                                                    />
+                                                )}
+                                                {isLive && (
+                                                    <Chip
+                                                        size="small"
+                                                        label="LIVE"
+                                                        color="error"
+                                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}
+                                                    />
+                                                )}
+                                                {isFinal && !match.isChampion && (
+                                                    <Chip
+                                                        size="small"
+                                                        label="FINAL"
+                                                        color="default"
+                                                        sx={{ height: 16, fontSize: '0.6rem' }}
+                                                    />
+                                                )}
+                                            </Box>
                                         </Box>
 
                                         {/* Team 1 Row */}
