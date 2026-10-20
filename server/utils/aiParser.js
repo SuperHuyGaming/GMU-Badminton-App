@@ -1,4 +1,5 @@
 const { GoogleGenAI, Type } = require('@google/genai');
+const { sanitizeScrapedTitle } = require('./sanitizeScrapedTitle');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "dummy_key_to_prevent_crash_on_import" });
 
@@ -11,6 +12,78 @@ const CANDIDATE_MODELS = Array.from(new Set([
     "gemini-3.5-flash-lite",
     "gemini-3.8-flash"
 ])).filter(Boolean);
+
+// Domain Collegiate & Regional Venue Dictionary
+const CAMPUS_VENUES = [
+    {
+        keywords: ['rac', 'recreation athletic complex', 'gmu open', 'mason open'],
+        venue: 'Recreation Athletic Complex (RAC Gym), George Mason University, Fairfax, VA',
+        hostUniversity: 'George Mason University',
+        city: 'Fairfax, VA'
+    },
+    {
+        keywords: ['ritchie coliseum', 'ritchie', 'sph', 'umd open', 'terp open', 'terrapin open'],
+        venue: 'Ritchie Coliseum / School of Public Health (SPH), University of Maryland, College Park, MD',
+        hostUniversity: 'University of Maryland',
+        city: 'College Park, MD'
+    },
+    {
+        keywords: ['memorial gymnasium', 'mem gym', 'slaughter', 'uva open', 'cavalier open'],
+        venue: 'Memorial Gymnasium / Slaughter Recreation Center, University of Virginia, Charlottesville, VA',
+        hostUniversity: 'University of Virginia',
+        city: 'Charlottesville, VA'
+    },
+    {
+        keywords: ['mccomas hall', 'mccomas', 'war memorial hall', 'vt open', 'hokie open'],
+        venue: 'McComas Hall / War Memorial Hall, Virginia Tech, Blacksburg, VA',
+        hostUniversity: 'Virginia Tech',
+        city: 'Blacksburg, VA'
+    },
+    {
+        keywords: ['cary street gymnasium', 'cary street', 'vcu open', 'ram open'],
+        venue: 'Cary Street Gymnasium, Virginia Commonwealth University, Richmond, VA',
+        hostUniversity: 'Virginia Commonwealth University',
+        city: 'Richmond, VA'
+    },
+    {
+        keywords: ['ralph s. o\'connor', 'o\'connor recreation', 'jhu open', 'hopkins open'],
+        venue: 'Ralph S. O\'Connor Recreation Center, Johns Hopkins University, Baltimore, MD',
+        hostUniversity: 'Johns Hopkins University',
+        city: 'Baltimore, MD'
+    },
+    {
+        keywords: ['northern virginia badminton club', 'nvbc', 'nvbc open', 'atlantic blvd'],
+        venue: 'Northern Virginia Badminton Club (NVBC), 21598 Atlantic Blvd, Ashburn, VA 20147',
+        hostUniversity: 'Northern Virginia Badminton Club',
+        city: 'Ashburn, VA'
+    },
+    {
+        keywords: ['capital badminton academy', 'cba', 'red branch'],
+        venue: 'Capital Badminton Academy (CBA), 9188 Red Branch Rd, Columbia, MD 21045',
+        hostUniversity: 'Capital Badminton Academy',
+        city: 'Columbia, MD'
+    }
+];
+
+/**
+ * Recognizes on-campus collegiate facilities and regional tournament venues from text.
+ * @param {string} text
+ * @returns {{ eventLocation: string, hostUniversity: string, city: string }|null}
+ */
+function identifyCampusVenue(text = '') {
+    if (!text || typeof text !== 'string') return null;
+    const lower = text.toLowerCase();
+    for (const v of CAMPUS_VENUES) {
+        if (v.keywords.some(k => lower.includes(k))) {
+            return {
+                eventLocation: v.venue,
+                hostUniversity: v.hostUniversity,
+                city: v.city
+            };
+        }
+    }
+    return null;
+}
 
 let quotaCooldownUntil = 0;
 
@@ -151,6 +224,11 @@ Post Caption:\n${safeCaption}`,
                 if (data.startDate) data.startDate = sanitizeParsedDate(data.startDate, 3);
                 if (data.endDate) data.endDate = sanitizeParsedDate(data.endDate, 3);
                 if (data.registrationDeadline) data.registrationDeadline = sanitizeParsedDate(data.registrationDeadline, 2);
+                const campusVenue = identifyCampusVenue(caption);
+                if (campusVenue) {
+                    if (!data.eventLocation) data.eventLocation = campusVenue.eventLocation;
+                    if (!data.hostUniversity) data.hostUniversity = campusVenue.hostUniversity;
+                }
             }
             return data;
         }
@@ -170,7 +248,9 @@ function fallbackRegexParser(caption) {
 
     let tournamentName = "Collegiate Badminton Tournament";
     const nameMatch = cleaned.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s(?:Open|Invitational|Tournament))/);
-    if (nameMatch) tournamentName = nameMatch[1];
+    if (nameMatch) {
+        tournamentName = sanitizeScrapedTitle(nameMatch[1]) || nameMatch[1];
+    }
 
     // Reject past year in tournament name or caption
     if (/\b(201\d|202[0-5])\b/.test(tournamentName) || /\b(201\d|202[0-5])\b/.test(cleaned)) return null;
@@ -211,8 +291,18 @@ function fallbackRegexParser(caption) {
         }
     }
 
+    const campusVenue = identifyCampusVenue(caption);
     console.log("[AIParser] Regex fallback successfully extracted sanitized 2026 data.");
-    return { isTournamentPost: true, tournamentName, skillLevels, startDate, endDate: endDate || startDate, registrationDeadline: null };
+    return {
+        isTournamentPost: true,
+        tournamentName,
+        skillLevels,
+        startDate,
+        endDate: endDate || startDate,
+        registrationDeadline: null,
+        eventLocation: campusVenue?.eventLocation,
+        hostUniversity: campusVenue?.hostUniversity
+    };
 }
 
 
@@ -268,6 +358,10 @@ Webpage Text:\n${rawText.substring(0, 5000)}`,
         if (text) {
             const data = JSON.parse(text);
             if (data && data.isValidDmvTournament) {
+                if (data.tournamentName) {
+                    const cleanTitle = sanitizeScrapedTitle(data.tournamentName);
+                    if (cleanTitle) data.tournamentName = cleanTitle;
+                }
                 // Reject past year in tournament title
                 if (/\b(201\d|202[0-5])\b/.test(data.tournamentName || '')) {
                     return { isValidDmvTournament: false };
@@ -282,6 +376,11 @@ Webpage Text:\n${rawText.substring(0, 5000)}`,
                 if (data.startDate) data.startDate = sanitizeParsedDate(data.startDate, 3);
                 if (data.endDate) data.endDate = sanitizeParsedDate(data.endDate, 3);
                 if (data.registrationDeadline) data.registrationDeadline = sanitizeParsedDate(data.registrationDeadline, 2);
+                const campusVenue = identifyCampusVenue(rawText);
+                if (campusVenue) {
+                    if (!data.hostLocation || data.hostLocation === 'DMV Area') data.hostLocation = campusVenue.eventLocation;
+                    if (!data.hostUniversity) data.hostUniversity = campusVenue.hostUniversity;
+                }
             }
             return data;
         }
@@ -321,6 +420,8 @@ function fallbackWebpageParser(rawText, url) {
         const titleMatch = rawText.match(/([A-Z0-9][A-Za-z0-9\s&'-]+(?:Open|Championships?|Invitational|Classic|Playoff|Tournament))/);
         if (titleMatch) tournamentName = titleMatch[1].trim();
     }
+    const cleanTitle = sanitizeScrapedTitle(tournamentName);
+    if (cleanTitle) tournamentName = cleanTitle;
 
     // Reject if tournament title contains an explicit past year (e.g. 2025, 2024, etc.)
     if (/\b(201\d|202[0-5])\b/.test(tournamentName)) {
@@ -329,16 +430,26 @@ function fallbackWebpageParser(rawText, url) {
 
     // Extract location (clean boundary before registration or deadline metadata)
     let hostLocation = "DMV Area";
-    const locMatch = rawText.match(/Location:\s*([^|\n]+?)(?=\s*(?:Registration|Deadline|Ends|Date|Fee|Skill|Cost|$))/i)
-        || rawText.match(/(?:Venue|Hosted at|at)\s*([^.,\n]+?(?:Gym|Center|Club|Complex|Academy|University))/i);
-    if (locMatch) {
-        hostLocation = locMatch[1].trim();
-    } else if (lower.includes("fairfax") || lower.includes("rac") || lower.includes("gmu")) {
-        hostLocation = "RAC Gym, George Mason University, Fairfax, VA";
-    } else if (lower.includes("columbia") || lower.includes("capital")) {
-        hostLocation = "Capital Badminton Academy, Columbia, MD";
-    } else if (lower.includes("college park") || lower.includes("umd")) {
-        hostLocation = "Ritchie Coliseum, College Park, MD";
+    let hostUniversity = "";
+    const campusVenue = identifyCampusVenue(rawText);
+    if (campusVenue) {
+        hostLocation = campusVenue.eventLocation;
+        hostUniversity = campusVenue.hostUniversity;
+    } else {
+        const locMatch = rawText.match(/Location:\s*([^|\n]+?)(?=\s*(?:Registration|Deadline|Ends|Date|Fee|Skill|Cost|$))/i)
+            || rawText.match(/(?:Venue|Hosted at|at)\s*([^.,\n]+?(?:Gym|Center|Club|Complex|Academy|University))/i);
+        if (locMatch) {
+            hostLocation = locMatch[1].trim();
+        } else if (lower.includes("fairfax") || lower.includes("rac") || lower.includes("gmu")) {
+            hostLocation = "RAC Gym, George Mason University, Fairfax, VA";
+            hostUniversity = "George Mason University";
+        } else if (lower.includes("columbia") || lower.includes("capital")) {
+            hostLocation = "Capital Badminton Academy, Columbia, MD";
+            hostUniversity = "Capital Badminton Academy";
+        } else if (lower.includes("college park") || lower.includes("umd")) {
+            hostLocation = "Ritchie Coliseum, College Park, MD";
+            hostUniversity = "University of Maryland";
+        }
     }
 
     // Extract dates, stripping historical establishment phrases first
@@ -411,6 +522,7 @@ function fallbackWebpageParser(rawText, url) {
         isValidDmvTournament: true,
         tournamentName,
         hostLocation,
+        hostUniversity: hostUniversity || undefined,
         startDate: startDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         endDate: startDate || new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
         registrationDeadline,
@@ -427,5 +539,7 @@ module.exports = {
     sanitizeParsedDate,
     PRIMARY_MODEL,
     CANDIDATE_MODELS,
-    generateWithGemini
+    generateWithGemini,
+    CAMPUS_VENUES,
+    identifyCampusVenue
 };

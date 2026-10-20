@@ -34,10 +34,17 @@ const tournamentSchema = new mongoose.Schema({
     originalCaption: String,
     hasSentDeadlineWarning: { type: Boolean, default: false },
     status: { type: String, enum: ["active", "sold_out", "canceled", "archived"], default: "active" },
+    linkStatus: { type: String, enum: ["valid", "expired", "warning", "unchecked"], default: "unchecked" },
+    linkStatusCode: Number,
+    linkLastChecked: Date,
+    fallbackRegistrationUrl: { type: String, default: "" },
     createdAt: Date
 }, { collection: "tournaments" }); // Match the Java service collection
 
 tournamentSchema.index({ tournamentName: 1 });
 tournamentSchema.index({ sourceUrl: 1 });
+tournamentSchema.index({ status: 1, endDate: 1 });
+tournamentSchema.index({ status: 1, startDate: 1 });
+tournamentSchema.index({ linkStatus: 1 });
 
 module.exports = mongoose.model("Tournament", tournamentSchema);

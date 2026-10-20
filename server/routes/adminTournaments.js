@@ -10,6 +10,8 @@ const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 const redis = require("../utils/redis");
 const rateLimit = require('express-rate-limit');
 const { runFullAutonomousHunt, processDiscoveryQueue, wipeAndRestartTournamentSystem } = require("../utils/autonomousHunter");
+const { deduplicateTournament } = require("../utils/deduplication");
+const { runTournamentLinkHealthcheck } = require("../utils/linkHealthChecker");
 
 const adminActionLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -85,26 +87,60 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
         const sourceLinks = Array.isArray(proposed.sourceLinks) ? proposed.sourceLinks : [];
         const scrapedImageUrls = Array.isArray(proposed.scrapedImageUrls) ? proposed.scrapedImageUrls : [];
 
-        // Critical Invariant: isOpenTournament MUST be set to true so public feeds and calendar render it
-        const tournament = new Tournament({
+        let existingLive = [];
+        if (mongoose.connection?.readyState === 1) {
+            try {
+                existingLive = await Tournament.find({}).lean();
+            } catch {
+                existingLive = [];
+            }
+        }
+        const candidateForDedup = {
             tournamentName: proposed.tournamentName,
-            eventLocation: proposed.location || "TBD",
-            hostUniversity: "Local Club",
             startDate: proposed.date,
             endDate: proposed.date,
-            registrationDeadline: proposed.registrationDeadline || proposed.date,
             registrationUrl: proposed.registrationLink || sourceLinks[0] || proposed.sourceUrl,
             sourceUrl: proposed.sourceUrl,
-            flyerImageUrl: scrapedImageUrls[0] || "",
-            skillLevels: proposed.skillLevels || [],
-            originalCaption: proposed.rawCaption || "",
-            isOpenTournament: true,
-            rsvpCount: 0,
-            hasSentDeadlineWarning: false,
-            createdAt: new Date()
-        });
+            divisions: proposed.divisions || [],
+            sourceLinks: sourceLinks
+        };
+        const dedupLive = deduplicateTournament(candidateForDedup, existingLive, { titleThreshold: 0.85, windowHours: 48 });
 
-        await tournament.save();
+        let tournament;
+        if (dedupLive.isDuplicate && dedupLive.canonicalId) {
+            tournament = await Tournament.findByIdAndUpdate(
+                dedupLive.canonicalId,
+                {
+                    $set: {
+                        divisions: dedupLive.mergedData.divisions,
+                        registrationUrl: dedupLive.mergedData.registrationUrl,
+                        sourceLinks: dedupLive.mergedData.sourceLinks,
+                        isOpenTournament: true
+                    }
+                },
+                { new: true }
+            );
+        } else {
+            // Critical Invariant: isOpenTournament MUST be set to true so public feeds and calendar render it
+            tournament = new Tournament({
+                tournamentName: proposed.tournamentName,
+                eventLocation: proposed.location || "TBD",
+                hostUniversity: "Local Club",
+                startDate: proposed.date,
+                endDate: proposed.date,
+                registrationDeadline: proposed.registrationDeadline || proposed.date,
+                registrationUrl: proposed.registrationLink || sourceLinks[0] || proposed.sourceUrl,
+                sourceUrl: proposed.sourceUrl,
+                flyerImageUrl: scrapedImageUrls[0] || "",
+                skillLevels: proposed.skillLevels || [],
+                originalCaption: proposed.rawCaption || "",
+                isOpenTournament: true,
+                rsvpCount: 0,
+                hasSentDeadlineWarning: false,
+                createdAt: new Date()
+            });
+            await tournament.save();
+        }
 
         // Invalidate public tournaments cache
         const keys = await redis.keys("tournaments:*");
@@ -487,6 +523,27 @@ router.post("/wipe-and-restart", adminActionLimiter, async (req, res) => {
         });
     } catch (err) {
         return res.status(500).json({ message: "Failed to wipe and restart tournament system", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/link-healthcheck
+ * Triggers autonomous link healthcheck crawler to verify outbound registration URLs.
+ */
+router.post("/link-healthcheck", adminActionLimiter, async (req, res) => {
+    try {
+        const batchSize = Math.min(Number(req.body?.batchSize) || 25, 50);
+        const stats = await runTournamentLinkHealthcheck(batchSize);
+        return res.status(200).json({
+            success: true,
+            message: "Link healthcheck completed successfully",
+            checked: stats.checkedCount,
+            healthy: stats.validCount,
+            expired: stats.expiredCount,
+            stats
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: "Failed to execute link healthcheck", error: err.message });
     }
 });
 

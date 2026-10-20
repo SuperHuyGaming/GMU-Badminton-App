@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const DiscoveryQueue = require('../models/DiscoveryQueue');
+const { sanitizeScrapedTitle } = require('./sanitizeScrapedTitle');
 
 const TS_BASE_URL = 'https://www.tournamentsoftware.com';
 
@@ -44,7 +45,8 @@ function parseTournamentSoftwareHtml(html, baseUrl = TS_BASE_URL) {
 
     try {
         // Check if this is an individual tournament detail page
-        const pageTitle = $('title').text().replace(/\|.*$/i, '').trim();
+        const rawPageTitle = $('title').text().replace(/\|.*$/i, '').trim();
+        const pageTitle = sanitizeScrapedTitle(rawPageTitle) || rawPageTitle;
         const isSingleTournamentPage = $('a[href*="/tournament/"], link[rel="canonical"]').length > 0 && pageTitle && !pageTitle.toLowerCase().includes('tournamentsoftware');
 
         if (isSingleTournamentPage && pageTitle) {
@@ -75,7 +77,8 @@ function parseTournamentSoftwareHtml(html, baseUrl = TS_BASE_URL) {
 
             // Extract title & link
             const linkElem = el.find('a[href*="/tournament/"], a[href*="/sport/"], h4.media-heading a, .title a').first();
-            const title = (linkElem.text() || el.find('.media-heading, .title').text() || '').trim();
+            const rawTitle = (linkElem.text() || el.find('.media-heading, .title').text() || '').trim();
+            const title = sanitizeScrapedTitle(rawTitle) || rawTitle;
             const relativeHref = linkElem.attr('href') || '';
             if (!title || !relativeHref) return;
 

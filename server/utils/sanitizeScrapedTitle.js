@@ -22,29 +22,37 @@ const STRIP_PREFIX_PATTERNS = [
     /^Navigation\s+Menu\s*/i,
     /^Menu\s*(Select\s+Your\s+Sport\s+)?/i,
     /^Home\s+News\s+/i,
+    /^Tournament\s*Software\s*[-|:]?\s*/i,
+    /^Home\s*[-|:]\s*/i,
 ];
 
 /**
- * Patterns of typical nav-link sequences that indicate the captured "title" is
- * actually a block of navigation text rather than a proper tournament name.
- * If the cleaned string still contains these sequences it is likely garbage.
+ * Navigation boilerplate and marketing slogans that should be stripped
+ * from within the title string rather than discarding the entire tournament.
  */
-const NAV_SEQUENCE_PATTERNS = [
-    /\bHome\s+News\s+Registration\b/i,
-    /\bRegistration\s+Payment\s+Location\b/i,
-    /\bSign\s+up\s+now\b/i,
-    /\bTraining\s+Packages\b/i,
-    /\bDrop-In\s+Booking/i,
-    /\bCourt\s+Rental\b/i,
-    /\bComing\s+soon\b/i,
-    /\bResults\s+pages\s+on\s+the\s+left\b/i,
-    /\bMascot\s+Competition\b/i,
-    /\bSelect\s+Your\s+Sport\b/i,
-    /\ba\s+smashing\s+sport\s+for\s+all\s+ages\b/i,
-    /\bLog\s+In\b/i,
-    /\bRecWell\s+Intramural\b/i,
-    /\brule\s+assumptions\b/i,
-    /\bDates\s+of\s+Play\b/i,
+const INLINE_DEBRIS_PATTERNS = [
+    /\bSkip\s+to\s+(main\s+)?content\b/gi,
+    /\bNavigation\s+Menu\b/gi,
+    /\bMenu\s+Select(?:\s+Your\s+Sport)?\b/gi,
+    /\bSelect\s+Your\s+Sport\b/gi,
+    /\b(?:a\s+)?smashing\s+sport(?:\s+for\s+all\s+ages)?\b/gi,
+    /\bHome\s+News(?:\s+Registration)?\b/gi,
+    /\bRegistration\s+Payment\s+Location\b/gi,
+    /\bSign\s+up\s+now\b/gi,
+    /\bTraining\s+Packages\b/gi,
+    /\bDrop-In\s+Booking\b/gi,
+    /\bCourt\s+Rental\b/gi,
+    /\bComing\s+soon\b/gi,
+    /\bResults\s+pages\s+on\s+the\s+left\b/gi,
+    /\bMascot\s+Competition\b/gi,
+    /\bLog\s+In(?:\s+Menu)?\b/gi,
+    /\bRecWell\s+Intramural\b/gi,
+    /\brule\s+assumptions\b/gi,
+    /\bDates\s+of\s+Play\b/gi,
+    /\bTournament\s*Software\b/gi,
+    /\bRegister\s+Now\b/gi,
+    /\bPowered\s+by\s+[A-Za-z0-9_-]+\b/gi,
+    /\bWelcome(?:\s+to(?:\s+the)?(?:\s+official)?(?:\s+tournament)?)?\b/gi,
 ];
 
 /**
@@ -71,19 +79,12 @@ function sanitizeScrapedTitle(raw) {
 
     let title = raw.trim();
 
-    // If the title contains known nav/UI sequences or error text, discard it
-    for (const pattern of NAV_SEQUENCE_PATTERNS) {
-        if (pattern.test(title)) {
-            return null;
-        }
-    }
-
     // Reject non-badminton sports if "badminton" is not explicitly mentioned in the title
     if (NON_BADMINTON_SPORTS.test(title) && !/badminton/i.test(title)) {
         return null;
     }
 
-    // Strip known boilerplate prefixes iteratively until none match
+    // Strip known boilerplate prefixes iteratively
     let changed = true;
     while (changed) {
         changed = false;
@@ -97,6 +98,20 @@ function sanitizeScrapedTitle(raw) {
         }
     }
 
+    // Strip inline debris patterns globally without discarding the whole tournament
+    for (const pattern of INLINE_DEBRIS_PATTERNS) {
+        title = title.replace(pattern, ' ');
+    }
+
+    // Clean orphaned delimiters and normalize whitespace, preserving intra-word slashes like A/B/C
+    title = title
+        .replace(/\s*[|•–—]+\s*/g, ' - ')
+        .replace(/\s+\/\s+/g, ' - ')
+        .replace(/(\s*-\s*){2,}/g, ' - ')
+        .replace(/^[\s|:–—•/-]+|[\s|:–—•/-]+$/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
     // Discard if too long (likely a paragraph of scraped content)
     if (title.length > MAX_TITLE_LENGTH) {
         // Try to rescue just the first sentence/clause if it's clean and bounded
@@ -108,8 +123,8 @@ function sanitizeScrapedTitle(raw) {
         }
     }
 
-    // Final guard: empty or too short after cleaning
-    if (!title || title.length < 3) return null;
+    // Final guard: empty, too short, or lacks alphanumeric characters
+    if (!title || title.length < 3 || !/[a-zA-Z0-9]/.test(title)) return null;
 
     return title;
 }
