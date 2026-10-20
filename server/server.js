@@ -97,10 +97,14 @@ const allowedOrigins = [...new Set([...staticAllowedOrigins, ...envOrigins, ...a
 const isOriginAllowed = (origin) => {
 	if (!origin) return true;
 	const norm = origin.toLowerCase().trim().replace(/\/+$/, "");
+	// 1. Static and environment whitelisted origins
 	if (allowedOrigins.some((o) => o && o.toLowerCase().trim().replace(/\/+$/, "") === norm)) return true;
+	// 2. Localhost & loopback development environments
 	if (/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(norm)) return true;
-	if (/^https:\/\/([a-z0-9-]+\.)*gmu-[a-z0-9-]+\.onrender\.com$/.test(norm)) return true;
-	if (/^https:\/\/([a-z0-9-]+\.)*[a-z0-9-]*(gmu|badminton|mason)[a-z0-9-]*\.onrender\.com$/.test(norm)) return true;
+	// 3. Official George Mason University academic domains (*.gmu.edu)
+	if (/^https?:\/\/([a-z0-9-]+\.)*gmu\.edu$/.test(norm)) return true;
+	// 4. Staging and preview deployments on Render strictly prefixed with GMU identifiers
+	if (/^https:\/\/([a-z0-9-]+\.)*(?:[a-z0-9-]+-)?gmu-[a-z0-9-]+\.onrender\.com$/.test(norm)) return true;
 	return false;
 };
 

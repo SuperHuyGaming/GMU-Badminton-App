@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, forwardRef } from 'react';
 import { 
     Box, Typography, Card, CardContent, CardActions, Button, 
     Alert, Grid, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
@@ -28,16 +28,53 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { VirtuosoGrid } from 'react-virtuoso';
 
 import EmptyTournaments from '../components/EmptyTournaments';
 import MapPinIcon from '../components/MapPinIcon';
 import TournamentBracket from '../components/TournamentBracket';
 import CourtQueueViewer from '../components/CourtQueueViewer';
 import UmpireDigitalPad from '../components/UmpireDigitalPad';
+import LazyFlyerImage from '../components/LazyFlyerImage';
 import apiFetch from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 const SKILL_LEVEL_OPTIONS = ['Beginner', 'Intermediate', 'Advanced', 'Open'];
+
+// Custom Grid components for VirtuosoGrid
+const VirtualGridList = forwardRef(({ style, children, className, ...props }, ref) => (
+    <div
+        ref={ref}
+        {...props}
+        className={className}
+        style={{
+            ...style,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '24px',
+            paddingBottom: '32px'
+        }}
+    >
+        {children}
+    </div>
+));
+VirtualGridList.displayName = 'VirtualGridList';
+
+const VirtualGridItem = forwardRef(({ children, className, ...props }, ref) => (
+    <div
+        ref={ref}
+        {...props}
+        className={className}
+        style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%'
+        }}
+    >
+        {children}
+    </div>
+));
+VirtualGridItem.displayName = 'VirtualGridItem';
 
 export default function Tournaments() {
     const { user } = useAuth();
@@ -590,246 +627,217 @@ END:VCALENDAR`;
                 <EmptyTournaments />
             )}
 
-            {/* VIEW MODE 1: LIST / CARD GRID */}
+            {/* VIEW MODE 1: LIST / VIRTUALIZED CARD GRID */}
             {!loading && !error && viewMode === 'list' && tournaments.length > 0 && (
-                <Grid container spacing={3}>
-                    {tournaments.map((tournament) => {
+                <VirtuosoGrid
+                    useWindowScroll
+                    data={tournaments}
+                    totalCount={tournaments.length}
+                    initialItemCount={Math.min(tournaments.length, 12)}
+                    overscan={300}
+                    components={{
+                        List: VirtualGridList,
+                        Item: VirtualGridItem
+                    }}
+                    itemContent={(index, tournament) => {
+                        if (!tournament) return null;
                         const tId = tournament._id || tournament.id;
                         const attending = isUserAttending(tournament);
                         const attendeesList = tournament.attendees || [];
                         const isSoldOut = tournament.status === 'sold_out';
 
                         return (
-                            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={tId}>
-                                <Card 
-                                    data-testid={`tournament-card-${tId}`}
-                                    sx={{ 
-                                        height: '100%', 
-                                        display: 'flex', 
-                                        flexDirection: 'column', 
-                                        borderRadius: 3, 
-                                        cursor: 'pointer',
-                                        transition: 'transform 0.2s, box-shadow 0.2s',
-                                        '&:hover': {
-                                            transform: 'translateY(-4px)',
-                                            boxShadow: '0 12px 28px rgba(0,0,0,0.12)'
-                                        }
-                                    }}
-                                    onClick={() => setSelectedTournament(tournament)}
-                                >
-                                    {/* Tournament Flyer Image or Fallback Banner */}
-                                    {tournament.flyerImageUrl ? (
-                                        <Box sx={{ width: '100%', height: 180, overflow: 'hidden', position: 'relative' }}>
-                                            <img 
-                                                src={tournament.flyerImageUrl} 
-                                                alt={`${tournament.tournamentName} flyer`} 
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                            />
-                                            {isSoldOut && (
-                                                <Chip 
-                                                    label="Sold Out" 
-                                                    color="error" 
-                                                    size="small" 
-                                                    sx={{ position: 'absolute', top: 10, right: 10, fontWeight: 700 }}
-                                                />
-                                            )}
-                                        </Box>
-                                    ) : (
-                                        <Box 
-                                            sx={{ 
-                                                width: '100%', 
-                                                height: 140, 
-                                                bgcolor: 'primary.dark', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center',
-                                                p: 2,
-                                                textAlign: 'center',
-                                                color: '#ffffff',
-                                                position: 'relative'
-                                            }}
-                                        >
-                                            <Typography variant="h6" sx={{ fontWeight: 700, opacity: 0.9 }}>
-                                                🏸 {tournament.hostUniversity || tournament.hostClubHandle || 'DMV Badminton'}
-                                            </Typography>
-                                            {isSoldOut && (
-                                                <Chip 
-                                                    label="Sold Out" 
-                                                    color="error" 
-                                                    size="small" 
-                                                    sx={{ position: 'absolute', top: 10, right: 10, fontWeight: 700 }}
-                                                />
-                                            )}
-                                        </Box>
-                                    )}
+                            <Card 
+                                data-testid={`tournament-card-${tId}`}
+                                sx={{ 
+                                    height: '100%', 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    borderRadius: 3, 
+                                    cursor: 'pointer',
+                                    transition: 'transform 0.2s, box-shadow 0.2s',
+                                    '&:hover': {
+                                        transform: 'translateY(-4px)',
+                                        boxShadow: '0 12px 28px rgba(0,0,0,0.12)'
+                                    }
+                                }}
+                                onClick={() => setSelectedTournament(tournament)}
+                            >
+                                {/* Decoupled Lazy Flyer Image */}
+                                <LazyFlyerImage
+                                    src={tournament.flyerImageUrl || tournament.bannerUrl}
+                                    alt={`${tournament.tournamentName} flyer`}
+                                    fallbackHost={tournament.hostUniversity || tournament.hostClubHandle || 'DMV Badminton'}
+                                    isSoldOut={isSoldOut}
+                                    height={180}
+                                />
 
-                                    <CardContent sx={{ flexGrow: 1, pb: 1 }}>
-                                        {/* Host Club / University Tag + Admin Delete */}
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                                {tournament.hostUniversity || tournament.hostClubHandle || 'Collegiate Tournament'}
-                                            </Typography>
-                                            {user?.role === 'admin' && (
-                                                <Tooltip title="Admin: Delete this tournament">
-                                                    <IconButton
-                                                        size="small"
-                                                        color="error"
-                                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmTournament(tournament); }}
-                                                        aria-label={`Delete tournament ${tournament.tournamentName}`}
-                                                        sx={{ ml: 1, opacity: 0.7, '&:hover': { opacity: 1 } }}
-                                                    >
-                                                        <DeleteForeverIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            )}
-                                        </Box>
+                                <CardContent sx={{ flexGrow: 1, pb: 1 }}>
+                                    {/* Host Club / University Tag + Admin Delete */}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            {tournament.hostUniversity || tournament.hostClubHandle || 'Collegiate Tournament'}
+                                        </Typography>
+                                        {user?.role === 'admin' && (
+                                            <Tooltip title="Admin: Delete this tournament">
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmTournament(tournament); }}
+                                                    aria-label={`Delete tournament ${tournament.tournamentName}`}
+                                                    sx={{ ml: 1, opacity: 0.7, '&:hover': { opacity: 1 } }}
+                                                >
+                                                    <DeleteForeverIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                    </Box>
 
-                                        {/* Tournament Title */}
-                                        <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.3, mt: 0.5 }}>
-                                            {tournament.tournamentName}
+                                    {/* Tournament Title */}
+                                    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.3, mt: 0.5 }}>
+                                        {tournament.tournamentName}
+                                    </Typography>
+
+                                    {/* Date and Location */}
+                                    <Stack spacing={0.7} sx={{ my: 1.5 }}>
+                                        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <EventIcon sx={{ fontSize: 18, color: 'primary.main' }} />
+                                            {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString('en-US', {
+                                                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                                            }) : 'Date TBD'}
                                         </Typography>
 
-                                        {/* Date and Location */}
-                                        <Stack spacing={0.7} sx={{ my: 1.5 }}>
-                                            <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <EventIcon sx={{ fontSize: 18, color: 'primary.main' }} />
-                                                {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString('en-US', {
-                                                    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
-                                                }) : 'Date TBD'}
-                                            </Typography>
-
-                                            <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <MapPinIcon width={16} height={16} />
-                                                <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {tournament.eventLocation || 'Location TBD'}
-                                                </Box>
-                                            </Typography>
-                                        </Stack>
-
-                                        {/* Skill Levels and Fee Chips */}
-                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-                                            {tournament.entryFee && (
-                                                <Chip label={`Fee: ${tournament.entryFee}`} size="small" color="default" sx={{ fontWeight: 600 }} />
-                                            )}
-                                            {(tournament.skillLevels || []).slice(0, 3).map((skill, idx) => (
-                                                <Chip key={idx} label={skill} size="small" variant="outlined" color="primary" />
-                                            ))}
-                                        </Box>
-                                    </CardContent>
-
-                                    {/* Action Bar: RSVP Button + Avatars + Register Button */}
-                                    <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                                        <Divider sx={{ width: '100%', mb: 0.5 }} />
-
-                                        {/* RSVP Section */}
-                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                            <Button 
-                                                variant={attending ? "contained" : "outlined"} 
-                                                color={attending ? "success" : "primary"}
-                                                size="small"
-                                                disabled={rsvpLoading[tId]}
-                                                startIcon={attending ? <CheckCircleIcon /> : null}
-                                                onClick={(e) => handleToggleRsvp(e, tournament)}
-                                                sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2 }}
-                                                aria-label={attending ? "Remove RSVP" : "RSVP I'm Going"}
-                                            >
-                                                {attending ? "Going ✓" : "I'm Going!"}
-                                            </Button>
-
-                                            {/* Attendees Count & Avatars */}
-                                            <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
-                                                <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                                                    {tournament.rsvpCount || 0} attending
-                                                </Typography>
-                                                {attendeesList.length > 0 && (
-                                                    <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 26, height: 26, fontSize: '0.75rem' } }}>
-                                                        {attendeesList.map((att, idx) => (
-                                                            <Tooltip key={idx} title={typeof att === 'object' ? att.name || 'Player' : 'Player'}>
-                                                                <Avatar 
-                                                                    alt={typeof att === 'object' ? att.name : 'Player'} 
-                                                                    src={typeof att === 'object' ? att.avatarUrl : ''} 
-                                                                />
-                                                            </Tooltip>
-                                                        ))}
-                                                    </AvatarGroup>
-                                                )}
+                                        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <MapPinIcon width={16} height={16} />
+                                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {tournament.eventLocation || 'Location TBD'}
                                             </Box>
-                                        </Box>
+                                        </Typography>
+                                    </Stack>
 
-                                        {/* Outbound Link & Calendar Buttons */}
-                                        {tournament.linkStatus === 'expired' && (
-                                            <Box sx={{ width: '100%', mb: 0.5 }}>
-                                                <Chip 
-                                                    icon={<WarningAmberIcon sx={{ fontSize: '1rem !important' }} />} 
-                                                    label="Link Expired / Host Fallback" 
-                                                    color="warning" 
-                                                    size="small" 
-                                                    sx={{ fontWeight: 700, fontSize: '0.72rem', height: 22 }} 
-                                                />
-                                            </Box>
+                                    {/* Skill Levels and Fee Chips */}
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                                        {tournament.entryFee && (
+                                            <Chip label={`Fee: ${tournament.entryFee}`} size="small" color="default" sx={{ fontWeight: 600 }} />
                                         )}
-                                        <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
-                                            {tournament.linkStatus === 'expired' ? (
-                                                <Tooltip title="Original registration link is expired. Redirecting to verified host club homepage.">
-                                                    <Button 
-                                                        variant="contained" 
-                                                        color="warning"
-                                                        fullWidth
-                                                        size="medium"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        href={tournament.fallbackRegistrationUrl || tournament.sourceUrl || tournament.registrationUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
-                                                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
-                                                    >
-                                                        Visit Host Club
-                                                    </Button>
-                                                </Tooltip>
-                                            ) : tournament.registrationUrl ? (
+                                        {(tournament.skillLevels || []).slice(0, 3).map((skill, idx) => (
+                                            <Chip key={idx} label={skill} size="small" variant="outlined" color="primary" />
+                                        ))}
+                                    </Box>
+                                </CardContent>
+
+                                {/* Action Bar: RSVP Button + Avatars + Register Button */}
+                                <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                    <Divider sx={{ width: '100%', mb: 0.5 }} />
+
+                                    {/* RSVP Section */}
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <Button 
+                                            variant={attending ? "contained" : "outlined"} 
+                                            color={attending ? "success" : "primary"}
+                                            size="small"
+                                            disabled={rsvpLoading[tId]}
+                                            startIcon={attending ? <CheckCircleIcon /> : null}
+                                            onClick={(e) => handleToggleRsvp(e, tournament)}
+                                            sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2 }}
+                                            aria-label={attending ? "Remove RSVP" : "RSVP I'm Going"}
+                                        >
+                                            {attending ? "Going ✓" : "I'm Going!"}
+                                        </Button>
+
+                                        {/* Attendees Count & Avatars */}
+                                        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
+                                            <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                                {tournament.rsvpCount || 0} attending
+                                            </Typography>
+                                            {attendeesList.length > 0 && (
+                                                <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 26, height: 26, fontSize: '0.75rem' } }}>
+                                                    {attendeesList.map((att, idx) => (
+                                                        <Tooltip key={idx} title={typeof att === 'object' ? att.name || 'Player' : 'Player'}>
+                                                            <Avatar 
+                                                                alt={typeof att === 'object' ? att.name : 'Player'} 
+                                                                src={typeof att === 'object' ? att.avatarUrl : ''} 
+                                                            />
+                                                        </Tooltip>
+                                                    ))}
+                                                </AvatarGroup>
+                                            )}
+                                        </Box>
+                                    </Box>
+
+                                    {/* Outbound Link & Calendar Buttons */}
+                                    {tournament.linkStatus === 'expired' && (
+                                        <Box sx={{ width: '100%', mb: 0.5 }}>
+                                            <Chip 
+                                                icon={<WarningAmberIcon sx={{ fontSize: '1rem !important' }} />} 
+                                                label="Link Expired / Host Fallback" 
+                                                color="warning" 
+                                                size="small" 
+                                                sx={{ fontWeight: 700, fontSize: '0.72rem', height: 22 }} 
+                                            />
+                                        </Box>
+                                    )}
+                                    <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+                                        {tournament.linkStatus === 'expired' ? (
+                                            <Tooltip title="Original registration link is expired. Redirecting to verified host club homepage.">
                                                 <Button 
                                                     variant="contained" 
-                                                    color="primary"
+                                                    color="warning"
                                                     fullWidth
                                                     size="medium"
                                                     onClick={(e) => e.stopPropagation()}
-                                                    href={tournament.registrationUrl}
+                                                    href={tournament.fallbackRegistrationUrl || tournament.sourceUrl || tournament.registrationUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
                                                     sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
                                                 >
-                                                    Sign Up Here
+                                                    Visit Host Club
                                                 </Button>
-                                            ) : (
-                                                <Button 
-                                                    variant="outlined" 
-                                                    fullWidth
-                                                    disabled
-                                                    size="medium"
-                                                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
-                                                >
-                                                    Registration TBD
-                                                </Button>
-                                            )}
-
-                                            <Tooltip title="Download .ics Calendar Event">
-                                                <IconButton 
-                                                    color="primary" 
-                                                    onClick={(e) => handleExportICS(e, tournament)}
-                                                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
-                                                    aria-label="Add tournament to calendar"
-                                                >
-                                                    <TodayIcon fontSize="small" />
-                                                </IconButton>
                                             </Tooltip>
-                                        </Box>
-                                    </CardActions>
-                                </Card>
-                            </Grid>
+                                        ) : tournament.registrationUrl ? (
+                                            <Button 
+                                                variant="contained" 
+                                                color="primary"
+                                                fullWidth
+                                                size="medium"
+                                                onClick={(e) => e.stopPropagation()}
+                                                href={tournament.registrationUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
+                                                sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                                            >
+                                                Sign Up Here
+                                            </Button>
+                                        ) : (
+                                            <Button 
+                                                variant="outlined" 
+                                                fullWidth
+                                                disabled
+                                                size="medium"
+                                                sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                                            >
+                                                Registration TBD
+                                            </Button>
+                                        )}
+
+                                        <Tooltip title="Download .ics Calendar Event">
+                                            <IconButton 
+                                                color="primary" 
+                                                onClick={(e) => handleExportICS(e, tournament)}
+                                                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                                                aria-label="Add tournament to calendar"
+                                            >
+                                                <TodayIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </Box>
+                                </CardActions>
+                            </Card>
                         );
-                    })}
-                </Grid>
+                    }}
+                />
             )}
 
             {/* VIEW MODE 2: INTERACTIVE MONTHLY CALENDAR */}
@@ -1060,21 +1068,13 @@ END:VCALENDAR`;
                             <Grid container spacing={3}>
                                 {/* Flyer preview image */}
                                 <Grid size={{ xs: 12, md: 5 }}>
-                                    {selectedTournament.flyerImageUrl ? (
-                                        <Box sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>
-                                            <img 
-                                                src={selectedTournament.flyerImageUrl} 
-                                                alt="Tournament Flyer" 
-                                                style={{ width: '100%', height: 'auto', display: 'block' }} 
-                                            />
-                                        </Box>
-                                    ) : (
-                                        <Box sx={{ width: '100%', height: 240, bgcolor: 'primary.dark', color: '#fff', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', p: 3 }}>
-                                            <Typography variant="h6" fontWeight={700}>
-                                                🏸 {selectedTournament.hostUniversity || 'DMV Badminton'}
-                                            </Typography>
-                                        </Box>
-                                    )}
+                                    <LazyFlyerImage
+                                        src={selectedTournament.flyerImageUrl || selectedTournament.bannerUrl}
+                                        alt={`${selectedTournament.tournamentName} flyer`}
+                                        fallbackHost={selectedTournament.hostUniversity || selectedTournament.hostClubHandle || 'DMV Badminton'}
+                                        height={240}
+                                        sx={{ borderRadius: 3, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}
+                                    />
                                 </Grid>
 
                                 {/* Tournament Details */}
