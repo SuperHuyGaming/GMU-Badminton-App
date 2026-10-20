@@ -57,7 +57,7 @@ GMU Badminton Connect is an enterprise collegiate platform structured into:
 | M1 | Ingestion Deduplication & Reliability | P1, P2, P3, P4, P5 | M0 | DONE |
 | M2 | Performance, RAM Governance & Scaling | P6, P7, P8, P9, P18 | M1 | DONE |
 | M3 | Interactive Systems, BWF Umpire Pad & Fair Play | P10, P11, P12, P13, P14 | M2 | DONE |
-| M4 | Community Integrity & Accessibility | P15, P16, P17, P19 | M3 | PLANNED |
+| M4 | Community Integrity & Accessibility | P15, P16, P17, P19 | M3 | DONE |
 | M5 | 10-Persona Synthetic Bot Verification & Victory Audit | P20, Full Suite Verification | M1, M2, M3, M4 | PLANNED |
 
 ## Interface Contracts
