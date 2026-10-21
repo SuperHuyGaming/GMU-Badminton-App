@@ -1,4 +1,4 @@
-# Project: Project Titan (20-Problem Enterprise Engineering Overhaul)
+﻿# Project: Project Titan (20-Problem Enterprise Engineering Overhaul)
 
 ## Architecture
 GMU Badminton Connect is an enterprise collegiate platform structured into:
@@ -16,7 +16,7 @@ GMU Badminton Connect is an enterprise collegiate platform structured into:
   - `server/models/TournamentMatch.js`: Optimistic concurrency locking (`optimisticConcurrency: true`, versioning `__v`) and bracket match advance endpoints.
   - `client/src/components/UmpireDigitalPad.jsx`: Offline PWA resilience with IndexedDB local ledger and auto-replay on Wi-Fi reconnection.
   - `server/routes/courts.js` & `server/utils/bwfRules.js`: Strict BWF 21-point rally scoring, 2-point clear deuce, 30-point golden cap, 60s/120s interval timers, Game 3 side change at 11 points.
-  - `server/models/Court.js` & `server/routes/courts.js`: RAC Gymnasium Court 1–6 scheduling, dynamic match duration estimation, 10-min walkover forfeit countdown, auto-advancement.
+  - `server/models/Court.js` & `server/routes/courts.js`: RAC Gymnasium Court 1â€“6 scheduling, dynamic match duration estimation, 10-min walkover forfeit countdown, auto-advancement.
   - `server/utils/glicko2.js`: Glicko-2 MMR engine tracking Rating ($R$), Rating Deviation ($RD$), and Volatility ($\sigma$) with inactivity decay.
 - **Community Integrity & Accessibility**:
   - `server/routes/friends.js`: Bi-directional atomic friend state transitions with session/transaction idempotency.
@@ -58,7 +58,7 @@ GMU Badminton Connect is an enterprise collegiate platform structured into:
 | M2 | Performance, RAM Governance & Scaling | P6, P7, P8, P9, P18 | M1 | DONE |
 | M3 | Interactive Systems, BWF Umpire Pad & Fair Play | P10, P11, P12, P13, P14 | M2 | DONE |
 | M4 | Community Integrity & Accessibility | P15, P16, P17, P19 | M3 | DONE |
-| M5 | 10-Persona Synthetic Bot Verification & Victory Audit | P20, Full Suite Verification | M1, M2, M3, M4 | PLANNED |
+| M5 | 10-Persona Synthetic Bot Verification & Victory Audit | P20, Full Suite Verification | M1, M2, M3, M4 | DONE |
 
 ## Interface Contracts
 
@@ -117,3 +117,4 @@ GMU Badminton Connect is an enterprise collegiate platform structured into:
   - Pages: `client/src/pages/Tournaments.jsx`, `client/src/pages/admin/TournamentApprovals.jsx`, `client/src/pages/Matchmaking.jsx`, `client/src/pages/Community.jsx`
   - Components: `client/src/components/TournamentBracket.jsx`, `client/src/components/UmpireDigitalPad.jsx`, `client/src/components/CourtQueueViewer.jsx`, `client/src/components/LazyFlyerImage.jsx`
   - Tests: `client/src/`
+
