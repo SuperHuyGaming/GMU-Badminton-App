@@ -943,6 +943,10 @@ router.get('/:tournamentId/matches/:matchId/lock', async (req, res) => {
     }
 });
 
+router.TOURNAMENT_DIRECTORY_PROJECTION = TOURNAMENT_DIRECTORY_PROJECTION;
+router.promoteNextFromWaitlist = promoteNextFromWaitlist;
+
 module.exports = router;
+
 
 
