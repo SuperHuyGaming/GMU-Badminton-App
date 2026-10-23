@@ -278,11 +278,13 @@ async function processDiscoveryQueue(batchSize = 5) {
                     const isErrorOrLoginPage = /404|not found|page can't be found|login|sign in|campusgroups|session expired/i.test(lowerExtracted) && !lowerExtracted.includes('tournament');
                     const hasBadminton = lowerExtracted.includes('badminton');
 
-                    if (extractedText.length > 50 && hasBadminton && !isErrorOrLoginPage) {
-                        rawText = extractedText;
+                    const hasTournamentSpecifics = /\b(tournament|open\s+badminton|championship|invitational|classic|badminton\s+cup|flights?\s+[a-d]|singles|doubles)\b/i.test(lowerExtracted);
+                    if (extractedText.length > 50 && hasBadminton && hasTournamentSpecifics && !isErrorOrLoginPage) {
+                        rawText = item.rawSnippet ? `${item.rawSnippet}\n\n[Webpage]: ${extractedText.slice(0, 3000)}` : extractedText;
                     } else if (item.rawSnippet) {
-                        // Preserve the rich snippet from Google Search / discovery seed
                         rawText = `${item.rawSnippet}\n\n[Context]: ${extractedText.slice(0, 400)}`;
+                    } else if (extractedText.length > 50 && hasBadminton && !isErrorOrLoginPage) {
+                        rawText = extractedText;
                     }
                 } catch (e) {
                     console.log(`[Hunter] Axios fetch failed for ${item.sourceUrl}. Falling back to snippet:`, e.message);
@@ -396,14 +398,32 @@ async function processDiscoveryQueue(batchSize = 5) {
             // Create ProposedTournament for Admin Review Queue
             console.log(`[Hunter] ✨ AI APPROVED: "${extracted.tournamentName}" -> Routing to Admin Review Queue.`);
             
-            // Enforce valid 2026/2027 date ranges (preventing historical dates like 2001)
-            let proposedDate = extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000);
-            if (isNaN(proposedDate.getTime()) || proposedDate.getFullYear() < 2026) {
-                proposedDate = new Date(Date.now() + 21 * 86400000);
+            // Strict Mode: Require valid, verified upcoming 2026/2027 tournament date (never manufacture fake dates)
+            if (!extracted.startDate) {
+                console.log(`[Hunter] AI Rejected (Missing tournament date): "${extracted.tournamentName}" @ ${item.sourceUrl}`);
+                item.status = 'REJECTED_BY_AI';
+                item.errorMessage = "Missing verified future tournament date";
+                await item.save();
+                rejectedCount++;
+                continue;
             }
-            let proposedDeadline = extracted.registrationDeadline ? new Date(extracted.registrationDeadline) : null;
-            if (proposedDeadline && (isNaN(proposedDeadline.getTime()) || proposedDeadline.getFullYear() < 2026)) {
-                proposedDeadline = new Date(proposedDate.getTime() - 7 * 86400000);
+
+            const proposedDate = new Date(extracted.startDate);
+            if (isNaN(proposedDate.getTime()) || proposedDate.getTime() < Date.now() || proposedDate.getFullYear() < 2026) {
+                console.log(`[Hunter] AI Rejected (Date in past or invalid: ${extracted.startDate}): "${extracted.tournamentName}" @ ${item.sourceUrl}`);
+                item.status = 'REJECTED_BY_AI';
+                item.errorMessage = `Past or invalid tournament date: ${extracted.startDate}`;
+                await item.save();
+                rejectedCount++;
+                continue;
+            }
+
+            let proposedDeadline = null;
+            if (extracted.registrationDeadline) {
+                const pDead = new Date(extracted.registrationDeadline);
+                if (!isNaN(pDead.getTime()) && pDead.getFullYear() >= 2026) {
+                    proposedDeadline = pDead;
+                }
             }
 
             await ProposedTournament.create({

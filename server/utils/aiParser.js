@@ -1,5 +1,21 @@
 const { GoogleGenAI, Type } = require('@google/genai');
 const { sanitizeScrapedTitle } = require('./sanitizeScrapedTitle');
+const INSTAGRAM_RECAP_PATTERNS = [
+    /\b(congratulat\w*|congrats|shoutout|shout\s*out|recap|photo\s*dump|last\s*weekend|placed\s*(?:1st|2nd|3rd|[0-9]+th)|won\s*gold|won\s*silver|won\s*bronze|thanks\s*for\s*coming|results:|podium|final\s*scores?|memories\s*from)\b/i
+];
+
+const NON_TOURNAMENT_CLUB_PATTERNS = [
+    /\b(open\s*gym|open\s*play|general\s*body\s*meeting|\bgbm\b|tryouts?|practice\s*schedule|dues|exec\s*board|e-board|merchandise|merch\s*drop|apparel|fundraiser|bake\s*sale|social\s*night|banquet|welcome\s*back)\b/i
+];
+
+const EXPLICIT_TOURNAMENT_ANNOUNCEMENT_PATTERNS = [
+    /\b(register\s*(?:now|here|at|via)|registration\s*(?:link|open|form|deadline)|sign\s*up\s*(?:link|deadline|here|now)|entry\s*fee|deadline\s*to\s*register|flights?\s*[a-d]|singles|doubles|mixed\s*doubles)\b/i
+];
+
+const PURE_UI_JUNK_PATTERNS = [
+    /^(menu|home|login|log\s*in|sign\s*in|sign\s*up(?:\s*now)?|training(?:\s*packages?)?|drop-in(?:\s*booking)?|court\s*rental|hours|schedule|about(?:\s*us)?|contact(?:\s*us)?|news|events?|badminton|court|rac|skip\s*to\s*content)$/i
+];
+
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "dummy_key_to_prevent_crash_on_import" });
 
@@ -187,6 +203,13 @@ function sanitizeParsedDate(dateStr, defaultWeeksAhead = 3) {
  */
 async function parseInstagramPost(caption) {
     if (!caption || typeof caption !== "string" || caption.trim() === '') return null;
+    const lowerCaption = caption.toLowerCase();
+    if (INSTAGRAM_RECAP_PATTERNS.some(p => p.test(lowerCaption))) {
+        return null;
+    }
+    if (NON_TOURNAMENT_CLUB_PATTERNS.some(p => p.test(lowerCaption)) && !EXPLICIT_TOURNAMENT_ANNOUNCEMENT_PATTERNS.some(p => p.test(lowerCaption))) {
+        return null;
+    }
 
     try {
         const safeCaption = caption.substring(0, 5000);
@@ -243,6 +266,8 @@ function fallbackRegexParser(caption) {
     // Strip historical establishment phrases (e.g. "est. 2001", "since 1998") before matching tournament dates
     const cleaned = caption.replace(/\b(?:est\.?|established|since|founded|history|copyright|©)\s*(?:in\s*)?(?:19\d{2}|20[0-2][0-5])\b/gi, '');
     const lower = cleaned.toLowerCase();
+    if (INSTAGRAM_RECAP_PATTERNS.some(p => p.test(lower))) return null;
+    if (NON_TOURNAMENT_CLUB_PATTERNS.some(p => p.test(lower)) && !EXPLICIT_TOURNAMENT_ANNOUNCEMENT_PATTERNS.some(p => p.test(lower))) return null;
     const isTournament = /tournament|open|invitational|championship/i.test(lower);
     if (!isTournament) return null;
 
@@ -490,12 +515,16 @@ function fallbackWebpageParser(rawText, url) {
         }
     }
 
-    // Critical: If the tournament's dates already concluded in the past (< today), reject it!
-    if (startDate) {
-        const checkEnd = endDate ? new Date(endDate) : new Date(startDate);
-        if (!isNaN(checkEnd.getTime()) && checkEnd.getTime() < Date.now()) {
-            return { isValidDmvTournament: false, reason: `Tournament already ended on ${endDate || startDate}` };
-        }
+    // Critical: Require confirmed future start date (do not fabricate dates)
+    if (!startDate) {
+        return { isValidDmvTournament: false, reason: "Missing confirmed upcoming tournament date" };
+    }
+    const checkEnd = endDate ? new Date(endDate) : new Date(startDate);
+    if (!isNaN(checkEnd.getTime()) && checkEnd.getTime() < Date.now()) {
+        return { isValidDmvTournament: false, reason: `Tournament already ended on ${endDate || startDate}` };
+    }
+    if (new Date(startDate).getFullYear() < 2026) {
+        return { isValidDmvTournament: false, reason: "Tournament year is in the past" };
     }
 
     let registrationDeadline = null;
@@ -523,8 +552,8 @@ function fallbackWebpageParser(rawText, url) {
         tournamentName,
         hostLocation,
         hostUniversity: hostUniversity || undefined,
-        startDate: startDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-        endDate: startDate || new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+        startDate: startDate,
+        endDate: endDate || startDate,
         registrationDeadline,
         skillLevels: [...new Set(skillLevels)],
         confidenceScore: 90

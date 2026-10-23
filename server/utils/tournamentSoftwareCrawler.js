@@ -12,18 +12,32 @@ const TS_HEADERS = {
 };
 
 const DMV_GEO_PATTERNS = [
-    /\b(va|virginia)\b/i,
-    /\b(md|maryland)\b/i,
-    /\b(dc|washington\s*d\.?c\.?)\b/i,
-    /\b(pa|pennsylvania)\b/i,
-    /\b(nc|north\s*carolina)\b/i,
-    /\b(columbia|fairfax|ashburn|college\s*park|gaithersburg|rockville|richmond|baltimore)\b/i,
+    /\b(virginia|maryland|pennsylvania|north\s*carolina)\b/i,
+    /\b(washington\s*d\.?c\.?|district\s*of\s*columbia)\b/i,
+    /(?:,\s*|\b)(?:VA|MD|DC|NC|PA)\b/i,
+    /\b(columbia|fairfax|ashburn|college\s*park|gaithersburg|rockville|richmond|baltimore|charlottesville|blacksburg)\b/i,
     /\b2[0-4]\d{3}\b/ // Mid-Atlantic ZIP code prefix range (DC, MD, VA, NC, PA)
 ];
 
 /**
  * Checks if a location text matches DMV / Mid-Atlantic region.
  */
+
+function parseCandidateDate(datesStr) {
+    if (!datesStr || typeof datesStr !== 'string') return null;
+    let toParse = datesStr.trim();
+    if (toParse.includes('-')) {
+        const yearMatch = toParse.match(/\b(20\d{2})\b/);
+        const monthMatch = toParse.match(/[A-Za-z]{3,9}/);
+        const dayMatch = toParse.match(/\b\d{1,2}\b/);
+        if (yearMatch && monthMatch && dayMatch) {
+            toParse = `${monthMatch[0]} ${dayMatch[0]}, ${yearMatch[1]}`;
+        }
+    }
+    const d = new Date(toParse);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 function isDmvRegion(locationText) {
     if (!locationText || typeof locationText !== 'string') return false;
     return DMV_GEO_PATTERNS.some(pattern => pattern.test(locationText));
@@ -56,7 +70,15 @@ function parseTournamentSoftwareHtml(html, baseUrl = TS_BASE_URL) {
             
             let dates = '';
             const dateMatch = bodyText.match(/(\w{3,9}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
-            if (dateMatch) dates = dateMatch[0];
+            if (dateMatch) {
+                dates = dateMatch[0];
+                const d = parseCandidateDate(dates);
+                if (d && (d.getTime() < Date.now() || d.getFullYear() < 2026)) {
+                    return results; // Past tournament -> skip
+                }
+            } else {
+                return results; // No explicit date -> skip
+            }
 
             const isDmv = isDmvRegion(location) || isDmvRegion(bodyText) || isDmvRegion(pageTitle);
 
@@ -99,6 +121,12 @@ function parseTournamentSoftwareHtml(html, baseUrl = TS_BASE_URL) {
             const dateMatch = textBlock.match(/(\w{3}\s+\d{1,2}(?:\s*-\s*\d{1,2})?,\s*\d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i);
             if (dateMatch) {
                 dates = dateMatch[0];
+                const d = parseCandidateDate(dates);
+                if (d && (d.getTime() < Date.now() || d.getFullYear() < 2026)) {
+                    return; // Past tournament -> skip
+                }
+            } else {
+                return; // Missing date -> skip
             }
 
             const isDmv = isDmvRegion(location) || isDmvRegion(textBlock) || isDmvRegion(title);
@@ -129,7 +157,7 @@ async function crawlTournamentSoftware(query = 'Virginia') {
     let response = null;
     let data = null;
     try {
-        const searchUrl = `${TS_BASE_URL}/sportselection/setsportselection/2?returnUrl=%2Ftournaments`;
+        const searchUrl = `${TS_BASE_URL}/find?q=${encodeURIComponent(query)}&sport=2`;
         response = await axios.get(searchUrl, {
             headers: TS_HEADERS,
             timeout: 10000,

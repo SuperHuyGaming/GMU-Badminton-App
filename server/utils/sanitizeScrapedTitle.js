@@ -124,7 +124,11 @@ function sanitizeScrapedTitle(raw) {
     }
 
     // Final guard: empty, too short, or lacks alphanumeric characters
-    if (!title || title.length < 3 || !/[a-zA-Z0-9]/.test(title)) return null;
+    if (!title || title.length < 5 || !/[a-zA-Z0-9]/.test(title)) return null;
+
+    // Discard pure navigation, menu, or facility UI boilerplate
+    const PURE_UI_JUNK = /^(menu|home|login|log\\s*in|sign\\s*in|sign\\s*up(?:\\s*now)?|training(?:\\s*packages?)?|drop-in(?:\\s*booking)?|court\\s*rental|hours|schedule|about(?:\\s*us)?|contact(?:\\s*us)?|news|events?|badminton|court|rac|skip\\s*to\\s*content)$/i;
+    if (PURE_UI_JUNK.test(title)) return null;
 
     return title;
 }

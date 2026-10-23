@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const mongoose = require('mongoose');
 const Tournament = require('../models/Tournament');
+const ProposedTournament = require('../models/ProposedTournament');
 const { ApifyClient } = require('apify-client');
 const { parseInstagramPost } = require('./aiParser');
 const { deduplicateTournament, mergeTournamentData } = require('./deduplication');
@@ -67,9 +68,33 @@ async function runInstagramScraper() {
 
             if (profileData && profileData.recentPosts) {
                 for (const post of profileData.recentPosts) {
+                    // Stale post filter: skip posts published more than 45 days ago
+                    if (post.timestamp) {
+                        const postDate = new Date(post.timestamp);
+                        const maxAgeMs = 45 * 24 * 60 * 60 * 1000;
+                        if (!isNaN(postDate.getTime()) && (Date.now() - postDate.getTime()) > maxAgeMs) {
+                            console.log(`[InstagramScraper] Skipping stale post from ${postDate.toISOString()} on @${club.handle}`);
+                            continue;
+                        }
+                    }
+
                     const caption = post.caption || '';
                     const lower = caption.toLowerCase();
-                    const isCandidate = /tournament|open|invitational|championship|classic|smash|bracket|badminton cup/i.test(lower);
+
+                    // Negative filter: Reject post-tournament recaps, congratulations, results, podium
+                    if (/\b(congratulat\w*|congrats|shoutout|shout\s*out|recap|photo\s*dump|last\s*weekend|placed\s*(?:1st|2nd|3rd|[0-9]+th)|won\s*gold|won\s*silver|won\s*bronze|thanks\s*for\s*coming|results:|podium|final\s*scores?|memories\s*from)\b/i.test(lower)) {
+                        console.log(`[InstagramScraper] Skipping past tournament recap on @${club.handle}`);
+                        continue;
+                    }
+
+                    // Negative filter: Reject regular club sessions without explicit registration call
+                    if (/\b(open\s*gym|open\s*play|general\s*body\s*meeting|\bgbm\b|tryouts?|practice\s*schedule|dues|exec\s*board|e-board|merchandise|merch\s*drop|apparel|fundraiser|bake\s*sale|social\s*night|banquet|welcome\s*back)\b/i.test(lower) &&
+                        !/\b(register\s*(?:now|here|at|via)|registration\s*(?:link|open|form|deadline)|sign\s*up\s*(?:link|deadline|here|now)|entry\s*fee|deadline\s*to\s*register)\b/i.test(lower)) {
+                        console.log(`[InstagramScraper] Skipping regular club session/update on @${club.handle}`);
+                        continue;
+                    }
+
+                    const isCandidate = /\b(tournament|open\s*(?:badminton|championship|invitational|classic)|invitational|championship|classic|badminton\s*cup)\b/i.test(lower);
                     if (!isCandidate) {
                         continue; // Skip non-tournament club updates to preserve Gemini API quota
                     }
@@ -78,6 +103,16 @@ async function runInstagramScraper() {
                     const parsedData = await parseInstagramPost(caption);
                     
                     if (parsedData && parsedData.isTournamentPost) {
+                        // Strict Future Date Verification: Must have confirmed future date
+                        if (!parsedData.startDate) {
+                            console.log(`[InstagramScraper] Rejected: missing start date for @${club.handle}`);
+                            continue;
+                        }
+                        const sDate = new Date(parsedData.startDate);
+                        if (isNaN(sDate.getTime()) || sDate.getTime() < Date.now() || sDate.getFullYear() < 2026) {
+                            console.log(`[InstagramScraper] Rejected: date in past or invalid (${parsedData.startDate}) for @${club.handle}`);
+                            continue;
+                        }
                         console.log(`[InstagramScraper] Valid tournament found from @${club.handle}: ${parsedData.tournamentName || 'Unknown Name'}`);
 
                         const candidateTourney = {
@@ -118,12 +153,29 @@ async function runInstagramScraper() {
                         }
 
                         if (!existingTournament) {
-                            const newTourney = new Tournament({
-                                ...candidateTourney,
-                                createdAt: new Date()
+                            const existsInProposed = await ProposedTournament.findOne({
+                                $or: [
+                                    { sourceUrl: post.postUrl },
+                                    { tournamentName: candidateTourney.tournamentName, date: candidateTourney.startDate }
+                                ]
                             });
-                            await newTourney.save();
-                            console.log(`[InstagramScraper] Saved new tournament: ${newTourney.tournamentName}`);
+                            if (!existsInProposed) {
+                                await ProposedTournament.create({
+                                    tournamentName: candidateTourney.tournamentName,
+                                    location: candidateTourney.eventLocation || `${club.name}, ${club.location}`,
+                                    date: candidateTourney.startDate,
+                                    registrationDeadline: candidateTourney.registrationDeadline,
+                                    registrationLink: candidateTourney.registrationUrl || candidateTourney.instagramPostUrl,
+                                    sourceUrl: candidateTourney.instagramPostUrl,
+                                    sourceType: 'INSTAGRAM',
+                                    rawCaption: (post.caption || '').substring(0, 600),
+                                    flyerImageUrl: candidateTourney.flyerImageUrl,
+                                    sourceLinks: [candidateTourney.instagramPostUrl],
+                                    confidenceScore: 88,
+                                    status: 'pending' // Route to Admin Review Queue!
+                                });
+                                console.log(`[InstagramScraper] Enqueued proposed tournament for Admin Review: ${candidateTourney.tournamentName}`);
+                            }
                         } else {
                             console.log(`[InstagramScraper] Duplicate found, merging tournament data.`);
                             const merged = mergeTournamentData(existingTournament, candidateTourney);
