@@ -398,24 +398,21 @@ async function processDiscoveryQueue(batchSize = 5) {
             // Create ProposedTournament for Admin Review Queue
             console.log(`[Hunter] ✨ AI APPROVED: "${extracted.tournamentName}" -> Routing to Admin Review Queue.`);
             
-            // Strict Mode: Require valid, verified upcoming 2026/2027 tournament date (never manufacture fake dates)
-            if (!extracted.startDate) {
-                console.log(`[Hunter] AI Rejected (Missing tournament date): "${extracted.tournamentName}" @ ${item.sourceUrl}`);
-                item.status = 'REJECTED_BY_AI';
-                item.errorMessage = "Missing verified future tournament date";
-                await item.save();
-                rejectedCount++;
-                continue;
-            }
-
-            const proposedDate = new Date(extracted.startDate);
-            if (isNaN(proposedDate.getTime()) || proposedDate.getTime() < Date.now() || proposedDate.getFullYear() < 2026) {
-                console.log(`[Hunter] AI Rejected (Date in past or invalid: ${extracted.startDate}): "${extracted.tournamentName}" @ ${item.sourceUrl}`);
-                item.status = 'REJECTED_BY_AI';
-                item.errorMessage = `Past or invalid tournament date: ${extracted.startDate}`;
-                await item.save();
-                rejectedCount++;
-                continue;
+            // Date handling: If date is found, verify it is upcoming; if date is NOT found, keep it in the queue with date = null for Admin Review
+            let proposedDate = null;
+            if (extracted.startDate) {
+                const parsedDate = new Date(extracted.startDate);
+                if (isNaN(parsedDate.getTime()) || parsedDate.getTime() < Date.now() || parsedDate.getFullYear() < 2026) {
+                    console.log(`[Hunter] AI Rejected (Date in past or invalid: ${extracted.startDate}): "${extracted.tournamentName}" @ ${item.sourceUrl}`);
+                    item.status = 'REJECTED_BY_AI';
+                    item.errorMessage = `Past or invalid tournament date: ${extracted.startDate}`;
+                    await item.save();
+                    rejectedCount++;
+                    continue;
+                }
+                proposedDate = parsedDate;
+            } else {
+                console.log(`[Hunter] ℹ️ Date not found for "${extracted.tournamentName}". Retaining in Admin Review Queue with date=null for admin inspection.`);
             }
 
             let proposedDeadline = null;
@@ -426,6 +423,20 @@ async function processDiscoveryQueue(batchSize = 5) {
                 }
             }
 
+            // Verify link health before creating proposal
+            let linkStatus = 'unchecked';
+            let linkStatusCode = null;
+            let fallbackRegistrationUrl = '';
+            try {
+                const { verifyLinkHealth, resolveHostClubFallback } = require('./linkHealthChecker');
+                const check = await verifyLinkHealth(item.sourceUrl, 3000);
+                linkStatus = check.linkStatus;
+                linkStatusCode = check.statusCode;
+                if (linkStatus === 'expired') {
+                    fallbackRegistrationUrl = resolveHostClubFallback({ sourceUrl: item.sourceUrl, hostLocation: extracted.hostLocation });
+                }
+            } catch (_) {}
+
             await ProposedTournament.create({
                 tournamentName: extracted.tournamentName,
                 location: extracted.hostLocation || "DMV Area",
@@ -435,62 +446,15 @@ async function processDiscoveryQueue(batchSize = 5) {
                 sourceUrl: item.sourceUrl,
                 rawCaption: rawText.substring(0, 600),
                 sourceLinks: [item.sourceUrl],
-                confidenceScore: extracted.confidenceScore || 92,
+                confidenceScore: proposedDate ? (extracted.confidenceScore || 92) : 75,
+                linkStatus,
+                linkStatusCode,
+                fallbackRegistrationUrl,
                 status: 'pending' // Admin Pending Queue!
             });
 
-            // Live Auto-Publish: If high confidence (>= 75%) or from a verified seed, publish directly to live Tournament feed
-            if (mongoose.connection?.readyState === 1 && (extracted.confidenceScore || 90) >= 75) {
-                try {
-                    const existingLive = await Tournament.findOne({
-                        $or: [
-                            { tournamentName: extracted.tournamentName },
-                            { sourceUrl: item.sourceUrl }
-                        ]
-                    });
-
-                    if (!existingLive) {
-                        console.log(`[Hunter] 🚀 Auto-publishing "${extracted.tournamentName}" directly to public Tournament feed!`);
-                        let startDate = extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000);
-                        if (isNaN(startDate.getTime()) || startDate.getFullYear() < 2026) {
-                            startDate = new Date(Date.now() + 21 * 86400000);
-                        }
-                        let endDate = extracted.endDate ? new Date(extracted.endDate) : startDate;
-                        if (isNaN(endDate.getTime()) || endDate.getFullYear() < 2026) {
-                            endDate = new Date(startDate.getTime() + 86400000);
-                        }
-
-                        await Tournament.create({
-                            tournamentName: extracted.tournamentName,
-                            eventLocation: extracted.hostLocation || "DMV Area",
-                            hostUniversity: extracted.hostUniversity || ((extracted.hostLocation && extracted.hostLocation.includes("George Mason")) ? "George Mason University" : "Collegiate / Local Club"),
-                            startDate,
-                            endDate,
-                            registrationDeadline: proposedDeadline,
-                            registrationUrl: item.sourceUrl,
-                            sourceUrl: item.sourceUrl,
-                            flyerImageUrl: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000&auto=format&fit=crop",
-                            skillLevels: (extracted.skillLevels && extracted.skillLevels.length > 0) ? extracted.skillLevels : ["Open", "Intermediate"],
-                            originalCaption: rawText.substring(0, 600),
-                            isOpenTournament: true,
-                            status: "active",
-                            rsvpCount: 0,
-                            createdAt: new Date(),
-                            scraperLastRun: new Date()
-                        });
-
-                        try {
-                            const redis = require('./redis');
-                            const keys = await redis.keys('tournaments:*');
-                            if (keys.length > 0) await redis.del(keys);
-                        } catch (redisErr) {
-                            console.warn("[Hunter] Cache invalidation skipped:", redisErr.message);
-                        }
-                    }
-                } catch (liveErr) {
-                    console.warn(`[Hunter] Direct live publish skipped:`, liveErr.message);
-                }
-            }
+            // Strict Human-Admin Gate: All discovered tournaments route exclusively to ProposedTournament (pending).
+            // Direct live auto-publishing is permanently disabled.
 
             // Keep local dedup cache warm
             allExisting.push({ tournamentName: extracted.tournamentName });

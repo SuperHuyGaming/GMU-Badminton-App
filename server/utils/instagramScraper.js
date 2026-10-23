@@ -103,15 +103,16 @@ async function runInstagramScraper() {
                     const parsedData = await parseInstagramPost(caption);
                     
                     if (parsedData && parsedData.isTournamentPost) {
-                        // Strict Future Date Verification: Must have confirmed future date
-                        if (!parsedData.startDate) {
-                            console.log(`[InstagramScraper] Rejected: missing start date for @${club.handle}`);
-                            continue;
-                        }
-                        const sDate = new Date(parsedData.startDate);
-                        if (isNaN(sDate.getTime()) || sDate.getTime() < Date.now() || sDate.getFullYear() < 2026) {
-                            console.log(`[InstagramScraper] Rejected: date in past or invalid (${parsedData.startDate}) for @${club.handle}`);
-                            continue;
+                        let confirmedDate = null;
+                        if (parsedData.startDate) {
+                            const sDate = new Date(parsedData.startDate);
+                            if (isNaN(sDate.getTime()) || sDate.getTime() < Date.now() || sDate.getFullYear() < 2026) {
+                                console.log(`[InstagramScraper] Rejected: date in past or invalid (${parsedData.startDate}) for @${club.handle}`);
+                                continue;
+                            }
+                            confirmedDate = sDate;
+                        } else {
+                            console.log(`[InstagramScraper] ℹ️ Date not found for post from @${club.handle}. Retaining in Admin Review Queue with date=null for admin inspection.`);
                         }
                         console.log(`[InstagramScraper] Valid tournament found from @${club.handle}: ${parsedData.tournamentName || 'Unknown Name'}`);
 
@@ -127,8 +128,8 @@ async function runInstagramScraper() {
                             hostClubHandle: club.handle,
                             originalCaption: post.caption,
                             skillLevels: parsedData.skillLevels || [],
-                            startDate: parsedData.startDate ? new Date(parsedData.startDate) : null,
-                            endDate: parsedData.endDate ? new Date(parsedData.endDate) : null,
+                            startDate: confirmedDate,
+                            endDate: confirmedDate,
                             scraperLastRun: new Date()
                         };
 
@@ -160,6 +161,19 @@ async function runInstagramScraper() {
                                 ]
                             });
                             if (!existsInProposed) {
+                                let linkStatus = 'unchecked';
+                                let linkStatusCode = null;
+                                let fallbackRegistrationUrl = '';
+                                try {
+                                    const { verifyLinkHealth, resolveHostClubFallback } = require('./linkHealthChecker');
+                                    const check = await verifyLinkHealth(candidateTourney.registrationUrl || candidateTourney.instagramPostUrl, 3000);
+                                    linkStatus = check.linkStatus;
+                                    linkStatusCode = check.statusCode;
+                                    if (linkStatus === 'expired') {
+                                        fallbackRegistrationUrl = resolveHostClubFallback(candidateTourney);
+                                    }
+                                } catch (_) {}
+
                                 await ProposedTournament.create({
                                     tournamentName: candidateTourney.tournamentName,
                                     location: candidateTourney.eventLocation || `${club.name}, ${club.location}`,
@@ -171,7 +185,10 @@ async function runInstagramScraper() {
                                     rawCaption: (post.caption || '').substring(0, 600),
                                     flyerImageUrl: candidateTourney.flyerImageUrl,
                                     sourceLinks: [candidateTourney.instagramPostUrl],
-                                    confidenceScore: 88,
+                                    confidenceScore: confirmedDate ? 88 : 75,
+                                    linkStatus,
+                                    linkStatusCode,
+                                    fallbackRegistrationUrl,
                                     status: 'pending' // Route to Admin Review Queue!
                                 });
                                 console.log(`[InstagramScraper] Enqueued proposed tournament for Admin Review: ${candidateTourney.tournamentName}`);
