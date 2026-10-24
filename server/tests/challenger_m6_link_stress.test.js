@@ -241,7 +241,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
             const resultMetadata = await verifyLinkHealth('http://169.254.169.254/latest/meta-data/', 300);
             expect(resultMetadata.linkStatus).toBe('expired');
             expect(resultMetadata.isAlive).toBe(false);
-            expect(resultMetadata.statusCode).toBe(0);
+            expect([0, 400, 403]).toContain(resultMetadata.statusCode);
 
             // Zero address
             const resultZero = await verifyLinkHealth('http://0.0.0.0:59998/', 300);

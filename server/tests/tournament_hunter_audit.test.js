@@ -89,7 +89,7 @@ const {
 const { processDiscoveryQueue } = require("../utils/autonomousHunter");
 const { parseDiscoveredWebpage } = require("../utils/aiParser");
 
-const JWT_SECRET = process.env.JWT_SECRET || "super_secret_badminton_key_2026";
+const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
 const adminId = "650000000000000000000099";
 const userId = "650000000000000000000001";
 
