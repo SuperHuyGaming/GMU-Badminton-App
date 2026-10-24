@@ -8,6 +8,7 @@ const Profile = React.lazy(() => import("./pages/Profile"));
 const Dashboard = React.lazy(() => import("./pages/Dashboard"));
 const Forum = React.lazy(() => import("./pages/Forum"));
 const Admin = React.lazy(() => import("./pages/Admin"));
+const TournamentApprovals = React.lazy(() => import("./pages/admin/TournamentApprovals"));
 const Messages = React.lazy(() => import("./pages/Messages"));
 const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
@@ -216,6 +217,16 @@ const AnimatedRoutes = () => {
 						}
 					/>
 					<Route
+						path="/admin/tournaments"
+						element={
+							<AdminRoute>
+								<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
+									<TournamentApprovals />
+								</motion.div>
+							</AdminRoute>
+						}
+					/>
+					<Route
 						path="/marketplace"
 						element={
 							<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
@@ -297,9 +308,21 @@ function App() {
 		palette: {
 			mode,
 			primary: mode === "light"
-				? { main: "#005c2e", dark: "#004d26", light: "#1b663e", contrastText: "#ffffff" }
+				? { main: "#004d26", dark: "#003319", light: "#156536", contrastText: "#ffffff" }
 				: { main: "#80e27e", dark: "#005c2e", light: "#a5d6a7", contrastText: "#02120a" },
 			secondary: { main: "#FFCC33", contrastText: "#002f17" },
+			error: mode === "light"
+				? { main: "#B00020", contrastText: "#ffffff" }
+				: { main: "#ef5350", contrastText: "#000000" },
+			warning: mode === "light"
+				? { main: "#c43c00", contrastText: "#ffffff" }
+				: { main: "#ff9800", contrastText: "#000000" },
+			info: mode === "light"
+				? { main: "#01579B", contrastText: "#ffffff" }
+				: { main: "#29b6f6", contrastText: "#000000" },
+			success: mode === "light"
+				? { main: "#1B5E20", contrastText: "#ffffff" }
+				: { main: "#66bb6a", contrastText: "#000000" },
 			text: {
 				primary: mode === "light" ? "#1a202c" : "#ffffff",
 				secondary: mode === "light" ? "#404040" : "rgba(255, 255, 255, 0.8)",
@@ -326,6 +349,31 @@ function App() {
 			}
 		},
 		components: {
+			MuiCssBaseline: {
+				styleOverrides: {
+					'*:focus-visible': {
+						outline: mode === 'dark' ? '2px solid #38bdf8 !important' : '2px solid #004d26 !important',
+						outlineOffset: '2px !important',
+					},
+					'button:focus-visible, a:focus-visible, [role="button"]:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex="0"]:focus-visible': {
+						outline: mode === 'dark' ? '2px solid #38bdf8 !important' : '2px solid #004d26 !important',
+						outlineOffset: '2px !important',
+					}
+				}
+			},
+			MuiButtonBase: {
+				defaultProps: {
+					disableRipple: false,
+				},
+				styleOverrides: {
+					root: {
+						'&.Mui-focusVisible': {
+							outline: mode === 'dark' ? '2px solid #38bdf8 !important' : '2px solid #004d26 !important',
+							outlineOffset: '2px !important',
+						}
+					}
+				}
+			},
 
 			MuiInputBase: {
 				styleOverrides: {
@@ -477,7 +525,20 @@ function App() {
 				<BrowserRouter>
 					<Navbar />
 
-					<Toaster position="top-center" reverseOrder={false} />
+					<Toaster 
+						position="top-center" 
+						reverseOrder={false}
+						containerAriaProps={{
+							'aria-live': 'polite',
+							role: 'status'
+						}}
+						toastOptions={{
+							ariaProps: {
+								role: 'status',
+								'aria-live': 'polite'
+							}
+						}}
+					/>
 
 					<Container 
 						maxWidth="lg" 

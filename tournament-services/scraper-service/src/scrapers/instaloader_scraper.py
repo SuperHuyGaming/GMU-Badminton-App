@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import instaloader
@@ -76,6 +76,7 @@ class InstagramScraper:
                     "url": f"https://www.instagram.com/p/{post.shortcode}/",
                     "caption": post.caption or "",
                     "image_url": post.url,
+                    "carousel_urls": [node.display_url for node in post.get_sidecar_nodes()] if getattr(post, "typename", "") == "GraphSidecar" else [],
                     "timestamp": post.date_utc.isoformat(),
                     "is_video": post.is_video,
                 }
@@ -107,13 +108,39 @@ class InstagramScraper:
                     "url": item.get("url", f"https://www.instagram.com/{target_handle}/"),
                     "caption": item.get("caption", ""),
                     "image_url": item.get("displayUrl", ""),
-                    "timestamp": item.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                    "timestamp": item.get("timestamp", datetime.now(UTC).isoformat()),
                     "is_video": False,
                 }
             )
 
         logger.info(f"Successfully retrieved {len(results)} posts via Apify failover.")
         return results
+
+    def fetch_hashtag_posts(self, hashtag: str, max_posts: int = 10) -> list[dict[str, Any]]:
+        """Phase 1: Dynamic Discovery via Hashtag Monitoring"""
+        if self.use_mock:
+            return self._mock_posts(hashtag, max_posts)
+            
+        logger.info(f"Crawling hashtag #{hashtag} via Instaloader...")
+        posts_data = []
+        try:
+            hashtag_obj = instaloader.Hashtag.from_name(self.loader.context, hashtag)
+            # Only iterate recent posts to catch newly announced tournaments
+            for post in hashtag_obj.get_posts():
+                if len(posts_data) >= max_posts:
+                    break
+                posts_data.append({
+                    "shortcode": post.shortcode,
+                    "url": f"https://instagram.com/p/{post.shortcode}/",
+                    "display_url": post.url,
+                    "carousel_urls": [node.display_url for node in post.get_sidecar_nodes()] if getattr(post, "typename", "") == "GraphSidecar" else [],
+                    "caption": post.caption,
+                    "timestamp": post.date_utc.isoformat(),
+                    "owner_username": post.owner_profile.username if post.owner_profile else "unknown"
+                })
+        except Exception as e:
+            logger.error(f"Failed to crawl hashtag #{hashtag}: {e}")
+        return posts_data
 
     def _mock_posts(self, target_handle: str, max_posts: int) -> list[dict[str, Any]]:
         return [
@@ -122,7 +149,7 @@ class InstagramScraper:
                 "url": f"https://www.instagram.com/p/mock_{target_handle}/",
                 "caption": f"🏸 {target_handle.upper()} OPEN TOURNAMENT IS HERE! 🏸\nJoin us for our annual smash fest. Open to all collegiate & external players!\nRegistration closes next Friday! Need a ride? Fill out the carpool form in bio by Wednesday!\nLink in bio!",
                 "image_url": f"https://badmintonfinder.org/mock-flyers/{target_handle}-flyer.jpg",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "is_video": False,
             }
         ]

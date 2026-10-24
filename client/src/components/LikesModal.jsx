@@ -16,7 +16,7 @@ export default function LikesModal({ open, title, list, onClose }) {
 	const navigate = useNavigate();
 
 	return (
-		<Dialog open={open} onClose={onClose} aria-labelledby="likes-modal-title" maxWidth="xs" fullWidth>
+		<Dialog open={open} onClose={onClose} disableRestoreFocus aria-labelledby="likes-modal-title" maxWidth="xs" fullWidth>
 			<DialogTitle
 				id="likes-modal-title"
 				sx={{

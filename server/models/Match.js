@@ -50,7 +50,7 @@ matchSchema.post('save', async function(doc) {
 				createdAt: doc.date,
 				score: doc.team1Score + doc.team2Score
 			},
-			{ upsert: true, new: true }
+			{ upsert: true, returnDocument: 'after' }
 		);
 	} catch (e) {
 		console.error("ActivityFeed sync error (Match):", e);

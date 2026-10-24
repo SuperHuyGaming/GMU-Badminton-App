@@ -3,6 +3,16 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
+import { registerSW } from 'virtual:pwa-register';
+
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && import.meta.env.PROD) {
+	registerSW({
+		immediate: true,
+		onNeedRefresh() {
+			window.location.reload();
+		}
+	});
+}
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 

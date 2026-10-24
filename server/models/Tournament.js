@@ -11,8 +11,28 @@ const tournamentSchema = new mongoose.Schema({
     registrationUrl: String,
     sourceUrl: String,
     flyerImageUrl: String,
-    rsvpCount: Number,
+    rsvpCount: { type: Number, default: 0 },
+    maxCapacity: { type: Number, default: 64, min: 1 },
+    attendees: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    waitlist: [
+        {
+            userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+            registeredAt: { type: Date, default: Date.now },
+            idempotencyKey: { type: String, trim: true }
+        }
+    ],
+    entryFee: String,
     skillLevels: [String],
+    divisions: [{
+        name: { type: String, required: true },
+        code: { type: String, required: true },
+        category: { type: String, default: "Singles" },
+        maxDraw: { type: Number, default: 32 },
+        fee: { type: String, default: "$25" },
+        feeAmount: { type: Number, default: 25 },
+        eligibility: { type: String, default: "Open" },
+        bracketType: { type: String, default: "single_elimination" }
+    }],
     startDate: Date,
     endDate: Date,
     scraperLastRun: Date,
@@ -21,7 +41,43 @@ const tournamentSchema = new mongoose.Schema({
     linktreeUrl: String,
     originalCaption: String,
     hasSentDeadlineWarning: { type: Boolean, default: false },
+    status: { type: String, enum: ["active", "sold_out", "canceled", "archived"], default: "active" },
+    linkStatus: { type: String, enum: ["valid", "expired", "warning", "unchecked"], default: "unchecked" },
+    linkStatusCode: Number,
+    linkLastChecked: Date,
+    fallbackRegistrationUrl: { type: String, default: "" },
     createdAt: Date
 }, { collection: "tournaments" }); // Match the Java service collection
+
+tournamentSchema.index({ tournamentName: 1 });
+tournamentSchema.index({ sourceUrl: 1 });
+tournamentSchema.index({ status: 1, endDate: 1 });
+tournamentSchema.index({ status: 1, startDate: 1 });
+tournamentSchema.index({ linkStatus: 1 });
+tournamentSchema.index({ "waitlist.userId": 1 });
+tournamentSchema.index({ "waitlist.idempotencyKey": 1 }, { sparse: true });
+tournamentSchema.index(
+    {
+        tournamentName: "text",
+        hostUniversity: "text",
+        "divisions.name": "text",
+        "divisions.code": "text",
+        eventLocation: "text",
+        skillLevels: "text",
+        originalCaption: "text"
+    },
+    {
+        weights: {
+            tournamentName: 10,
+            hostUniversity: 8,
+            "divisions.name": 6,
+            "divisions.code": 5,
+            eventLocation: 4,
+            skillLevels: 3,
+            originalCaption: 1
+        },
+        name: "TournamentCompoundTextIndex"
+    }
+);
 
 module.exports = mongoose.model("Tournament", tournamentSchema);

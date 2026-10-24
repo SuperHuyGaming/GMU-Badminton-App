@@ -1,0 +1,580 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const xss = require("xss");
+const ProposedTournament = require("../models/ProposedTournament");
+const Tournament = require("../models/Tournament");
+const DiscoveryQueue = require("../models/DiscoveryQueue");
+const Notification = require("../models/Notification");
+const User = require("../models/User");
+const { authMiddleware, adminMiddleware } = require("../middleware/auth");
+const redis = require("../utils/redis");
+const rateLimit = require('express-rate-limit');
+const { runFullAutonomousHunt, processDiscoveryQueue, wipeAndRestartTournamentSystem } = require("../utils/autonomousHunter");
+const { deduplicateTournament } = require("../utils/deduplication");
+const { runTournamentLinkHealthcheck } = require("../utils/linkHealthChecker");
+
+const adminActionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    skip: (req) => req.method === "OPTIONS",
+    message: { message: "Too many admin actions from this IP, please try again after 15 minutes" }
+});
+
+const { handleMessage } = require('../utils/kafkaConsumer');
+
+const router = express.Router();
+
+router.post('/ingest', async (req, res) => {
+    try {
+        const secret = req.headers['x-scraper-secret'];
+        if (process.env.SCRAPER_SECRET && secret !== process.env.SCRAPER_SECRET) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        const savedDoc = await handleMessage({
+            topic: 'tournament-scraping',
+            partition: 0,
+            message: { value: JSON.stringify(req.body) }
+        });
+        if (savedDoc) {
+            return res.status(200).json({ message: 'Ingested', id: savedDoc._id });
+        }
+        return res.status(400).json({ message: 'Failed to ingest' });
+    } catch (err) {
+        return res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
+
+// Enforce authentication and admin authorization for all tournament admin endpoints
+router.use(authMiddleware);
+router.use(adminMiddleware);
+
+/**
+ * GET /api/admin/tournaments/proposed
+ * Retrieves all pending proposed tournaments sorted by confidenceScore descending.
+ */
+router.get("/proposed", async (req, res) => {
+    try {
+        const proposals = await ProposedTournament.find({ status: "pending" })
+            .sort({ confidenceScore: -1 });
+        return res.status(200).json(proposals);
+    } catch (err) {
+        return res.status(500).json({ message: "Server error fetching proposed tournaments", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/approve/:id
+ * Approves a proposed tournament: creates a Tournament entry with isOpenTournament: true,
+ * transitions proposal status to approved, and records audit metadata.
+ */
+router.post("/approve/:id", adminActionLimiter, async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid proposed tournament ID format." });
+        }
+
+        const proposed = await ProposedTournament.findById(id);
+        if (!proposed) {
+            return res.status(404).json({ message: "Proposed tournament not found." });
+        }
+
+        if (proposed.status === "approved") {
+            return res.status(400).json({ message: "Tournament proposal is already approved." });
+        }
+
+        const sourceLinks = Array.isArray(proposed.sourceLinks) ? proposed.sourceLinks : [];
+        const scrapedImageUrls = Array.isArray(proposed.scrapedImageUrls) ? proposed.scrapedImageUrls : [];
+
+        let existingLive = [];
+        if (mongoose.connection?.readyState === 1) {
+            try {
+                existingLive = await Tournament.find({}).lean();
+            } catch {
+                existingLive = [];
+            }
+        }
+        const candidateForDedup = {
+            tournamentName: proposed.tournamentName,
+            startDate: proposed.date,
+            endDate: proposed.date,
+            registrationUrl: proposed.registrationLink || sourceLinks[0] || proposed.sourceUrl,
+            sourceUrl: proposed.sourceUrl,
+            divisions: proposed.divisions || [],
+            sourceLinks: sourceLinks
+        };
+        const dedupLive = deduplicateTournament(candidateForDedup, existingLive, { titleThreshold: 0.85, windowHours: 48 });
+
+        let tournament;
+        if (dedupLive.isDuplicate && dedupLive.canonicalId) {
+            tournament = await Tournament.findByIdAndUpdate(
+                dedupLive.canonicalId,
+                {
+                    $set: {
+                        divisions: dedupLive.mergedData.divisions,
+                        registrationUrl: dedupLive.mergedData.registrationUrl,
+                        sourceLinks: dedupLive.mergedData.sourceLinks,
+                        isOpenTournament: true,
+                        linkStatus: proposed.linkStatus || "unchecked",
+                        linkStatusCode: proposed.linkStatusCode,
+                        fallbackRegistrationUrl: proposed.fallbackRegistrationUrl || ""
+                    }
+                },
+                { new: true }
+            );
+        } else {
+            // Critical Invariant: isOpenTournament MUST be set to true so public feeds and calendar render it
+            tournament = new Tournament({
+                tournamentName: proposed.tournamentName,
+                eventLocation: proposed.location || "TBD",
+                hostUniversity: "Local Club",
+                startDate: proposed.date,
+                endDate: proposed.date,
+                registrationDeadline: proposed.registrationDeadline || proposed.date,
+                registrationUrl: proposed.registrationLink || sourceLinks[0] || proposed.sourceUrl,
+                sourceUrl: proposed.sourceUrl,
+                flyerImageUrl: scrapedImageUrls[0] || "",
+                skillLevels: proposed.skillLevels || [],
+                originalCaption: proposed.rawCaption || "",
+                isOpenTournament: true,
+                linkStatus: proposed.linkStatus || "unchecked",
+                linkStatusCode: proposed.linkStatusCode,
+                fallbackRegistrationUrl: proposed.fallbackRegistrationUrl || "",
+                rsvpCount: 0,
+                hasSentDeadlineWarning: false,
+                createdAt: new Date()
+            });
+            await tournament.save();
+        }
+
+        // Invalidate public tournaments cache
+        try {
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            } else {
+                const keys = await redis.keys("tournaments:*");
+                if (keys.length > 0) await redis.del(keys);
+            }
+        } catch (cacheErr) {
+            console.warn("[AdminTournaments] Cache flush error on approve:", cacheErr.message);
+        }
+
+        proposed.status = "approved";
+        proposed.approvedAt = new Date();
+        proposed.approvedBy = req.user?.id || req.user?.userId || null;
+        proposed.createdTournamentId = tournament._id;
+        await proposed.save();
+
+        const io = req.io || req.app?.get("io");
+        if (io) {
+            io.emit("tournamentApproved", tournament);
+        }
+
+        // Broadcast notification alerts to players for the newly discovered/approved tournament
+        if (mongoose.connection && mongoose.connection.readyState === 1) {
+            try {
+                const players = await User.find({}, '_id').limit(100);
+                if (players && players.length > 0) {
+                    const notifications = players.map(p => ({
+                        targetUserId: p._id.toString(),
+                        message: `🏆 New DMV Tournament Approved: "${tournament.tournamentName}"! Check the calendar and RSVP.`,
+                        link: "/tournaments",
+                        time: new Date()
+                    }));
+                    await Notification.insertMany(notifications);
+                }
+            } catch (notifErr) {
+                console.warn("[AdminTournaments] Non-fatal notification error:", notifErr.message);
+            }
+        }
+
+        return res.status(200).json({
+            message: "Tournament approved and published successfully",
+            tournament,
+            proposedTournament: proposed
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Server error approving tournament", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/reject/:id
+ * Rejects a proposed tournament and logs the rejection reason.
+ */
+router.post("/reject/:id", adminActionLimiter, async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid proposed tournament ID format." });
+        }
+
+        const proposed = await ProposedTournament.findById(id);
+        if (!proposed) {
+            return res.status(404).json({ message: "Proposed tournament not found." });
+        }
+
+        const reason = req.body && typeof req.body.reason === "string" && req.body.reason.trim()
+            ? xss(req.body.reason.trim().slice(0, 500))
+            : "Rejected by admin";
+
+        proposed.status = "rejected";
+        proposed.rejectedAt = new Date();
+        proposed.rejectionReason = reason;
+        await proposed.save();
+
+        return res.status(200).json({
+            message: "Tournament proposal rejected",
+            proposedTournament: proposed
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Server error rejecting tournament", error: err.message });
+    }
+});
+
+/**
+ * PUT /api/admin/tournaments/:id
+ * Edits AI Structured Data fields on a proposed tournament before approval.
+ */
+router.put("/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid proposed tournament ID format." });
+        }
+
+        const proposed = await ProposedTournament.findById(id);
+        if (!proposed) {
+            return res.status(404).json({ message: "Proposed tournament not found." });
+        }
+
+        const payload = req.body || {};
+        const sourceData = payload.aiStructuredData && typeof payload.aiStructuredData === "object"
+            ? { ...payload, ...payload.aiStructuredData }
+            : payload;
+
+        if (sourceData.tournamentName !== undefined) {
+            if (typeof sourceData.tournamentName !== "string" || !sourceData.tournamentName.trim()) {
+                return res.status(400).json({ message: "Tournament name cannot be empty." });
+            }
+            proposed.tournamentName = xss(sourceData.tournamentName.trim());
+        }
+
+        if (sourceData.location !== undefined && typeof sourceData.location === "string") {
+            proposed.location = xss(sourceData.location.trim().slice(0, 200)) || "TBD";
+        }
+
+        if (sourceData.entryFee !== undefined && typeof sourceData.entryFee === "string") {
+            proposed.entryFee = xss(sourceData.entryFee.trim().slice(0, 100));
+        }
+
+        if (sourceData.registrationLink !== undefined && typeof sourceData.registrationLink === "string") {
+            proposed.registrationLink = xss(sourceData.registrationLink.trim());
+        }
+
+        if (sourceData.skillLevels !== undefined && Array.isArray(sourceData.skillLevels)) {
+            proposed.skillLevels = sourceData.skillLevels
+                .filter((s) => typeof s === "string")
+                .map((s) => xss(s.trim()));
+        }
+
+        if (sourceData.date !== undefined) {
+            proposed.date = sourceData.date ? new Date(sourceData.date) : undefined;
+        }
+
+        if (sourceData.registrationDeadline !== undefined) {
+            proposed.registrationDeadline = sourceData.registrationDeadline
+                ? new Date(sourceData.registrationDeadline)
+                : undefined;
+        }
+
+        if (sourceData.confidenceScore !== undefined) {
+            const score = Number(sourceData.confidenceScore);
+            if (!isNaN(score) && score >= 0 && score <= 100) {
+                proposed.confidenceScore = score;
+            } else {
+                return res.status(400).json({ message: "Confidence score must be a number between 0 and 100." });
+            }
+        }
+
+        await proposed.save();
+
+        return res.status(200).json({
+            message: "Tournament proposal updated successfully",
+            proposedTournament: proposed
+        });
+    } catch (err) {
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ message: err.message });
+        }
+        return res.status(500).json({ message: "Server error updating tournament proposal", error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/tournaments/:id
+ * Permanently removes a live tournament from the public directory.
+ * Flushes the Redis tournaments cache so the deletion is reflected immediately.
+ */
+router.delete("/:id", adminActionLimiter, async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid tournament ID format." });
+        }
+
+        const tournament = await Tournament.findByIdAndDelete(id);
+        if (!tournament) {
+            return res.status(404).json({ message: "Tournament not found." });
+        }
+
+        // Flush public tournaments cache
+        try {
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            } else {
+                const keys = await redis.keys("tournaments:*");
+                if (keys.length > 0) await redis.del(keys);
+            }
+        } catch (cacheErr) {
+            console.warn("[AdminTournaments] Non-fatal cache flush error on delete:", cacheErr.message);
+        }
+
+        // Emit real-time deletion event
+        const io = req.io || req.app?.get("io");
+        if (io) {
+            io.emit("tournamentDeleted", { _id: id });
+        }
+
+        return res.status(200).json({ message: "Tournament deleted successfully.", _id: id });
+    } catch (err) {
+        return res.status(500).json({ message: "Server error deleting tournament", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/manual
+ * Manually creates a new tournament in the tournaments collection with isOpenTournament: true.
+ * Emits tournamentApproved event via Socket.io if available.
+ */
+router.post("/manual", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const tournamentName = body.tournamentName;
+
+        if (!tournamentName || typeof tournamentName !== "string" || !tournamentName.trim()) {
+            return res.status(400).json({ message: "Tournament name is required." });
+        }
+
+        const sanitizedName = xss(tournamentName.trim());
+        const eventLocation = body.eventLocation || body.location;
+        const sanitizedLocation = eventLocation && typeof eventLocation === "string" && eventLocation.trim()
+            ? xss(eventLocation.trim().slice(0, 200))
+            : "TBD";
+
+        const startDate = body.startDate || body.date ? new Date(body.startDate || body.date) : undefined;
+        const endDate = body.endDate
+            ? new Date(body.endDate)
+            : (body.startDate || body.date ? new Date(body.startDate || body.date) : undefined);
+        const registrationDeadline = body.registrationDeadline
+            ? new Date(body.registrationDeadline)
+            : startDate;
+
+        const regUrl = body.registrationUrl || body.registrationLink || "";
+        const sanitizedRegUrl = typeof regUrl === "string" ? xss(regUrl.trim()) : "";
+
+        const flyerUrl = body.flyerImageUrl || "";
+        const sanitizedFlyerUrl = typeof flyerUrl === "string" ? xss(flyerUrl.trim()) : "";
+
+        const skillLevels = Array.isArray(body.skillLevels)
+            ? body.skillLevels.filter((s) => typeof s === "string").map((s) => xss(s.trim()))
+            : [];
+
+        const originalCaption = body.originalCaption || body.rawCaption || "";
+        const sanitizedCaption = typeof originalCaption === "string" ? xss(originalCaption.trim()) : "";
+
+        const tournament = new Tournament({
+            tournamentName: sanitizedName,
+            eventLocation: sanitizedLocation,
+            hostUniversity: body.hostUniversity && typeof body.hostUniversity === "string" ? xss(body.hostUniversity.trim()) : "Local Club",
+            startDate,
+            endDate,
+            registrationDeadline,
+            registrationUrl: sanitizedRegUrl,
+            sourceUrl: body.sourceUrl ? xss(body.sourceUrl.trim()) : "",
+            flyerImageUrl: sanitizedFlyerUrl,
+            skillLevels,
+            originalCaption: sanitizedCaption,
+            isOpenTournament: true,
+            rsvpCount: 0,
+            hasSentDeadlineWarning: false,
+            createdAt: new Date()
+        });
+
+        await tournament.save();
+
+        // Invalidate public tournaments cache
+        try {
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            } else {
+                const keys = await redis.keys("tournaments:*");
+                if (keys.length > 0) await redis.del(keys);
+            }
+        } catch (cacheErr) {
+            console.warn("[AdminTournaments] Non-fatal cache flush error on manual tournament creation:", cacheErr.message);
+        }
+
+        const io = req.io || req.app?.get("io");
+        if (io) {
+            io.emit("tournamentApproved", tournament);
+        }
+
+        return res.status(201).json({
+            message: "Tournament created successfully",
+            tournament
+        });
+    } catch (err) {
+        if (err.name === "ValidationError") {
+            return res.status(400).json({ message: err.message });
+        }
+        return res.status(500).json({ message: "Server error creating manual tournament", error: err.message });
+    }
+});
+
+/**
+ * GET /api/admin/tournaments/discovery-queue
+ * Retrieves items from DiscoveryQueue with optional status filter and pagination limit.
+ */
+router.get("/discovery-queue", async (req, res) => {
+    try {
+        const { status, limit = 50 } = req.query;
+        let query = {};
+        if (status) {
+            const s = String(status).toUpperCase();
+            if (s === 'PENDING' || s === 'PENDING_AI_REVIEW') {
+                query = { status: 'PENDING_AI_REVIEW' };
+            } else if (s === 'APPROVED' || s === 'APPROVED_BY_AI') {
+                query = { status: 'APPROVED_BY_AI' };
+            } else if (s === 'REJECTED' || s === 'REJECTED_BY_AI' || s === 'DUPLICATE' || s === 'FAILED' || s === 'IRRELEVANT') {
+                query = { status: 'REJECTED_BY_AI' };
+            } else if (s === 'PROCESSED') {
+                query = { status: { $in: ['APPROVED_BY_AI', 'REJECTED_BY_AI', 'PROCESSED'] } };
+            } else {
+                query = { status };
+            }
+        }
+        const items = await DiscoveryQueue.find(query)
+            .sort({ discoveredAt: -1 })
+            .limit(Math.min(Number(limit) || 50, 100));
+        const totalCount = await DiscoveryQueue.countDocuments(query);
+        return res.status(200).json({ items, totalCount });
+    } catch (err) {
+        return res.status(500).json({ message: "Server error fetching discovery queue", error: err.message });
+    }
+});
+
+let isHunting = false;
+
+/**
+ * POST /api/admin/tournaments/discovery-queue/run-hunt
+ * Triggers the full autonomous hunter cycle (TournamentSoftware + Web search + Queue AI evaluation).
+ * Runs asynchronously in the background to prevent Render reverse proxy 502 Bad Gateway timeouts.
+ */
+router.post("/discovery-queue/run-hunt", adminActionLimiter, async (req, res) => {
+    try {
+        if (isHunting) {
+            return res.status(200).json({
+                message: "Autonomous Tournament Hunter cycle is already running in background.",
+                status: "already_running"
+            });
+        }
+
+        isHunting = true;
+        res.status(202).json({
+            message: "Autonomous Tournament Hunter cycle started in background.",
+            status: "started"
+        });
+
+        setImmediate(async () => {
+            try {
+                console.log("🚀 [Hunter] Starting background Autonomous Tournament Hunter execution...");
+                const result = await runFullAutonomousHunt();
+                console.log("✅ [Hunter] Background Autonomous Tournament Hunter completed successfully.");
+                const io = req.io || req.app?.get("io");
+                if (io) {
+                    io.emit("hunterComplete", { success: true, result });
+                }
+            } catch (err) {
+                console.error("❌ [Hunter] Background autonomous hunt error:", err.message);
+                const io = req.io || req.app?.get("io");
+                if (io) {
+                    io.emit("hunterComplete", { success: false, error: err.message });
+                }
+            } finally {
+                isHunting = false;
+            }
+        });
+    } catch (err) {
+        isHunting = false;
+        return res.status(500).json({ message: "Failed to run autonomous hunt", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/discovery-queue/process
+ * Processes a batch of pending items in the discovery queue through AI evaluation and deduplication.
+ */
+router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => {
+    try {
+        const batchSize = Math.min(Number(req.body?.batchSize) || 10, 20);
+        const result = await processDiscoveryQueue(batchSize);
+        return res.status(200).json({
+            message: "Discovery queue processing complete",
+            result
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to process discovery queue", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/wipe-and-restart
+ * Wipes discovery queue, proposed tournaments, purges invalid/past tournaments (e.g. 2001 VCU),
+ * and re-seeds verified live tournaments for 2026.
+ */
+router.post("/wipe-and-restart", adminActionLimiter, async (req, res) => {
+    try {
+        const result = await wipeAndRestartTournamentSystem();
+        return res.status(200).json({
+            message: "Tournament system wiped and restarted successfully",
+            result
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to wipe and restart tournament system", error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/tournaments/link-healthcheck
+ * Triggers autonomous link healthcheck crawler to verify outbound registration URLs.
+ */
+router.post("/link-healthcheck", adminActionLimiter, async (req, res) => {
+    try {
+        const batchSize = Math.min(Number(req.body?.batchSize) || 25, 50);
+        const stats = await runTournamentLinkHealthcheck(batchSize);
+        return res.status(200).json({
+            success: true,
+            message: "Link healthcheck completed successfully",
+            checked: stats.checkedCount,
+            healthy: stats.validCount,
+            expired: stats.expiredCount,
+            stats
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: "Failed to execute link healthcheck", error: err.message });
+    }
+});
+
+module.exports = router;

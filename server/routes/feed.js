@@ -62,7 +62,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
 
         if (tab === "latest") {
             if (lastDoc) matchStage.createdAt = { $lt: lastDoc.createdAt };
-            const feedItems = await ActivityFeed.find(matchStage).sort({ createdAt: -1 }).limit(limit + 1).lean();
+            const feedItems = await ActivityFeed.find(matchStage).sort({ isPinned: -1, createdAt: -1 }).limit(limit + 1).lean();
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();
             const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
@@ -152,7 +152,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
                 });
             }
 
-            pipeline.push({ $sort: { velocityScore: -1, _id: -1 } });
+            pipeline.push({ $sort: { isPinned: -1, velocityScore: -1, _id: -1 } });
             pipeline.push({ $limit: limit + 1 });
 
             const feedItems = await ActivityFeed.aggregate(pipeline);

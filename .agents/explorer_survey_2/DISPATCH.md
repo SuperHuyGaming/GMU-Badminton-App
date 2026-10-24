@@ -1,30 +1,27 @@
-# Dispatch for Explorer Survey 2
+# Dispatch: Explorer 2 - Server Routes, Middleware, & Admin Auth
 
-## Mission
-Investigate R2: Matchmaking search bar styling refinement.
-- Locate the Matchmaking page and its search bar component.
-- Examine current styling (CSS, Tailwind, styled classes) and how dark theme is handled.
-- Identify the exact styling needed to make the search bar background slightly lighter and translucent.
-- Check existing tests for Matchmaking or search bar.
-- Write your findings to `analysis.md` and summary in `handoff.md`.
+## Objective
+Investigate `server/server.js`, existing routes, auth middleware, and role verification in the server codebase to determine how to securely implement and mount `/api/admin/tournaments`.
 
-## 2026-09-29T18:35:41Z
-You are Explorer 2 (Archetype: teamwork_preview_explorer).
-Your working directory is: D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_2
-Your parent is: orchestrator_1 (Conversation ID: 93d2d1d0-6d75-4341-b9f0-ead10a1e3f67)
+## Key Files to Investigate
+- `D:\GMU Fall 2026\GMU-Badminton-App\.agents\ORIGINAL_REQUEST.md` (mandatory read)
+- `D:\GMU Fall 2026\GMU-Badminton-App\server\server.js`
+- `D:\GMU Fall 2026\GMU-Badminton-App\server\routes/`
+- `D:\GMU Fall 2026\GMU-Badminton-App\server\middleware/` (e.g. auth middleware)
 
-Read ORIGINAL_REQUEST.md at: D:\GMU Fall 2026\GMU-Badminton-App\.agents\ORIGINAL_REQUEST.md
-Read DISPATCH.md at: D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_2\DISPATCH.md
+## Deliverables
+Write your comprehensive findings and recommendations to `.agents/explorer_survey_2/handoff.md`. Include:
+1. How routes are currently structured, mounted, and error-handled in `server/server.js`.
+2. Existing auth middleware implementation, how tokens are validated, and how `req.user` / `req.user.role` are populated.
+3. Is there an existing admin check middleware or role check pattern? How should admin verification be enforced for all `/api/admin/tournaments` routes?
+4. Detailed endpoints design for:
+   - `GET /proposed`: pending tournaments sorted by confidenceScore desc
+   - `POST /approve/:id`: find, create in Tournament, mark approved
+   - `POST /reject/:id`: mark rejected
+   - `PUT /:id`: update AI structured data
+5. Recommended route structure for `server/routes/adminTournaments.js` and mount point in `server/server.js`.
 
-Your task is to investigate Requirement 2: Refine Matchmaking Search Bar Styling.
-1. Locate where the Matchmaking page and its search bar input are defined in `client/` (e.g., `client/src/pages/Matchmaking.jsx` or search component).
-2. Examine the styling system used (Tailwind CSS, standard CSS, module CSS, styled components, etc.) and inspect the current background, border, and text styles of the search bar.
-3. Identify how the dark theme is styled and how to make the search bar background "slightly lighter and translucent, ensuring it looks like a distinct input box against the dark theme background".
-4. Check if there are any existing tests for the Matchmaking search bar or page in `client/`.
-5. Identify any potential linting or test impacts.
-
-Produce two files in your working directory:
-- `D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_2\analysis.md`: Detailed technical findings with file paths, code snippets, and styling classes.
-- `D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_2\handoff.md`: Structured handoff following the Handoff Protocol (Observation, Logic Chain, Caveats, Conclusion, Verification Method).
-
-When complete, send a message to orchestrator_1 reporting completion and linking to your handoff.md.
+## 2026-10-02T23:40:30Z
+Investigate `server/server.js`, existing routes, auth middleware, and role verification in the server codebase to determine how to securely implement and mount `/api/admin/tournaments`.
+Deliverable: Write a comprehensive report to D:\GMU Fall 2026\GMU-Badminton-App\.agents\explorer_survey_2\handoff.md.
+When finished, send a message to parent with your completion status and reference the handoff report path.

@@ -12,6 +12,7 @@ const rateLimit = require("express-rate-limit");
 const coachLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 20,
+    skip: (req) => req.method === "OPTIONS",
     message: { message: "You're sending messages too fast. Take a breather! 🏸" },
     keyGenerator: (req) => (req.user?.id || req.user?.userId || "anonymous"),
     validate: { keyGeneratorIpFallback: false },

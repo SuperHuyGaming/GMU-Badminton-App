@@ -30,7 +30,11 @@ public class MongoChangeStreamListener {
         log.info("Initializing MongoDB Change Stream listener on 'outbox_events' collection...");
 
         ChangeStreamOptions.ChangeStreamOptionsBuilder optionsBuilder = ChangeStreamOptions.builder()
-                .filter(org.springframework.data.mongodb.core.query.Criteria.where("operationType").is("insert"));
+                .filter(org.springframework.data.mongodb.core.aggregation.Aggregation.newAggregation(
+                        org.springframework.data.mongodb.core.aggregation.Aggregation.match(
+                                org.springframework.data.mongodb.core.query.Criteria.where("operationType").is("insert")
+                        )
+                ));
         
         if (resumeToken != null) {
             optionsBuilder.resumeToken(resumeToken);

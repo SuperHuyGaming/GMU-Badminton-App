@@ -49,6 +49,7 @@ router.get("/:id", async (req, res, next) => {
 const listingLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
+    skip: (req) => req.method === "OPTIONS",
     message: { message: "Too many listings created, please try again later." }
 });
 

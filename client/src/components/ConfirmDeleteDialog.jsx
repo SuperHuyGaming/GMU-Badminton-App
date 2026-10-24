@@ -20,6 +20,7 @@ export default function ConfirmDeleteDialog({
 		<Dialog
 			open={open}
 			onClose={onClose}
+			disableRestoreFocus
 			aria-labelledby="confirm-delete-dialog-title"
 			aria-describedby="confirm-delete-dialog-desc"
 			PaperProps={{ sx: { borderRadius: 3, p: 1 } }}

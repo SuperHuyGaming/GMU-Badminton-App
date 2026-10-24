@@ -10,6 +10,7 @@ const xss = require("xss");
 const scrapeLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
+    skip: (req) => req.method === "OPTIONS",
     message: { message: "Too many scraping requests, please try again later." }
 });
 
@@ -64,6 +65,9 @@ router.post("/instagram", authMiddleware, scrapeLimiter, async (req, res, next) 
         const input = {
             directUrls: [url],
             resultsType: "details",
+            proxyConfiguration: {
+                useApifyProxy: true
+            }
         };
 
         const run = await client.actor("apify/instagram-post-scraper").call(input);
