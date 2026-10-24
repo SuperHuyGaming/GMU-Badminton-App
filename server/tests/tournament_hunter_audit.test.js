@@ -543,7 +543,7 @@ describe("Milestone 6: Tournament Hunter & Ingestion Audit Suite", () => {
                 isValidDmvTournament: true,
                 tournamentName: "2026 CBA Fall Classic",
                 hostLocation: "Columbia, MD",
-                startDate: "2026-10-24T09:00:00.000Z",
+                startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                 endDate: "2026-10-25T18:00:00.000Z",
                 registrationLink: "https://capitalbadminton.com/dead-link-404",
                 confidenceScore: 90

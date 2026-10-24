@@ -35,6 +35,41 @@ import { useAuth } from '../context/AuthContext';
 
 const SKILL_LEVEL_OPTIONS = ['Beginner', 'Intermediate', 'Advanced', 'Open'];
 
+const BADMINTON_SYNONYMS = {
+    GMU: "George Mason",
+    UMD: "University of Maryland",
+    NVBC: "Northern Virginia Badminton Club",
+    CBA: "Capital Badminton",
+    JHU: "Johns Hopkins",
+    VT: "Virginia Tech",
+    UVA: "University of Virginia"
+};
+
+const REVERSE_SYNONYMS = {
+    "GEORGE MASON": "GMU",
+    "UNIVERSITY OF MARYLAND": "UMD",
+    "NORTHERN VIRGINIA BADMINTON CLUB": "NVBC",
+    "CAPITAL BADMINTON": "CBA",
+    "JOHNS HOPKINS": "JHU",
+    "VIRGINIA TECH": "VT",
+    "UNIVERSITY OF VIRGINIA": "UVA"
+};
+
+function getSearchVariants(term) {
+    if (!term) return [];
+    const lower = term.toLowerCase();
+    const upper = term.toUpperCase();
+    const variants = [lower];
+
+    if (BADMINTON_SYNONYMS[upper]) {
+        variants.push(BADMINTON_SYNONYMS[upper].toLowerCase());
+    }
+    if (REVERSE_SYNONYMS[upper]) {
+        variants.push(REVERSE_SYNONYMS[upper].toLowerCase());
+    }
+    return variants;
+}
+
 // Custom Grid components for VirtuosoGrid
 const VirtualGridList = forwardRef(({ style, children, className, ...props }, ref) => (
     <div
@@ -134,12 +169,11 @@ export default function Tournaments() {
     }, [searchInput, searchParams, updateFilters]);
 
     // Sync input if searchParams change externally (e.g. back/forward navigation or reset)
-    useEffect(() => {
-        const currentQ = searchParams.get('q') || '';
-        if (currentQ !== searchInput) {
-            setSearchInput(currentQ);
-        }
-    }, [searchParams]);
+    const [prevSearchQuery, setPrevSearchQuery] = useState(searchQuery);
+    if (searchQuery !== prevSearchQuery) {
+        setPrevSearchQuery(searchQuery);
+        setSearchInput(searchQuery);
+    }
 
     // Fetch tournaments from Express API
     const fetchTournaments = useCallback(async () => {
@@ -190,34 +224,45 @@ export default function Tournaments() {
     // Instant in-memory client-side filtering on keystrokes across tournamentName, hostUniversity, eventLocation, divisions, and skillLevels (< 5ms)
     const matchesSearch = useCallback((t, term) => {
         if (!term) return true;
-        const lower = term.toLowerCase();
-        if (t.tournamentName && t.tournamentName.toLowerCase().includes(lower)) return true;
-        if (t.hostUniversity && t.hostUniversity.toLowerCase().includes(lower)) return true;
-        if (t.hostClubHandle && t.hostClubHandle.toLowerCase().includes(lower)) return true;
-        if (t.eventLocation && t.eventLocation.toLowerCase().includes(lower)) return true;
-        if (Array.isArray(t.divisions)) {
-            for (const d of t.divisions) {
-                if (typeof d === 'string' && d.toLowerCase().includes(lower)) return true;
-                if (d && typeof d === 'object') {
-                    if (d.name && d.name.toLowerCase().includes(lower)) return true;
-                    if (d.code && d.code.toLowerCase().includes(lower)) return true;
-                    if (d.category && d.category.toLowerCase().includes(lower)) return true;
+        const variants = getSearchVariants(term);
+        return variants.some((v) => {
+            if (t.tournamentName && t.tournamentName.toLowerCase().includes(v)) return true;
+            if (t.hostUniversity && t.hostUniversity.toLowerCase().includes(v)) return true;
+            if (t.hostClubHandle && t.hostClubHandle.toLowerCase().includes(v)) return true;
+            if (t.eventLocation && t.eventLocation.toLowerCase().includes(v)) return true;
+            if (t.originalCaption && t.originalCaption.toLowerCase().includes(v)) return true;
+            if (Array.isArray(t.divisions)) {
+                for (const d of t.divisions) {
+                    if (typeof d === 'string' && d.toLowerCase().includes(v)) return true;
+                    if (d && typeof d === 'object') {
+                        if (d.name && d.name.toLowerCase().includes(v)) return true;
+                        if (d.code && d.code.toLowerCase().includes(v)) return true;
+                        if (d.category && d.category.toLowerCase().includes(v)) return true;
+                    }
                 }
             }
-        }
-        if (Array.isArray(t.skillLevels)) {
-            for (const s of t.skillLevels) {
-                if (typeof s === 'string' && s.toLowerCase().includes(lower)) return true;
+            if (Array.isArray(t.skillLevels)) {
+                for (const s of t.skillLevels) {
+                    if (typeof s === 'string' && s.toLowerCase().includes(v)) return true;
+                }
             }
-        }
-        return false;
+            return false;
+        });
     }, []);
 
     const filteredTournaments = useMemo(() => {
         const query = searchInput.trim();
         if (!query) return tournaments;
+        const upperQuery = query.toUpperCase();
+        const reverseAcronym = REVERSE_SYNONYMS[upperQuery];
+
         const tokens = query.split(/\s+/).filter(Boolean);
-        return tournaments.filter(t => tokens.every(token => matchesSearch(t, token)));
+        return tournaments.filter(t => {
+            if (reverseAcronym && matchesSearch(t, reverseAcronym)) {
+                return true;
+            }
+            return tokens.every(token => matchesSearch(t, token));
+        });
     }, [tournaments, searchInput, matchesSearch]);
 
     // RSVP Toggle handler

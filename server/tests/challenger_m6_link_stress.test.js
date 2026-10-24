@@ -819,7 +819,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
                 isValidDmvTournament: true,
                 tournamentName: '2026 Mid-Atlantic Collegiate Championships',
                 hostLocation: 'Columbia, MD',
-                startDate: '2026-10-24T09:00:00.000Z',
+                startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                 registrationLink: 'https://example.com/exploding-prober',
                 confidenceScore: 92
             };
@@ -939,7 +939,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
                         isValidDmvTournament: true,
                         tournamentName: '2026 CBA Batch Event',
                         hostLocation: 'Columbia, MD',
-                        startDate: '2026-10-24T09:00:00.000Z',
+                        startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                         registrationLink: 'https://capitalbadminton.com/healthy-link',
                         confidenceScore: 90
                     });

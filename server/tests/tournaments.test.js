@@ -138,6 +138,41 @@ describe("Public Tournaments API & RSVP System", () => {
             }));
         });
 
+        it("supports badminton synonym expansion in short prefix matching (< 3 characters) for VT", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?search=VT");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ tournamentName: { $regex: "VT", $options: "i" } }),
+                    expect.objectContaining({ hostUniversity: { $regex: "Virginia Tech", $options: "i" } })
+                ])
+            }));
+        });
+
+        it("safely escapes regex control characters in search query and location", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            const res = await request(app).get("/api/tournaments?search=(*&location=Fairfax (RAC)");
+
+            expect(res.status).toBe(200);
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                eventLocation: { $regex: "Fairfax \\(RAC\\)", $options: "i" },
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ tournamentName: { $regex: "\\(\\\*", $options: "i" } }),
+                ])
+            }));
+        });
+
         it("serves cached tournaments from Redis when available", async () => {
             const redis = require("../utils/redis");
             const cachedList = [{ _id: "cached_1", tournamentName: "Cached Tourney" }];

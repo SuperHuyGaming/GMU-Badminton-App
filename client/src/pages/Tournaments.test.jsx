@@ -255,6 +255,16 @@ describe('Public Tournaments Page Component', () => {
         expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
         expect(screen.queryByText('Capital Fall Invitational 2027')).not.toBeInTheDocument();
 
+        // Filter by badminton acronym synonym (GMU -> George Mason)
+        fireEvent.change(searchInput, { target: { value: 'GMU' } });
+        expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Capital Fall Invitational 2027')).not.toBeInTheDocument();
+
+        // Filter by club acronym synonym (CBA -> Capital Badminton)
+        fireEvent.change(searchInput, { target: { value: 'CBA' } });
+        expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Mason Open Championships 2027')).not.toBeInTheDocument();
+
         // Empty search restores all
         fireEvent.change(searchInput, { target: { value: '' } });
         expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();

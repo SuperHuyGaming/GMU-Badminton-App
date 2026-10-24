@@ -570,6 +570,38 @@ describe("TournamentApprovals Admin Page Component", () => {
         // Input field should now have the fallback URL
         expect(regLinkInput).toHaveValue("https://novabadmintonacademy.com/");
     });
+
+    it("12. Renders disabled fallback button when proposal has expired linkStatus without fallbackRegistrationUrl", async () => {
+        const expiredProposalNoFallback = {
+            ...mockProposals[0],
+            _id: "prop-expired-no-fallback",
+            tournamentName: "DMV Spring Open 2026",
+            linkStatus: "expired",
+            linkStatusCode: 410,
+            registrationLink: "https://badmintonclub.org/old-event",
+            fallbackRegistrationUrl: "",
+        };
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => [expiredProposalNoFallback],
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("DMV Spring Open 2026")).toBeInTheDocument();
+        });
+
+        const reviewBtn = screen.getByRole("button", { name: /Review/i });
+        fireEvent.click(reviewBtn);
+
+        expect(screen.getByTestId("expired-link-alert")).toBeInTheDocument();
+        const fallbackBtn = screen.getByTestId("btn-use-verified-fallback");
+        expect(fallbackBtn).toBeInTheDocument();
+        expect(fallbackBtn).toBeDisabled();
+        expect(screen.getByText(/No verified fallback URL registered/i)).toBeInTheDocument();
+    });
 });
 
 

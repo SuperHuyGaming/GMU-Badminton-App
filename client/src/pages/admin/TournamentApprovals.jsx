@@ -1298,31 +1298,36 @@ export default function TournamentApprovals() {
                                             data-testid="expired-link-alert"
                                             sx={{ mb: 2, borderRadius: 2 }}
                                             action={
-                                                selectedProposal.fallbackRegistrationUrl ? (
-                                                    <Button
-                                                        color="inherit"
-                                                        size="small"
-                                                        variant="outlined"
-                                                        data-testid="btn-use-verified-fallback"
-                                                        onClick={() =>
+                                                <Button
+                                                    color="inherit"
+                                                    size="small"
+                                                    variant="outlined"
+                                                    data-testid="btn-use-verified-fallback"
+                                                    disabled={!selectedProposal.fallbackRegistrationUrl}
+                                                    onClick={() => {
+                                                        if (selectedProposal.fallbackRegistrationUrl) {
                                                             setEditForm((prev) => ({
                                                                 ...prev,
                                                                 registrationLink: selectedProposal.fallbackRegistrationUrl,
-                                                            }))
+                                                            }));
                                                         }
-                                                        sx={{ fontWeight: "bold", textTransform: "none", whiteSpace: "nowrap" }}
-                                                    >
-                                                        Use Verified Fallback
-                                                    </Button>
-                                                ) : null
+                                                    }}
+                                                    sx={{ fontWeight: "bold", textTransform: "none", whiteSpace: "nowrap" }}
+                                                >
+                                                    Use Verified Fallback
+                                                </Button>
                                             }
                                         >
                                             <Typography variant="body2" fontWeight="bold">
                                                 Warning: Registration link is expired or broken{selectedProposal.linkStatusCode ? ` (HTTP ${selectedProposal.linkStatusCode})` : ""}.
                                             </Typography>
-                                            {selectedProposal.fallbackRegistrationUrl && (
+                                            {selectedProposal.fallbackRegistrationUrl ? (
                                                 <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
                                                     Verified fallback: {selectedProposal.fallbackRegistrationUrl}
+                                                </Typography>
+                                            ) : (
+                                                <Typography variant="caption" display="block" sx={{ mt: 0.5, fontStyle: "italic" }}>
+                                                    No verified fallback URL registered for this proposal.
                                                 </Typography>
                                             )}
                                         </Alert>
