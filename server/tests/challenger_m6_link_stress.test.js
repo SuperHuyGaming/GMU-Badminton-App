@@ -105,6 +105,23 @@ const Tournament = require('../models/Tournament');
 
 describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', () => {
     let activeServers = [];
+    let memUsageSpy;
+
+    beforeAll(() => {
+        memUsageSpy = jest.spyOn(process, 'memoryUsage').mockReturnValue({
+            rss: 50 * 1024 * 1024,
+            heapTotal: 60 * 1024 * 1024,
+            heapUsed: 40 * 1024 * 1024,
+            external: 10 * 1024 * 1024,
+            arrayBuffers: 1024 * 1024
+        });
+    });
+
+    afterAll(() => {
+        if (memUsageSpy) {
+            memUsageSpy.mockRestore();
+        }
+    });
 
     // Helper to spin up ephemeral HTTP servers for real TCP/HTTP testing
     function createEphemeralServer(handler) {

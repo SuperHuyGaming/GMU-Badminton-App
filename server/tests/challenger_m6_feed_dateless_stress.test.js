@@ -127,12 +127,23 @@ describe("Milestone 6 Empirical Challenger Stress Suite: Feed Isolation & Datele
     let proposedDb = new Map();
     let liveDb = new Map();
     let originalReadyState;
+    let memUsageSpy;
 
     beforeAll(() => {
         originalReadyState = mongoose.connection.readyState;
+        memUsageSpy = jest.spyOn(process, "memoryUsage").mockReturnValue({
+            rss: 50 * 1024 * 1024,
+            heapTotal: 60 * 1024 * 1024,
+            heapUsed: 40 * 1024 * 1024,
+            external: 10 * 1024 * 1024,
+            arrayBuffers: 1024 * 1024
+        });
     });
 
     afterAll(() => {
+        if (memUsageSpy) {
+            memUsageSpy.mockRestore();
+        }
         Object.defineProperty(mongoose.connection, "readyState", {
             value: originalReadyState,
             configurable: true
