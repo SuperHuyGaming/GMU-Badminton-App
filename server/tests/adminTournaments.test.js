@@ -249,7 +249,10 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                 skillLevels: ["Open", "A", "B"],
                 rawCaption: "Annual GMU Fall Open Championship!",
                 confidenceScore: 88,
-                status: "pending"
+                status: "pending",
+                linkStatus: "expired",
+                linkStatusCode: 404,
+                fallbackRegistrationUrl: "https://novabadmintonacademy.com/"
             });
             proposalDoc.save = jest.fn().mockResolvedValue(proposalDoc);
 
@@ -271,6 +274,9 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
             expect(res.body.tournament.registrationUrl).toBe("https://tournamentsoftware.com/gmu2026");
             expect(res.body.tournament.flyerImageUrl).toBe("https://cdn.example.com/flyer1.png");
             expect(res.body.tournament.rsvpCount).toBe(0);
+            expect(res.body.tournament.linkStatus).toBe("expired");
+            expect(res.body.tournament.linkStatusCode).toBe(404);
+            expect(res.body.tournament.fallbackRegistrationUrl).toBe("https://novabadmintonacademy.com/");
 
             // Proposal State Transition Verification
             expect(proposalDoc.status).toBe("approved");

@@ -93,6 +93,51 @@ describe("Public Tournaments API & RSVP System", () => {
             }));
         });
 
+        it("supports multi-skill filtering with skills parameter", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?skills=Beginner,Advanced");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                skillLevels: { $in: ["Beginner", "Advanced"] }
+            }));
+        });
+
+        it("supports compound text search with badminton synonym expansion for GMU", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?search=GMU");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                $text: { $search: expect.stringMatching(/GMU.*George Mason|George Mason/i) }
+            }));
+        });
+
+        it("falls back to regex search for short prefix matching (< 3 characters)", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?search=GM");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ tournamentName: { $regex: "GM", $options: "i" } }),
+                    expect.objectContaining({ hostUniversity: { $regex: "GM", $options: "i" } })
+                ])
+            }));
+        });
+
         it("serves cached tournaments from Redis when available", async () => {
             const redis = require("../utils/redis");
             const cachedList = [{ _id: "cached_1", tournamentName: "Cached Tourney" }];

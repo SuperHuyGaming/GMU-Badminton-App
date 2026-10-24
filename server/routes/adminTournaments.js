@@ -115,7 +115,10 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
                         divisions: dedupLive.mergedData.divisions,
                         registrationUrl: dedupLive.mergedData.registrationUrl,
                         sourceLinks: dedupLive.mergedData.sourceLinks,
-                        isOpenTournament: true
+                        isOpenTournament: true,
+                        linkStatus: proposed.linkStatus || "unchecked",
+                        linkStatusCode: proposed.linkStatusCode,
+                        fallbackRegistrationUrl: proposed.fallbackRegistrationUrl || ""
                     }
                 },
                 { new: true }
@@ -135,6 +138,9 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
                 skillLevels: proposed.skillLevels || [],
                 originalCaption: proposed.rawCaption || "",
                 isOpenTournament: true,
+                linkStatus: proposed.linkStatus || "unchecked",
+                linkStatusCode: proposed.linkStatusCode,
+                fallbackRegistrationUrl: proposed.fallbackRegistrationUrl || "",
                 rsvpCount: 0,
                 hasSentDeadlineWarning: false,
                 createdAt: new Date()

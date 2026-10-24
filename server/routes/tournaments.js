@@ -44,9 +44,61 @@ const TOURNAMENT_DIRECTORY_PROJECTION = [
     'divisions.bracketType'
 ].join(' ');
 
+const BADMINTON_SYNONYMS = {
+    GMU: "George Mason",
+    UMD: "University of Maryland",
+    NVBC: "Northern Virginia Badminton Club",
+    CBA: "Capital Badminton",
+    JHU: "Johns Hopkins",
+    VT: "Virginia Tech",
+    UVA: "University of Virginia"
+};
+
+const REVERSE_SYNONYMS = {
+    "GEORGE MASON": "GMU",
+    "UNIVERSITY OF MARYLAND": "UMD",
+    "NORTHERN VIRGINIA BADMINTON CLUB": "NVBC",
+    "CAPITAL BADMINTON": "CBA",
+    "JOHNS HOPKINS": "JHU",
+    "VIRGINIA TECH": "VT",
+    "UNIVERSITY OF VIRGINIA": "UVA"
+};
+
+function expandBadmintonSearch(term) {
+    if (!term || typeof term !== 'string') return [];
+    const clean = term.trim();
+    const upper = clean.toUpperCase();
+    const expansions = [clean];
+
+    if (BADMINTON_SYNONYMS[upper]) {
+        expansions.push(BADMINTON_SYNONYMS[upper]);
+    }
+    if (REVERSE_SYNONYMS[upper]) {
+        expansions.push(REVERSE_SYNONYMS[upper]);
+    }
+
+    const words = clean.split(/\s+/);
+    if (words.length > 1) {
+        let expanded = false;
+        const expandedWords = words.map(w => {
+            const u = w.toUpperCase();
+            if (BADMINTON_SYNONYMS[u]) {
+                expanded = true;
+                return BADMINTON_SYNONYMS[u];
+            }
+            return w;
+        });
+        if (expanded) {
+            expansions.push(expandedWords.join(' '));
+        }
+    }
+
+    return Array.from(new Set(expansions));
+}
+
 router.get('/', async (req, res) => {
     try {
-        const { month, location, skillLevel, upcoming, weekend, search, status, includeArchived } = req.query;
+        const { month, location, skillLevel, skills, upcoming, weekend, search, status, includeArchived } = req.query;
         let query = {};
 
         // Strict Temporal Horizon & Archiving Invariant:
@@ -107,8 +159,17 @@ router.get('/', async (req, res) => {
             query.eventLocation = { $regex: location, $options: 'i' };
         }
 
-        if (skillLevel) {
-            query.skillLevels = skillLevel;
+        // Multi-skill filtering
+        const skillParam = skills || skillLevel;
+        if (skillParam) {
+            const skillList = (Array.isArray(skillParam) ? skillParam : String(skillParam).split(','))
+                .map(s => s.trim())
+                .filter(Boolean);
+            if (skillList.length === 1) {
+                query.skillLevels = skillList[0];
+            } else if (skillList.length > 1) {
+                query.skillLevels = { $in: skillList };
+            }
         }
 
         if (upcoming === 'true') {
@@ -132,19 +193,31 @@ router.get('/', async (req, res) => {
             query.startDate = { $gte: saturday, $lte: sunday };
         }
 
-        if (search) {
-            const searchRegex = { $regex: search, $options: 'i' };
-            const searchCondition = [
-                { tournamentName: searchRegex },
-                { eventLocation: searchRegex },
-                { hostUniversity: searchRegex },
-                { hostClubHandle: searchRegex }
-            ];
-            if (query.$or) {
-                query.$and = [{ $or: query.$or }, { $or: searchCondition }];
-                delete query.$or;
+        if (search && typeof search === 'string' && search.trim()) {
+            const trimmedSearch = search.trim();
+            const expansions = expandBadmintonSearch(trimmedSearch);
+
+            // Short prefix matching (< 3 characters) directly uses regex fallback
+            if (trimmedSearch.length < 3) {
+                const searchRegex = { $regex: trimmedSearch, $options: 'i' };
+                const searchCondition = [
+                    { tournamentName: searchRegex },
+                    { eventLocation: searchRegex },
+                    { hostUniversity: searchRegex },
+                    { hostClubHandle: searchRegex },
+                    { 'divisions.name': searchRegex },
+                    { 'divisions.code': searchRegex },
+                    { skillLevels: searchRegex }
+                ];
+                if (query.$or) {
+                    query.$and = [{ $or: query.$or }, { $or: searchCondition }];
+                    delete query.$or;
+                } else {
+                    query.$or = searchCondition;
+                }
             } else {
-                query.$or = searchCondition;
+                // Compound text search with synonym expansion
+                query.$text = { $search: expansions.join(' ') };
             }
         }
 
@@ -158,17 +231,92 @@ router.get('/', async (req, res) => {
             console.warn("Redis read error:", cacheErr.message);
         }
 
-        let queryBuilder = Tournament.find(query);
-        if (typeof queryBuilder.select === 'function') {
-            queryBuilder = queryBuilder.select(TOURNAMENT_DIRECTORY_PROJECTION);
+        let tournaments = [];
+        try {
+            let queryBuilder = Tournament.find(query);
+            if (typeof queryBuilder.select === 'function') {
+                queryBuilder = queryBuilder.select(TOURNAMENT_DIRECTORY_PROJECTION);
+            }
+            if (typeof queryBuilder.populate === 'function') {
+                queryBuilder = queryBuilder.populate("attendees", "name avatarUrl _id");
+            }
+            if (typeof queryBuilder.sort === 'function') {
+                queryBuilder = queryBuilder.sort({ startDate: 1 });
+            }
+            tournaments = await queryBuilder;
+        } catch (queryErr) {
+            // Fallback: If $text query failed (e.g. text index missing in mock or test environment),
+            // fallback to regex query across all fields with synonym expansion
+            if (query.$text) {
+                const fallbackQuery = { ...query };
+                delete fallbackQuery.$text;
+                const trimmedSearch = search.trim();
+                const expansions = expandBadmintonSearch(trimmedSearch);
+                const searchCondition = expansions.flatMap(term => {
+                    const r = { $regex: term, $options: 'i' };
+                    return [
+                        { tournamentName: r },
+                        { eventLocation: r },
+                        { hostUniversity: r },
+                        { hostClubHandle: r },
+                        { 'divisions.name': r },
+                        { 'divisions.code': r },
+                        { skillLevels: r }
+                    ];
+                });
+                if (fallbackQuery.$or) {
+                    fallbackQuery.$and = [{ $or: fallbackQuery.$or }, { $or: searchCondition }];
+                    delete fallbackQuery.$or;
+                } else {
+                    fallbackQuery.$or = searchCondition;
+                }
+                let fallbackBuilder = Tournament.find(fallbackQuery);
+                if (typeof fallbackBuilder.select === 'function') fallbackBuilder = fallbackBuilder.select(TOURNAMENT_DIRECTORY_PROJECTION);
+                if (typeof fallbackBuilder.populate === 'function') fallbackBuilder = fallbackBuilder.populate("attendees", "name avatarUrl _id");
+                if (typeof fallbackBuilder.sort === 'function') fallbackBuilder = fallbackBuilder.sort({ startDate: 1 });
+                tournaments = await fallbackBuilder;
+            } else {
+                throw queryErr;
+            }
         }
-        if (typeof queryBuilder.populate === 'function') {
-            queryBuilder = queryBuilder.populate("attendees", "name avatarUrl _id");
+
+        // Prefix fallback: If $text returned 0 results, check if prefix matching matches
+        if (query.$text && Array.isArray(tournaments) && tournaments.length === 0 && search && search.trim()) {
+            try {
+                const fallbackQuery = { ...query };
+                delete fallbackQuery.$text;
+                const trimmedSearch = search.trim();
+                const expansions = expandBadmintonSearch(trimmedSearch);
+                const searchCondition = expansions.flatMap(term => {
+                    const r = { $regex: term, $options: 'i' };
+                    return [
+                        { tournamentName: r },
+                        { eventLocation: r },
+                        { hostUniversity: r },
+                        { hostClubHandle: r },
+                        { 'divisions.name': r },
+                        { 'divisions.code': r },
+                        { skillLevels: r }
+                    ];
+                });
+                if (fallbackQuery.$or) {
+                    fallbackQuery.$and = [{ $or: fallbackQuery.$or }, { $or: searchCondition }];
+                    delete fallbackQuery.$or;
+                } else {
+                    fallbackQuery.$or = searchCondition;
+                }
+                let fallbackBuilder = Tournament.find(fallbackQuery);
+                if (typeof fallbackBuilder.select === 'function') fallbackBuilder = fallbackBuilder.select(TOURNAMENT_DIRECTORY_PROJECTION);
+                if (typeof fallbackBuilder.populate === 'function') fallbackBuilder = fallbackBuilder.populate("attendees", "name avatarUrl _id");
+                if (typeof fallbackBuilder.sort === 'function') fallbackBuilder = fallbackBuilder.sort({ startDate: 1 });
+                const fallbackTournaments = await fallbackBuilder;
+                if (fallbackTournaments && fallbackTournaments.length > 0) {
+                    tournaments = fallbackTournaments;
+                }
+            } catch {
+                // Non-blocking fallback
+            }
         }
-        if (typeof queryBuilder.sort === 'function') {
-            queryBuilder = queryBuilder.sort({ startDate: 1 });
-        }
-        let tournaments = await queryBuilder;
 
         // Strict Human-Admin Gate: If no tournaments are found, return empty list.
         // Never auto-populate or serve unapproved hardcoded tournaments.

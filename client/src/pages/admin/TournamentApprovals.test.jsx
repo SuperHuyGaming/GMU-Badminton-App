@@ -527,5 +527,49 @@ describe("TournamentApprovals Admin Page Component", () => {
             );
         });
     });
+
+    it("11. Renders warning alert and Use Verified Fallback button when proposal has expired linkStatus", async () => {
+        const expiredProposal = {
+            ...mockProposals[0],
+            _id: "prop-expired-1",
+            tournamentName: "NVBC Fall Smash 2026",
+            linkStatus: "expired",
+            linkStatusCode: 404,
+            registrationLink: "https://novabadmintonacademy.com/events/smash-open-2026",
+            fallbackRegistrationUrl: "https://novabadmintonacademy.com/",
+        };
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => [expiredProposal],
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("NVBC Fall Smash 2026")).toBeInTheDocument();
+        });
+
+        // Open review modal
+        const reviewBtn = screen.getByRole("button", { name: /Review/i });
+        fireEvent.click(reviewBtn);
+
+        // Warning alert should be rendered
+        expect(screen.getByTestId("expired-link-alert")).toBeInTheDocument();
+        expect(screen.getByText(/Registration link is expired or broken/i)).toBeInTheDocument();
+
+        // Check registration link initially has the broken URL
+        const regLinkInput = screen.getByLabelText(/Registration Link \/ URL/i);
+        expect(regLinkInput).toHaveValue("https://novabadmintonacademy.com/events/smash-open-2026");
+
+        // Click "Use Verified Fallback" button
+        const fallbackBtn = screen.getByTestId("btn-use-verified-fallback");
+        expect(fallbackBtn).toBeInTheDocument();
+        fireEvent.click(fallbackBtn);
+
+        // Input field should now have the fallback URL
+        expect(regLinkInput).toHaveValue("https://novabadmintonacademy.com/");
+    });
 });
+
 

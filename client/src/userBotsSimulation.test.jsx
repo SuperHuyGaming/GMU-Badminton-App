@@ -147,12 +147,10 @@ describe('🤖 5-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
                 </MemoryRouter>
             );
 
-            // Check page title and primary navigation
+            // Check page title and primary navigation (dedicated directory search)
             expect(screen.getByText(/Discover DMV Tournaments/i)).toBeInTheDocument();
-            expect(screen.getByTestId('tab-tournaments-directory')).toBeInTheDocument();
-            expect(screen.getByTestId('tab-bracket-viewer')).toBeInTheDocument();
-            expect(screen.getByTestId('tab-court-schedule')).toBeInTheDocument();
-            expect(screen.getByTestId('tab-umpire-pad')).toBeInTheDocument();
+            expect(screen.getByPlaceholderText(/Search tournaments/i)).toBeInTheDocument();
+            expect(screen.queryByTestId('tab-tournaments-directory')).not.toBeInTheDocument();
 
             // Await tournament data resolution
             await waitFor(() => {

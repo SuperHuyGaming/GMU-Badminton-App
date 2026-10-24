@@ -47,6 +47,7 @@ const mockTournaments = [
         endDate: '2027-10-16T00:00:00.000Z',
         entryFee: '$30',
         skillLevels: ['Intermediate', 'Advanced'],
+        divisions: [{ name: 'Men Singles Open', code: 'MSO' }],
         registrationUrl: 'https://masonbadminton.com/register',
         flyerImageUrl: 'https://example.com/flyer1.png',
         rsvpCount: 2,
@@ -65,6 +66,7 @@ const mockTournaments = [
         endDate: '2027-11-06T00:00:00.000Z',
         entryFee: '$25',
         skillLevels: ['Beginner', 'Open'],
+        divisions: [{ name: 'Mixed Doubles C', code: 'XDC' }],
         registrationUrl: 'https://capitalbadminton.com/tourney',
         flyerImageUrl: '',
         rsvpCount: 0,
@@ -194,36 +196,96 @@ describe('Public Tournaments Page Component', () => {
         });
     });
 
-    it('switches between Tournaments Directory, Interactive Bracket, Court Schedule, and Umpire Pad tabs', async () => {
+    it('renders as a dedicated tournament directory without top navigation tabs or subordinate components', async () => {
         render(
             <MemoryRouter initialEntries={['/tournaments']}>
                 <Tournaments />
             </MemoryRouter>
         );
 
-        expect(screen.getByTestId('tab-tournaments-directory')).toBeInTheDocument();
-        expect(screen.getByTestId('tab-bracket-viewer')).toBeInTheDocument();
-        expect(screen.getByTestId('tab-court-schedule')).toBeInTheDocument();
-        expect(screen.getByTestId('tab-umpire-pad')).toBeInTheDocument();
+        // Top navigation tabs should not exist
+        expect(screen.queryByTestId('tab-tournaments-directory')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('tab-bracket-viewer')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('tab-court-schedule')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('tab-umpire-pad')).not.toBeInTheDocument();
 
-        // Switch to Interactive Bracket Viewer
-        fireEvent.click(screen.getByTestId('tab-bracket-viewer'));
-        expect(screen.getByTestId('tournament-bracket-engine')).toBeInTheDocument();
+        // Subordinate tool components should not exist
+        expect(screen.queryByTestId('tournament-bracket-engine')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('court-queue-viewer')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('umpire-digital-pad')).not.toBeInTheDocument();
 
-        // Switch to RAC Court Schedule
-        fireEvent.click(screen.getByTestId('tab-court-schedule'));
-        expect(screen.getByTestId('court-queue-viewer')).toBeInTheDocument();
-        expect(screen.getByText(/RAC Gymnasium Courts 1–6 Scheduling Hub/i)).toBeInTheDocument();
-
-        // Switch to Umpire Digital Pad
-        fireEvent.click(screen.getByTestId('tab-umpire-pad'));
-        expect(screen.getByTestId('umpire-digital-pad')).toBeInTheDocument();
-        expect(screen.getByText(/Official Touch Umpire Pad/i)).toBeInTheDocument();
-
-        // Switch back to Directory
-        fireEvent.click(screen.getByTestId('tab-tournaments-directory'));
+        // Dedicated search bar and directory should exist
+        expect(screen.getByPlaceholderText(/Search tournaments/i)).toBeInTheDocument();
         await waitFor(() => {
             expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+    });
+
+    it('performs instant in-memory search across tournamentName, hostUniversity, eventLocation, divisions, and skillLevels without skeleton flash', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+            expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+        });
+
+        const searchInput = screen.getByPlaceholderText(/Search tournaments/i);
+
+        // Filter by location (Columbia)
+        fireEvent.change(searchInput, { target: { value: 'Columbia' } });
+        expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Mason Open Championships 2027')).not.toBeInTheDocument();
+
+        // Filter by division (MSO)
+        fireEvent.change(searchInput, { target: { value: 'MSO' } });
+        expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Capital Fall Invitational 2027')).not.toBeInTheDocument();
+
+        // Filter by skill level (Beginner)
+        fireEvent.change(searchInput, { target: { value: 'Beginner' } });
+        expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Mason Open Championships 2027')).not.toBeInTheDocument();
+
+        // Filter by host university (George Mason)
+        fireEvent.change(searchInput, { target: { value: 'George Mason' } });
+        expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Capital Fall Invitational 2027')).not.toBeInTheDocument();
+
+        // Empty search restores all
+        fireEvent.change(searchInput, { target: { value: '' } });
+        expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+    });
+
+    it('handles multi-skill filter chips and includes skills query param in API requests', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Click Intermediate skill chip
+        const intermediateChip = screen.getByRole('button', { name: 'Intermediate' });
+        fireEvent.click(intermediateChip);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringMatching(/skills=Intermediate/));
+        });
+
+        // Click Advanced skill chip to multi-select
+        const advancedChip = screen.getByRole('button', { name: 'Advanced' });
+        fireEvent.click(advancedChip);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringMatching(/skills=Intermediate%2CAdvanced|skills=Intermediate,Advanced/));
         });
     });
 

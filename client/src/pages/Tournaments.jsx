@@ -5,7 +5,7 @@ import {
     ToggleButton, ToggleButtonGroup,
     Drawer, Avatar, AvatarGroup, IconButton, FormGroup, FormControlLabel, Checkbox, 
     Divider, Chip, Tooltip, TextField, InputAdornment, Skeleton, Stack, Badge, Paper,
-    Switch, Tabs, Tab, CircularProgress
+    Switch, CircularProgress
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -21,9 +21,6 @@ import ClearIcon from '@mui/icons-material/Clear';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LaunchIcon from '@mui/icons-material/Launch';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import SportsTennisIcon from '@mui/icons-material/SportsTennis';
-import SportsScoreIcon from '@mui/icons-material/SportsScore';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useSearchParams } from 'react-router-dom';
@@ -32,9 +29,6 @@ import { VirtuosoGrid } from 'react-virtuoso';
 
 import EmptyTournaments from '../components/EmptyTournaments';
 import MapPinIcon from '../components/MapPinIcon';
-import TournamentBracket from '../components/TournamentBracket';
-import CourtQueueViewer from '../components/CourtQueueViewer';
-import UmpireDigitalPad from '../components/UmpireDigitalPad';
 import LazyFlyerImage from '../components/LazyFlyerImage';
 import apiFetch from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -95,11 +89,11 @@ export default function Tournaments() {
 
     // View state
     const [viewMode, setViewMode] = useState(searchParams.get('view') || 'list'); // 'list' | 'calendar'
-    const activeTab = searchParams.get('tab') || 'directory';
     const [selectedTournament, setSelectedTournament] = useState(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
 
-    // Filter states from URL params
+    // Filter states from URL params and instant search input
+    const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || '');
     const searchQuery = searchParams.get('q') || '';
     const filterUpcoming = searchParams.get('upcoming') !== 'false'; // default true
     const filterWeekend = searchParams.get('weekend') === 'true';
@@ -112,6 +106,41 @@ export default function Tournaments() {
     const [calendarDate, setCalendarDate] = useState(() => new Date());
     const [calendarSelectedDate, setCalendarSelectedDate] = useState(null);
 
+    // Update URL helper
+    const updateFilters = useCallback((updates) => {
+        const newParams = new URLSearchParams(searchParams);
+        Object.entries(updates).forEach(([key, val]) => {
+            if (val === null || val === undefined || val === '' || val === false) {
+                newParams.delete(key);
+            } else if (Array.isArray(val)) {
+                if (val.length === 0) newParams.delete(key);
+                else newParams.set(key, val.join(','));
+            } else {
+                newParams.set(key, String(val));
+            }
+        });
+        setSearchParams(newParams, { replace: true });
+    }, [searchParams, setSearchParams]);
+
+    // Debounce server query and URL updates by 250ms on searchInput change
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const currentQ = searchParams.get('q') || '';
+            if (searchInput !== currentQ) {
+                updateFilters({ q: searchInput });
+            }
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [searchInput, searchParams, updateFilters]);
+
+    // Sync input if searchParams change externally (e.g. back/forward navigation or reset)
+    useEffect(() => {
+        const currentQ = searchParams.get('q') || '';
+        if (currentQ !== searchInput) {
+            setSearchInput(currentQ);
+        }
+    }, [searchParams]);
+
     // Fetch tournaments from Express API
     const fetchTournaments = useCallback(async () => {
         setLoading(true);
@@ -121,7 +150,7 @@ export default function Tournaments() {
             if (searchQuery) queryParts.push(`search=${encodeURIComponent(searchQuery)}`);
             if (filterUpcoming) queryParts.push('upcoming=true');
             if (filterWeekend) queryParts.push('weekend=true');
-            if (selectedSkills.length > 0) queryParts.push(`skillLevel=${encodeURIComponent(selectedSkills[0])}`);
+            if (selectedSkills.length > 0) queryParts.push(`skills=${encodeURIComponent(selectedSkills.join(','))}`);
 
             const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
             const res = await apiFetch(`/api/tournaments${queryString}`);
@@ -153,25 +182,43 @@ export default function Tournaments() {
         fetchTournaments();
     }, [fetchTournaments]);
 
-    // Update URL helper
-    const updateFilters = (updates) => {
-        const newParams = new URLSearchParams(searchParams);
-        Object.entries(updates).forEach(([key, val]) => {
-            if (val === null || val === undefined || val === '' || val === false) {
-                newParams.delete(key);
-            } else if (Array.isArray(val)) {
-                if (val.length === 0) newParams.delete(key);
-                else newParams.set(key, val.join(','));
-            } else {
-                newParams.set(key, String(val));
-            }
-        });
-        setSearchParams(newParams, { replace: true });
-    };
-
     const handleClearFilters = () => {
+        setSearchInput('');
         setSearchParams(new URLSearchParams({ upcoming: 'true' }), { replace: true });
     };
+
+    // Instant in-memory client-side filtering on keystrokes across tournamentName, hostUniversity, eventLocation, divisions, and skillLevels (< 5ms)
+    const matchesSearch = useCallback((t, term) => {
+        if (!term) return true;
+        const lower = term.toLowerCase();
+        if (t.tournamentName && t.tournamentName.toLowerCase().includes(lower)) return true;
+        if (t.hostUniversity && t.hostUniversity.toLowerCase().includes(lower)) return true;
+        if (t.hostClubHandle && t.hostClubHandle.toLowerCase().includes(lower)) return true;
+        if (t.eventLocation && t.eventLocation.toLowerCase().includes(lower)) return true;
+        if (Array.isArray(t.divisions)) {
+            for (const d of t.divisions) {
+                if (typeof d === 'string' && d.toLowerCase().includes(lower)) return true;
+                if (d && typeof d === 'object') {
+                    if (d.name && d.name.toLowerCase().includes(lower)) return true;
+                    if (d.code && d.code.toLowerCase().includes(lower)) return true;
+                    if (d.category && d.category.toLowerCase().includes(lower)) return true;
+                }
+            }
+        }
+        if (Array.isArray(t.skillLevels)) {
+            for (const s of t.skillLevels) {
+                if (typeof s === 'string' && s.toLowerCase().includes(lower)) return true;
+            }
+        }
+        return false;
+    }, []);
+
+    const filteredTournaments = useMemo(() => {
+        const query = searchInput.trim();
+        if (!query) return tournaments;
+        const tokens = query.split(/\s+/).filter(Boolean);
+        return tournaments.filter(t => tokens.every(token => matchesSearch(t, token)));
+    }, [tournaments, searchInput, matchesSearch]);
 
     // RSVP Toggle handler
     const handleToggleRsvp = async (e, tournament) => {
@@ -341,7 +388,7 @@ END:VCALENDAR`;
 
     // Active filters count
 
-    const activeFilterCount = (searchQuery ? 1 : 0) + 
+    const activeFilterCount = (searchInput ? 1 : 0) + 
                              (filterWeekend ? 1 : 0) + 
                              (!filterUpcoming ? 1 : 0) + 
                              selectedSkills.length;
@@ -375,7 +422,7 @@ END:VCALENDAR`;
     // Group tournaments by date string (YYYY-MM-DD)
     const tournamentsByDate = useMemo(() => {
         const map = {};
-        tournaments.forEach(t => {
+        filteredTournaments.forEach(t => {
             if (!t.startDate) return;
             const d = new Date(t.startDate);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -383,7 +430,7 @@ END:VCALENDAR`;
             map[key].push(t);
         });
         return map;
-    }, [tournaments]);
+    }, [filteredTournaments]);
 
     // Tournaments for the selected calendar date
     const calendarSelectedTournaments = useMemo(() => {
@@ -415,34 +462,6 @@ END:VCALENDAR`;
                 </Typography>
             </Box>
 
-            {/* Top Navigation Tabs */}
-            <Paper 
-                elevation={1} 
-                sx={{ 
-                    mb: 3, 
-                    borderRadius: 3, 
-                    bgcolor: 'background.paper',
-                    overflow: 'hidden'
-                }}
-            >
-                <Tabs
-                    value={activeTab}
-                    onChange={(_, val) => updateFilters({ tab: val === 'directory' ? null : val })}
-                    indicatorColor="primary"
-                    textColor="primary"
-                    variant="scrollable"
-                    scrollButtons="auto"
-                    aria-label="Tournament navigation tabs"
-                >
-                    <Tab icon={<EventIcon />} iconPosition="start" label="Tournaments Directory" value="directory" data-testid="tab-tournaments-directory" />
-                    <Tab icon={<AccountTreeIcon />} iconPosition="start" label="Interactive Bracket Viewer" value="bracket" data-testid="tab-bracket-viewer" />
-                    <Tab icon={<SportsTennisIcon />} iconPosition="start" label="RAC Court Schedule (Courts 1-6)" value="courts" data-testid="tab-court-schedule" />
-                    <Tab icon={<SportsScoreIcon />} iconPosition="start" label="Umpire Digital Pad" value="umpire" data-testid="tab-umpire-pad" />
-                </Tabs>
-            </Paper>
-
-            {activeTab === 'directory' && (
-                <>
             {/* Controls Bar: Search, View Switcher & Filter Toggle */}
             <Paper 
                 elevation={1} 
@@ -462,8 +481,8 @@ END:VCALENDAR`;
                 <TextField 
                     placeholder="Search tournaments, clubs, universities..."
                     size="small"
-                    value={searchQuery}
-                    onChange={(e) => updateFilters({ q: e.target.value })}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     sx={{ flex: { xs: '1 1 100%', sm: '1 1 280px' } }}
                     slotProps={{
                         input: {
@@ -472,9 +491,9 @@ END:VCALENDAR`;
                                     <SearchIcon color="action" />
                                 </InputAdornment>
                             ),
-                            endAdornment: searchQuery ? (
+                            endAdornment: searchInput ? (
                                 <InputAdornment position="end">
-                                    <IconButton size="small" onClick={() => updateFilters({ q: '' })} aria-label="Clear search">
+                                    <IconButton size="small" onClick={() => { setSearchInput(''); updateFilters({ q: '' }); }} aria-label="Clear search">
                                         <ClearIcon fontSize="small" />
                                     </IconButton>
                                 </InputAdornment>
@@ -591,7 +610,7 @@ END:VCALENDAR`;
             </Box>
 
             {/* Loading State Skeletons */}
-            {loading && (
+            {loading && tournaments.length === 0 && (
                 <Grid container spacing={3}>
                     {[1, 2, 3, 4, 5, 6].map((k) => (
                         <Grid size={{ xs: 12, sm: 6, md: 4 }} key={k}>
@@ -623,17 +642,17 @@ END:VCALENDAR`;
             )}
 
             {/* Empty State */}
-            {!loading && !error && tournaments.length === 0 && (
+            {!error && !(loading && tournaments.length === 0) && filteredTournaments.length === 0 && (
                 <EmptyTournaments />
             )}
 
             {/* VIEW MODE 1: LIST / VIRTUALIZED CARD GRID */}
-            {!loading && !error && viewMode === 'list' && tournaments.length > 0 && (
+            {!error && !(loading && tournaments.length === 0) && viewMode === 'list' && filteredTournaments.length > 0 && (
                 <VirtuosoGrid
                     useWindowScroll
-                    data={tournaments}
-                    totalCount={tournaments.length}
-                    initialItemCount={Math.min(tournaments.length, 12)}
+                    data={filteredTournaments}
+                    totalCount={filteredTournaments.length}
+                    initialItemCount={Math.min(filteredTournaments.length, 12)}
                     overscan={300}
                     components={{
                         List: VirtualGridList,
@@ -1010,33 +1029,6 @@ END:VCALENDAR`;
                         </Box>
                     )}
                 </Paper>
-            )}
-                </>
-            )}
-
-            {/* INTERACTIVE BRACKET VIEWER TAB */}
-            {activeTab === 'bracket' && (
-                <Box sx={{ mb: 4 }}>
-                    <TournamentBracket />
-                </Box>
-            )}
-
-            {/* RAC COURT SCHEDULE TAB */}
-            {activeTab === 'courts' && (
-                <Box sx={{ mb: 4 }}>
-                    <CourtQueueViewer 
-                        onSelectMatchForUmpire={(court) => updateFilters({ tab: 'umpire', court: court.courtNumber })} 
-                    />
-                </Box>
-            )}
-
-            {/* UMPIRE DIGITAL PAD TAB */}
-            {activeTab === 'umpire' && (
-                <Box sx={{ mb: 4 }}>
-                    <UmpireDigitalPad 
-                        initialCourtNumber={Number(searchParams.get('court')) || 1} 
-                    />
-                </Box>
             )}
 
             {/* TOURNAMENT DETAIL MODAL */}

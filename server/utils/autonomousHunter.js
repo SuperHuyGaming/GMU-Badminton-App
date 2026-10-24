@@ -508,7 +508,7 @@ const VERIFIED_DMV_SEEDS = [
         snippet: '[2026 Mid-Atlantic Collegiate Team Badminton Championships] Hosted at Capital Badminton Academy in Columbia, MD. Oct 24 - 25, 2026. Register on TournamentSoftware.'
     },
     {
-        url: 'https://novabadmintonacademy.com/events/smash-open-2026',
+        url: 'https://novabadmintonacademy.com/',
         snippet: '[2026 NVBC Open Championship] Northern Virginia Badminton Club, Ashburn, VA. Adult & Junior Open flights. December 2026.'
     }
 ];
@@ -792,8 +792,8 @@ function getGuaranteedTournamentsList() {
             rideFormDeadline: new Date("2026-12-14T23:59:59.000Z"),
             isOpenTournament: true,
             status: "active",
-            registrationUrl: "https://novabadmintonacademy.com/events/smash-open-2026",
-            sourceUrl: "https://novabadmintonacademy.com/events/smash-open-2026",
+            registrationUrl: "https://novabadmintonacademy.com/",
+            sourceUrl: "https://novabadmintonacademy.com/",
             flyerImageUrl: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?q=80&w=1000&auto=format&fit=crop",
             skillLevels: ["Open Flight", "Flight B", "Flight C", "Junior U19"],
             entryFee: "$30/event",

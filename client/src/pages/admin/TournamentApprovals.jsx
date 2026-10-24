@@ -1292,6 +1292,42 @@ export default function TournamentApprovals() {
                                         </Alert>
                                     )}
 
+                                    {selectedProposal.linkStatus === "expired" && (
+                                        <Alert
+                                            severity="warning"
+                                            data-testid="expired-link-alert"
+                                            sx={{ mb: 2, borderRadius: 2 }}
+                                            action={
+                                                selectedProposal.fallbackRegistrationUrl ? (
+                                                    <Button
+                                                        color="inherit"
+                                                        size="small"
+                                                        variant="outlined"
+                                                        data-testid="btn-use-verified-fallback"
+                                                        onClick={() =>
+                                                            setEditForm((prev) => ({
+                                                                ...prev,
+                                                                registrationLink: selectedProposal.fallbackRegistrationUrl,
+                                                            }))
+                                                        }
+                                                        sx={{ fontWeight: "bold", textTransform: "none", whiteSpace: "nowrap" }}
+                                                    >
+                                                        Use Verified Fallback
+                                                    </Button>
+                                                ) : null
+                                            }
+                                        >
+                                            <Typography variant="body2" fontWeight="bold">
+                                                Warning: Registration link is expired or broken{selectedProposal.linkStatusCode ? ` (HTTP ${selectedProposal.linkStatusCode})` : ""}.
+                                            </Typography>
+                                            {selectedProposal.fallbackRegistrationUrl && (
+                                                <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                                                    Verified fallback: {selectedProposal.fallbackRegistrationUrl}
+                                                </Typography>
+                                            )}
+                                        </Alert>
+                                    )}
+
                                     <TextField
                                         label="Tournament Name"
                                         required
