@@ -26,6 +26,7 @@
  *    - Verified heap memory bounds strictly < 200MB
  */
 
+require('dotenv').config();
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -335,8 +336,8 @@ describe("Challenger 2 Empirical Stress Test: Link Crawler & Temporal Horizon", 
             expect(resolveHostClubFallback({})).toBe("https://linktr.ee/gmubadminton");
             expect(resolveHostClubFallback(undefined)).toBe("https://linktr.ee/gmubadminton");
             expect(resolveHostClubFallback()).toBe("https://linktr.ee/gmubadminton");
-            // Adversarial edge case: null argument throws TypeError because default param only catches undefined
-            expect(() => resolveHostClubFallback(null)).toThrow(TypeError);
+            // Verified: with null-guard applied, explicit null safely resolves to GMU Linktree without throwing
+            expect(resolveHostClubFallback(null)).toBe("https://linktr.ee/gmubadminton");
         });
     });
 

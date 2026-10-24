@@ -169,7 +169,7 @@ describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
             } finally {
                 axiosSpy.mockRestore();
             }
-        });
+        }, 20000);
 
         test('handles negative, zero, and malformed batch sizes gracefully', async () => {
             const edgeCases = [

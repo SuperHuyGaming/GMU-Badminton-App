@@ -21,7 +21,8 @@ const HEALTHCHECK_HEADERS = {
  * @returns {string} Fallback URL
  */
 function resolveHostClubFallback(tournament = {}) {
-    const handle = (tournament.hostClubHandle || '').replace('@', '').toLowerCase();
+    const t = tournament || {};
+    const handle = (t.hostClubHandle || '').replace('@', '').toLowerCase();
     if (handle === 'gmu_badminton' || handle === 'gmubadminton') {
         return 'https://linktr.ee/gmubadminton';
     }
@@ -39,17 +40,17 @@ function resolveHostClubFallback(tournament = {}) {
     }
 
     const text = [
-        tournament.hostUniversity || '',
-        tournament.hostClubHandle || '',
-        tournament.eventLocation || '',
-        tournament.tournamentName || '',
-        tournament.sourceUrl || ''
+        t.hostUniversity || '',
+        t.hostClubHandle || '',
+        t.eventLocation || '',
+        t.tournamentName || '',
+        t.sourceUrl || ''
     ].join(' ').toLowerCase();
 
     if (text.includes('george mason') || text.includes('gmu') || text.includes('rac gym') || text.includes('fairfax')) {
         return 'https://linktr.ee/gmubadminton';
     }
-    if (text.includes('capital badminton') || text.includes('columbia, md')) {
+    if (text.includes('capital badminton') || text.includes('columbia') || /\bcba\b/.test(text)) {
         return 'https://www.capitalbadminton.com';
     }
     if (text.includes('northern virginia') || text.includes('nvbc') || text.includes('ashburn')) {
@@ -59,7 +60,7 @@ function resolveHostClubFallback(tournament = {}) {
         return 'https://linktr.ee/umd_badminton';
     }
 
-    return tournament.sourceUrl || 'https://linktr.ee/gmubadminton';
+    return t.sourceUrl || 'https://linktr.ee/gmubadminton';
 }
 
 /**

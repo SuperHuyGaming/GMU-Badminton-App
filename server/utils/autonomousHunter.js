@@ -429,11 +429,16 @@ async function processDiscoveryQueue(batchSize = 5) {
             let fallbackRegistrationUrl = '';
             try {
                 const { verifyLinkHealth, resolveHostClubFallback } = require('./linkHealthChecker');
-                const check = await verifyLinkHealth(item.sourceUrl, 3000);
+                const targetUrl = extracted.registrationLink || extracted.registrationUrl || item.sourceUrl;
+                const check = await verifyLinkHealth(targetUrl, 3000);
                 linkStatus = check.linkStatus;
                 linkStatusCode = check.statusCode;
                 if (linkStatus === 'expired') {
-                    fallbackRegistrationUrl = resolveHostClubFallback({ sourceUrl: item.sourceUrl, hostLocation: extracted.hostLocation });
+                    fallbackRegistrationUrl = resolveHostClubFallback({
+                        sourceUrl: targetUrl,
+                        hostLocation: extracted.hostLocation,
+                        tournamentName: extracted.tournamentName
+                    });
                 }
             } catch (_) {}
 
@@ -442,7 +447,7 @@ async function processDiscoveryQueue(batchSize = 5) {
                 location: extracted.hostLocation || "DMV Area",
                 date: proposedDate,
                 registrationDeadline: proposedDeadline,
-                registrationLink: item.sourceUrl,
+                registrationLink: extracted.registrationLink || extracted.registrationUrl || item.sourceUrl,
                 sourceUrl: item.sourceUrl,
                 rawCaption: rawText.substring(0, 600),
                 sourceLinks: [item.sourceUrl],

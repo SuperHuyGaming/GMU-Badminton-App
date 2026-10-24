@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 
 const proposedTournamentSchema = new mongoose.Schema({
     // Raw Scraped Data
-    rawCaption: { type: String, default: "" },
+    rawCaption: { type: String, default: "" },
+    flyerImageUrl: { type: String, default: "" },
+    sourceType: { type: String, default: "WEB_CRAWLER" },
     scrapedImageUrls: { type: [String], default: [] },
     sourceLinks: { type: [String], default: [] },
 
