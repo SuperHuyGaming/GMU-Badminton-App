@@ -49,7 +49,7 @@ function resolveHostClubFallback(tournament = {}) {
     if (text.includes('george mason') || text.includes('gmu') || text.includes('rac gym') || text.includes('fairfax')) {
         return 'https://linktr.ee/gmubadminton';
     }
-    if (text.includes('capital badminton') || text.includes('columbia, md')) {
+    if (text.includes('capital badminton') || text.includes('columbia') || /\bcba\b/.test(text)) {
         return 'https://www.capitalbadminton.com';
     }
     if (text.includes('northern virginia') || text.includes('nvbc') || text.includes('ashburn')) {

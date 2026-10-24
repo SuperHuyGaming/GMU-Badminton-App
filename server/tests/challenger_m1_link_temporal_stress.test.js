@@ -26,6 +26,7 @@
  *    - Verified heap memory bounds strictly < 200MB
  */
 
+require('dotenv').config();
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
