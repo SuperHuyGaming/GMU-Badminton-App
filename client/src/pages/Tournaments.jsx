@@ -23,6 +23,7 @@ import LaunchIcon from '@mui/icons-material/Launch';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { VirtuosoGrid } from 'react-virtuoso';
@@ -68,6 +69,31 @@ function getSearchVariants(term) {
         variants.push(REVERSE_SYNONYMS[upper].toLowerCase());
     }
     return variants;
+}
+
+function getTournamentStatus(tournament) {
+    if (tournament.status === 'sold_out') {
+        return { label: 'Sold Out', bgcolor: '#d32f2f', color: '#ffffff' };
+    }
+    const now = new Date();
+    if (tournament.registrationDeadline) {
+        const deadline = new Date(tournament.registrationDeadline);
+        if (deadline < now) {
+            return { label: 'Registration Closed', bgcolor: '#616161', color: '#ffffff' };
+        }
+        const diffMs = deadline.getTime() - now.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        if (diffDays <= 3) {
+            return { label: 'Closing Soon', bgcolor: '#ed6c02', color: '#ffffff' };
+        }
+    }
+    if (tournament.startDate && new Date(tournament.startDate) < now) {
+        return { label: 'Completed', bgcolor: '#757575', color: '#ffffff' };
+    }
+    if (tournament.registrationUrl) {
+        return { label: 'Registration Open', bgcolor: '#008744', color: '#ffffff' };
+    }
+    return { label: 'Schedule TBD', bgcolor: '#455a64', color: '#ffffff' };
 }
 
 // Custom Grid components for VirtuosoGrid
@@ -382,12 +408,17 @@ END:VCALENDAR`;
     // Admin: permanently delete a tournament
     const handleAdminDelete = async () => {
         if (!deleteConfirmTournament) return;
+        if (!user || user.role !== 'admin') {
+            toast.error('Only administrators can delete tournaments.');
+            setDeleteConfirmTournament(null);
+            return;
+        }
         const tId = deleteConfirmTournament._id || deleteConfirmTournament.id;
         setDeleteLoading(true);
         try {
-            const res = await apiFetch(`/api/admin/tournaments/${tId}`, { method: 'DELETE' });
+            const res = await apiFetch(`/api/tournaments/${tId}`, { method: 'DELETE' });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Delete failed');
+            if (!res.ok) throw new Error(data.message || data.error || 'Delete failed');
             toast.success(`"${deleteConfirmTournament.tournamentName}" deleted.`);
             setTournaments(prev => prev.filter(t => (t._id || t.id) !== tId));
             if (selectedTournament && (selectedTournament._id || selectedTournament.id) === tId) {
@@ -483,28 +514,134 @@ END:VCALENDAR`;
         return tournamentsByDate[calendarSelectedDate] || [];
     }, [calendarSelectedDate, tournamentsByDate]);
 
+    // Live tournament metrics for the modern hero stats counter
+    const totalAttendees = useMemo(() => {
+        return tournaments.reduce((acc, t) => acc + (t.rsvpCount || (t.attendees?.length || 0)), 0);
+    }, [tournaments]);
+
+    const uniqueHostsCount = useMemo(() => {
+        const hosts = new Set();
+        tournaments.forEach(t => {
+            const host = t.hostUniversity || t.hostClubHandle;
+            if (host) hosts.add(host);
+        });
+        return hosts.size;
+    }, [tournaments]);
+
     return (
         <Box sx={{ maxWidth: 1240, mx: 'auto', p: { xs: 2, sm: 3, md: 4 } }}>
-            {/* Hero Header Banner */}
+            {/* Sleek Modern Hero Banner with Collegiate Badminton Badge & Live Stats Counter */}
             <Box 
                 sx={{ 
                     mb: 4, 
-                    p: { xs: 3, md: 5 }, 
+                    p: { xs: 3, sm: 4, md: 5 }, 
                     borderRadius: 4, 
-                    background: 'linear-gradient(135deg, #006633 0%, #004d26 100%)', 
+                    background: 'radial-gradient(circle at 12% 20%, rgba(255, 204, 51, 0.16) 0%, transparent 45%), radial-gradient(circle at 88% 80%, rgba(0, 168, 89, 0.22) 0%, transparent 50%), linear-gradient(135deg, #005028 0%, #003618 100%)', 
                     color: '#ffffff', 
                     textAlign: 'center',
-                    boxShadow: '0 8px 32px rgba(0, 102, 51, 0.25)',
+                    boxShadow: '0 12px 36px rgba(0, 77, 38, 0.28)',
                     position: 'relative',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255, 255, 255, 0.12)'
                 }}
             >
-                <Typography variant="h3" sx={{ fontWeight: 800, mb: 1.5, fontSize: { xs: '1.9rem', sm: '2.5rem', md: '3rem' } }}>
+                {/* Collegiate Badminton Badge */}
+                <Box 
+                    sx={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: 1, 
+                        px: 2, 
+                        py: 0.65, 
+                        borderRadius: 50, 
+                        bgcolor: 'rgba(255, 255, 255, 0.12)', 
+                        backdropFilter: 'blur(8px)', 
+                        border: '1px solid rgba(255, 255, 255, 0.22)', 
+                        mb: 2 
+                    }}
+                >
+                    <EmojiEventsIcon sx={{ fontSize: 18, color: '#FFCC33' }} />
+                    <Typography variant="caption" sx={{ color: '#FFCC33', fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', fontSize: '0.78rem' }}>
+                        🏸 Mason Collegiate Circuit & DMV Open Hub
+                    </Typography>
+                </Box>
+
+                <Typography variant="h3" sx={{ fontWeight: 900, mb: 1.5, fontSize: { xs: '1.95rem', sm: '2.6rem', md: '3.1rem' }, letterSpacing: '-0.5px' }}>
                     Discover DMV Tournaments
                 </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.9, maxWidth: 720, mx: 'auto', fontWeight: 400, fontSize: { xs: '0.95rem', md: '1.15rem' } }}>
+                <Typography variant="h6" sx={{ opacity: 0.92, maxWidth: 740, mx: 'auto', fontWeight: 400, fontSize: { xs: '0.95rem', md: '1.15rem' }, lineHeight: 1.6, mb: 3.5 }}>
                     Real-time badminton tournaments and open invitational events aggregated from collegiate clubs across DC, Maryland, and Virginia.
                 </Typography>
+
+                {/* Live Tournament Stats Counter */}
+                <Grid container spacing={2} sx={{ maxWidth: 840, mx: 'auto', mt: 1, justifyContent: 'center' }}>
+                    <Grid size={{ xs: 6, sm: 4 }}>
+                        <Paper 
+                            elevation={0} 
+                            sx={{ 
+                                py: 1.5, 
+                                px: 2, 
+                                borderRadius: 3, 
+                                bgcolor: 'rgba(255, 255, 255, 0.08)', 
+                                backdropFilter: 'blur(10px)', 
+                                border: '1px solid rgba(255, 255, 255, 0.16)', 
+                                color: '#ffffff', 
+                                textAlign: 'center' 
+                            }}
+                        >
+                            <Typography variant="h4" sx={{ fontWeight: 900, color: '#FFCC33', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+                                {tournaments.length}
+                            </Typography>
+                            <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
+                                Active Events
+                            </Typography>
+                        </Paper>
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 4 }}>
+                        <Paper 
+                            elevation={0} 
+                            sx={{ 
+                                py: 1.5, 
+                                px: 2, 
+                                borderRadius: 3, 
+                                bgcolor: 'rgba(255, 255, 255, 0.08)', 
+                                backdropFilter: 'blur(10px)', 
+                                border: '1px solid rgba(255, 255, 255, 0.16)', 
+                                color: '#ffffff', 
+                                textAlign: 'center' 
+                            }}
+                        >
+                            <Typography variant="h4" sx={{ fontWeight: 900, color: '#FFCC33', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+                                {totalAttendees}
+                            </Typography>
+                            <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
+                                Players RSVP'd
+                            </Typography>
+                        </Paper>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        <Paper 
+                            elevation={0} 
+                            sx={{ 
+                                py: 1.5, 
+                                px: 2, 
+                                borderRadius: 3, 
+                                bgcolor: 'rgba(255, 255, 255, 0.08)', 
+                                backdropFilter: 'blur(10px)', 
+                                border: '1px solid rgba(255, 255, 255, 0.16)', 
+                                color: '#ffffff', 
+                                textAlign: 'center' 
+                            }}
+                        >
+                            <Typography variant="h4" sx={{ fontWeight: 900, color: '#FFCC33', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+                                {uniqueHostsCount || (tournaments.length > 0 ? 3 : 0)}
+                            </Typography>
+                            <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
+                                Host Clubs & Colleges
+                            </Typography>
+                        </Paper>
+                    </Grid>
+                </Grid>
             </Box>
 
             {/* Controls Bar: Search, View Switcher & Filter Toggle */}
@@ -688,7 +825,7 @@ END:VCALENDAR`;
 
             {/* Empty State */}
             {!error && !(loading && tournaments.length === 0) && filteredTournaments.length === 0 && (
-                <EmptyTournaments />
+                <EmptyTournaments onResetFilters={handleClearFilters} />
             )}
 
             {/* VIEW MODE 1: LIST / VIRTUALIZED CARD GRID */}
@@ -709,6 +846,7 @@ END:VCALENDAR`;
                         const attending = isUserAttending(tournament);
                         const attendeesList = tournament.attendees || [];
                         const isSoldOut = tournament.status === 'sold_out';
+                        const statusInfo = getTournamentStatus(tournament);
 
                         return (
                             <Card 
@@ -717,29 +855,51 @@ END:VCALENDAR`;
                                     height: '100%', 
                                     display: 'flex', 
                                     flexDirection: 'column', 
-                                    borderRadius: 3, 
+                                    borderRadius: 3.5, 
                                     cursor: 'pointer',
-                                    transition: 'transform 0.2s, box-shadow 0.2s',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    overflow: 'hidden',
+                                    transition: 'transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.22s',
                                     '&:hover': {
-                                        transform: 'translateY(-4px)',
-                                        boxShadow: '0 12px 28px rgba(0,0,0,0.12)'
+                                        transform: 'translateY(-5px)',
+                                        boxShadow: '0 16px 32px rgba(0, 102, 51, 0.12)',
+                                        borderColor: 'primary.light'
                                     }
                                 }}
                                 onClick={() => setSelectedTournament(tournament)}
                             >
-                                {/* Decoupled Lazy Flyer Image */}
-                                <LazyFlyerImage
-                                    src={tournament.flyerImageUrl || tournament.bannerUrl}
-                                    alt={`${tournament.tournamentName} flyer`}
-                                    fallbackHost={tournament.hostUniversity || tournament.hostClubHandle || 'DMV Badminton'}
-                                    isSoldOut={isSoldOut}
-                                    height={180}
-                                />
+                                {/* Flyer Container with Status Chips & Elevation */}
+                                <Box sx={{ position: 'relative' }}>
+                                    <LazyFlyerImage
+                                        src={tournament.flyerImageUrl || tournament.bannerUrl}
+                                        alt={`${tournament.tournamentName} flyer`}
+                                        fallbackHost={tournament.hostUniversity || tournament.hostClubHandle || 'DMV Badminton'}
+                                        isSoldOut={isSoldOut}
+                                        height={185}
+                                    />
+                                    {/* Prominent Status Chip on Flyer */}
+                                    <Box sx={{ position: 'absolute', top: 12, left: 12, zIndex: 1, display: 'flex', gap: 1 }}>
+                                        <Chip 
+                                            label={statusInfo.label} 
+                                            size="small" 
+                                            sx={{ 
+                                                fontWeight: 800, 
+                                                fontSize: '0.72rem', 
+                                                letterSpacing: 0.4,
+                                                bgcolor: statusInfo.bgcolor,
+                                                color: statusInfo.color,
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                                                textTransform: 'uppercase'
+                                            }} 
+                                        />
+                                    </Box>
+                                </Box>
 
-                                <CardContent sx={{ flexGrow: 1, pb: 1 }}>
+                                <CardContent sx={{ flexGrow: 1, p: 2.5, pb: 1 }}>
                                     {/* Host Club / University Tag + Admin Delete */}
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: 'primary.main', fontSize: '0.75rem' }}>
                                             {tournament.hostUniversity || tournament.hostClubHandle || 'Collegiate Tournament'}
                                         </Typography>
                                         {user?.role === 'admin' && (
@@ -749,7 +909,11 @@ END:VCALENDAR`;
                                                     color="error"
                                                     onClick={(e) => { e.stopPropagation(); setDeleteConfirmTournament(tournament); }}
                                                     aria-label={`Delete tournament ${tournament.tournamentName}`}
-                                                    sx={{ ml: 1, opacity: 0.7, '&:hover': { opacity: 1 } }}
+                                                    sx={{ 
+                                                        ml: 1, 
+                                                        opacity: 0.85, 
+                                                        '&:hover': { opacity: 1, bgcolor: 'error.main', color: '#fff' } 
+                                                    }}
                                                 >
                                                     <DeleteForeverIcon fontSize="small" />
                                                 </IconButton>
@@ -758,40 +922,42 @@ END:VCALENDAR`;
                                     </Box>
 
                                     {/* Tournament Title */}
-                                    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.3, mt: 0.5 }}>
+                                    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.3, mt: 0.5, fontSize: '1.15rem' }}>
                                         {tournament.tournamentName}
                                     </Typography>
 
-                                    {/* Date and Location */}
-                                    <Stack spacing={0.7} sx={{ my: 1.5 }}>
-                                        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    {/* Prominent Date and Venue Badges */}
+                                    <Stack spacing={0.9} sx={{ my: 1.5 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'action.hover', px: 1.25, py: 0.6, borderRadius: 1.5 }}>
                                             <EventIcon sx={{ fontSize: 18, color: 'primary.main' }} />
-                                            {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString('en-US', {
-                                                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
-                                            }) : 'Date TBD'}
-                                        </Typography>
+                                            <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                                                {tournament.startDate ? new Date(tournament.startDate).toLocaleDateString('en-US', {
+                                                    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                                                }) : 'Date TBD'}
+                                            </Typography>
+                                        </Box>
 
-                                        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'action.hover', px: 1.25, py: 0.6, borderRadius: 1.5 }}>
                                             <MapPinIcon width={16} height={16} />
-                                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
                                                 {tournament.eventLocation || 'Location TBD'}
-                                            </Box>
-                                        </Typography>
+                                            </Typography>
+                                        </Box>
                                     </Stack>
 
-                                    {/* Skill Levels and Fee Chips */}
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                                    {/* Clean Division/Flight Chips and Fee */}
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6, mt: 1 }}>
                                         {tournament.entryFee && (
-                                            <Chip label={`Fee: ${tournament.entryFee}`} size="small" color="default" sx={{ fontWeight: 600 }} />
+                                            <Chip label={`Fee: ${tournament.entryFee}`} size="small" sx={{ fontWeight: 700, bgcolor: 'rgba(0, 102, 51, 0.08)', color: 'primary.dark' }} />
                                         )}
                                         {(tournament.skillLevels || []).slice(0, 3).map((skill, idx) => (
-                                            <Chip key={idx} label={skill} size="small" variant="outlined" color="primary" />
+                                            <Chip key={idx} label={skill} size="small" variant="outlined" color="primary" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />
                                         ))}
                                     </Box>
                                 </CardContent>
 
-                                {/* Action Bar: RSVP Button + Avatars + Register Button */}
-                                <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                {/* Action Bar: RSVP, View Details & Outbound Register Call-To-Action */}
+                                <CardActions sx={{ px: 2.5, pb: 2.5, pt: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                     <Divider sx={{ width: '100%', mb: 0.5 }} />
 
                                     {/* RSVP Section */}
@@ -842,6 +1008,16 @@ END:VCALENDAR`;
                                         </Box>
                                     )}
                                     <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+                                        <Button
+                                            variant="outlined"
+                                            color="inherit"
+                                            size="medium"
+                                            onClick={(e) => { e.stopPropagation(); setSelectedTournament(tournament); }}
+                                            sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', borderColor: 'divider', px: 1.5, whiteSpace: 'nowrap' }}
+                                        >
+                                            View Details
+                                        </Button>
+
                                         {tournament.linkStatus === 'expired' ? (
                                             <Tooltip title="Original registration link is expired. Redirecting to verified host club homepage.">
                                                 <Button 
@@ -1316,7 +1492,7 @@ END:VCALENDAR`;
             {/* Admin Delete Confirmation Dialog */}
 
             <Dialog
-                open={Boolean(deleteConfirmTournament)}
+                open={Boolean(deleteConfirmTournament) && user?.role === 'admin'}
                 onClose={() => !deleteLoading && setDeleteConfirmTournament(null)}
                 maxWidth="xs"
                 fullWidth

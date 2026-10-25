@@ -19,6 +19,11 @@ const userToken = jwt.sign(
     { id: userId, userId: userId, role: "user", name: "Player One" },
     JWT_SECRET
 );
+const adminId = "650000000000000000000002";
+const adminToken = jwt.sign(
+    { id: adminId, userId: adminId, role: "admin", name: "Admin User" },
+    JWT_SECRET
+);
 
 const app = express();
 app.use(express.json());
@@ -251,6 +256,60 @@ describe("Public Tournaments API & RSVP System", () => {
             expect(res.body.isRsvped).toBe(false);
             expect(res.body.rsvpCount).toBe(0);
             expect(mockTournamentDoc.save).toHaveBeenCalled();
+        });
+    });
+
+    describe("DELETE /api/tournaments/:id", () => {
+        it("returns 401 when unauthenticated", async () => {
+            const res = await request(app)
+                .delete("/api/tournaments/650000000000000000000101");
+
+            expect(res.status).toBe(401);
+        });
+
+        it("returns 403 when authenticated as regular user (non-admin)", async () => {
+            const res = await request(app)
+                .delete("/api/tournaments/650000000000000000000101")
+                .set("Authorization", `Bearer ${userToken}`);
+
+            expect(res.status).toBe(403);
+            expect(res.body.message).toMatch(/admin/i);
+        });
+
+        it("returns 400 for invalid tournament ID", async () => {
+            const res = await request(app)
+                .delete("/api/tournaments/invalid-id-format")
+                .set("Authorization", `Bearer ${adminToken}`);
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toMatch(/invalid tournament id/i);
+        });
+
+        it("returns 404 when tournament does not exist", async () => {
+            jest.spyOn(Tournament, "findByIdAndDelete").mockResolvedValue(null);
+
+            const res = await request(app)
+                .delete("/api/tournaments/650000000000000000000999")
+                .set("Authorization", `Bearer ${adminToken}`);
+
+            expect(res.status).toBe(404);
+            expect(res.body.message).toMatch(/not found/i);
+        });
+
+        it("deletes tournament successfully when requested by admin", async () => {
+            const tourneyId = "650000000000000000000101";
+            jest.spyOn(Tournament, "findByIdAndDelete").mockResolvedValue({
+                _id: new mongoose.Types.ObjectId(tourneyId),
+                tournamentName: "GMU Spring Open"
+            });
+
+            const res = await request(app)
+                .delete(`/api/tournaments/${tourneyId}`)
+                .set("Authorization", `Bearer ${adminToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.message).toMatch(/deleted successfully/i);
+            expect(res.body._id).toBe(tourneyId);
         });
     });
 });

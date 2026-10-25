@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const Tournament = require('../models/Tournament');
 const TournamentMatch = require('../models/TournamentMatch');
 const BracketLockCoordinator = require('../utils/bracketLockCoordinator');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const redis = require('../utils/redis');
 
 const bracketLockCoordinator = new BracketLockCoordinator(redis);
@@ -886,6 +886,48 @@ router.delete('/:id/waitlist', authMiddleware, async (req, res) => {
 });
 
 /**
+ * DELETE /api/tournaments/:id
+ * Permanently removes a tournament from the public directory.
+ * Strictly restricted to authenticated admin users (authMiddleware + adminMiddleware).
+ */
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid tournament ID format." });
+        }
+
+        const tournament = await Tournament.findByIdAndDelete(id);
+        if (!tournament) {
+            return res.status(404).json({ message: "Tournament not found." });
+        }
+
+        // Flush Redis tournaments cache
+        try {
+            if (typeof redis.invalidateCacheTag === 'function') {
+                await redis.invalidateCacheTag("tournaments:active_keys");
+            } else {
+                const keys = await redis.keys("tournaments:*");
+                if (keys && keys.length > 0) await redis.del(keys);
+            }
+        } catch (cacheErr) {
+            console.warn("[Tournaments] Non-fatal cache flush error on delete:", cacheErr.message);
+        }
+
+        // Emit real-time deletion event
+        const io = req.io || req.app?.get("io");
+        if (io) {
+            io.emit("tournamentDeleted", { _id: id });
+        }
+
+        return res.status(200).json({ message: "Tournament deleted successfully.", _id: id });
+    } catch (err) {
+        console.error("Error deleting tournament:", err);
+        return res.status(500).json({ message: "Server error deleting tournament.", error: err.message });
+    }
+});
+
+/**
  * POST /api/tournaments/reset-seed
  * High-performance tournament clean-slate reset and verified seeding endpoint.
  * Executes in < 100ms with zero memory leaks and returns execution metrics.
@@ -894,7 +936,8 @@ router.post('/reset-seed', async (req, res) => {
     try {
         const startTime = Date.now();
         const { wipeAndRestartTournamentSystem } = require('../utils/autonomousHunter');
-        const result = await wipeAndRestartTournamentSystem();
+        const isProduction = process.env.NODE_ENV === 'production';
+        const result = await wipeAndRestartTournamentSystem({ forceSeed: !isProduction });
         const executionTimeMs = result.executionTimeMs ?? (Date.now() - startTime);
 
         if (!result.success) {

@@ -926,7 +926,7 @@ async function ensureGuaranteedTournaments() {
  * purges invalid/past tournaments (including legacy 2001/pre-2026 entries),
  * and atomically re-seeds verified live 2026/2027 tournaments using bulkWrite.
  */
-async function wipeAndRestartTournamentSystem() {
+async function wipeAndRestartTournamentSystem(options = {}) {
     const startTime = Date.now();
     try {
         if (mongoose.connection?.readyState !== 1) {
@@ -978,50 +978,58 @@ async function wipeAndRestartTournamentSystem() {
             console.warn("[Hunter Wipe] Redis cache clear skipped:", redisErr.message);
         }
 
-        // 5. Atomic bulkWrite with upsert: true for verified 2026/2027 tournaments
-        const verifiedTournaments = getGuaranteedTournamentsList();
-        const bulkOps = verifiedTournaments.map(t => ({
-            updateOne: {
-                filter: { tournamentName: t.tournamentName },
-                update: {
-                    $set: {
-                        eventLocation: t.eventLocation,
-                        hostUniversity: t.hostUniversity,
-                        hostClubHandle: t.hostClubHandle,
-                        startDate: t.startDate,
-                        endDate: t.endDate,
-                        registrationDeadline: t.registrationDeadline,
-                        rideFormDeadline: t.rideFormDeadline,
-                        isOpenTournament: true,
-                        status: "active",
-                        registrationUrl: t.registrationUrl,
-                        sourceUrl: t.sourceUrl,
-                        flyerImageUrl: t.flyerImageUrl,
-                        skillLevels: t.skillLevels,
-                        divisions: t.divisions,
-                        entryFee: t.entryFee,
-                        originalCaption: t.originalCaption,
-                        scraperLastRun: new Date()
+        // 5. Atomic bulkWrite for verified tournaments (skipped in production unless forceSeed is true)
+        const isProduction = process.env.NODE_ENV === 'production';
+        const shouldSeed = options.forceSeed !== undefined ? options.forceSeed : !isProduction;
+
+        let verifiedTournaments = [];
+        if (shouldSeed) {
+            verifiedTournaments = getGuaranteedTournamentsList();
+            const bulkOps = verifiedTournaments.map(t => ({
+                updateOne: {
+                    filter: { tournamentName: t.tournamentName },
+                    update: {
+                        $set: {
+                            eventLocation: t.eventLocation,
+                            hostUniversity: t.hostUniversity,
+                            hostClubHandle: t.hostClubHandle,
+                            startDate: t.startDate,
+                            endDate: t.endDate,
+                            registrationDeadline: t.registrationDeadline,
+                            rideFormDeadline: t.rideFormDeadline,
+                            isOpenTournament: true,
+                            status: "active",
+                            registrationUrl: t.registrationUrl,
+                            sourceUrl: t.sourceUrl,
+                            flyerImageUrl: t.flyerImageUrl,
+                            skillLevels: t.skillLevels,
+                            divisions: t.divisions,
+                            entryFee: t.entryFee,
+                            originalCaption: t.originalCaption,
+                            scraperLastRun: new Date()
+                        },
+                        $setOnInsert: {
+                            rsvpCount: t.rsvpCount || 0,
+                            attendees: t.attendees || [],
+                            createdAt: new Date()
+                        }
                     },
-                    $setOnInsert: {
-                        rsvpCount: t.rsvpCount || 0,
-                        attendees: t.attendees || [],
-                        createdAt: new Date()
-                    }
-                },
-                upsert: true
-            }
-        }));
+                    upsert: true
+                }
+            }));
 
-        if (typeof Tournament.bulkWrite === 'function') {
-            await Tournament.bulkWrite(bulkOps, { ordered: false });
-        }
-
-        // Support test environments spying on findOneAndUpdate
-        if (Tournament.findOneAndUpdate && Tournament.findOneAndUpdate._isMockFunction) {
-            for (const t of verifiedTournaments) {
-                await Tournament.findOneAndUpdate({ tournamentName: t.tournamentName }, {}, { upsert: true });
+            if (typeof Tournament.bulkWrite === 'function') {
+                await Tournament.bulkWrite(bulkOps, { ordered: false });
             }
+
+            // Support test environments spying on findOneAndUpdate
+            if (Tournament.findOneAndUpdate && Tournament.findOneAndUpdate._isMockFunction) {
+                for (const t of verifiedTournaments) {
+                    await Tournament.findOneAndUpdate({ tournamentName: t.tournamentName }, {}, { upsert: true });
+                }
+            }
+        } else {
+            console.log("🧹 [Hunter Wipe] Production mode active: purged invalid/stale entries without force-injecting mock/seed tournaments.");
         }
 
         const executionTimeMs = Date.now() - startTime;

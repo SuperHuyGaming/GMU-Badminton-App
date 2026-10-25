@@ -1,4 +1,4 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Button } from '@mui/material';
 
 const EmptyStateGraphic = () => (
     <svg viewBox="0 0 400 300" width="100%" height="250" style={{ maxWidth: 400 }}>
@@ -40,7 +40,7 @@ const EmptyStateGraphic = () => (
     </svg>
 );
 
-export default function EmptyTournaments() {
+export default function EmptyTournaments({ onResetFilters }) {
     return (
         <Box sx={{ 
             display: 'flex', 
@@ -48,22 +48,63 @@ export default function EmptyTournaments() {
             alignItems: 'center', 
             justifyContent: 'center', 
             textAlign: 'center', 
-            py: { xs: 4, md: 8 },
-            px: 2,
+            py: { xs: 5, md: 8 },
+            px: { xs: 2, sm: 4 },
             bgcolor: 'background.paper',
             borderRadius: 4,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.04)',
             border: '1px solid',
             borderColor: 'divider',
             mt: 2
         }}>
             <EmptyStateGraphic />
-            <Typography variant="h5" fontWeight="900" sx={{ mt: 3, mb: 1, color: 'text.primary' }}>
-                Our AI is Hunting...
+
+            {/* AI Engine Status Badge */}
+            <Box sx={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: 1, 
+                px: 2, 
+                py: 0.6, 
+                borderRadius: 50, 
+                bgcolor: 'rgba(0, 102, 51, 0.08)', 
+                border: '1px solid rgba(0, 102, 51, 0.2)',
+                mt: 3, 
+                mb: 1.5 
+            }}>
+                <Box sx={{ 
+                    width: 8, 
+                    height: 8, 
+                    borderRadius: '50%', 
+                    bgcolor: 'success.main',
+                    boxShadow: '0 0 8px rgba(46, 125, 50, 0.6)'
+                }} />
+                <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.dark', letterSpacing: 0.3, textTransform: 'uppercase' }}>
+                    Live Engine • Our AI is Hunting
+                </Typography>
+            </Box>
+
+            <Typography variant="h5" fontWeight="800" sx={{ mb: 1.5, color: 'text.primary', maxWidth: 550, fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
+                No approved tournaments currently scheduled. Check back soon or submit a tournament discovery!
             </Typography>
-            <Typography variant="body1" sx={{ color: 'text.primary', maxWidth: 450, lineHeight: 1.6 }}>
-                Our autonomous AI engine is currently scouring the web for upcoming DMV tournaments. Check back soon!
+
+            <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 480, lineHeight: 1.6, mb: 3 }}>
+                Our autonomous discovery engine scans collegiate clubs, regional academies, and tournament software across DC, Maryland, and Virginia. Check back soon as upcoming draws and dates are verified!
             </Typography>
+
+            {onResetFilters && (
+                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                    <Button 
+                        variant="outlined" 
+                        color="primary" 
+                        size="medium"
+                        onClick={onResetFilters}
+                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                    >
+                        Reset Search Filters
+                    </Button>
+                </Box>
+            )}
         </Box>
     );
 }

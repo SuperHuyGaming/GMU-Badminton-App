@@ -24,15 +24,18 @@ vi.mock('../utils/socket', () => ({
     }
 }));
 
-const mockUser = {
+let currentAuthUser = {
     _id: 'user-current-1',
     name: 'Test Player',
+    role: 'user',
     avatarUrl: 'https://example.com/avatar.png'
 };
 
+const mockUser = currentAuthUser;
+
 vi.mock('../context/AuthContext', () => ({
     useAuth: () => ({
-        user: mockUser,
+        user: currentAuthUser,
         setUser: vi.fn()
     })
 }));
@@ -78,6 +81,12 @@ const mockTournaments = [
 describe('Public Tournaments Page Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        currentAuthUser = {
+            _id: 'user-current-1',
+            name: 'Test Player',
+            role: 'user',
+            avatarUrl: 'https://example.com/avatar.png'
+        };
         apiFetch.mockResolvedValue({
             ok: true,
             status: 200,
@@ -366,6 +375,143 @@ describe('Public Tournaments Page Component', () => {
         await waitFor(() => {
             expect(apiFetch).toHaveBeenCalledWith('/api/tournaments/reset-seed', { method: 'POST' });
             expect(toast.success).toHaveBeenCalledWith('Tournament system wiped and restarted successfully');
+        });
+    });
+
+    it('strictly hides tournament delete button from regular users and guests', async () => {
+        currentAuthUser = {
+            _id: 'user-player-1',
+            name: 'Regular Player',
+            role: 'user'
+        };
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Delete buttons should NOT exist in the DOM for regular players
+        const deleteButtons = screen.queryAllByLabelText(/Delete tournament/i);
+        expect(deleteButtons).toHaveLength(0);
+    });
+
+    it('allows authenticated admin users to see delete button and permanently delete a tournament', async () => {
+        currentAuthUser = {
+            _id: 'admin-1',
+            name: 'Club Admin',
+            role: 'admin'
+        };
+
+        apiFetch.mockImplementation(async (url, opts) => {
+            if (url === '/api/tournaments/t-1' && opts?.method === 'DELETE') {
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ message: 'Tournament deleted successfully.', _id: 't-1' })
+                };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({ tournaments: mockTournaments })
+            };
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Admin should see delete button
+        const deleteBtn = screen.getByLabelText('Delete tournament Mason Open Championships 2027');
+        expect(deleteBtn).toBeInTheDocument();
+
+        fireEvent.click(deleteBtn);
+
+        // Delete confirmation dialog should open
+        await waitFor(() => {
+            expect(screen.getByText('Delete Tournament?')).toBeInTheDocument();
+            expect(screen.getByText(/"Mason Open Championships 2027"/i)).toBeInTheDocument();
+        });
+
+        // Confirm deletion
+        const confirmDeleteBtn = screen.getByRole('button', { name: /^Delete$/i });
+        fireEvent.click(confirmDeleteBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/tournaments/t-1', { method: 'DELETE' });
+            expect(toast.success).toHaveBeenCalledWith('"Mason Open Championships 2027" deleted.');
+        });
+    });
+
+    it('renders live tournament stats counter and collegiate badminton badge in modern hero banner', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Collegiate badge in hero banner
+        expect(screen.getByText(/Mason Collegiate Circuit & DMV Open Hub/i)).toBeInTheDocument();
+
+        // Live stats counters in hero banner
+        expect(screen.getByText(/Active Events/i)).toBeInTheDocument();
+        expect(screen.getByText(/Players RSVP'd/i)).toBeInTheDocument();
+        expect(screen.getByText(/Host Clubs & Colleges/i)).toBeInTheDocument();
+    });
+
+    it('renders crisp View Details call-to-action button and opens detail modal on click', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        const viewDetailsButtons = screen.getAllByRole('button', { name: /view details/i });
+        expect(viewDetailsButtons.length).toBeGreaterThan(0);
+
+        fireEvent.click(viewDetailsButtons[0]);
+
+        await waitFor(() => {
+            expect(screen.getByRole('dialog')).toBeInTheDocument();
+            expect(screen.getByText(/POST DETAILS/i)).toBeInTheDocument();
+        });
+    });
+
+    it('renders premier empty state with exact prompt required copy when no tournaments exist', async () => {
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({ tournaments: [] })
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText(/No approved tournaments currently scheduled. Check back soon or submit a tournament discovery!/i)).toBeInTheDocument();
+            expect(screen.getByText(/Our AI is Hunting/i)).toBeInTheDocument();
         });
     });
 });
