@@ -6,7 +6,8 @@ import { toast } from "react-hot-toast";
 import {
 	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
-	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem
+	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem,
+	Checkbox
 } from "@mui/material";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
@@ -30,7 +31,7 @@ export default function Forum() {
 	const observer = useRef();
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [newPost, setNewPost] = useState({ title: "", content: "", imageUrl: "", tags: [] });
+	const [newPost, setNewPost] = useState({ title: "", content: "", imageUrl: "", tags: [], visibility: 'PUBLIC', isPinned: false });
 	const [postImages, setPostImages] = useState([]);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
@@ -177,7 +178,9 @@ export default function Forum() {
 					imageUrls: finalImageUrls,
 					authorName: currentUser.name,
 					authorId: currentUser.id,
-                    tags: newPost.tags,
+					tags: newPost.tags,
+					visibility: newPost.visibility || 'PUBLIC',
+					isPinned: Boolean(newPost.isPinned),
 					targetDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
 				}),
 			});
@@ -186,7 +189,7 @@ export default function Forum() {
 			setIsUploadingImage(false);
 			if (!res.ok) return toast.error(data.message || "Failed to post. Please try again.");
 
-			setNewPost({ title: "", content: "", imageUrl: "", tags: [], visibility: 'PUBLIC' });
+			setNewPost({ title: "", content: "", imageUrl: "", tags: [], visibility: 'PUBLIC', isPinned: false });
 			setPostImages([]);
 			setIsModalOpen(false);
 			toast.success("Post created successfully!");
@@ -201,53 +204,89 @@ export default function Forum() {
 			{/* HERO BANNER */}
 			<Box 
 				sx={{ 
-					width: '100%', mb: 4, py: { xs: 4, md: 6 },
-					background: "linear-gradient(135deg, rgba(0, 102, 51, 0.9) 0%, rgba(255, 204, 51, 0.8) 100%)",
+					width: '100%', mb: 4, py: { xs: 4, md: 5 }, px: 3,
+					background: "linear-gradient(135deg, rgba(0, 102, 51, 0.95) 0%, rgba(255, 204, 51, 0.85) 100%)",
 					borderRadius: 4,
 					position: 'relative', overflow: 'hidden',
 					display: 'flex', flexDirection: 'column',
 					alignItems: 'center', justifyContent: 'center',
-					boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
+					boxShadow: '0 8px 32px rgba(0, 102, 51, 0.18)',
 				}}
 			>
-				<Typography variant="h3" fontWeight="900" color="white" align="center" sx={{ textShadow: "0px 2px 4px rgba(0,0,0,0.5)", zIndex: 1, mb: 2 }}>
+				<Typography variant="h3" fontWeight="900" color="white" align="center" sx={{ textShadow: "0px 2px 6px rgba(0,0,0,0.4)", zIndex: 1, mb: 1, fontSize: { xs: '2rem', sm: '2.8rem' } }}>
 					Community Hub
 				</Typography>
-				<Typography variant="h6" color="rgba(255,255,255,0.9)" align="center" sx={{ zIndex: 1, px: 2 }}>
-					Connect, discuss, and track all the action happening on campus.
+				<Typography variant="h6" color="rgba(255,255,255,0.95)" align="center" sx={{ zIndex: 1, px: 2, mb: 2.5, maxWidth: 600, fontSize: { xs: '0.95rem', sm: '1.15rem' } }}>
+					Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
 				</Typography>
+				<Button
+					variant="contained"
+					onClick={() => setIsModalOpen(true)}
+					sx={{
+						zIndex: 1,
+						bgcolor: 'white',
+						color: '#006633',
+						fontWeight: '900',
+						px: 3.5,
+						py: 1,
+						borderRadius: 10,
+						boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+						'&:hover': { bgcolor: 'rgba(255,255,255,0.9)', transform: 'translateY(-2px)' },
+						transition: 'all 0.2s',
+					}}
+				>
+					✍️ Create New Post
+				</Button>
 			</Box>
 
 			{/* TABS NAVIGATION */}
-			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4, gap: 2 }}>
-				<Tabs value={tab} onChange={handleTabChange} textColor="primary" indicatorColor="primary" aria-label="Forum post categories"
+			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3, gap: 2 }}>
+				<Tabs 
+					value={tab} 
+					onChange={handleTabChange} 
+					textColor="primary" 
+					indicatorColor="primary" 
+					aria-label="Community Hub categories"
 					sx={{ 
-						'& .MuiTab-root': { fontWeight: 'bold', fontSize: '1.1rem', textTransform: 'none', px: { xs: 2, sm: 4 } },
-						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5
-					}}>
-					<Tab label="For You" value="foryou" />
-					<Tab label="Trending" value="top" />
-					<Tab label="Latest" value="latest" />
+						'& .MuiTab-root': { fontWeight: '900', fontSize: { xs: '0.95rem', sm: '1.05rem' }, textTransform: 'none', px: { xs: 2.5, sm: 4 }, minHeight: 48 },
+						background: 'background.paper', borderRadius: 10, boxShadow: 2, p: 0.6,
+						border: '1px solid', borderColor: 'divider'
+					}}
+				>
+					<Tab label="✨ For You" value="foryou" />
+					<Tab label="🔥 Top" value="top" />
+					<Tab label="⏱ Latest" value="latest" />
 				</Tabs>
 
-				{/* ACTION BAR (TRENDING TAGS + REFRESH) */}
+				{/* ACTION BAR (HOT TAGS & TRENDING TOPICS + REFRESH) */}
 				<Box 
 					sx={{ 
-						width: '100%', maxWidth: '800px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 2
+						width: '100%', maxWidth: '800px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 1.5, px: 1
 					}}
 				>
                     <Box 
                         sx={{ 
-                            display: 'flex', gap: 1, overflowX: 'auto', pb: 1, flex: 1,
-                            '&::-webkit-scrollbar': { display: 'none' }, // Hide scrollbar for clean UI
+                            display: 'flex', gap: 1, overflowX: 'auto', pb: 1, flex: 1, alignItems: 'center',
+                            '&::-webkit-scrollbar': { display: 'none' },
                             msOverflowStyle: 'none', scrollbarWidth: 'none' 
                         }}
                     >
-                        <Chip label="Trending" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: '#000000' }} />
-                        {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment'].map((tag) => (
+                        <Chip label="🔥 Trending" size="small" sx={{ fontWeight: '900', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: '#000000' }} />
+                        <Chip 
+                            label="All" 
+                            size="small" 
+                            variant={selectedTag === "" ? "filled" : "outlined"}
+                            color={selectedTag === "" ? "primary" : "default"}
+                            onClick={() => {
+                                setSelectedTag("");
+                                setPage(1);
+                            }}
+                            sx={{ fontWeight: 'bold', cursor: 'pointer' }}
+                        />
+                        {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment', 'Matchmaking'].map((tag) => (
                             <Chip 
                                 key={tag} 
-                                label={tag} 
+                                label={`#${tag}`} 
                                 size="small" 
                                 variant={selectedTag === tag ? "filled" : "outlined"}
                                 color={selectedTag === tag ? "primary" : "default"}
@@ -268,7 +307,7 @@ export default function Forum() {
                         size="small" 
                         color="inherit"
                         onClick={() => { setPage(1); setFeed([]); }}
-                        sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 26 }}
+                        sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 28, px: 1.5 }}
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.13 15.57a9 9 0 1 0 3.12-11.83l-4.75 4.76"/></svg>
                         <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
@@ -405,11 +444,14 @@ export default function Forum() {
 								authorId: item.authorId,
 								authorName: item.authorName,
 								authorBadges: item.authorBadges,
+								authorPic: item.authorProfilePic,
 								timestamp: item.createdAt,
-                                tags: item.tags || [],
+								tags: item.tags || [],
+								isPinned: Boolean(item.isPinned),
+								reactions: item.reactions || [],
 								likedBy: new Array(Math.max(0, item.likes || 0)).fill('mock_id'), // PostCard only cares about length
 								recentLikerAvatars: item.recentLikerAvatars || [],
-																comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
+								comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
 							};
 							return (
 								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
@@ -506,6 +548,7 @@ export default function Forum() {
 				fullScreen={fullScreen} 
 				open={isModalOpen} 
 				onClose={() => setIsModalOpen(false)} 
+				disableRestoreFocus
 				aria-labelledby="create-post-dialog-title"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
 			>
@@ -564,17 +607,43 @@ export default function Forum() {
                     </Box>
 					</Box>
 
+					{currentUser?.role === 'admin' && (
+						<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'action.hover', p: 1.5, borderRadius: 2 }}>
+							<Checkbox
+								id="pin-megathread-checkbox"
+								checked={Boolean(newPost.isPinned)}
+								onChange={(e) => setNewPost({ ...newPost, isPinned: e.target.checked })}
+								color="warning"
+							/>
+							<Typography component="label" htmlFor="pin-megathread-checkbox" variant="body2" fontWeight="bold" sx={{ cursor: 'pointer' }}>
+								📌 Pin as Megathread (Sticks to top of Community Feed)
+							</Typography>
+						</Box>
+					)}
+
                     <Box>
 						<input accept="image/*" style={{ display: "none" }} id="post-image-upload" type="file" multiple onChange={(e) => {
 							const files = Array.from(e.target.files);
-							if (files.length > 4) return alert("Maximum 4 images allowed");
-							setPostImages(files);
+							if (files.length + postImages.length > 4) return alert("Maximum 4 images allowed");
+							setPostImages(prev => [...prev, ...files]);
 						}} />
 						<label htmlFor="post-image-upload">
 							<Button variant="outlined" component="span" fullWidth color={postImages.length > 0 ? "success" : "primary"}>
-								{postImages.length > 0 ? `Selected: ${postImages.length} image(s)` : "Attach Image(s) (Max 4)"}
+								{postImages.length > 0 ? `Attach More Images (${postImages.length}/4)` : "Attach Image(s) (Max 4)"}
 							</Button>
 						</label>
+						{postImages.length > 0 && (
+							<Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+								{postImages.map((file, idx) => (
+									<Chip
+										key={idx}
+										label={file.name}
+										size="small"
+										onDelete={() => setPostImages(prev => prev.filter((_, i) => i !== idx))}
+									/>
+								))}
+							</Box>
+						)}
 					</Box>
 				</DialogContent>
 				<DialogActions sx={{ px: 3, pb: 2 }}>

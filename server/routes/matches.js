@@ -4,6 +4,7 @@ const router = express.Router();
 const Match = require("../models/Match");
 const User = require("../models/User");
 const { calculateElo } = require("../utils/elo");
+const { calculateMatchGlicko2, applyInactivityDecay } = require("../utils/glicko2");
 const { authMiddleware } = require("../middleware/auth");
 
 const { redisClient, redisEnabled } = require("../config/redis");
@@ -70,6 +71,10 @@ router.get("/leaderboard", async (req, res, next) => {
                 skillLevel: 1,
                 homeUniversity: 1,
                 [sortField]: 1,
+                singlesElo: 1,
+                doublesElo: 1,
+                singlesRd: { $ifNull: ["$glicko.singles.rd", 350] },
+                doublesRd: { $ifNull: ["$glicko.doubles.rd", 350] },
                 'stats.totalMatches': 1
             }
         });
@@ -234,38 +239,77 @@ router.put("/:matchId/confirm", authMiddleware, async (req, res, next) => {
         
         match.status = "confirmed";
         
-        // Calculate Elo
-        // For doubles, we average the team's Elo, calculate change, and apply to both
-        const getTeamElo = async (teamIds, type) => {
+        // Calculate Glicko-2 MMR with Inactivity Decay
+        const getTeamGlickoState = async (teamIds, type) => {
             const users = await User.find({ _id: { $in: teamIds } });
+            const subKey = type === "singles" ? "singles" : "doubles";
             const eloField = type === "singles" ? "singlesElo" : "doublesElo";
-            const avgElo = users.reduce((sum, u) => sum + u[eloField], 0) / users.length;
-            return { avgElo, users, eloField };
+
+            // Apply inactivity decay lazily before calculating match
+            for (const u of users) {
+                if (!u.glicko) {
+                    u.glicko = {
+                        singles: { rating: u.singlesElo || 1200, rd: 350, volatility: 0.06, lastMatchDate: u.lastActive || new Date() },
+                        doubles: { rating: u.doublesElo || 1200, rd: 350, volatility: 0.06, lastMatchDate: u.lastActive || new Date() }
+                    };
+                }
+                const decayed = applyInactivityDecay(u.glicko[subKey]);
+                if (decayed) {
+                    u.glicko[subKey].rd = decayed.rd;
+                    u.glicko[subKey].lastMatchDate = decayed.lastMatchDate;
+                }
+            }
+
+            const avgRating = users.reduce((sum, u) => sum + (u.glicko?.[subKey]?.rating || u[eloField] || 1200), 0) / (users.length || 1);
+            const compositeRd = Math.sqrt(users.reduce((sum, u) => sum + Math.pow(u.glicko?.[subKey]?.rd || 350, 2), 0)) / (users.length || 1);
+            const avgVol = users.reduce((sum, u) => sum + (u.glicko?.[subKey]?.volatility || 0.06), 0) / (users.length || 1);
+
+            return { rating: avgRating, rd: compositeRd, volatility: avgVol, users, subKey, eloField };
         };
-        
-        const t1 = await getTeamElo(match.team1, match.type);
-        const t2 = await getTeamElo(match.team2, match.type);
-        
+
+        const t1 = await getTeamGlickoState(match.team1, match.type);
+        const t2 = await getTeamGlickoState(match.team2, match.type);
+
         const score1 = match.winner === "team1" ? 1 : 0;
         const score2 = match.winner === "team2" ? 1 : 0;
-        
-        const { change1, change2 } = calculateElo(t1.avgElo, t2.avgElo, score1, score2);
-        
+
+        const result = calculateMatchGlicko2(t1, t2, score1, score2);
+
         match.eloChanges = [];
-        
-        // Apply changes and persist updated Elo
+
+        // Apply changes and persist updated Glicko-2 ratings
         for (const u of t1.users) {
-            u[t1.eloField] += change1;
+            if (!u.glicko) {
+                u.glicko = {
+                    singles: { rating: u.singlesElo || 1200, rd: 350, volatility: 0.06, lastMatchDate: new Date() },
+                    doubles: { rating: u.doublesElo || 1200, rd: 350, volatility: 0.06, lastMatchDate: new Date() }
+                };
+            }
+            u.glicko[t1.subKey].rating = result.team1.newRating;
+            u.glicko[t1.subKey].rd = result.team1.newRd;
+            u.glicko[t1.subKey].volatility = result.team1.newVolatility;
+            u.glicko[t1.subKey].lastMatchDate = new Date();
+            u[t1.eloField] = result.team1.newRating;
             await u.save();
-            match.eloChanges.push({ userId: u._id, change: change1 });
+            match.eloChanges.push({ userId: u._id, change: result.team1.change, rd: result.team1.newRd });
         }
-        
+
         for (const u of t2.users) {
-            u[t2.eloField] += change2;
+            if (!u.glicko) {
+                u.glicko = {
+                    singles: { rating: u.singlesElo || 1200, rd: 350, volatility: 0.06, lastMatchDate: new Date() },
+                    doubles: { rating: u.doublesElo || 1200, rd: 350, volatility: 0.06, lastMatchDate: new Date() }
+                };
+            }
+            u.glicko[t2.subKey].rating = result.team2.newRating;
+            u.glicko[t2.subKey].rd = result.team2.newRd;
+            u.glicko[t2.subKey].volatility = result.team2.newVolatility;
+            u.glicko[t2.subKey].lastMatchDate = new Date();
+            u[t2.eloField] = result.team2.newRating;
             await u.save();
-            match.eloChanges.push({ userId: u._id, change: change2 });
+            match.eloChanges.push({ userId: u._id, change: result.team2.change, rd: result.team2.newRd });
         }
-        
+
         await match.save();
 
         // Process gamification and stats

@@ -4,12 +4,14 @@ const { ApifyClient } = require("apify-client");
 const { parseInstagramPost } = require("../utils/aiParser");
 const { authMiddleware } = require("../middleware/auth");
 const Tournament = require("../models/Tournament");
+const ProposedTournament = require("../models/ProposedTournament");
 const rateLimit = require("express-rate-limit");
 const xss = require("xss");
 
 const scrapeLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
+    skip: (req) => req.method === "OPTIONS",
     message: { message: "Too many scraping requests, please try again later." }
 });
 
@@ -64,6 +66,9 @@ router.post("/instagram", authMiddleware, scrapeLimiter, async (req, res, next) 
         const input = {
             directUrls: [url],
             resultsType: "details",
+            proxyConfiguration: {
+                useApifyProxy: true
+            }
         };
 
         const run = await client.actor("apify/instagram-post-scraper").call(input);
@@ -144,24 +149,24 @@ router.post("/submit-pending", authMiddleware, scrapeLimiter, async (req, res, n
         const cleanSourceUrl = isValidUrl(instagramPostUrl) ? instagramPostUrl : "";
         const cleanSkillLevels = Array.isArray(skillLevels) ? skillLevels.filter(s => typeof s === "string").map(s => xss(s.trim())) : [];
         
-        const newTourney = new Tournament({
+        const newProposal = new ProposedTournament({
             tournamentName: cleanTournamentName,
-            startDate: startDate ? new Date(startDate) : undefined,
-            endDate: endDate ? new Date(endDate) : undefined,
+            date: startDate ? new Date(startDate) : undefined,
+            location: cleanEventLocation || cleanHostUniversity || "TBD",
+            registrationLink: cleanRegistrationUrl || "",
             registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : undefined,
             skillLevels: cleanSkillLevels,
-            flyerImageUrl: cleanFlyerUrl,
-            originalCaption: cleanCaption,
-            sourceUrl: cleanSourceUrl,
-            registrationUrl: cleanRegistrationUrl,
-            hostUniversity: cleanHostUniversity,
-            eventLocation: cleanEventLocation,
-            isOpenTournament: false, // Set to false so it requires Admin approval to show on main feed
-            createdAt: new Date()
+            flyerImageUrl: cleanFlyerUrl || "",
+            rawCaption: cleanCaption || "",
+            sourceUrl: cleanSourceUrl || cleanRegistrationUrl || "https://community.submission",
+            sourceType: "COMMUNITY_SUBMISSION",
+            status: "pending",
+            confidenceScore: 90,
+            linkStatus: "unchecked"
         });
 
-        await newTourney.save();
-        res.status(201).json({ message: "Tournament submitted for admin approval!" });
+        await newProposal.save();
+        res.status(201).json({ message: "Tournament submitted for admin approval!", proposal: newProposal });
     } catch (err) {
         next(err);
     }

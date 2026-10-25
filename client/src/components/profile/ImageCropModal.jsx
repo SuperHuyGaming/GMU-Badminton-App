@@ -74,6 +74,7 @@ export default function ImageCropModal({
 		<Dialog 
 			open={open} 
 			onClose={onClose} 
+			disableRestoreFocus
 			aria-labelledby="crop-image-dialog-title"
 			maxWidth="md" 
 			fullWidth

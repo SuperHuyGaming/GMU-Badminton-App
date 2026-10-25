@@ -208,7 +208,7 @@ export default function Marketplace() {
             )}
 
             {/* Create Listing Modal */}
-            <Dialog open={open} onClose={handleClose} aria-labelledby="create-listing-title" fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
+            <Dialog open={open} onClose={handleClose} disableRestoreFocus aria-labelledby="create-listing-title" fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 3 } }}>
                 <DialogTitle id="create-listing-title" sx={{ fontWeight: 'bold' }}>List an Item</DialogTitle>
                 <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <TextField 

@@ -230,6 +230,12 @@ const Leaderboard = () => {
                                             <Typography variant="h5" fontWeight="900" color="primary.main">
                                                 {tab === 'singles' ? user.singlesElo : user.doublesElo}
                                             </Typography>
+                                            {((tab === 'singles' ? user.singlesRd : user.doublesRd) !== undefined) && (
+                                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
+                                                    ±{Math.round(tab === 'singles' ? user.singlesRd : user.doublesRd)}
+                                                    {(tab === 'singles' ? user.singlesRd : user.doublesRd) > 110 ? ' (Provisional)' : ''}
+                                                </Typography>
+                                            )}
                                         </TableCell>
                                     </React.Fragment>
                                 );

@@ -1,5 +1,6 @@
 // client/src/pages/Admin.jsx
 import { useState, useEffect } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import {
 	Container,
 	Typography,
@@ -20,6 +21,7 @@ import {
 } from "@mui/material";
 
 import apiFetch from "../utils/api";
+import FeedbackManager from "../components/admin/FeedbackManager";
 
 // Sleek Trash Icon
 const TrashIcon = () => (
@@ -115,6 +117,8 @@ export default function Admin() {
 				await apiFetch(`/api/admin/messages/${id}`, { method: "DELETE" });
 				setFlaggedMessages(flaggedMessages.filter((m) => m._id !== id));
 				setAllMessages(allMessages.filter((m) => m._id !== id));
+			} else if (type === "feedback") {
+				await apiFetch(`/api/feedback/admin/${id}`, { method: "DELETE" });
 			}
 		} catch (err) {
 			console.error(err);
@@ -145,6 +149,51 @@ export default function Admin() {
 					Platform Administration Hub
 				</Typography>
 			</Box>
+
+			{/* TOURNAMENT APPROVALS BANNER */}
+			<Paper
+				elevation={0}
+				sx={{
+					p: 3,
+					mb: 4,
+					borderRadius: 3,
+					border: "1px solid",
+					borderColor: "divider",
+					bgcolor: "background.paper",
+					display: "flex",
+					justifyContent: "space-between",
+					alignItems: "center",
+					flexWrap: "wrap",
+					gap: 2,
+				}}
+			>
+				<Box>
+					<Typography variant="h6" fontWeight="bold" color="text.primary">
+						🏸 Tournament Approvals & Scraper Review Queue
+					</Typography>
+					<Typography variant="body2" color="text.secondary">
+						Review, verify, and approve AI-extracted tournament proposals from web scraping before publishing.
+					</Typography>
+				</Box>
+				<Button
+					variant="contained"
+					color="secondary"
+					component={RouterLink}
+					to="/admin/tournaments"
+					sx={{
+						textTransform: "none",
+						fontWeight: "bold",
+						backgroundColor: "#FFCC33",
+						color: "#1a202c",
+						"&:hover": { backgroundColor: "#e6b800" },
+					}}
+				>
+					Open Tournament Approvals
+				</Button>
+			</Paper>
+
+			{/* USER FEEDBACK & ERROR REPORTS */}
+			<FeedbackManager promptDelete={promptDelete} />
 
 			{/* MODERATION QUEUE */}
 			<Typography
@@ -644,6 +693,7 @@ export default function Admin() {
 				onClose={() =>
 					setDeleteConfirm({ open: false, type: "", id: null })
 				}
+				disableRestoreFocus
 				aria-labelledby="admin-delete-title"
 				aria-describedby="admin-delete-desc"
 				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
@@ -667,7 +717,9 @@ export default function Admin() {
 							? "user"
 							: deleteConfirm.type === "spam"
 								? "spam post"
-								: deleteConfirm.type === "message"
+								: deleteConfirm.type === "feedback"
+									? "feedback report"
+									: deleteConfirm.type === "message"
 									? "private message"
 									: "post"}
 						? This action cannot be undone.

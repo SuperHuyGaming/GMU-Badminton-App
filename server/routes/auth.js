@@ -11,6 +11,7 @@ const router = express.Router();
 const authLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
 	max: 10,
+	skip: (req) => req.method === "OPTIONS",
 	message: { message: "Too many attempts from this IP, please try again after 15 minutes." },
 });
 
@@ -128,6 +129,7 @@ router.post("/login", authLimiter, validateLogin, async (req, res, next) => {
 const refreshLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
 	max: 60,
+	skip: (req) => req.method === "OPTIONS",
 	message: { message: "Too many refresh token requests, please try again later." },
 });
 

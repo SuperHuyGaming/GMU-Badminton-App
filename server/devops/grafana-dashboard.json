@@ -1,0 +1,45 @@
+{
+  "title": "Autonomous Hunter Dashboard",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Tournaments Auto-Published",
+      "targets": [
+        {
+          "expr": "sum(tournaments_autopublished_total)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Tournaments Auto-Updated",
+      "targets": [
+        {
+          "expr": "sum(tournaments_autoupdated_total)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Scraper Failures",
+      "targets": [
+        {
+          "expr": "sum(scraper_failures_total)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "LLM Malformed JSON",
+      "targets": [
+        {
+          "expr": "sum(llm_malformed_json_total)",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

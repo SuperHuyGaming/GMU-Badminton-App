@@ -1,5 +1,5 @@
-import { useState, useContext } from 'react';
-import { Button } from '@mui/material';
+import { useState, useContext, useRef } from 'react';
+import { Button, CircularProgress } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import CheckIcon from '@mui/icons-material/Check';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
@@ -28,6 +28,8 @@ export default function FriendActionButton({
     return s;
   };
 
+  const isSubmittingRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [prevInitialStatus, setPrevInitialStatus] = useState(initialStatus);
   const [status, setStatus] = useState(() => normalizeStatus(initialStatus));
 
@@ -47,9 +49,14 @@ export default function FriendActionButton({
 
   const handleAction = async (e) => {
     if (e?.stopPropagation) e.stopPropagation();
-    if (disabled || status === 'pending' || status === 'friends') return;
+    if (disabled || isLoading || isSubmittingRef.current || status === 'pending' || status === 'friends') return;
+
+    isSubmittingRef.current = true;
+    setIsLoading(true);
 
     const prevStatus = status;
+    const actionType = status === 'none' ? 'req' : (status === 'request_received' ? 'acc' : 'can');
+    const idempotencyKey = `friend-${actionType}-${effectiveCurrentUserId || 'anon'}-${targetUserId}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
     if (status === 'none') {
       // Optimistic transition to pending
@@ -57,15 +64,28 @@ export default function FriendActionButton({
       if (onStatusChange) onStatusChange('pending', targetUserId);
 
       try {
-        await apiFetch('/api/friends/request', {
+        const res = await apiFetch('/api/friends/request', {
           keepalive: true,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+          },
           body: JSON.stringify({
             recipientId: targetUserId,
             friendId: targetUserId,
           }),
         });
+
+        if (res && res.ok === false) {
+          let errData = {};
+          try {
+            errData = await res.json();
+          } catch {
+            // ignore non-json response body
+          }
+          throw new Error(errData?.message || 'Failed to send friend request');
+        }
 
         toast.success(`Friend request sent to ${targetUserName}!`);
       } catch (err) {
@@ -80,6 +100,9 @@ export default function FriendActionButton({
         } else {
            toast.error(err.message || 'Failed to send friend request');
         }
+      } finally {
+        isSubmittingRef.current = false;
+        setIsLoading(false);
       }
     } else if (status === 'request_received') {
       // Optimistic transition to friends
@@ -87,10 +110,13 @@ export default function FriendActionButton({
       if (onStatusChange) onStatusChange('friends', targetUserId);
 
       try {
-        await apiFetch('/api/friends/accept', {
+        const res = await apiFetch('/api/friends/accept', {
           keepalive: true,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+          },
           body: JSON.stringify({
             requesterId: targetUserId,
             friendId: targetUserId,
@@ -98,12 +124,25 @@ export default function FriendActionButton({
           }),
         });
 
+        if (res && res.ok === false) {
+          let errData = {};
+          try {
+            errData = await res.json();
+          } catch {
+            // ignore non-json response body
+          }
+          throw new Error(errData?.message || 'Failed to accept friend request');
+        }
+
         toast.success(`You and ${targetUserName} are now friends!`);
       } catch (err) {
         // Rollback on failure
         setStatus(prevStatus);
         if (onStatusChange) onStatusChange(prevStatus, targetUserId);
         toast.error(err.message || 'Failed to accept friend request');
+      } finally {
+        isSubmittingRef.current = false;
+        setIsLoading(false);
       }
     } else if (status === 'pending') {
       // Optimistic transition to none (Undo)
@@ -111,14 +150,27 @@ export default function FriendActionButton({
       if (onStatusChange) onStatusChange('none', targetUserId);
 
       try {
-        await apiFetch('/api/friends/cancel', {
+        const res = await apiFetch('/api/friends/cancel', {
           keepalive: true,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+          },
           body: JSON.stringify({
             recipientId: targetUserId,
           }),
         });
+
+        if (res && res.ok === false) {
+          let errData = {};
+          try {
+            errData = await res.json();
+          } catch {
+            // ignore non-json response body
+          }
+          throw new Error(errData?.message || 'Failed to cancel friend request');
+        }
 
         toast.success(`Friend request to ${targetUserName} cancelled.`);
       } catch (err) {
@@ -126,7 +178,13 @@ export default function FriendActionButton({
         setStatus(prevStatus);
         if (onStatusChange) onStatusChange(prevStatus, targetUserId);
         toast.error(err.message || 'Failed to cancel friend request');
+      } finally {
+        isSubmittingRef.current = false;
+        setIsLoading(false);
       }
+    } else {
+      isSubmittingRef.current = false;
+      setIsLoading(false);
     }
   };
 
@@ -134,16 +192,18 @@ export default function FriendActionButton({
   let buttonVariant = variant || 'contained';
   let buttonColor = 'primary';
   let buttonIcon = <PersonAddIcon />;
-  let isDisabled = disabled;
-    if (status === 'pending') isDisabled = true;
+  let isDisabled = disabled || isLoading;
 
   if (status === 'pending') {
     label = 'Request Sent';
     buttonVariant = variant || 'outlined';
     buttonColor = 'inherit';
-    buttonIcon = <CheckIcon />;
-    isDisabled = disabled;
-    if (status === 'pending') isDisabled = true;
+    buttonIcon = isLoading ? (
+      <CircularProgress size={16} sx={{ mr: 1 }} color="inherit" />
+    ) : (
+      <CheckIcon />
+    );
+    isDisabled = true;
   } else if (status === 'friends') {
     label = 'Friends';
     buttonVariant = variant || 'outlined';
@@ -154,9 +214,14 @@ export default function FriendActionButton({
     label = 'Accept Request';
     buttonVariant = variant || 'contained';
     buttonColor = 'primary';
-    buttonIcon = <PersonAddIcon />;
-    isDisabled = disabled;
-    if (status === 'pending') isDisabled = true;
+    buttonIcon = isLoading ? (
+      <CircularProgress size={16} sx={{ mr: 1 }} color="inherit" />
+    ) : (
+      <PersonAddIcon />
+    );
+    isDisabled = disabled || isLoading;
+  } else if (isLoading) {
+    buttonIcon = <CircularProgress size={16} sx={{ mr: 1 }} color="inherit" />;
   }
 
   return (

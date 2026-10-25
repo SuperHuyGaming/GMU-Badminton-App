@@ -7,6 +7,7 @@ const { authMiddleware } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
 const xss = require("xss");
 const { analyzeContent } = require("../utils/aiModeration");
+const { evaluateSpamHeuristics } = require("../utils/spamDetector");
 const router = express.Router();
 
 const escapeHtml = (str) => {
@@ -31,6 +32,7 @@ const truncateText = (text, maxLength = 40) => {
 const postLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
 	max: 10,
+	skip: (req) => req.method === "OPTIONS",
 	message: {
 		message: "You are posting too fast. Please wait a few minutes.",
 	},
@@ -247,7 +249,10 @@ router.get("/", async (req, res) => {
 		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
 		const skip = (page - 1) * limit;
 
-		const query = { isFlagged: { $ne: true } };
+		const query = {
+			isFlagged: { $ne: true },
+			status: { $nin: ['quarantined', 'deleted'] }
+		};
 		if (req.query.date && typeof req.query.date === "string") query.targetDate = req.query.date.slice(0, 50);
 
 		const rawPosts = await Post.find(query)
@@ -263,7 +268,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility } = req.body;
+		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility, isPinned } = req.body;
 
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
@@ -288,26 +293,42 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		const authorId = (req.user.id || req.user.userId).toString();
 		const authorName = req.user.name || req.body.authorName || "Member";
 
+		const spamEvaluation = await evaluateSpamHeuristics({
+			userId: authorId,
+			title: cleanTitle,
+			content: cleanContent
+		});
+
+		const isFlagged = Boolean(isSpam || aiAnalysis.isFlagged || spamEvaluation.isSpam);
+		const status = isFlagged ? 'quarantined' : 'active';
+		const toxicityScore = spamEvaluation.score || aiAnalysis.score || 0;
+
 		const newPost = new Post({
 			title: cleanTitle,
 			content: cleanContent,
 			imageUrl: cleanImageUrl,
 			imageUrls: cleanImageUrls,
 			tags: cleanTags,
+			isPinned: req.user.role === "admin" && Boolean(isPinned),
 			visibility: visibility || 'PUBLIC',
 			authorName,
 			targetDate: targetDate || "General",
 			authorId,
-			isFlagged: isSpam || aiAnalysis.isFlagged,
-			toxicityScore: aiAnalysis.score || 0
+			status,
+			isFlagged,
+			toxicityScore
 		});
 
 		await newPost.save();
 
-		if (isSpam || aiAnalysis.isFlagged)
+		if (isFlagged) {
 			return res
 				.status(201)
-				.json({ message: "Post submitted for review." });
+				.json({
+					message: "Post submitted for review.",
+					post: { _id: newPost._id, status: newPost.status, isFlagged: newPost.isFlagged }
+				});
+		}
 
 		const hydratedPost = await hydrateWithPictures(newPost.toObject());
 		if (req.io) req.io.emit("postCreated", hydratedPost);
@@ -330,6 +351,7 @@ router.get("/user/:userId", async (req, res) => {
 		const rawPosts = await Post.find({
 			authorId: req.params.userId,
 			isFlagged: { $ne: true },
+			status: { $nin: ['quarantined', 'deleted'] }
 		})
 			.sort({ timestamp: -1 })
 			.skip(skip)
@@ -338,6 +360,74 @@ router.get("/user/:userId", async (req, res) => {
 		res.json(await hydrateWithPictures(rawPosts));
 	} catch (error) {
 		res.status(500).json({ message: "Error fetching user posts" });
+	}
+});
+
+// ==========================================
+// REPORT POST & COMMUNITY QUARANTINE
+// ==========================================
+router.post("/:postId/report", authMiddleware, async (req, res) => {
+	try {
+		const { postId } = req.params;
+		if (!mongoose.isValidObjectId(postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const post = await Post.findById(postId);
+		if (!post) {
+			return res.status(404).json({ message: "Post not found." });
+		}
+
+		// Invariant: author cannot report their own post
+		if (post.authorId && post.authorId.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot report your own post." });
+		}
+
+		// Invariant: prevent duplicate reports from the same user
+		if (!Array.isArray(post.reports)) post.reports = [];
+		const alreadyReported = post.reports.some(r => r.reportedBy && r.reportedBy.toString() === currentUserId);
+		if (alreadyReported) {
+			return res.status(400).json({ message: "You have already reported this post." });
+		}
+
+		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Inappropriate";
+		post.reports.push({
+			reportedBy: currentUserId,
+			reason,
+			timestamp: new Date()
+		});
+		post.reportCount = post.reports.length;
+
+		let quarantined = false;
+		// 3-Report Auto-Quarantine Trigger
+		if (post.reportCount >= 3) {
+			post.status = 'quarantined';
+			post.isFlagged = true;
+			quarantined = true;
+		}
+
+		await post.save(); // Triggers post-save hook to remove from ActivityFeed if quarantined
+
+		if (quarantined) {
+			const io = req.io || req.app?.get('io');
+			if (io) {
+				io.emit("postQuarantined", { postId: post._id, reportCount: post.reportCount });
+				io.emit("postDeleted", post._id.toString());
+			}
+		}
+
+		return res.status(200).json({
+			success: true,
+			message: quarantined 
+				? "Post has received 3 community reports and has been quarantined for moderator review."
+				: "Post reported successfully.",
+			reportCount: post.reportCount,
+			status: post.status
+		});
+	} catch (err) {
+		console.error("Error reporting post:", err);
+		return res.status(500).json({ message: "Internal server error reporting post." });
 	}
 });
 
@@ -887,6 +977,112 @@ router.put(
 		}
 	},
 );
+
+// ==========================================
+// PIN POST (ADMIN ONLY)
+// ==========================================
+router.put("/:postId/pin", authMiddleware, async (req, res) => {
+	try {
+		if (req.user.role !== "admin") {
+			return res.status(403).json({ message: "Only administrators can pin posts." });
+		}
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		post.isPinned = !post.isPinned;
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+
+		res.json({
+			success: true,
+			isPinned: post.isPinned,
+			post: hydratedPost,
+			message: post.isPinned ? "Post pinned successfully." : "Post unpinned."
+		});
+	} catch (error) {
+		console.error("Error toggling pin status:", error);
+		res.status(500).json({ message: "Error toggling pin status." });
+	}
+});
+
+// ==========================================
+// EMOJI REACTIONS (🏸, 🔥, 💯, ❤️, 👏)
+// ==========================================
+const ALLOWED_EMOJIS = ["🏸", "🔥", "💯", "❤️", "👏", "👍"];
+
+router.put("/:postId/react", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const { emoji } = req.body;
+		if (!emoji || !ALLOWED_EMOJIS.includes(emoji)) {
+			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
+		const userName = req.user.name || "Player";
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		if (!Array.isArray(post.reactions)) {
+			post.reactions = [];
+		}
+
+		const existingReactionIndex = post.reactions.findIndex(
+			(r) => r.userId && r.userId.toString() === userId.toString()
+		);
+
+		let action = "added";
+		if (existingReactionIndex !== -1) {
+			if (post.reactions[existingReactionIndex].emoji === emoji) {
+				// Same emoji clicked -> remove reaction (toggle off)
+				post.reactions.splice(existingReactionIndex, 1);
+				action = "removed";
+			} else {
+				// Different emoji clicked -> replace reaction
+				post.reactions[existingReactionIndex].emoji = emoji;
+				action = "updated";
+			}
+		} else {
+			// New reaction
+			post.reactions.push({
+				userId,
+				userName,
+				emoji,
+				createdAt: new Date(),
+			});
+			action = "added";
+		}
+
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) {
+			req.io.emit("postUpdated", hydratedPost);
+			if (action === "added" && post.authorId?.toString() !== userId.toString()) {
+				await sendNotification(
+					req.io,
+					post.authorId.toString(),
+					`${userName} reacted with ${emoji} to your post.`,
+					`/forum?postId=${post._id}`
+				);
+			}
+		}
+
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error handling reaction:", error);
+		res.status(500).json({ message: "Error updating reaction." });
+	}
+});
 
 module.exports = router;
 

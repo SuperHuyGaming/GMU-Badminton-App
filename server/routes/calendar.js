@@ -9,6 +9,7 @@ const rateLimit = require("express-rate-limit");
 const calendarLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 60,
+    skip: (req) => req.method === "OPTIONS",
     message: "Too many calendar requests, please try again later."
 });
 
@@ -28,26 +29,20 @@ router.get("/feed/:userId.ics", calendarLimiter, async (req, res, next) => {
         }
 
         let tournamentIds = user.rsvpedTournaments || [];
-        
-        // Optional fallback for demonstration if no RSVPs yet
-        if (tournamentIds.length === 0) {
-            // Uncomment to populate with upcoming open tournaments for testing if empty
-            // const upcoming = await Tournament.find({ registrationDeadline: { $gte: new Date() } }).limit(3);
-            // tournamentIds = upcoming.map(t => t._id.toString());
-        }
+        const validObjectIds = tournamentIds.filter(id => mongoose.isValidObjectId(id));
 
-        // 2. Fetch the corresponding tournaments
+        // 2. Fetch corresponding tournaments supporting both user.rsvpedTournaments and attendees: userId
         const tournaments = await Tournament.find({
-            _id: { $in: tournamentIds }
+            $or: [
+                { _id: { $in: validObjectIds } },
+                { attendees: userId }
+            ]
         });
 
         // 3. Transform to ICS events format
         const events = tournaments.map(t => {
-            // Convert Date to [year, month, day, hour, minute] for ICS
-            // Using registrationDeadline as the event time for now, 
-            // since actual event dates aren't in the base schema.
-            // (Assuming registrationDeadline is the event date if not separated)
-            const date = t.registrationDeadline || new Date();
+            // Use t.startDate for event start time
+            const date = t.startDate || t.registrationDeadline || new Date();
             const startArray = [
                 date.getFullYear(),
                 date.getMonth() + 1, // ICS expects 1-indexed months
@@ -56,8 +51,7 @@ router.get("/feed/:userId.ics", calendarLimiter, async (req, res, next) => {
                 date.getMinutes()
             ];
             
-            // Assume the tournament lasts roughly 8 hours
-            const endDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+            const endDate = t.endDate || new Date(date.getTime() + 8 * 60 * 60 * 1000);
             const endArray = [
                 endDate.getFullYear(),
                 endDate.getMonth() + 1,

@@ -22,7 +22,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class RateLimitFilter implements WebFilter {
 
-    private final ProxyManager<String> proxyManager;
+    private final ProxyManager<byte[]> proxyManager;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -41,7 +41,7 @@ public class RateLimitFilter implements WebFilter {
         String bucketKey = "rate_limit:courts:" + ipAddress;
 
         // Create or get bucket with 10 requests per minute capacity
-        BucketProxy bucket = proxyManager.builder().build(bucketKey, () -> BucketConfiguration.builder()
+        BucketProxy bucket = proxyManager.builder().build(bucketKey.getBytes(), () -> BucketConfiguration.builder()
                 .addLimit(Bandwidth.classic(10, Refill.greedy(10, Duration.ofMinutes(1))))
                 .build());
 

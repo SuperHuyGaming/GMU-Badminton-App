@@ -1,5 +1,5 @@
 // client/src/hooks/useNotifications.js
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
@@ -7,35 +7,47 @@ import { toast } from "react-hot-toast";
 
 export const useNotifications = () => {
 	const { user, setToastMessage } = useAuth();
+	const userId = useMemo(() => user?._id || user?.id, [user?._id, user?.id]);
 	const [notifications, setNotifications] = useState([]);
 	const [unreadMessages, setUnreadMessages] = useState(0);
 
 	useEffect(() => {
-		if (!user) {
+		if (!userId) {
 			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setNotifications([]);
 			return;
 		}
 
-		socket.emit("joinUserRoom", user.id);
+		const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+		if (!token) {
+			return;
+		}
+
+		socket.emit("joinUserRoom", userId);
 
 		const fetchUnread = () => {
-			apiFetch(`/api/messages/recent/${user.id}`).then(res => res.json())
+			if (!userId) return;
+			apiFetch(`/api/messages/recent/${userId}`).then(res => res ? res.json() : null)
 			.then(chatsData => {
-				const unread = chatsData.reduce((acc, chat) => acc + chat.unreadCount, 0);
+				if (!Array.isArray(chatsData)) return;
+				const unread = chatsData.reduce((acc, chat) => acc + (chat.unreadCount || 0), 0);
 				setUnreadMessages(unread);
 			}).catch(console.error);
 		};
 
 		// Fetch initial notifications and unread messages
 		Promise.all([
-			apiFetch(`/api/forum/notifications/${user.id}`).then(res => res.json()),
-			apiFetch(`/api/messages/recent/${user.id}`).then(res => res.json())
+			apiFetch(`/api/forum/notifications/${userId}`).then(res => res ? res.json() : []),
+			apiFetch(`/api/messages/recent/${userId}`).then(res => res ? res.json() : [])
 		])
 		.then(([notifData, chatsData]) => {
-			setNotifications(notifData);
-			const unread = chatsData.reduce((acc, chat) => acc + chat.unreadCount, 0);
-			setUnreadMessages(unread);
+			if (Array.isArray(notifData)) {
+				setNotifications(notifData);
+			}
+			if (Array.isArray(chatsData)) {
+				const unread = chatsData.reduce((acc, chat) => acc + (chat.unreadCount || 0), 0);
+				setUnreadMessages(unread);
+			}
 		})
 		.catch(console.error);
 
@@ -43,16 +55,17 @@ export const useNotifications = () => {
 
 		// Handle live notifications
 		const handleNewNotification = (notification) => {
-			if (notification.targetUserId === user.id) {
+			if (String(notification?.targetUserId) === String(userId)) {
 				setNotifications((prev) => [notification, ...prev]);
 				toast(notification.message, { icon: '🔔' });
 			}
 		};
 
 		const handlePrivateMessage = (msg) => {
-			if (msg.receiver._id === user.id || msg.receiver === user.id) {
+			const receiverId = msg?.receiver?._id || msg?.receiver;
+			if (String(receiverId) === String(userId)) {
 				setUnreadMessages(prev => prev + 1);
-				toast(`New message from ${msg.sender.name || 'someone'}`, { icon: '💬' });
+				toast(`New message from ${msg?.sender?.name || 'someone'}`, { icon: '💬' });
 			}
 		};
 
@@ -64,21 +77,21 @@ export const useNotifications = () => {
 			socket.off("privateMessage", handlePrivateMessage);
 			window.removeEventListener("chatRead", fetchUnread);
 		};
-	}, [user, setToastMessage]);
+	}, [userId, setToastMessage]);
 
 	const unreadCount = notifications.filter((n) => !n.read).length;
 
 	const markAsRead = async () => {
-		if (!user) return;
+		if (!userId) return;
 		setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
 
-		await apiFetch(`/api/forum/notifications/${user.id}/read`, {
+		await apiFetch(`/api/forum/notifications/${userId}/read`, {
 			method: "PUT",
 		}).catch(console.error);
 	};
 
 	const markSingleAsRead = async (notifId) => {
-		if (!user) return;
+		if (!userId || !notifId) return;
 		setNotifications((prev) => 
 			prev.map((n) => n._id === notifId ? { ...n, read: true } : n)
 		);
