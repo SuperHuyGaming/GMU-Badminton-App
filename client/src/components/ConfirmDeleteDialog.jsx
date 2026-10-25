@@ -23,7 +23,7 @@ export default function ConfirmDeleteDialog({
 			disableRestoreFocus
 			aria-labelledby="confirm-delete-dialog-title"
 			aria-describedby="confirm-delete-dialog-desc"
-			PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+			slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
 		>
 			<DialogTitle
 				id="confirm-delete-dialog-title"

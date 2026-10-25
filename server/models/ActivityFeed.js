@@ -15,6 +15,8 @@ const activityFeedSchema = new mongoose.Schema({
     image: { type: String },
     images: { type: [String], default: [] },
     tags: { type: [String], default: [] },
+    category: { type: String, default: "general" },
+    matchDetails: { type: mongoose.Schema.Types.Mixed },
     
     // Match specific
     team1Score: Number,
@@ -37,6 +39,8 @@ const activityFeedSchema = new mongoose.Schema({
             userId: String,
             userName: String,
             emoji: String,
+            reactionType: String,
+            createdAt: { type: Date, default: Date.now },
         }
     ],
 

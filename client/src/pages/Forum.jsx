@@ -31,7 +31,22 @@ export default function Forum() {
 	const observer = useRef();
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [newPost, setNewPost] = useState({ title: "", content: "", imageUrl: "", tags: [], visibility: 'PUBLIC', isPinned: false });
+	const [newPost, setNewPost] = useState({
+		title: "",
+		content: "",
+		category: "general",
+		matchDetails: {
+			partner: "",
+			opponents: "",
+			score: "",
+			court: "",
+			winner: "",
+		},
+		imageUrl: "",
+		tags: [],
+		visibility: 'PUBLIC',
+		isPinned: false
+	});
 	const [postImages, setPostImages] = useState([]);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
@@ -167,13 +182,20 @@ export default function Forum() {
 				}
 			}
 
-			// Submit Post (using old Forum API but it creates an ActivityFeed under the hood)
-			// Target date is no longer strictly used for filtering, but backend requires it.
+			// Submit Post (using Forum API which syncs ActivityFeed)
 			const res = await apiFetch("/api/forum", {
 				method: "POST",
 				body: JSON.stringify({
 					title: newPost.title,
 					content: newPost.content,
+					category: newPost.category || 'general',
+					matchDetails: newPost.category === 'match_result' ? {
+						partner: newPost.matchDetails?.partner || "",
+						opponents: newPost.matchDetails?.opponents ? (Array.isArray(newPost.matchDetails.opponents) ? newPost.matchDetails.opponents : newPost.matchDetails.opponents.split(',').map(s => s.trim()).filter(Boolean)) : [],
+						score: newPost.matchDetails?.score || "",
+						court: newPost.matchDetails?.court || "",
+						winner: newPost.matchDetails?.winner || "",
+					} : undefined,
 					imageUrl: finalImageUrls[0] || "",
 					imageUrls: finalImageUrls,
 					authorName: currentUser.name,
@@ -189,7 +211,16 @@ export default function Forum() {
 			setIsUploadingImage(false);
 			if (!res.ok) return toast.error(data.message || "Failed to post. Please try again.");
 
-			setNewPost({ title: "", content: "", imageUrl: "", tags: [], visibility: 'PUBLIC', isPinned: false });
+			setNewPost({
+				title: "",
+				content: "",
+				category: "general",
+				matchDetails: { partner: "", opponents: "", score: "", court: "", winner: "" },
+				imageUrl: "",
+				tags: [],
+				visibility: 'PUBLIC',
+				isPinned: false
+			});
 			setPostImages([]);
 			setIsModalOpen(false);
 			toast.success("Post created successfully!");
@@ -314,6 +345,18 @@ export default function Forum() {
                     </Button>
 				</Box>
 
+				{/* 
+				  Category Group & Feed Filters (Commented out for future sprint to keep feed uncluttered)
+				  The user requested to mess with search, date sorting, and category group filters (finding players/matches/questions) later.
+				  <Box sx={{ width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, mb: 1.5 }}>
+				    <Chip label="All" size="small" variant="filled" color="primary" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Match Results" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Gear" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Meetups" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Training" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				  </Box>
+				*/}
+
 			</Box>
 
 			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', maxWidth: '680px', mx: 'auto' }}>
@@ -350,7 +393,8 @@ export default function Forum() {
 									method: "POST",
 									body: JSON.stringify({ 
 										title: newPost.content.substring(0, 50) + (newPost.content.length > 50 ? "..." : ""),
-										content: newPost.content 
+										content: newPost.content,
+										category: "general"
 									})
 								});
 								if (res.ok) {
@@ -439,6 +483,8 @@ export default function Forum() {
 								_id: item.referenceId,
 								title: item.title,
 								content: item.content,
+								category: item.category || 'general',
+								matchDetails: item.matchDetails || null,
 								imageUrl: item.image,
 								imageUrls: item.images || [],
 								authorId: item.authorId,
@@ -550,7 +596,7 @@ export default function Forum() {
 				onClose={() => setIsModalOpen(false)} 
 				disableRestoreFocus
 				aria-labelledby="create-post-dialog-title"
-				PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+				slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
 			>
 				<DialogTitle id="create-post-dialog-title" sx={{ fontWeight: "bold", fontSize: "1.5rem" }}>Create a Post</DialogTitle>
 				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
@@ -558,6 +604,27 @@ export default function Forum() {
 					<TextField label="What's on your mind?" multiline rows={4} variant="outlined" fullWidth value={newPost.content} onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} />
 					
 					<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+						{/* Category Selection */}
+						<Box sx={{ flex: 1 }}>
+							<Typography variant="caption" color="text.primary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
+								Category
+							</Typography>
+							<Select
+								value={newPost.category || 'general'}
+								onChange={(e) => setNewPost({ ...newPost, category: e.target.value })}
+								size="small"
+								fullWidth
+								aria-label="Post category"
+								inputProps={{ 'aria-label': 'Post category' }}
+							>
+								<MenuItem value="general">💬 General Discussion</MenuItem>
+								<MenuItem value="match_result">🏸 Match Result</MenuItem>
+								<MenuItem value="gear_review">🎒 Gear Review</MenuItem>
+								<MenuItem value="meetup_rally">🤝 Meetup Rally</MenuItem>
+								<MenuItem value="training">💪 Training & Tips</MenuItem>
+							</Select>
+						</Box>
+
 						{/* Privacy Selection */}
 						<Box sx={{ flex: 1 }}>
 							<Typography variant="caption" color="text.primary" fontWeight="bold" sx={{ mb: 1, display: 'block' }}>
@@ -606,6 +673,85 @@ export default function Forum() {
                         </Box>
                     </Box>
 					</Box>
+
+					{/* Optional Match Scorecard Fields (when Match Result is selected) */}
+					{newPost.category === 'match_result' && (
+						<Box
+							sx={{
+								p: 2,
+								borderRadius: 2,
+								bgcolor: 'action.hover',
+								border: '1px solid',
+								borderColor: 'divider',
+								display: 'flex',
+								flexDirection: 'column',
+								gap: 2,
+							}}
+						>
+							<Typography variant="subtitle2" fontWeight="bold" color="primary.main">
+								🏸 Match Scorecard Details (Optional)
+							</Typography>
+							<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+								<TextField
+									label="Final Score"
+									placeholder="e.g. 21-18, 19-21, 21-19"
+									size="small"
+									fullWidth
+									value={newPost.matchDetails?.score || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										matchDetails: { ...newPost.matchDetails, score: e.target.value }
+									})}
+								/>
+								<TextField
+									label="Court / Location"
+									placeholder="e.g. Court 3 (RAC)"
+									size="small"
+									fullWidth
+									value={newPost.matchDetails?.court || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										matchDetails: { ...newPost.matchDetails, court: e.target.value }
+									})}
+								/>
+							</Box>
+							<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+								<TextField
+									label="Partner Name"
+									placeholder="e.g. Alex Wong"
+									size="small"
+									fullWidth
+									value={newPost.matchDetails?.partner || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										matchDetails: { ...newPost.matchDetails, partner: e.target.value }
+									})}
+								/>
+								<TextField
+									label="Opponent(s)"
+									placeholder="e.g. David Kim, Chris Lee"
+									size="small"
+									fullWidth
+									value={newPost.matchDetails?.opponents || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										matchDetails: { ...newPost.matchDetails, opponents: e.target.value }
+									})}
+								/>
+							</Box>
+							<TextField
+								label="Winner"
+								placeholder="e.g. Team Us"
+								size="small"
+								fullWidth
+								value={newPost.matchDetails?.winner || ""}
+								onChange={(e) => setNewPost({
+									...newPost,
+									matchDetails: { ...newPost.matchDetails, winner: e.target.value }
+								})}
+							/>
+						</Box>
+					)}
 
 					{currentUser?.role === 'admin' && (
 						<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'action.hover', p: 1.5, borderRadius: 2 }}>

@@ -30,6 +30,10 @@ router.get("/", authMiddleware, async (req, res, next) => {
             matchStage.tags = req.query.tag.trim().slice(0, 50);
         }
 
+        if (req.query.category && typeof req.query.category === "string" && req.query.category !== "all") {
+            matchStage.category = req.query.category.trim().slice(0, 50);
+        }
+
         let lastDoc = null;
         if (cursor && cursor !== "null") {
             if (!mongoose.isValidObjectId(cursor)) {

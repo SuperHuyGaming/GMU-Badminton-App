@@ -118,4 +118,20 @@ describe('Forum Page Component (Community Hub)', () => {
         expect(screen.getByText('#Tournament')).toBeInTheDocument();
         expect(screen.getByText('#RAC')).toBeInTheDocument();
     });
+
+    it('opens Create Post modal with category selector', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false })
+        });
+
+        renderWithProviders();
+        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
+        createBtn.click();
+
+        await waitFor(() => {
+            expect(screen.getByText('Create a Post')).toBeInTheDocument();
+            expect(screen.getByText('Category')).toBeInTheDocument();
+        });
+    });
 });

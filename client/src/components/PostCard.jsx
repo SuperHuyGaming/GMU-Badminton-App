@@ -21,7 +21,23 @@ import {
 	TextField,
 	Collapse,
 	Chip,
+	Tooltip,
 } from "@mui/material";
+
+// Badminton Reaction Trio
+const BADMINTON_REACTIONS = [
+	{ emoji: "💥", type: "smash", label: "Smash", tooltip: "Smash (Like/Hype)" },
+	{ emoji: "🧊", type: "ice_drop", label: "Ice Drop", tooltip: "Ice Drop (IDK/Cold)" },
+	{ emoji: "⚡", type: "clutch", label: "Clutch", tooltip: "Clutch (Game-Winner)" },
+];
+
+const CATEGORY_CONFIG = {
+	general: { label: "General", bg: "rgba(0, 0, 0, 0.05)", color: "text.secondary", border: "rgba(0, 0, 0, 0.12)" },
+	match_result: { label: "Match Result", bg: "rgba(33, 150, 243, 0.12)", color: "#1976d2", border: "rgba(33, 150, 243, 0.3)" },
+	gear_review: { label: "Gear Review", bg: "rgba(156, 39, 176, 0.12)", color: "#7b1fa2", border: "rgba(156, 39, 176, 0.3)" },
+	meetup_rally: { label: "Meetup Rally", bg: "rgba(76, 175, 80, 0.12)", color: "#2e7d32", border: "rgba(76, 175, 80, 0.3)" },
+	training: { label: "Training", bg: "rgba(255, 152, 0, 0.12)", color: "#e65100", border: "rgba(255, 152, 0, 0.3)" },
+};
 
 // Separated Sub-Components
 import LikesModal from "./LikesModal";
@@ -29,7 +45,6 @@ import PostCommentsInline from "./PostCommentsInline";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import MediaLightbox from "./MediaLightbox";
 import {
-	ThumbUpOutline,
 	ThumbUpFilled,
 	MessageCircleIcon,
 	ShareIcon,
@@ -37,9 +52,9 @@ import {
 } from "./Icons";
 
 // eslint-disable-next-line no-unused-vars
-export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
+export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser }) {
 	const navigate = useNavigate();
-	const currentUser = JSON.parse(localStorage.getItem("user"));
+	const currentUser = propUser || (typeof window !== "undefined" && localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null);
     const controls = useAnimation();
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
@@ -133,9 +148,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 
 	const handleDoubleTap = (e) => {
 		e.preventDefault();
-		// Avoid liking twice rapidly
-		if (!hasLiked && !isLiking) {
-			handleLike();
+		const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
+		if (!userReaction) {
+			handleReaction('💥');
 		}
 		setShowHeart(true);
 		setTimeout(() => setShowHeart(false), 1000);
@@ -152,8 +167,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 
 		setIsLiking(true);
 		try {
+			const apiUrl = import.meta.env.VITE_API_URL || "";
 			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/like`,
+				`${apiUrl}/api/forum/${localPost._id}/like`,
 				{
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
@@ -174,14 +190,15 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 	const handleReaction = async (emoji) => {
 		if (!currentUser) return alert("You must be logged in to react to posts!");
 		try {
+			const apiUrl = import.meta.env.VITE_API_URL || "";
+			const token = localStorage.getItem("token");
+			const headers = { "Content-Type": "application/json" };
+			if (token) headers["Authorization"] = `Bearer ${token}`;
 			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/react`,
+				`${apiUrl}/api/forum/${localPost._id}/react`,
 				{
 					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
+					headers,
 					body: JSON.stringify({ emoji }),
 				},
 			);
@@ -448,14 +465,32 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								: "?")}
 					</Avatar>
 					<Box sx={{ flexGrow: 1 }}>
-						<Typography
-							variant="h6"
-							fontWeight="bold"
-							color="text.primary"
-							sx={{ lineHeight: 1.2 }}
-						>
-							{localPost.title}
-						</Typography>
+						<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
+							{localPost.category && (
+								<Chip
+									label={CATEGORY_CONFIG[localPost.category]?.label || localPost.category}
+									size="small"
+									sx={{
+										fontWeight: "bold",
+										fontSize: "0.68rem",
+										height: 20,
+										borderRadius: 1,
+										bgcolor: CATEGORY_CONFIG[localPost.category]?.bg || "rgba(0, 0, 0, 0.05)",
+										color: CATEGORY_CONFIG[localPost.category]?.color || "text.secondary",
+										border: "1px solid",
+										borderColor: CATEGORY_CONFIG[localPost.category]?.border || "divider",
+									}}
+								/>
+							)}
+							<Typography
+								variant="h6"
+								fontWeight="bold"
+								color="text.primary"
+								sx={{ lineHeight: 1.2 }}
+							>
+								{localPost.title}
+							</Typography>
+						</Box>
 						<Typography variant="caption" color="text.primary">
 							<span
 								role="button"
@@ -640,6 +675,64 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 							userSelect: 'none' // Prevent text selection on rapid double clicking
 						}}
 					>
+						{/* MATCH SCORECARD BANNER */}
+						{localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court) && (
+							<Paper
+								variant="outlined"
+								sx={{
+									mb: 2,
+									p: 2,
+									borderRadius: 2.5,
+									background: "linear-gradient(135deg, rgba(0, 102, 51, 0.04) 0%, rgba(255, 204, 51, 0.08) 100%)",
+									border: "1px solid",
+									borderColor: "rgba(0, 102, 51, 0.2)",
+									boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+									pointerEvents: "auto",
+								}}
+							>
+								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										<Typography variant="subtitle2" sx={{ fontWeight: "900", color: "primary.main", display: "flex", alignItems: "center", gap: 0.5 }}>
+											🏸 Match Scorecard
+										</Typography>
+										{localPost.matchDetails.court && (
+											<Chip label={`Court: ${localPost.matchDetails.court}`} size="small" variant="outlined" sx={{ fontSize: "0.7rem", height: 20 }} />
+										)}
+									</Box>
+									{localPost.matchDetails.winner && (
+										<Chip
+											label={`Winner: ${localPost.matchDetails.winner}`}
+											size="small"
+											color="success"
+											sx={{ fontWeight: "bold", fontSize: "0.7rem", height: 20 }}
+										/>
+									)}
+								</Box>
+
+								{localPost.matchDetails.score && (
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, py: 0.5, px: 1, bgcolor: "background.paper", borderRadius: 1.5, border: "1px dashed", borderColor: "divider" }}>
+										<Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+											Final Score:
+										</Typography>
+										<Typography variant="body1" sx={{ fontWeight: "900", letterSpacing: "1px", color: "text.primary" }}>
+											{localPost.matchDetails.score}
+										</Typography>
+									</Box>
+								)}
+
+								<Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, fontSize: "0.85rem" }}>
+									<Typography variant="body2" color="text.secondary">
+										<strong>Team / Partner:</strong> {localPost.matchDetails.partner ? `${localPost.authorName || "Player"} & ${localPost.matchDetails.partner}` : (localPost.authorName || "Player")}
+									</Typography>
+									{localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents)) && (
+										<Typography variant="body2" color="text.secondary">
+											<strong>Opponents:</strong> {Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.join(", ") : localPost.matchDetails.opponents}
+										</Typography>
+									)}
+								</Box>
+							</Paper>
+						)}
+
 						<Typography
 							variant="body1"
 							color="text.primary"
@@ -796,23 +889,25 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								const hasReactedWithThis = (localPost.reactions || []).some(
 									(r) => r.userId === currentUser?.id && r.emoji === emoji
 								);
+								const reactionMeta = BADMINTON_REACTIONS.find((b) => b.emoji === emoji);
 								return (
-									<Chip
-										key={emoji}
-										label={`${emoji} ${count}`}
-										size="small"
-										variant={hasReactedWithThis ? "filled" : "outlined"}
-										color={hasReactedWithThis ? "primary" : "default"}
-										onClick={() => handleReaction(emoji)}
-										sx={{
-											cursor: "pointer",
-											fontWeight: "bold",
-											fontSize: "0.75rem",
-											height: 24,
-											transition: "transform 0.15s ease",
-											"&:hover": { transform: "scale(1.1)" },
-										}}
-									/>
+									<Tooltip key={emoji} title={reactionMeta ? reactionMeta.tooltip : emoji} arrow>
+										<Chip
+											label={`${emoji} ${count}`}
+											size="small"
+											variant={hasReactedWithThis ? "filled" : "outlined"}
+											color={hasReactedWithThis ? "primary" : "default"}
+											onClick={() => handleReaction(emoji)}
+											sx={{
+												cursor: "pointer",
+												fontWeight: "bold",
+												fontSize: "0.75rem",
+												height: 24,
+												transition: "transform 0.15s ease",
+												"&:hover": { transform: "scale(1.1)" },
+											}}
+										/>
+									</Tooltip>
 								);
 							})}
 						</Box>
@@ -919,34 +1014,36 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 						onMouseLeave={() => setShowReactions(false)}
 						sx={{ position: 'relative', flex: 1, display: 'flex' }}
 					>
-						{/* Floating Reaction Bar with Custom Badminton Emojis */}
+						{/* Floating Reaction Bar with Badminton Reaction Trio */}
 						<Collapse in={showReactions} timeout="auto" unmountOnExit sx={{ position: 'absolute', bottom: '100%', left: 0, mb: 1, zIndex: 10 }}>
 							<Paper elevation={6} sx={{ display: 'flex', gap: 0.5, p: 0.8, borderRadius: 10, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-								{['🏸', '🔥', '💯', '❤️', '👏'].map((emoji) => (
-									<IconButton 
-										key={emoji} 
-										aria-label={`React with ${emoji}`}
-										onClick={(e) => { 
-											e.stopPropagation(); 
-											handleReaction(emoji); 
-										}}
-										sx={{ 
-											p: 0.8,
-											transition: 'transform 0.15s', 
-											'&:hover': { transform: 'scale(1.35)' } 
-										}}
-									>
-										<Typography fontSize="1.3rem">{emoji}</Typography>
-									</IconButton>
+								{BADMINTON_REACTIONS.map((item) => (
+									<Tooltip key={item.type} title={item.tooltip} arrow>
+										<IconButton 
+											aria-label={`React with ${item.label}`}
+											onClick={(e) => { 
+												e.stopPropagation(); 
+												handleReaction(item.emoji); 
+											}}
+											sx={{ 
+												p: 0.8,
+												transition: 'transform 0.15s ease', 
+												'&:hover': { transform: 'scale(1.35)' } 
+											}}
+										>
+											<Typography fontSize="1.3rem">{item.emoji}</Typography>
+										</IconButton>
+									</Tooltip>
 								))}
 							</Paper>
 						</Collapse>
 
 						<Button
+							aria-label="React to post"
 							onClick={() => {
 								const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
 								if (userReaction) handleReaction(userReaction);
-								else handleReaction('🏸');
+								else handleReaction('💥');
 							}}
 							color={(localPost.reactions || []).some((r) => r.userId === currentUser?.id) || hasLiked ? "primary" : "inherit"}
 							sx={actionBtnStyle}
@@ -955,11 +1052,18 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle }) {
 								{(() => {
 									const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
 									if (userReaction) return <Typography component="span" sx={{ fontSize: "1.1rem" }}>{userReaction}</Typography>;
-									return hasLiked ? <ThumbUpFilled /> : <ThumbUpOutline />;
+									return <Typography component="span" sx={{ fontSize: "1.1rem" }}>💥</Typography>;
 								})()}
 							</Box>
 							<Box sx={{ display: { xs: "none", sm: "inline-block" } }}>
-								React
+								{(() => {
+									const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
+									if (userReaction) {
+										const match = BADMINTON_REACTIONS.find((b) => b.emoji === userReaction);
+										return match ? match.label : "Reacted";
+									}
+									return "Smash";
+								})()}
 							</Box>
 						</Button>
 					</Box>

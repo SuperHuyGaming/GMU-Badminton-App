@@ -243,6 +243,8 @@ const sendNotification = async (io, targetUserId, message, link) => {
 // ==========================================
 // POSTS (FETCH & CREATE)
 // ==========================================
+const ALLOWED_CATEGORIES = ['general', 'match_result', 'gear_review', 'meetup_rally', 'training'];
+
 router.get("/", async (req, res) => {
 	try {
 		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -254,6 +256,9 @@ router.get("/", async (req, res) => {
 			status: { $nin: ['quarantined', 'deleted'] }
 		};
 		if (req.query.date && typeof req.query.date === "string") query.targetDate = req.query.date.slice(0, 50);
+		if (req.query.category && typeof req.query.category === "string" && req.query.category !== "all") {
+			query.category = req.query.category.slice(0, 50);
+		}
 
 		const rawPosts = await Post.find(query)
 			.sort({ timestamp: -1 })
@@ -268,7 +273,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility, isPinned } = req.body;
+		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility, isPinned, category, matchDetails } = req.body;
 
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
@@ -279,6 +284,27 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 
 		if (!content || typeof content !== "string" || !content.trim()) {
 			return res.status(400).json({ message: "Post content is required." });
+		}
+
+		let cleanCategory = "general";
+		if (category) {
+			if (!ALLOWED_CATEGORIES.includes(category)) {
+				return res.status(400).json({ message: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}` });
+			}
+			cleanCategory = category;
+		}
+
+		let cleanMatchDetails = undefined;
+		if (matchDetails && typeof matchDetails === "object") {
+			cleanMatchDetails = {
+				partner: matchDetails.partner ? xss(String(matchDetails.partner).trim()).slice(0, 100) : "",
+				opponents: Array.isArray(matchDetails.opponents)
+					? matchDetails.opponents.map((o) => xss(String(o || "").trim()).slice(0, 100)).filter(Boolean)
+					: (matchDetails.opponents ? [xss(String(matchDetails.opponents).trim()).slice(0, 100)].filter(Boolean) : []),
+				score: matchDetails.score ? xss(String(matchDetails.score).trim()).slice(0, 100) : "",
+				court: matchDetails.court ? xss(String(matchDetails.court).trim()).slice(0, 100) : "",
+				winner: matchDetails.winner ? xss(String(matchDetails.winner).trim()).slice(0, 100) : "",
+			};
 		}
 		
 		const cleanTitle = xss(title.trim());
@@ -306,6 +332,8 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		const newPost = new Post({
 			title: cleanTitle,
 			content: cleanContent,
+			category: cleanCategory,
+			matchDetails: cleanMatchDetails,
 			imageUrl: cleanImageUrl,
 			imageUrls: cleanImageUrls,
 			tags: cleanTags,
@@ -440,7 +468,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const { title, content } = req.body;
+		const { title, content, category, matchDetails } = req.body;
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
 		}
@@ -458,6 +486,27 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 
 		if (post.authorId.toString() !== currentUserId && req.user.role !== "admin")
 			return res.status(403).json({ message: "Unauthorized" });
+
+		if (category) {
+			if (!ALLOWED_CATEGORIES.includes(category)) {
+				return res.status(400).json({ message: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}` });
+			}
+			post.category = category;
+		}
+
+		if (matchDetails && typeof matchDetails === "object") {
+			post.matchDetails = {
+				partner: matchDetails.partner !== undefined ? xss(String(matchDetails.partner || "").trim()).slice(0, 100) : (post.matchDetails?.partner || ""),
+				opponents: matchDetails.opponents !== undefined
+					? (Array.isArray(matchDetails.opponents)
+						? matchDetails.opponents.map((o) => xss(String(o || "").trim()).slice(0, 100)).filter(Boolean)
+						: [xss(String(matchDetails.opponents || "").trim()).slice(0, 100)].filter(Boolean))
+					: (post.matchDetails?.opponents || []),
+				score: matchDetails.score !== undefined ? xss(String(matchDetails.score || "").trim()).slice(0, 100) : (post.matchDetails?.score || ""),
+				court: matchDetails.court !== undefined ? xss(String(matchDetails.court || "").trim()).slice(0, 100) : (post.matchDetails?.court || ""),
+				winner: matchDetails.winner !== undefined ? xss(String(matchDetails.winner || "").trim()).slice(0, 100) : (post.matchDetails?.winner || ""),
+			};
+		}
 
 		const cleanTitle = xss(title.trim());
 		const cleanContent = xss(content.trim());
@@ -1012,9 +1061,24 @@ router.put("/:postId/pin", authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// EMOJI REACTIONS (🏸, 🔥, 💯, ❤️, 👏)
+// BADMINTON REACTION TRIO (💥, 🧊, ⚡) & EMOJIS
 // ==========================================
-const ALLOWED_EMOJIS = ["🏸", "🔥", "💯", "❤️", "👏", "👍"];
+const BADMINTON_REACTIONS_MAP = {
+	"💥": { reactionType: "smash", notificationText: "smashed your post." },
+	"🧊": { reactionType: "ice_drop", notificationText: "dropped on your post." },
+	"⚡": { reactionType: "clutch", notificationText: "marked your post as clutch." },
+};
+
+const REACTION_TYPE_TO_EMOJI = {
+	smash: "💥",
+	ice_drop: "🧊",
+	clutch: "⚡",
+};
+
+const ALLOWED_EMOJIS = [
+	"💥", "🧊", "⚡", // Authentic Badminton Trio
+	"🏸", "🔥", "💯", "❤️", "👏", "👍", // Legacy emojis for backward compatibility
+];
 
 router.put("/:postId/react", authMiddleware, async (req, res) => {
 	try {
@@ -1022,10 +1086,16 @@ router.put("/:postId/react", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const { emoji } = req.body;
+		let { emoji, reactionType } = req.body;
+		if (!emoji && reactionType && REACTION_TYPE_TO_EMOJI[reactionType]) {
+			emoji = REACTION_TYPE_TO_EMOJI[reactionType];
+		}
+
 		if (!emoji || !ALLOWED_EMOJIS.includes(emoji)) {
 			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
 		}
+
+		const resolvedReactionType = reactionType || BADMINTON_REACTIONS_MAP[emoji]?.reactionType || "custom";
 
 		const userId = (req.user.id || req.user.userId).toString();
 		const userName = req.user.name || "Player";
@@ -1049,6 +1119,8 @@ router.put("/:postId/react", authMiddleware, async (req, res) => {
 			} else {
 				// Different emoji clicked -> replace reaction
 				post.reactions[existingReactionIndex].emoji = emoji;
+				post.reactions[existingReactionIndex].reactionType = resolvedReactionType;
+				post.reactions[existingReactionIndex].createdAt = new Date();
 				action = "updated";
 			}
 		} else {
@@ -1057,6 +1129,7 @@ router.put("/:postId/react", authMiddleware, async (req, res) => {
 				userId,
 				userName,
 				emoji,
+				reactionType: resolvedReactionType,
 				createdAt: new Date(),
 			});
 			action = "added";
@@ -1068,10 +1141,11 @@ router.put("/:postId/react", authMiddleware, async (req, res) => {
 		if (req.io) {
 			req.io.emit("postUpdated", hydratedPost);
 			if (action === "added" && post.authorId?.toString() !== userId.toString()) {
+				const notificationSuffix = BADMINTON_REACTIONS_MAP[emoji]?.notificationText || `reacted with ${emoji} to your post.`;
 				await sendNotification(
 					req.io,
 					post.authorId.toString(),
-					`${userName} reacted with ${emoji} to your post.`,
+					`${userName} ${notificationSuffix}`,
 					`/forum?postId=${post._id}`
 				);
 			}

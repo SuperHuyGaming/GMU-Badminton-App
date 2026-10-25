@@ -8,7 +8,20 @@ const PostSchema = new mongoose.Schema({
 	authorId: { type: String, required: true },
 	targetDate: { type: String, required: true },
 	timestamp: { type: Date, default: Date.now },
+	createdAt: { type: Date, default: Date.now },
 	visibility: { type: String, enum: ['PUBLIC', 'FRIENDS_ONLY', 'ONLY_ME'], default: 'PUBLIC' },
+	category: {
+		type: String,
+		enum: ['general', 'match_result', 'gear_review', 'meetup_rally', 'training'],
+		default: 'general',
+	},
+	matchDetails: {
+		partner: { type: String, default: "" },
+		opponents: { type: [String], default: [] },
+		score: { type: String, default: "" },
+		court: { type: String, default: "" },
+		winner: { type: String, default: "" },
+	},
 	likedBy: { type: [String], default: [] },
 	isFlagged: { type: Boolean, default: false },
 	status: {
@@ -40,6 +53,7 @@ const PostSchema = new mongoose.Schema({
 			userId: { type: String, required: true },
 			userName: { type: String, default: "Player" },
 			emoji: { type: String, required: true },
+			reactionType: { type: String },
 			createdAt: { type: Date, default: Date.now },
 		},
 	],
@@ -63,6 +77,32 @@ const PostSchema = new mongoose.Schema({
 			],
 		},
 	],
+});
+
+// Compound indexes
+PostSchema.index({ status: 1, isPinned: -1, createdAt: -1 });
+PostSchema.index({ category: 1, createdAt: -1 });
+PostSchema.index({ tags: 1, createdAt: -1 });
+
+PostSchema.pre('save', function (next) {
+	if (!this.createdAt && this.timestamp) {
+		this.createdAt = this.timestamp;
+	} else if (!this.timestamp && this.createdAt) {
+		this.timestamp = this.createdAt;
+	}
+	if (Array.isArray(this.reactions)) {
+		const EMOJI_TO_TYPE = {
+			"💥": "smash",
+			"🧊": "ice_drop",
+			"⚡": "clutch"
+		};
+		this.reactions.forEach(r => {
+			if (!r.reactionType && r.emoji && EMOJI_TO_TYPE[r.emoji]) {
+				r.reactionType = EMOJI_TO_TYPE[r.emoji];
+			}
+		});
+	}
+	next();
 });
 
 PostSchema.post('save', async function(doc) {
@@ -106,11 +146,13 @@ PostSchema.post('save', async function(doc) {
 				images: doc.imageUrls || [],
 				tags: doc.tags || [],
 				isPinned: doc.isPinned || false,
+				category: doc.category || 'general',
+				matchDetails: doc.matchDetails || null,
 				reactions: doc.reactions || [],
 				likes: doc.likedBy?.length || 0,
 				recentLikerAvatars: recentLikerAvatars,
 				comments: doc.comments?.length || 0,
-				createdAt: doc.timestamp,
+				createdAt: doc.createdAt || doc.timestamp,
 				visibility: doc.visibility,
 				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3 + (doc.reactions?.length || 0) * 2 + (doc.isPinned ? 1000 : 0)
 			},
