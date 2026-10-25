@@ -40,7 +40,7 @@ const EmptyStateGraphic = () => (
     </svg>
 );
 
-export default function EmptyTournaments({ onResetFilters }) {
+export default function EmptyTournaments({ onResetFilters, onSubmitDiscovery }) {
     return (
         <Box sx={{ 
             display: 'flex', 
@@ -92,8 +92,8 @@ export default function EmptyTournaments({ onResetFilters }) {
                 Our autonomous discovery engine scans collegiate clubs, regional academies, and tournament software across DC, Maryland, and Virginia. Check back soon as upcoming draws and dates are verified!
             </Typography>
 
-            {onResetFilters && (
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {onResetFilters && (
                     <Button 
                         variant="outlined" 
                         color="primary" 
@@ -103,8 +103,19 @@ export default function EmptyTournaments({ onResetFilters }) {
                     >
                         Reset Search Filters
                     </Button>
-                </Box>
-            )}
+                )}
+                {onSubmitDiscovery && (
+                    <Button 
+                        variant="contained" 
+                        color="primary" 
+                        size="medium"
+                        onClick={onSubmitDiscovery}
+                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                    >
+                        Submit Tournament Discovery
+                    </Button>
+                )}
+            </Box>
         </Box>
     );
 }

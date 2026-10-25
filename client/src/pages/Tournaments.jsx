@@ -96,6 +96,58 @@ function getTournamentStatus(tournament) {
     return { label: 'Schedule TBD', bgcolor: '#455a64', color: '#ffffff' };
 }
 
+function getTournamentBadges(tournament) {
+    const badges = [];
+    const seen = new Set();
+
+    // 1. Division badges (MS, WS, MD, WD, XD, Flights)
+    if (Array.isArray(tournament.divisions)) {
+        for (const div of tournament.divisions) {
+            let raw = '';
+            if (typeof div === 'string') {
+                raw = div.trim();
+            } else if (div && typeof div === 'object') {
+                raw = div.code || div.name || '';
+            }
+            if (!raw) continue;
+            const upper = raw.toUpperCase();
+
+            let label = raw;
+            if (upper.includes('MS_') || upper === 'MSO' || upper === 'MS' || upper === "MEN'S SINGLES") label = 'MS';
+            else if (upper.includes('WS_') || upper === 'WSO' || upper === 'WS' || upper === "WOMEN'S SINGLES") label = 'WS';
+            else if (upper.includes('MD_') || upper === 'MDO' || upper === 'MD' || upper === "MEN'S DOUBLES") label = 'MD';
+            else if (upper.includes('WD_') || upper === 'WDO' || upper === 'WD' || upper === "WOMEN'S DOUBLES") label = 'WD';
+            else if (upper.includes('XD_') || upper === 'XDO' || upper === 'XD' || upper === "MIXED DOUBLES") label = 'XD';
+            else if (upper.includes('FLIGHT_A') || upper === 'FLIGHT A') label = 'Flight A';
+            else if (upper.includes('FLIGHT_B') || upper === 'FLIGHT B') label = 'Flight B';
+            else if (upper.includes('FLIGHT_C') || upper === 'FLIGHT C') label = 'Flight C';
+            else if (upper.includes('TEAM')) label = 'Team';
+
+            if (label && !seen.has(label.toUpperCase())) {
+                seen.add(label.toUpperCase());
+                badges.push({ label, type: label.startsWith('Flight') ? 'flight' : 'division' });
+            }
+        }
+    }
+
+    // 2. Flight or skill badges from skillLevels
+    if (Array.isArray(tournament.skillLevels)) {
+        for (const skill of tournament.skillLevels) {
+            if (typeof skill === 'string' && skill.trim()) {
+                const trimmed = skill.trim();
+                const upper = trimmed.toUpperCase();
+                if (!seen.has(upper)) {
+                    seen.add(upper);
+                    const isFlight = upper.startsWith('FLIGHT');
+                    badges.push({ label: trimmed, type: isFlight ? 'flight' : 'skill' });
+                }
+            }
+        }
+    }
+
+    return badges;
+}
+
 // Custom Grid components for VirtuosoGrid
 const VirtualGridList = forwardRef(({ style, children, className, ...props }, ref) => (
     <div
@@ -147,6 +199,16 @@ export default function Tournaments() {
     const [refreshing, setRefreshing] = useState(false);
     const [clearDialogOpen, setClearDialogOpen] = useState(false);
     const [clearing, setClearing] = useState(false);
+    const [submitDiscoveryOpen, setSubmitDiscoveryOpen] = useState(false);
+    const [submittingDiscovery, setSubmittingDiscovery] = useState(false);
+    const [discoveryForm, setDiscoveryForm] = useState({
+        tournamentName: '',
+        eventLocation: '',
+        startDate: '',
+        registrationUrl: '',
+        flyerImageUrl: '',
+        originalCaption: ''
+    });
 
     // View state
     const [viewMode, setViewMode] = useState(searchParams.get('view') || 'list'); // 'list' | 'calendar'
@@ -462,6 +524,48 @@ END:VCALENDAR`;
         }
     };
 
+    // Open discovery submission dialog
+    const handleOpenSubmitDiscovery = () => {
+        if (!user) {
+            toast.error("Please sign in to submit a tournament discovery!");
+            return;
+        }
+        setDiscoveryForm({
+            tournamentName: '',
+            eventLocation: '',
+            startDate: '',
+            registrationUrl: '',
+            flyerImageUrl: '',
+            originalCaption: ''
+        });
+        setSubmitDiscoveryOpen(true);
+    };
+
+    // Submit crowdsourced tournament discovery
+    const handleSubmitDiscovery = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (!discoveryForm.tournamentName.trim()) {
+            toast.error("Tournament name is required.");
+            return;
+        }
+        setSubmittingDiscovery(true);
+        try {
+            const res = await apiFetch("/api/scrape/submit-pending", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(discoveryForm)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Failed to submit discovery");
+            toast.success(data.message || "Tournament submitted for admin approval!");
+            setSubmitDiscoveryOpen(false);
+        } catch (err) {
+            toast.error(err.message || "Could not submit tournament discovery.");
+        } finally {
+            setSubmittingDiscovery(false);
+        }
+    };
+
     // Active filters count
 
     const activeFilterCount = (searchInput ? 1 : 0) + 
@@ -748,6 +852,17 @@ END:VCALENDAR`;
                             {clearing ? "Resetting..." : "Clear & Reset"}
                         </Button>
                     </Tooltip>
+
+                    {/* Submit Discovery Button */}
+                    <Button
+                        variant="contained"
+                        size="medium"
+                        color="primary"
+                        onClick={handleOpenSubmitDiscovery}
+                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                    >
+                        Submit Discovery
+                    </Button>
                 </Box>
             </Paper>
 
@@ -825,7 +940,7 @@ END:VCALENDAR`;
 
             {/* Empty State */}
             {!error && !(loading && tournaments.length === 0) && filteredTournaments.length === 0 && (
-                <EmptyTournaments onResetFilters={handleClearFilters} />
+                <EmptyTournaments onResetFilters={handleClearFilters} onSubmitDiscovery={handleOpenSubmitDiscovery} />
             )}
 
             {/* VIEW MODE 1: LIST / VIRTUALIZED CARD GRID */}
@@ -847,6 +962,9 @@ END:VCALENDAR`;
                         const attendeesList = tournament.attendees || [];
                         const isSoldOut = tournament.status === 'sold_out';
                         const statusInfo = getTournamentStatus(tournament);
+                        const badges = getTournamentBadges(tournament);
+                        const visibleBadges = badges.slice(0, 4);
+                        const extraBadgeCount = badges.length - visibleBadges.length;
 
                         return (
                             <Card 
@@ -946,13 +1064,59 @@ END:VCALENDAR`;
                                     </Stack>
 
                                     {/* Clean Division/Flight Chips and Fee */}
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6, mt: 1 }}>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6, mt: 1, alignItems: 'center' }}>
                                         {tournament.entryFee && (
                                             <Chip label={`Fee: ${tournament.entryFee}`} size="small" sx={{ fontWeight: 700, bgcolor: 'rgba(0, 102, 51, 0.08)', color: 'primary.dark' }} />
                                         )}
-                                        {(tournament.skillLevels || []).slice(0, 3).map((skill, idx) => (
-                                            <Chip key={idx} label={skill} size="small" variant="outlined" color="primary" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />
-                                        ))}
+                                        {visibleBadges.map((badge, idx) => {
+                                            if (badge.type === 'flight') {
+                                                return (
+                                                    <Chip 
+                                                        key={idx} 
+                                                        label={badge.label} 
+                                                        size="small" 
+                                                        sx={{ 
+                                                            fontWeight: 700, 
+                                                            fontSize: '0.72rem',
+                                                            bgcolor: 'rgba(255, 204, 51, 0.18)', 
+                                                            color: '#7a5a00',
+                                                            border: '1px solid rgba(255, 204, 51, 0.45)' 
+                                                        }} 
+                                                    />
+                                                );
+                                            }
+                                            if (badge.type === 'division') {
+                                                return (
+                                                    <Chip 
+                                                        key={idx} 
+                                                        label={badge.label} 
+                                                        size="small" 
+                                                        variant="outlined" 
+                                                        color="primary" 
+                                                        sx={{ fontWeight: 700, fontSize: '0.72rem' }} 
+                                                    />
+                                                );
+                                            }
+                                            return (
+                                                <Chip 
+                                                    key={idx} 
+                                                    label={badge.label} 
+                                                    size="small" 
+                                                    variant="outlined" 
+                                                    sx={{ fontWeight: 600, fontSize: '0.72rem', color: 'text.secondary', borderColor: 'divider' }} 
+                                                />
+                                            );
+                                        })}
+                                        {extraBadgeCount > 0 && (
+                                            <Tooltip title={badges.slice(4).map(b => b.label).join(', ')}>
+                                                <Chip 
+                                                    label={`+${extraBadgeCount} more`} 
+                                                    size="small" 
+                                                    variant="outlined" 
+                                                    sx={{ fontWeight: 600, fontSize: '0.7rem', color: 'text.secondary' }} 
+                                                />
+                                            </Tooltip>
+                                        )}
                                     </Box>
                                 </CardContent>
 
@@ -984,7 +1148,7 @@ END:VCALENDAR`;
                                                 <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 26, height: 26, fontSize: '0.75rem' } }}>
                                                     {attendeesList.map((att, idx) => (
                                                         <Tooltip key={idx} title={typeof att === 'object' ? att.name || 'Player' : 'Player'}>
-                                                            <Avatar 
+                                                             <Avatar 
                                                                 alt={typeof att === 'object' ? att.name : 'Player'} 
                                                                 src={typeof att === 'object' ? att.avatarUrl : ''} 
                                                             />
@@ -1048,14 +1212,14 @@ END:VCALENDAR`;
                                                 endIcon={<LaunchIcon sx={{ fontSize: 16 }} />}
                                                 sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
                                             >
-                                                Sign Up Here
+                                                Register
                                             </Button>
                                         ) : (
                                             <Button 
                                                 variant="outlined" 
-                                                fullWidth
-                                                disabled
-                                                size="medium"
+                                                fullWidth 
+                                                disabled 
+                                                size="medium" 
                                                 sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
                                             >
                                                 Registration TBD
@@ -1272,9 +1436,30 @@ END:VCALENDAR`;
                                     {selectedTournament.tournamentName}
                                 </Typography>
                             </Box>
-                            <IconButton onClick={() => setSelectedTournament(null)} aria-label="Close dialog">
-                                <CloseIcon />
-                            </IconButton>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                {user?.role === 'admin' && (
+                                    <Tooltip title="Admin: Delete this tournament">
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteConfirmTournament(selectedTournament);
+                                            }}
+                                            aria-label={`Delete tournament ${selectedTournament.tournamentName}`}
+                                            sx={{
+                                                opacity: 0.85,
+                                                '&:hover': { opacity: 1, bgcolor: 'error.main', color: '#fff' }
+                                            }}
+                                        >
+                                            <DeleteForeverIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                )}
+                                <IconButton onClick={() => setSelectedTournament(null)} aria-label="Close dialog">
+                                    <CloseIcon />
+                                </IconButton>
+                            </Box>
                         </DialogTitle>
 
                         <DialogContent dividers sx={{ p: { xs: 2, md: 3 } }}>
@@ -1315,15 +1500,40 @@ END:VCALENDAR`;
                                             </Typography>
                                         )}
 
-                                        {/* Skill Levels */}
-                                        <Box>
-                                            <Typography variant="subtitle2" fontWeight={700} gutterBottom>Skill Divisions:</Typography>
-                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                                {(selectedTournament.skillLevels || []).map((skill, idx) => (
-                                                    <Chip key={idx} label={skill} size="small" color="primary" variant="outlined" />
-                                                ))}
+                                        {/* Offered Divisions & Flights */}
+                                        {Array.isArray(selectedTournament.divisions) && selectedTournament.divisions.length > 0 && (
+                                            <Box>
+                                                <Typography variant="subtitle2" fontWeight={700} gutterBottom>Offered Divisions & Flights:</Typography>
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+                                                    {selectedTournament.divisions.map((div, idx) => {
+                                                        const name = typeof div === 'string' ? div : (div.name || div.code || 'Division');
+                                                        const fee = typeof div === 'object' && div.fee ? ` • ${div.fee}` : '';
+                                                        return (
+                                                            <Chip 
+                                                                key={idx} 
+                                                                label={`${name}${fee}`} 
+                                                                size="small" 
+                                                                variant="outlined" 
+                                                                color="primary" 
+                                                                sx={{ fontWeight: 600 }} 
+                                                            />
+                                                        );
+                                                    })}
+                                                </Box>
                                             </Box>
-                                        </Box>
+                                        )}
+
+                                        {/* Skill Levels */}
+                                        {Array.isArray(selectedTournament.skillLevels) && selectedTournament.skillLevels.length > 0 && (
+                                            <Box>
+                                                <Typography variant="subtitle2" fontWeight={700} gutterBottom>Skill Levels:</Typography>
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                    {selectedTournament.skillLevels.map((skill, idx) => (
+                                                        <Chip key={idx} label={skill} size="small" variant="outlined" sx={{ color: 'text.secondary', borderColor: 'divider' }} />
+                                                    ))}
+                                                </Box>
+                                            </Box>
+                                        )}
 
                                         {/* Original Caption / Details */}
                                         {selectedTournament.originalCaption && (
@@ -1394,7 +1604,7 @@ END:VCALENDAR`;
                                                     startIcon={selectedTournament.linkStatus === 'expired' ? <WarningAmberIcon /> : null}
                                                     sx={{ flex: 1.5, fontWeight: 700, borderRadius: 2 }}
                                                 >
-                                                    {selectedTournament.linkStatus === 'expired' ? "Visit Host Club" : "Register Online"}
+                                                    {selectedTournament.linkStatus === 'expired' ? "Visit Host Club" : "Register"}
                                                 </Button>
                                             )}
                                         </Stack>
@@ -1566,6 +1776,106 @@ END:VCALENDAR`;
                         {clearing ? 'Resetting…' : 'Reset Now'}
                     </Button>
                 </DialogActions>
+            </Dialog>
+
+            {/* User Submit Tournament Discovery Dialog */}
+            <Dialog
+                open={submitDiscoveryOpen}
+                onClose={() => !submittingDiscovery && setSubmitDiscoveryOpen(false)}
+                maxWidth="sm"
+                fullWidth
+                disableRestoreFocus
+            >
+                <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <EmojiEventsIcon color="primary" />
+                        <span>Submit Tournament Discovery</span>
+                    </Box>
+                    <IconButton size="small" onClick={() => setSubmitDiscoveryOpen(false)} disabled={submittingDiscovery}>
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <form onSubmit={handleSubmitDiscovery}>
+                    <DialogContent dividers sx={{ p: 3 }}>
+                        <DialogContentText sx={{ mb: 2 }}>
+                            Discovered an upcoming collegiate or DMV badminton tournament? Submit it below! Our team and automated verification engine will review and publish it to the directory.
+                        </DialogContentText>
+                        <Stack spacing={2}>
+                            <TextField
+                                label="Tournament Name"
+                                required
+                                fullWidth
+                                size="small"
+                                value={discoveryForm.tournamentName}
+                                onChange={(e) => setDiscoveryForm(prev => ({ ...prev, tournamentName: e.target.value }))}
+                                placeholder="e.g. 2026 GMU Spring Invitational"
+                            />
+                            <TextField
+                                label="Event Location / Venue"
+                                fullWidth
+                                size="small"
+                                value={discoveryForm.eventLocation}
+                                onChange={(e) => setDiscoveryForm(prev => ({ ...prev, eventLocation: e.target.value }))}
+                                placeholder="e.g. RAC Gym, Fairfax, VA"
+                            />
+                            <TextField
+                                label="Start Date"
+                                type="date"
+                                fullWidth
+                                size="small"
+                                slotProps={{ inputLabel: { shrink: true } }}
+                                value={discoveryForm.startDate}
+                                onChange={(e) => setDiscoveryForm(prev => ({ ...prev, startDate: e.target.value }))}
+                            />
+                            <TextField
+                                label="Registration Link / TournamentSoftware URL"
+                                fullWidth
+                                size="small"
+                                value={discoveryForm.registrationUrl}
+                                onChange={(e) => setDiscoveryForm(prev => ({ ...prev, registrationUrl: e.target.value }))}
+                                placeholder="https://..."
+                            />
+                            <TextField
+                                label="Flyer Image URL"
+                                fullWidth
+                                size="small"
+                                value={discoveryForm.flyerImageUrl}
+                                onChange={(e) => setDiscoveryForm(prev => ({ ...prev, flyerImageUrl: e.target.value }))}
+                                placeholder="https://..."
+                            />
+                            <TextField
+                                label="Notes / Divisions / Caption"
+                                fullWidth
+                                multiline
+                                rows={3}
+                                size="small"
+                                value={discoveryForm.originalCaption}
+                                onChange={(e) => setDiscoveryForm(prev => ({ ...prev, originalCaption: e.target.value }))}
+                                placeholder="Details about divisions (MS, MD, XD), flight levels, fees, eligibility..."
+                            />
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, py: 2 }}>
+                        <Button 
+                            onClick={() => setSubmitDiscoveryOpen(false)} 
+                            disabled={submittingDiscovery}
+                            variant="outlined"
+                            sx={{ borderRadius: 2 }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            type="submit" 
+                            variant="contained" 
+                            color="primary"
+                            disabled={submittingDiscovery || !discoveryForm.tournamentName.trim()}
+                            startIcon={submittingDiscovery ? <CircularProgress size={16} color="inherit" /> : null}
+                            sx={{ borderRadius: 2, fontWeight: 700 }}
+                        >
+                            {submittingDiscovery ? 'Submitting…' : 'Submit Discovery'}
+                        </Button>
+                    </DialogActions>
+                </form>
             </Dialog>
         </Box>
     );

@@ -116,6 +116,33 @@ describe("R1: Tournament Clean Slate & Verified Data Seeding Suite", () => {
             expect(mockBulkWrite).toHaveBeenCalled();
         });
 
+        test("wipeAndRestartTournamentSystem does not inject seed tournaments when forceSeed is false (production mode)", async () => {
+            jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 2 });
+            const mockBulkWrite = jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
+
+            const result = await wipeAndRestartTournamentSystem({ forceSeed: false });
+
+            expect(result.success).toBe(true);
+            expect(result.activeGuaranteedCount).toBe(0);
+            expect(result.tournaments).toEqual([]);
+            expect(mockBulkWrite).not.toHaveBeenCalled();
+        });
+
+        test("wipeAndRestartTournamentSystem forces seeding when forceSeed is true", async () => {
+            jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            const mockBulkWrite = jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({ upsertedCount: 5 });
+
+            const result = await wipeAndRestartTournamentSystem({ forceSeed: true });
+
+            expect(result.success).toBe(true);
+            expect(result.activeGuaranteedCount).toBe(5);
+            expect(mockBulkWrite).toHaveBeenCalled();
+        });
+
         test("handles disconnected database safely without leaking unhandled rejections", async () => {
             Object.defineProperty(mongoose.connection, 'readyState', { value: 0, configurable: true });
 
@@ -144,6 +171,27 @@ describe("R1: Tournament Clean Slate & Verified Data Seeding Suite", () => {
             expect(res.body.seededTournaments).toBe(5);
             expect(res.body.tournaments).toHaveLength(5);
             expect(res.body.tournaments[0].tournamentName).toBe("2026 GMU Badminton Open");
+        });
+
+        test("POST /api/tournaments/reset-seed does not seed fake tournaments in production mode", async () => {
+            const originalEnv = process.env.NODE_ENV;
+            try {
+                process.env.NODE_ENV = 'production';
+                jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+                jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+                jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 1 });
+                const mockBulkWrite = jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
+
+                const res = await request(app).post('/api/tournaments/reset-seed');
+
+                expect(res.status).toBe(200);
+                expect(res.body.success).toBe(true);
+                expect(res.body.seededTournaments).toBe(0);
+                expect(res.body.tournaments).toHaveLength(0);
+                expect(mockBulkWrite).not.toHaveBeenCalled();
+            } finally {
+                process.env.NODE_ENV = originalEnv;
+            }
         });
 
         test("returns 500 if database is disconnected during reset-seed", async () => {

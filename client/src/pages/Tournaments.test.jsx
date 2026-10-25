@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import Tournaments from './Tournaments';
@@ -512,6 +512,142 @@ describe('Public Tournaments Page Component', () => {
         await waitFor(() => {
             expect(screen.getByText(/No approved tournaments currently scheduled. Check back soon or submit a tournament discovery!/i)).toBeInTheDocument();
             expect(screen.getByText(/Our AI is Hunting/i)).toBeInTheDocument();
+        });
+    });
+
+    it('renders clean division and flight chips, fee chip, and crisp Register CTA button on tournament cards', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Fee chip
+        expect(screen.getByText(/Fee: \$30/i)).toBeInTheDocument();
+
+        // Division chip (MSO -> MS)
+        expect(screen.getByText('MS')).toBeInTheDocument();
+
+        // Register CTA button
+        const registerButtons = screen.getAllByRole('link', { name: /register/i });
+        expect(registerButtons.length).toBeGreaterThan(0);
+        expect(registerButtons[0]).toHaveAttribute('href', 'https://masonbadminton.com/register');
+    });
+
+    it('allows admin to delete tournament directly from within the detail modal', async () => {
+        currentAuthUser = {
+            _id: 'admin-1',
+            name: 'Club Admin',
+            role: 'admin'
+        };
+
+        apiFetch.mockImplementation(async (url, opts) => {
+            if (url === '/api/tournaments/t-1' && opts?.method === 'DELETE') {
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ message: 'Tournament deleted successfully.', _id: 't-1' })
+                };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({ tournaments: mockTournaments })
+            };
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Open detail modal via View Details button
+        const viewDetailsBtn = screen.getAllByRole('button', { name: /view details/i })[0];
+        fireEvent.click(viewDetailsBtn);
+
+        let dialog;
+        await waitFor(() => {
+            dialog = screen.getByRole('dialog');
+            expect(dialog).toBeInTheDocument();
+            expect(screen.getByText(/Offered Divisions & Flights/i)).toBeInTheDocument();
+        });
+
+        // Admin delete icon button in modal dialog header
+        const deleteBtnInModal = within(dialog).getByLabelText('Delete tournament Mason Open Championships 2027');
+        expect(deleteBtnInModal).toBeInTheDocument();
+
+        fireEvent.click(deleteBtnInModal);
+
+        // Delete confirmation dialog
+        await waitFor(() => {
+            expect(screen.getByText('Delete Tournament?')).toBeInTheDocument();
+        });
+
+        const confirmBtn = screen.getByRole('button', { name: /^Delete$/i });
+        fireEvent.click(confirmBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/tournaments/t-1', { method: 'DELETE' });
+            expect(toast.success).toHaveBeenCalledWith('"Mason Open Championships 2027" deleted.');
+        });
+    });
+
+    it('opens discovery submission dialog and submits pending tournament to API', async () => {
+        apiFetch.mockImplementation(async (url, opts) => {
+            if (url === '/api/scrape/submit-pending' && opts?.method === 'POST') {
+                return {
+                    ok: true,
+                    status: 201,
+                    json: async () => ({ message: 'Tournament submitted for admin approval!' })
+                };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({ tournaments: mockTournaments })
+            };
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Click Submit Discovery button
+        const submitDiscoveryBtn = screen.getByRole('button', { name: /submit discovery/i });
+        fireEvent.click(submitDiscoveryBtn);
+
+        await waitFor(() => {
+            expect(screen.getByText('Submit Tournament Discovery')).toBeInTheDocument();
+        });
+
+        // Fill tournament name
+        const nameInput = screen.getByLabelText(/Tournament Name/i);
+        fireEvent.change(nameInput, { target: { value: '2027 GMU Spring Invitational' } });
+
+        // Submit form
+        const submitBtn = screen.getByRole('button', { name: /^Submit Discovery$/i });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/scrape/submit-pending', expect.objectContaining({
+                method: 'POST'
+            }));
+            expect(toast.success).toHaveBeenCalledWith('Tournament submitted for admin approval!');
         });
     });
 });

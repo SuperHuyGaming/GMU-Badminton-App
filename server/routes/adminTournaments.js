@@ -546,7 +546,9 @@ router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => 
  */
 router.post("/wipe-and-restart", adminActionLimiter, async (req, res) => {
     try {
-        const result = await wipeAndRestartTournamentSystem();
+        const isProduction = process.env.NODE_ENV === 'production';
+        const shouldSeed = req.body?.forceSeed !== undefined ? req.body.forceSeed : !isProduction;
+        const result = await wipeAndRestartTournamentSystem({ forceSeed: shouldSeed });
         return res.status(200).json({
             message: "Tournament system wiped and restarted successfully",
             result
