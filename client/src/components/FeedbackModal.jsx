@@ -1,5 +1,5 @@
 // client/src/components/FeedbackModal.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
 	Dialog,
 	DialogTitle,
@@ -14,8 +14,12 @@ import {
 	Alert,
 	CircularProgress,
 	Stack,
+	Paper,
+	Tooltip,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import RemoveIcon from "@mui/icons-material/Remove";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import FeedbackIcon from "@mui/icons-material/Feedback";
@@ -41,7 +45,17 @@ const SEVERITIES = [
 ];
 
 export default function FeedbackModal() {
-	const { isOpen, initialData, closeFeedbackModal } = useFeedback();
+	const {
+		isOpen,
+		isMinimized,
+		draft,
+		initialData,
+		closeFeedbackModal,
+		minimizeFeedbackModal,
+		maximizeFeedbackModal,
+		saveDraft,
+		clearDraft,
+	} = useFeedback();
 	const { user } = useAuth();
 
 	const [type, setType] = useState("bug");
@@ -57,25 +71,74 @@ export default function FeedbackModal() {
 	const [urlInput, setUrlInput] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
+	const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
+	// Initialize from draft or initialData when opened
 	useEffect(() => {
 		if (isOpen) {
-			setType(initialData?.type || "bug");
-			setSeverity(initialData?.severity || "medium");
-			setTitle("");
-			setDescription("");
-			setPageUrl(initialData?.pageUrl || (typeof window !== "undefined" ? window.location.pathname : "/"));
-			setGuestName("");
-			setGuestEmail("");
-			setImages([]);
+			if (draft && (draft.title || draft.description || (draft.images && draft.images.length > 0))) {
+				setType(draft.type || "bug");
+				setSeverity(draft.severity || "medium");
+				setTitle(draft.title || "");
+				setDescription(draft.description || "");
+				setPageUrl(draft.pageUrl || (typeof window !== "undefined" ? window.location.pathname : "/"));
+				setGuestName(draft.guestName || "");
+				setGuestEmail(draft.guestEmail || "");
+				setImages(draft.images || []);
+				setHasRestoredDraft(true);
+			} else {
+				setType(initialData?.type || "bug");
+				setSeverity(initialData?.severity || "medium");
+				setTitle("");
+				setDescription("");
+				setPageUrl(initialData?.pageUrl || (typeof window !== "undefined" ? window.location.pathname : "/"));
+				setGuestName("");
+				setGuestEmail("");
+				setImages([]);
+				setHasRestoredDraft(false);
+			}
 			setShowUrlInput(false);
 			setUrlInput("");
 			setErrorMessage("");
 		}
-	}, [isOpen, initialData]);
+	}, [isOpen, initialData]); // deliberate: only sync when open state triggers
 
-	const handleFileUpload = async (files) => {
+	// Auto-persist draft to context/sessionStorage whenever relevant fields change
+	useEffect(() => {
+		if (!isOpen) return;
+		const hasContent = Boolean(
+			title.trim() ||
+			description.trim() ||
+			images.length > 0 ||
+			guestName.trim() ||
+			guestEmail.trim()
+		);
+
+		if (hasContent) {
+			saveDraft({
+				type,
+				severity,
+				title,
+				description,
+				pageUrl,
+				guestName,
+				guestEmail,
+				images,
+			});
+		}
+	}, [isOpen, type, severity, title, description, pageUrl, guestName, guestEmail, images, saveDraft]);
+
+	const handleFileUpload = useCallback(async (files) => {
 		if (!files || files.length === 0) return;
+
+		setImages((currentImages) => {
+			const remainingSlots = 4 - currentImages.length;
+			if (remainingSlots <= 0) {
+				setErrorMessage("You can attach a maximum of 4 pictures.");
+				return currentImages;
+			}
+			return currentImages;
+		});
 
 		const remainingSlots = 4 - images.length;
 		if (remainingSlots <= 0) {
@@ -134,24 +197,38 @@ export default function FeedbackModal() {
 			}
 		}
 		setUploadingImage(false);
-	};
+	}, [images.length]);
 
-	const handlePaste = (e) => {
-		const items = e.clipboardData?.items;
-		if (!items) return;
-		const imageFiles = [];
-		for (let i = 0; i < items.length; i++) {
-			if (items[i].type.indexOf("image") !== -1) {
-				const file = items[i].getAsFile();
-				if (file) imageFiles.push(file);
+	// Global clipboard paste listener: active whenever modal is open or minimized
+	useEffect(() => {
+		if (!isOpen) return;
+
+		const handleGlobalPaste = (e) => {
+			const items = e.clipboardData?.items;
+			if (!items) return;
+
+			const imageFiles = [];
+			for (let i = 0; i < items.length; i++) {
+				if (items[i].type.indexOf("image") !== -1) {
+					const file = items[i].getAsFile();
+					if (file) imageFiles.push(file);
+				}
 			}
-		}
-		if (imageFiles.length > 0) {
-			e.preventDefault();
-			handleFileUpload(imageFiles);
-			toast.success("Pasted screenshot attached!");
-		}
-	};
+
+			if (imageFiles.length > 0) {
+				e.preventDefault();
+				handleFileUpload(imageFiles);
+				toast.success(
+					isMinimized
+						? "Screenshot attached to minimized draft!"
+						: "Pasted screenshot attached!"
+				);
+			}
+		};
+
+		window.addEventListener("paste", handleGlobalPaste);
+		return () => window.removeEventListener("paste", handleGlobalPaste);
+	}, [isOpen, isMinimized, handleFileUpload]);
 
 	const handleAddImageUrl = () => {
 		if (!urlInput.trim()) return;
@@ -166,6 +243,15 @@ export default function FeedbackModal() {
 
 	const handleRemoveImage = (indexToRemove) => {
 		setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+	};
+
+	const handleClearDraft = () => {
+		clearDraft();
+		setTitle("");
+		setDescription("");
+		setImages([]);
+		setHasRestoredDraft(false);
+		toast.success("Draft cleared.");
 	};
 
 	const handleSubmit = async (e) => {
@@ -216,6 +302,7 @@ export default function FeedbackModal() {
 			}
 
 			toast.success("Thank you! Your feedback has been sent to our admin team.");
+			clearDraft();
 			closeFeedbackModal();
 		} catch (err) {
 			setErrorMessage(err.message || "Could not submit report. Please try again.");
@@ -224,21 +311,132 @@ export default function FeedbackModal() {
 		}
 	};
 
+	if (!isOpen) return null;
+
+	const activeCat = CATEGORIES.find((c) => c.id === type) || CATEGORIES[0];
+	const ActiveCatIcon = activeCat.icon;
+
+	// Minimized Floating Pill Mode
+	if (isMinimized) {
+		return (
+			<Paper
+				elevation={8}
+				onClick={maximizeFeedbackModal}
+				role="button"
+				aria-label="Expand bug report draft"
+				tabIndex={0}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						maximizeFeedbackModal();
+					}
+				}}
+				sx={{
+					position: "fixed",
+					bottom: { xs: 80, sm: 96 },
+					right: { xs: 16, sm: 28 },
+					zIndex: 1350,
+					cursor: "pointer",
+					display: "flex",
+					alignItems: "center",
+					gap: 1.5,
+					py: 1,
+					px: 2,
+					borderRadius: 9999,
+					bgcolor: "background.paper",
+					border: "2px solid",
+					borderColor: activeCat.color,
+					boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+					transition: "transform 0.2s ease, box-shadow 0.2s ease",
+					"&:hover": {
+						transform: "translateY(-3px)",
+						boxShadow: "0 12px 28px rgba(0,0,0,0.3)",
+					},
+					"&:focus-visible": {
+						outline: "3px solid #FFCC33",
+						outlineOffset: "2px",
+					},
+				}}
+			>
+				<ActiveCatIcon style={{ color: activeCat.color, fontSize: 20 }} />
+				<Box sx={{ maxWidth: { xs: 160, sm: 240 }, overflow: "hidden" }}>
+					<Typography
+						variant="body2"
+						sx={{
+							fontWeight: 700,
+							fontSize: "0.85rem",
+							overflow: "hidden",
+							textOverflow: "ellipsis",
+							whiteSpace: "nowrap",
+						}}
+					>
+						{title.trim() ? title.trim() : `${activeCat.label} (Draft)`}
+					</Typography>
+					<Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
+						{images.length > 0
+							? `📷 ${images.length} pic${images.length > 1 ? "s" : ""} • Click to resume`
+							: "Click to resume draft"}
+					</Typography>
+				</Box>
+				<Tooltip title="Expand form" arrow>
+					<IconButton
+						size="small"
+						aria-label="Expand form"
+						onClick={(e) => {
+							e.stopPropagation();
+							maximizeFeedbackModal();
+						}}
+						sx={{ p: 0.5, color: "text.secondary" }}
+					>
+						<OpenInFullIcon sx={{ fontSize: 16 }} />
+					</IconButton>
+				</Tooltip>
+				<Tooltip title="Close draft" arrow>
+					<IconButton
+						size="small"
+						aria-label="Close draft"
+						onClick={(e) => {
+							e.stopPropagation();
+							closeFeedbackModal();
+						}}
+						sx={{ p: 0.5, color: "text.secondary", "&:hover": { color: "error.main" } }}
+					>
+						<CloseIcon sx={{ fontSize: 16 }} />
+					</IconButton>
+				</Tooltip>
+			</Paper>
+		);
+	}
+
+	// Expanded Docked Card / Dialog Mode (Non-blocking backdrop)
 	return (
 		<Dialog
 			open={isOpen}
 			onClose={closeFeedbackModal}
+			hideBackdrop={true}
+			disableScrollLock={true}
+			disableEnforceFocus={true}
 			maxWidth="sm"
 			fullWidth
 			aria-labelledby="feedback-dialog-title"
 			slotProps={{
 				paper: {
-					onPaste: handlePaste,
 					sx: {
+						position: "fixed",
+						bottom: { xs: 8, sm: 24 },
+						right: { xs: 8, sm: 24 },
+						m: 0,
+						width: { xs: "calc(100vw - 16px)", sm: 540 },
+						maxHeight: { xs: "90vh", sm: "82vh" },
+						boxShadow: "0 24px 48px rgba(0, 0, 0, 0.28)",
+						border: "1px solid",
+						borderColor: "divider",
 						borderRadius: 3,
 						p: { xs: 1, sm: 2 },
 						bgcolor: "background.paper",
 						backgroundImage: "none",
+						zIndex: 1400,
+						overflowY: "auto",
 					},
 				},
 			}}
@@ -253,24 +451,79 @@ export default function FeedbackModal() {
 				}}
 			>
 				<Box>
-					<Typography variant="h6" fontWeight="bold" color="text.primary">
-						Feedback & Issue Reporting
-					</Typography>
+					<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+						<Typography variant="h6" fontWeight="bold" color="text.primary">
+							Feedback & Issue Reporting
+						</Typography>
+						{hasRestoredDraft && (
+							<Chip
+								size="small"
+								label="Draft Restored"
+								color="warning"
+								variant="outlined"
+								sx={{ height: 20, fontSize: "0.7rem", fontWeight: "bold" }}
+							/>
+						)}
+					</Box>
 					<Typography variant="body2" color="text.secondary">
 						Help us improve the GMU Badminton platform. We review every submission!
 					</Typography>
 				</Box>
-				<IconButton
-					onClick={closeFeedbackModal}
-					size="small"
-					aria-label="Close feedback dialog"
-					sx={{ color: "text.secondary" }}
-				>
-					<CloseIcon fontSize="small" />
-				</IconButton>
+				<Stack direction="row" spacing={0.5}>
+					<Tooltip title="Minimize to floating pill (lets you inspect screen & take screenshots)" arrow>
+						<IconButton
+							onClick={minimizeFeedbackModal}
+							size="small"
+							aria-label="Minimize report form"
+							sx={{ color: "text.secondary" }}
+						>
+							<RemoveIcon fontSize="small" />
+						</IconButton>
+					</Tooltip>
+					<Tooltip title="Close dialog" arrow>
+						<IconButton
+							onClick={closeFeedbackModal}
+							size="small"
+							aria-label="Close feedback dialog"
+							sx={{ color: "text.secondary" }}
+						>
+							<CloseIcon fontSize="small" />
+						</IconButton>
+					</Tooltip>
+				</Stack>
 			</DialogTitle>
 
 			<DialogContent dividers sx={{ pt: 2, pb: 2 }}>
+				{/* Non-blocking UX Tip */}
+				<Box
+					sx={{
+						mb: 2,
+						p: 1.25,
+						bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 102, 51, 0.06)"),
+						border: "1px solid",
+						borderColor: "divider",
+						borderRadius: 2,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "space-between",
+						gap: 1,
+					}}
+				>
+					<Typography variant="caption" color="text.secondary">
+						💡 <strong>Non-blocking helper:</strong> Click <strong>Minimize (—)</strong> to navigate or inspect errors. Press <strong>Ctrl+V</strong> anywhere to attach screenshots!
+					</Typography>
+					{(title || description || images.length > 0) && (
+						<Button
+							size="small"
+							color="inherit"
+							onClick={handleClearDraft}
+							sx={{ fontSize: "0.7rem", textTransform: "none", py: 0, px: 0.8, minWidth: "auto" }}
+						>
+							Clear draft
+						</Button>
+					)}
+				</Box>
+
 				{errorMessage && (
 					<Alert severity="error" sx={{ mb: 2.5, borderRadius: 2 }}>
 						{errorMessage}
