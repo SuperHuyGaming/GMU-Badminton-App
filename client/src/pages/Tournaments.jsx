@@ -222,6 +222,8 @@ export default function Tournaments() {
     const [selectedTournament, setSelectedTournament] = useState(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [bracketDialogOpen, setBracketDialogOpen] = useState(false);
+    const [bracketData, setBracketData] = useState(null);
+    const [loadingBracket, setLoadingBracket] = useState(false);
 
     // Filter and Sort states
     const [divisionFilter, setDivisionFilter] = useState('all'); // 'all' | 'singles' | 'doubles' | 'mixed'
@@ -380,6 +382,71 @@ export default function Tournaments() {
             socket.off('tournament:rsvpUpdated', handleRsvpUpdated);
         };
     }, [fetchTournaments]);
+
+    // Fetch live matches when bracket dialog is opened
+    useEffect(() => {
+        if (!bracketDialogOpen || !selectedTournament?._id) return;
+
+        let isMounted = true;
+        const loadBracketMatches = async () => {
+            setLoadingBracket(true);
+            try {
+                const res = await apiFetch(`/api/tournaments/${selectedTournament._id}/matches`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted && data.matches && data.matches.length > 0) {
+                        const roundsMap = {};
+                        data.matches.forEach((m) => {
+                            const rName = m.round || 'Round 1';
+                            if (!roundsMap[rName]) {
+                                roundsMap[rName] = {
+                                    id: `r-${rName}`,
+                                    name: rName,
+                                    matches: []
+                                };
+                            }
+                            roundsMap[rName].matches.push({
+                                id: m._id || m.id,
+                                team1: {
+                                    name: m.team1?.[0]?.name || (Array.isArray(m.team1) ? m.team1.map(p => p.name).join(' & ') : 'TBD'),
+                                    score: m.team1Score ?? 0,
+                                    seed: m.team1?.[0]?.seed,
+                                    isWinner: m.winner === (m.team1?.[0]?.name || 'team1')
+                                },
+                                team2: {
+                                    name: m.team2?.[0]?.name || (Array.isArray(m.team2) ? m.team2.map(p => p.name).join(' & ') : 'TBD'),
+                                    score: m.team2Score ?? 0,
+                                    seed: m.team2?.[0]?.seed,
+                                    isWinner: m.winner === (m.team2?.[0]?.name || 'team2')
+                                },
+                                status: m.matchStatus || 'SCHEDULED',
+                                court: m.courtNumber ? `Court ${m.courtNumber}` : undefined,
+                                winner: m.winner
+                            });
+                        });
+
+                        setBracketData({
+                            id: `draw-${selectedTournament._id}`,
+                            tournamentName: selectedTournament.tournamentName || 'Tournament Bracket',
+                            division: selectedTournament.divisions?.[0]?.name || 'Open Flight',
+                            format: 'SINGLE_ELIMINATION',
+                            rounds: Object.values(roundsMap)
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('[Tournaments] Error loading bracket matches:', err.message);
+            } finally {
+                if (isMounted) setLoadingBracket(false);
+            }
+        };
+
+        loadBracketMatches();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [bracketDialogOpen, selectedTournament]);
 
     const handleClearFilters = () => {
         setSearchInput('');
@@ -2008,7 +2075,7 @@ END:VCALENDAR`;
             {/* INTERACTIVE TOURNAMENT BRACKET DIALOG */}
             <Dialog 
                 open={bracketDialogOpen} 
-                onClose={() => setBracketDialogOpen(false)} 
+                onClose={() => { setBracketDialogOpen(false); setBracketData(null); }} 
                 maxWidth="lg" 
                 fullWidth
                 disableRestoreFocus
@@ -2021,12 +2088,18 @@ END:VCALENDAR`;
                             {selectedTournament?.tournamentName ? `${selectedTournament.tournamentName} — Draws & Brackets` : 'Tournament Draws & Brackets'}
                         </Typography>
                     </Box>
-                    <IconButton onClick={() => setBracketDialogOpen(false)} aria-label="Close bracket dialog">
+                    <IconButton onClick={() => { setBracketDialogOpen(false); setBracketData(null); }} aria-label="Close bracket dialog">
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
                 <DialogContent sx={{ p: 2, flex: 1, overflow: 'auto' }}>
-                    <TournamentBracket />
+                    {loadingBracket ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 300 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <TournamentBracket bracketData={bracketData} />
+                    )}
                 </DialogContent>
             </Dialog>
 

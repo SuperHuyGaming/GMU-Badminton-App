@@ -252,7 +252,7 @@ export default function TournamentBracket({
                 </Box>
 
                 {/* Draw Format Switcher */}
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                     <ButtonGroup size="small" variant="outlined" aria-label="Draw Format Selector">
                         <Button
                             variant={drawFormat === 'SINGLE_ELIMINATION' ? 'contained' : 'outlined'}

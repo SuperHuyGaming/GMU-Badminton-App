@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import Tournaments from './Tournaments';
@@ -16,12 +16,24 @@ vi.mock('react-hot-toast', () => ({
     },
 }));
 
+const { mockSocket, socketHandlers } = vi.hoisted(() => {
+    const handlers = {};
+    return {
+        socketHandlers: handlers,
+        mockSocket: {
+            emit: vi.fn(),
+            on: vi.fn((event, handler) => {
+                handlers[event] = handler;
+            }),
+            off: vi.fn((event) => {
+                delete handlers[event];
+            })
+        }
+    };
+});
+
 vi.mock('../utils/socket', () => ({
-    default: {
-        emit: vi.fn(),
-        on: vi.fn(),
-        off: vi.fn()
-    }
+    default: mockSocket
 }));
 
 let currentAuthUser = {
@@ -81,6 +93,7 @@ const mockTournaments = [
 describe('Public Tournaments Page Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        Object.keys(socketHandlers).forEach(key => delete socketHandlers[key]);
         currentAuthUser = {
             _id: 'user-current-1',
             name: 'Test Player',
@@ -849,6 +862,55 @@ describe('Public Tournaments Page Component', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/Draws & Brackets/i)).toBeInTheDocument();
+            expect(apiFetch).toHaveBeenCalledWith('/api/tournaments/t-1/matches');
+        });
+    });
+
+    it('handles real-time socket events: tournamentApproved, tournamentDeleted, and tournament:rsvpUpdated', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+            expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+        });
+
+        // 1. tournament:rsvpUpdated event updates feed in real time
+        expect(socketHandlers['tournament:rsvpUpdated']).toBeDefined();
+        act(() => {
+            socketHandlers['tournament:rsvpUpdated']({
+                tournamentId: 't-1',
+                rsvpCount: 42,
+                attendees: [{ _id: 'u-99', name: 'New Attendee', avatarUrl: '' }]
+            });
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText(/42 attending/i)).toBeInTheDocument();
+        });
+
+        // 2. tournamentDeleted event removes tournament from feed in real time
+        expect(socketHandlers['tournamentDeleted']).toBeDefined();
+        act(() => {
+            socketHandlers['tournamentDeleted']({ id: 't-2' });
+        });
+
+        await waitFor(() => {
+            expect(screen.queryByText('Capital Fall Invitational 2027')).not.toBeInTheDocument();
+        });
+
+        // 3. tournamentApproved event triggers fetchTournaments refresh
+        expect(socketHandlers['tournamentApproved']).toBeDefined();
+        const callCountBefore = apiFetch.mock.calls.length;
+        act(() => {
+            socketHandlers['tournamentApproved']();
+        });
+
+        await waitFor(() => {
+            expect(apiFetch.mock.calls.length).toBeGreaterThan(callCountBefore);
         });
     });
 });

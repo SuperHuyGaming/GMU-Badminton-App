@@ -14,6 +14,11 @@ const Tournament = require('../models/Tournament');
 const DiscoveryQueue = require('../models/DiscoveryQueue');
 const ProposedTournament = require('../models/ProposedTournament');
 const { getGuaranteedTournamentsList, wipeAndRestartTournamentSystem } = require('../utils/autonomousHunter');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'gmu_badminton_super_secret_key_2026';
+const adminToken = jwt.sign({ id: 'test-admin', role: 'admin' }, JWT_SECRET);
+const userToken = jwt.sign({ id: 'test-user', role: 'user' }, JWT_SECRET);
 
 const app = express();
 app.use(express.json());
@@ -154,13 +159,29 @@ describe("R1: Tournament Clean Slate & Verified Data Seeding Suite", () => {
     });
 
     describe("3. POST /api/tournaments/reset-seed Endpoint Verification", () => {
+        test("POST /api/tournaments/reset-seed returns 401 when request is unauthenticated", async () => {
+            const res = await request(app).post('/api/tournaments/reset-seed');
+            expect(res.status).toBe(401);
+            expect(res.body.message).toMatch(/no token|authorization denied/i);
+        });
+
+        test("POST /api/tournaments/reset-seed returns 403 when authenticated as regular user (non-admin)", async () => {
+            const res = await request(app)
+                .post('/api/tournaments/reset-seed')
+                .set('Authorization', `Bearer ${userToken}`);
+            expect(res.status).toBe(403);
+            expect(res.body.message).toMatch(/admins only/i);
+        });
+
         test("POST /api/tournaments/reset-seed executes in < 100ms and returns execution metrics", async () => {
             jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 9 });
             jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 2 });
             jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 4 });
             jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({ upsertedCount: 5 });
 
-            const res = await request(app).post('/api/tournaments/reset-seed');
+            const res = await request(app)
+                .post('/api/tournaments/reset-seed')
+                .set('Authorization', `Bearer ${adminToken}`);
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
@@ -182,7 +203,9 @@ describe("R1: Tournament Clean Slate & Verified Data Seeding Suite", () => {
                 jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 1 });
                 const mockBulkWrite = jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
 
-                const res = await request(app).post('/api/tournaments/reset-seed');
+                const res = await request(app)
+                    .post('/api/tournaments/reset-seed')
+                    .set('Authorization', `Bearer ${adminToken}`);
 
                 expect(res.status).toBe(200);
                 expect(res.body.success).toBe(true);
@@ -197,7 +220,9 @@ describe("R1: Tournament Clean Slate & Verified Data Seeding Suite", () => {
         test("returns 500 if database is disconnected during reset-seed", async () => {
             Object.defineProperty(mongoose.connection, 'readyState', { value: 0, configurable: true });
 
-            const res = await request(app).post('/api/tournaments/reset-seed');
+            const res = await request(app)
+                .post('/api/tournaments/reset-seed')
+                .set('Authorization', `Bearer ${adminToken}`);
             expect(res.status).toBe(500);
             expect(res.body.success).toBe(false);
             expect(res.body.error).toContain("Database not connected");

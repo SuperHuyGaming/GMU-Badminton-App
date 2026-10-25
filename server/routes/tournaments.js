@@ -961,14 +961,7 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
  * Executes in < 100ms with zero memory leaks and returns execution metrics.
  * Strictly protected by authMiddleware and adminMiddleware.
  */
-router.post('/reset-seed', (req, res, next) => {
-    // In automated tests where legacy seed suites run without Authorization headers, permit test execution
-    if ((process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) && !req.headers.authorization) {
-        req.user = { id: 'test-admin', role: 'admin' };
-        return next();
-    }
-    return authMiddleware(req, res, () => adminMiddleware(req, res, next));
-}, async (req, res) => {
+router.post('/reset-seed', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const startTime = Date.now();
         const { wipeAndRestartTournamentSystem } = require('../utils/autonomousHunter');
@@ -1011,12 +1004,11 @@ router.get('/:tournamentId/matches', async (req, res) => {
         const { tournamentId } = req.params;
         const { division, round, status } = req.query;
 
-        let query = {};
-        if (mongoose.Types.ObjectId.isValid(tournamentId)) {
-            query.tournamentId = tournamentId;
-        } else {
-            query.tournamentId = tournamentId;
+        if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+            return res.status(400).json({ error: "Invalid tournament ID format" });
         }
+
+        let query = { tournamentId };
 
         if (division) query.division = division;
         if (round) query.round = round;
