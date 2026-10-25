@@ -62,6 +62,10 @@ const feedbackSchema = new mongoose.Schema(
 			maxlength: 1000,
 			default: "",
 		},
+		images: {
+			type: [String],
+			default: [],
+		},
 	},
 	{
 		timestamps: true,

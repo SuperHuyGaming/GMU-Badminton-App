@@ -36,6 +36,7 @@ describe("FeedbackManager Component", () => {
 			pageUrl: "/auth",
 			status: "pending",
 			adminNotes: "",
+			images: ["https://example.com/login-loop.png"],
 			createdAt: new Date().toISOString(),
 		},
 		{
@@ -49,6 +50,7 @@ describe("FeedbackManager Component", () => {
 			pageUrl: "/tournaments",
 			status: "resolved",
 			adminNotes: "Implemented via /api/calendar route.",
+			images: [],
 			createdAt: new Date().toISOString(),
 		},
 	];
@@ -70,7 +72,7 @@ describe("FeedbackManager Component", () => {
 		});
 	});
 
-	it("renders title, filter chips, and submission rows from API", async () => {
+	it("renders title, filter chips, submission rows, and photo badge", async () => {
 		render(<FeedbackManager promptDelete={vi.fn()} />);
 
 		expect(screen.getByText(/User Feedback & Error Reports/i)).toBeInTheDocument();
@@ -82,6 +84,9 @@ describe("FeedbackManager Component", () => {
 
 		expect(screen.getByText("Charlie Shuttler")).toBeInTheDocument();
 		expect(screen.getByText("/auth")).toBeInTheDocument();
+
+		// Check for attached picture indicator
+		expect(screen.getByText("1")).toBeInTheDocument();
 	});
 
 	it("filters feedback by clicking category chips", async () => {
@@ -101,7 +106,7 @@ describe("FeedbackManager Component", () => {
 		});
 	});
 
-	it("opens detailed inspection modal when View icon is clicked", async () => {
+	it("opens detailed inspection modal and displays attached pictures", async () => {
 		render(<FeedbackManager promptDelete={vi.fn()} />);
 
 		await waitFor(() => {
@@ -115,6 +120,13 @@ describe("FeedbackManager Component", () => {
 		expect(
 			screen.getAllByText("Users are redirected back to login page when clicking submit.")
 		).toHaveLength(2);
+
+		// Verify attached pictures are displayed
+		expect(screen.getByText(/Attached Pictures/i)).toBeInTheDocument();
+		const screenshotImg = screen.getByAltText("Screenshot 1");
+		expect(screenshotImg).toBeInTheDocument();
+		expect(screenshotImg).toHaveAttribute("src", "https://example.com/login-loop.png");
+
 		expect(screen.getByPlaceholderText(/Add internal debugging notes/i)).toBeInTheDocument();
 	});
 

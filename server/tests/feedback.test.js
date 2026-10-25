@@ -1,4 +1,5 @@
 // server/tests/feedback.test.js
+require("dotenv").config();
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -28,23 +29,47 @@ describe("Feedback & Error Reporting API", () => {
 		jest.clearAllMocks();
 	});
 
-	describe("POST /api/feedback (Public & Authenticated Submissions)", () => {
-		it("allows a guest user to submit a bug report", async () => {
-			const savedDoc = {
-				_id: "650000000000000000000100",
-				type: "bug",
-				title: "Courts tab fails to load on mobile",
-				description: "When opening the courts tab on iOS Safari, the spinner keeps turning.",
-				severity: "high",
-				pageUrl: "/courts",
-				user: null,
-				userName: "Guest Tester",
-				userEmail: "guest@example.com",
-				status: "pending",
-				createdAt: new Date(),
-			};
+	describe("POST /api/feedback/upload (Picture & Screenshot Uploads)", () => {
+		it("uploads an image file and returns an imageUrl", async () => {
+			const dummyPngBuffer = Buffer.from(
+				"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+				"base64"
+			);
 
-			jest.spyOn(Feedback.prototype, "save").mockResolvedValue(savedDoc);
+			const res = await request(app)
+				.post("/api/feedback/upload")
+				.attach("image", dummyPngBuffer, "screenshot.png");
+
+			expect(res.status).toBe(200);
+			expect(res.body.success).toBe(true);
+			expect(res.body.imageUrl).toBeDefined();
+			expect(typeof res.body.imageUrl).toBe("string");
+		});
+
+		it("returns 400 if no image file is provided in request", async () => {
+			const res = await request(app).post("/api/feedback/upload");
+			expect(res.status).toBe(400);
+			expect(res.body.message).toContain("No image file provided");
+		});
+
+		it("returns 400 if non-image file format is uploaded", async () => {
+			const textBuffer = Buffer.from("hello text file", "utf8");
+			const res = await request(app)
+				.post("/api/feedback/upload")
+				.attach("image", textBuffer, "badfile.txt");
+
+			expect(res.status).toBe(400);
+			expect(res.body.message).toContain("Invalid file format");
+		});
+	});
+
+	describe("POST /api/feedback (Public & Authenticated Submissions)", () => {
+		it("allows a guest user to submit a bug report with attached screenshots", async () => {
+			let saved = null;
+			jest.spyOn(Feedback.prototype, "save").mockImplementation(function () {
+				saved = this.toObject();
+				return Promise.resolve(saved);
+			});
 
 			const res = await request(app)
 				.post("/api/feedback")
@@ -56,16 +81,19 @@ describe("Feedback & Error Reporting API", () => {
 					pageUrl: "/courts",
 					userName: "Guest Tester",
 					userEmail: "guest@example.com",
+					images: ["https://res.cloudinary.com/demo/image/upload/sample.jpg"],
 				});
 
 			expect(res.status).toBe(201);
 			expect(res.body.success).toBe(true);
 			expect(res.body.message).toContain("Thank you for your feedback");
-			expect(res.body.feedback).toBeDefined();
-			expect(res.body.feedback.title).toBe("Courts tab fails to load on mobile");
+			expect(saved).toBeDefined();
+			expect(saved.title).toBe("Courts tab fails to load on mobile");
+			expect(saved.images).toHaveLength(1);
+			expect(saved.images[0]).toContain("sample.jpg");
 		});
 
-		it("associates submission with authenticated user when Authorization header is provided", async () => {
+		it("associates submission with authenticated user and handles multiple images", async () => {
 			let createdPayload = null;
 			jest.spyOn(Feedback.prototype, "save").mockImplementation(function () {
 				createdPayload = this.toObject();
@@ -80,6 +108,13 @@ describe("Feedback & Error Reporting API", () => {
 					title: "Add doubles tournament bracket format",
 					description: "Would love to see round robin pools before single elimination brackets.",
 					pageUrl: "/tournaments",
+					images: [
+						"https://example.com/mock-bracket-1.png",
+						"https://example.com/mock-bracket-2.png",
+						"https://example.com/mock-bracket-3.png",
+						"https://example.com/mock-bracket-4.png",
+						"https://example.com/mock-bracket-5.png", // exceeds max 4
+					],
 				});
 
 			expect(res.status).toBe(201);
@@ -87,6 +122,7 @@ describe("Feedback & Error Reporting API", () => {
 			expect(createdPayload.user.toString()).toBe(regularUserId);
 			expect(createdPayload.type).toBe("feature");
 			expect(createdPayload.status).toBe("pending");
+			expect(createdPayload.images).toHaveLength(4); // capped at 4
 		});
 
 		it("rejects submission if title is missing or too short", async () => {
@@ -176,6 +212,7 @@ describe("Feedback & Error Reporting API", () => {
 						title: "Bracket score update delay",
 						status: "pending",
 						severity: "high",
+						images: ["https://example.com/screenshot1.png"],
 						createdAt: new Date(),
 					},
 					{
@@ -184,6 +221,7 @@ describe("Feedback & Error Reporting API", () => {
 						title: "Dark mode contrast in scoreboard",
 						status: "resolved",
 						severity: "medium",
+						images: [],
 						createdAt: new Date(),
 					},
 				];
@@ -230,11 +268,12 @@ describe("Feedback & Error Reporting API", () => {
 		});
 
 		describe("PATCH /api/feedback/admin/:id", () => {
-			it("updates feedback status and admin notes", async () => {
+			it("updates feedback status, admin notes, and images", async () => {
 				const mockDoc = {
 					_id: "650000000000000000000105",
 					status: "pending",
 					adminNotes: "",
+					images: [],
 					save: jest.fn().mockResolvedValue(true),
 				};
 				jest.spyOn(Feedback, "findById").mockResolvedValue(mockDoc);
@@ -245,12 +284,14 @@ describe("Feedback & Error Reporting API", () => {
 					.send({
 						status: "in_progress",
 						adminNotes: "Investigating WebSocket reconnect event on courts tab.",
+						images: ["https://example.com/resolved-fix.png"],
 					});
 
 				expect(res.status).toBe(200);
 				expect(res.body.success).toBe(true);
 				expect(mockDoc.status).toBe("in_progress");
 				expect(mockDoc.adminNotes).toContain("Investigating WebSocket");
+				expect(mockDoc.images).toHaveLength(1);
 				expect(mockDoc.save).toHaveBeenCalled();
 			});
 

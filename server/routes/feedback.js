@@ -3,9 +3,11 @@ const express = require("express");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const xss = require("xss");
+const multer = require("multer");
 const rateLimit = require("express-rate-limit");
 const Feedback = require("../models/Feedback");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
+const { cloudinary } = require("../config/cloudinary");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
@@ -16,6 +18,21 @@ const feedbackSubmitLimiter = rateLimit({
 	max: process.env.NODE_ENV === "test" ? 1000 : 25,
 	skip: (req) => req.method === "OPTIONS",
 	message: { message: "Too many feedback submissions from this IP. Please try again after 15 minutes." },
+});
+
+// Multer storage for attached screenshots / bug photos (5MB max)
+const storage = multer.memoryStorage();
+const upload = multer({
+	storage,
+	limits: { fileSize: 5 * 1024 * 1024 },
+	fileFilter: (req, file, cb) => {
+		const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+		if (allowedMimes.includes(file.mimetype)) {
+			cb(null, true);
+		} else {
+			cb(new Error("Invalid file format. Only JPEG, PNG, WEBP, and GIF images are allowed."));
+		}
+	},
 });
 
 // Optional auth helper: if bearer token is attached and valid, populates req.user
@@ -41,12 +58,66 @@ const optionalAuthMiddleware = (req, res, next) => {
 };
 
 // ==========================================
+// IMAGE UPLOAD (Public & Authenticated)
+// ==========================================
+
+router.post(
+	"/upload",
+	feedbackSubmitLimiter,
+	(req, res, next) => {
+		upload.single("image")(req, res, (err) => {
+			if (err instanceof multer.MulterError) {
+				return res.status(400).json({ message: err.message || "File upload error" });
+			} else if (err) {
+				return res.status(400).json({ message: err.message });
+			}
+			next();
+		});
+	},
+	async (req, res) => {
+		try {
+			if (!req.file) {
+				return res.status(400).json({ message: "No image file provided." });
+			}
+
+			const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+			if (cloudName && cloudName !== "mock_cloud" && process.env.NODE_ENV !== "test" && cloudinary?.uploader) {
+				return cloudinary.uploader
+					.upload_stream(
+						{
+							folder: "gmu-badminton/feedback",
+							resource_type: "image",
+							transformation: [{ width: 1600, height: 1600, crop: "limit", quality: "auto" }],
+						},
+						(error, result) => {
+							if (error) {
+								console.error("Cloudinary upload failed, falling back to data URL:", error);
+								const fallbackDataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+								return res.json({ success: true, imageUrl: fallbackDataUrl });
+							}
+							return res.json({ success: true, imageUrl: result.secure_url });
+						}
+					)
+					.end(req.file.buffer);
+			}
+
+			// Local / test fallback: return data URL
+			const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+			res.json({ success: true, imageUrl: dataUrl });
+		} catch (err) {
+			console.error("Feedback image upload error:", err);
+			res.status(500).json({ message: "Failed to upload image. Please try again." });
+		}
+	}
+);
+
+// ==========================================
 // PUBLIC USER SUBMISSION
 // ==========================================
 
 router.post("/", feedbackSubmitLimiter, optionalAuthMiddleware, async (req, res) => {
 	try {
-		const { type, title, description, severity, pageUrl, userName, userEmail } = req.body;
+		const { type, title, description, severity, pageUrl, userName, userEmail, images, imageUrls } = req.body;
 
 		// Validation: Type
 		const validTypes = ["bug", "feedback", "feature"];
@@ -86,6 +157,19 @@ router.post("/", feedbackSubmitLimiter, optionalAuthMiddleware, async (req, res)
 			}
 		}
 
+		// Sanitize & limit attached pictures / screenshots (max 4 images)
+		const rawImages = Array.isArray(images) ? images : Array.isArray(imageUrls) ? imageUrls : [];
+		const cleanImages = rawImages
+			.filter((img) => typeof img === "string" && img.trim())
+			.slice(0, 4)
+			.map((img) => {
+				const trimmed = img.trim();
+				if (trimmed.startsWith("data:image/")) {
+					return trimmed.slice(0, 7 * 1024 * 1024);
+				}
+				return xss(trimmed.slice(0, 1000));
+			});
+
 		// Determine user ownership
 		let userId = null;
 		let cleanUserName = "Anonymous User";
@@ -118,6 +202,7 @@ router.post("/", feedbackSubmitLimiter, optionalAuthMiddleware, async (req, res)
 			userName: cleanUserName,
 			userEmail: cleanUserEmail,
 			status: "pending",
+			images: cleanImages,
 		});
 
 		await feedback.save();
@@ -198,7 +283,7 @@ router.patch("/admin/:id", authMiddleware, adminMiddleware, async (req, res) => 
 			return res.status(404).json({ message: "Feedback report not found." });
 		}
 
-		const { status, adminNotes } = req.body;
+		const { status, adminNotes, images } = req.body;
 
 		if (status) {
 			const validStatuses = ["pending", "in_progress", "resolved", "dismissed"];
@@ -210,6 +295,13 @@ router.patch("/admin/:id", authMiddleware, adminMiddleware, async (req, res) => 
 
 		if (adminNotes !== undefined && typeof adminNotes === "string") {
 			feedback.adminNotes = xss(adminNotes.trim().slice(0, 1000));
+		}
+
+		if (images !== undefined && Array.isArray(images)) {
+			feedback.images = images
+				.filter((img) => typeof img === "string" && img.trim())
+				.slice(0, 4)
+				.map((img) => (img.trim().startsWith("data:image/") ? img.trim() : xss(img.trim().slice(0, 1000))));
 		}
 
 		await feedback.save();

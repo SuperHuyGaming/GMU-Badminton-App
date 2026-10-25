@@ -55,6 +55,8 @@ describe("FeedbackModal Component", () => {
 		expect(screen.getByLabelText(/Subject \/ Title/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/Detailed Description/i)).toBeInTheDocument();
 		expect(screen.getByText(/Detected Location:/i)).toBeInTheDocument();
+		expect(screen.getByText(/Pictures & Screenshots/i)).toBeInTheDocument();
+		expect(screen.getByText("Upload Picture")).toBeInTheDocument();
 	});
 
 	it("shows severity chips when category is bug report", () => {
@@ -83,7 +85,30 @@ describe("FeedbackModal Component", () => {
 		expect(await screen.findByText(/Please enter a title/i)).toBeInTheDocument();
 	});
 
-	it("successfully submits bug report and calls apiFetch with correct payload", async () => {
+	it("allows adding and removing picture attachments via URL", async () => {
+		renderModal();
+
+		const addUrlBtn = screen.getByText("Add via URL");
+		fireEvent.click(addUrlBtn);
+
+		const urlInput = screen.getByPlaceholderText("https://example.com/screenshot.png");
+		fireEvent.change(urlInput, { target: { value: "https://example.com/bug-evidence.png" } });
+
+		const addBtn = screen.getByRole("button", { name: "Add" });
+		fireEvent.click(addBtn);
+
+		const img = screen.getByAltText("Attachment 1");
+		expect(img).toBeInTheDocument();
+		expect(img).toHaveAttribute("src", "https://example.com/bug-evidence.png");
+
+		// Remove the image
+		const removeBtn = screen.getByLabelText("Remove picture 1");
+		fireEvent.click(removeBtn);
+
+		expect(screen.queryByAltText("Attachment 1")).not.toBeInTheDocument();
+	});
+
+	it("successfully submits bug report with attached pictures and calls apiFetch", async () => {
 		apiFetch.mockResolvedValueOnce({
 			ok: true,
 			json: async () => ({ success: true, message: "Thank you for your feedback!" }),
@@ -92,6 +117,12 @@ describe("FeedbackModal Component", () => {
 		renderModal({
 			user: { id: "u123", username: "AlexBadminton", email: "alex@gmu.edu" },
 		});
+
+		// Attach an image via URL
+		fireEvent.click(screen.getByText("Add via URL"));
+		const urlInput = screen.getByPlaceholderText("https://example.com/screenshot.png");
+		fireEvent.change(urlInput, { target: { value: "https://example.com/court-glitch.png" } });
+		fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
 		const titleInput = screen.getByLabelText(/Subject \/ Title/i);
 		const descInput = screen.getByLabelText(/Detailed Description/i);
@@ -107,7 +138,7 @@ describe("FeedbackModal Component", () => {
 				"/api/feedback",
 				expect.objectContaining({
 					method: "POST",
-					body: expect.stringContaining("Bracket canvas glitch on zoom"),
+					body: expect.stringContaining("https://example.com/court-glitch.png"),
 				})
 			);
 		});

@@ -20,6 +20,8 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import FeedbackIcon from "@mui/icons-material/Feedback";
 import SendIcon from "@mui/icons-material/Send";
+import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import LinkIcon from "@mui/icons-material/Link";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { useFeedback } from "../context/FeedbackContext";
@@ -49,6 +51,10 @@ export default function FeedbackModal() {
 	const [pageUrl, setPageUrl] = useState("");
 	const [guestName, setGuestName] = useState("");
 	const [guestEmail, setGuestEmail] = useState("");
+	const [images, setImages] = useState([]);
+	const [uploadingImage, setUploadingImage] = useState(false);
+	const [showUrlInput, setShowUrlInput] = useState(false);
+	const [urlInput, setUrlInput] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
 
@@ -61,9 +67,106 @@ export default function FeedbackModal() {
 			setPageUrl(initialData?.pageUrl || (typeof window !== "undefined" ? window.location.pathname : "/"));
 			setGuestName("");
 			setGuestEmail("");
+			setImages([]);
+			setShowUrlInput(false);
+			setUrlInput("");
 			setErrorMessage("");
 		}
 	}, [isOpen, initialData]);
+
+	const handleFileUpload = async (files) => {
+		if (!files || files.length === 0) return;
+
+		const remainingSlots = 4 - images.length;
+		if (remainingSlots <= 0) {
+			setErrorMessage("You can attach a maximum of 4 pictures.");
+			return;
+		}
+
+		const filesToUpload = Array.from(files).slice(0, remainingSlots);
+		setUploadingImage(true);
+		setErrorMessage("");
+
+		for (const file of filesToUpload) {
+			if (!file.type.startsWith("image/")) {
+				setErrorMessage("Only image files (PNG, JPG, WEBP, GIF) are allowed.");
+				continue;
+			}
+			if (file.size > 5 * 1024 * 1024) {
+				setErrorMessage(`Image "${file.name}" exceeds the 5MB size limit.`);
+				continue;
+			}
+
+			try {
+				const formData = new FormData();
+				formData.append("image", file);
+
+				const res = await apiFetch("/api/feedback/upload", {
+					method: "POST",
+					body: formData,
+				});
+
+				if (res.ok) {
+					const data = await res.json();
+					if (data.imageUrl) {
+						setImages((prev) => [...prev, data.imageUrl].slice(0, 4));
+						continue;
+					}
+				}
+
+				// Fallback to local Data URL
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					if (e.target.result) {
+						setImages((prev) => [...prev, e.target.result].slice(0, 4));
+					}
+				};
+				reader.readAsDataURL(file);
+			} catch (err) {
+				console.warn("Upload error, using local data URL fallback", err);
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					if (e.target.result) {
+						setImages((prev) => [...prev, e.target.result].slice(0, 4));
+					}
+				};
+				reader.readAsDataURL(file);
+			}
+		}
+		setUploadingImage(false);
+	};
+
+	const handlePaste = (e) => {
+		const items = e.clipboardData?.items;
+		if (!items) return;
+		const imageFiles = [];
+		for (let i = 0; i < items.length; i++) {
+			if (items[i].type.indexOf("image") !== -1) {
+				const file = items[i].getAsFile();
+				if (file) imageFiles.push(file);
+			}
+		}
+		if (imageFiles.length > 0) {
+			e.preventDefault();
+			handleFileUpload(imageFiles);
+			toast.success("Pasted screenshot attached!");
+		}
+	};
+
+	const handleAddImageUrl = () => {
+		if (!urlInput.trim()) return;
+		if (images.length >= 4) {
+			setErrorMessage("You can attach a maximum of 4 pictures.");
+			return;
+		}
+		setImages((prev) => [...prev, urlInput.trim()].slice(0, 4));
+		setUrlInput("");
+		setShowUrlInput(false);
+	};
+
+	const handleRemoveImage = (indexToRemove) => {
+		setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+	};
 
 	const handleSubmit = async (e) => {
 		if (e) e.preventDefault();
@@ -97,6 +200,7 @@ export default function FeedbackModal() {
 				pageUrl: pageUrl.trim(),
 				userName: user ? (user.username || user.name) : guestName.trim() || "Anonymous Guest",
 				userEmail: user ? (user.email || "") : guestEmail.trim() || "",
+				images,
 			};
 
 			const res = await apiFetch("/api/feedback", {
@@ -129,6 +233,7 @@ export default function FeedbackModal() {
 			aria-labelledby="feedback-dialog-title"
 			slotProps={{
 				paper: {
+					onPaste: handlePaste,
 					sx: {
 						borderRadius: 3,
 						p: { xs: 1, sm: 2 },
@@ -275,6 +380,119 @@ export default function FeedbackModal() {
 						slotProps={{ htmlInput: { maxLength: 3000 } }}
 						helperText={`${description.length}/3000 characters`}
 					/>
+				</Box>
+
+				{/* Attach Pictures / Screenshots */}
+				<Box sx={{ mb: 2.5 }}>
+					<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+						<Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: "uppercase" }}>
+							📷 Pictures & Screenshots ({images.length}/4)
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							Tip: Paste screenshot with Ctrl+V
+						</Typography>
+					</Box>
+
+					<Stack direction="row" spacing={1} alignItems="center">
+						<input
+							type="file"
+							accept="image/*"
+							multiple
+							id="feedback-image-upload"
+							style={{ display: "none" }}
+							onChange={(e) => {
+								handleFileUpload(e.target.files);
+								e.target.value = "";
+							}}
+						/>
+						<label htmlFor="feedback-image-upload">
+							<Button
+								variant="outlined"
+								component="span"
+								size="small"
+								disabled={uploadingImage || images.length >= 4}
+								startIcon={uploadingImage ? <CircularProgress size={16} /> : <AddPhotoAlternateIcon />}
+								sx={{ textTransform: "none", fontWeight: "bold" }}
+							>
+								{uploadingImage ? "Uploading..." : "Upload Picture"}
+							</Button>
+						</label>
+
+						<Button
+							variant="text"
+							size="small"
+							onClick={() => setShowUrlInput(!showUrlInput)}
+							disabled={images.length >= 4}
+							startIcon={<LinkIcon />}
+							sx={{ textTransform: "none", fontWeight: "bold" }}
+						>
+							Add via URL
+						</Button>
+					</Stack>
+
+					{showUrlInput && (
+						<Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+							<TextField
+								size="small"
+								fullWidth
+								placeholder="https://example.com/screenshot.png"
+								value={urlInput}
+								onChange={(e) => setUrlInput(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") {
+										e.preventDefault();
+										handleAddImageUrl();
+									}
+								}}
+							/>
+							<Button variant="contained" size="small" onClick={handleAddImageUrl} sx={{ textTransform: "none" }}>
+								Add
+							</Button>
+						</Box>
+					)}
+
+					{images.length > 0 && (
+						<Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+							{images.map((imgUrl, idx) => (
+								<Box
+									key={idx}
+									sx={{
+										position: "relative",
+										width: 76,
+										height: 76,
+										borderRadius: 2,
+										overflow: "hidden",
+										border: "2px solid",
+										borderColor: "divider",
+										bgcolor: "background.default",
+									}}
+								>
+									<Box
+										component="img"
+										src={imgUrl}
+										alt={`Attachment ${idx + 1}`}
+										sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+									/>
+									<IconButton
+										size="small"
+										onClick={() => handleRemoveImage(idx)}
+										aria-label={`Remove picture ${idx + 1}`}
+										sx={{
+											position: "absolute",
+											top: 2,
+											right: 2,
+											bgcolor: "rgba(0,0,0,0.65)",
+											color: "#ffffff",
+											p: 0.3,
+											"&:hover": { bgcolor: "rgba(229, 62, 62, 0.9)" },
+										}}
+									>
+										<CloseIcon sx={{ fontSize: 14 }} />
+									</IconButton>
+								</Box>
+							))}
+						</Stack>
+					)}
 				</Box>
 
 				{/* Auto-Captured Page Context */}

@@ -24,7 +24,6 @@ import {
 	Stack,
 	IconButton,
 	CircularProgress,
-	Alert,
 	Tooltip,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
@@ -34,9 +33,11 @@ import FeedbackIcon from "@mui/icons-material/Feedback";
 import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import toast from "react-hot-toast";
 import apiFetch from "../../utils/api";
 import socket from "../../utils/socket";
+import MediaLightbox from "../MediaLightbox";
 
 const TYPE_CONFIG = {
 	bug: { label: "Bug", color: "error", icon: BugReportIcon },
@@ -69,6 +70,10 @@ export default function FeedbackManager({ promptDelete }) {
 	const [selectedReport, setSelectedReport] = useState(null);
 	const [adminNotes, setAdminNotes] = useState("");
 	const [savingNotes, setSavingNotes] = useState(false);
+
+	// Lightbox viewer for attached pictures
+	const [lightboxOpen, setLightboxOpen] = useState(false);
+	const [lightboxIndex, setLightboxIndex] = useState(0);
 
 	const fetchFeedback = useCallback(async () => {
 		setLoading(true);
@@ -142,7 +147,6 @@ export default function FeedbackManager({ promptDelete }) {
 			});
 			if (!res.ok) throw new Error("Failed to update status");
 
-			const data = await res.json();
 			setFeedbackList((prev) =>
 				prev.map((f) => (f._id === id ? { ...f, status: newStatus } : f))
 			);
@@ -355,9 +359,24 @@ export default function FeedbackManager({ promptDelete }) {
 											</Stack>
 										</TableCell>
 										<TableCell sx={{ maxWidth: 260 }}>
-											<Typography variant="body2" fontWeight="bold" noWrap color="text.primary">
-												{item.title}
-											</Typography>
+											<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+												<Typography variant="body2" fontWeight="bold" noWrap color="text.primary">
+													{item.title}
+												</Typography>
+												{item.images && item.images.length > 0 && (
+													<Tooltip title={`${item.images.length} picture(s) attached`}>
+														<Chip
+															size="small"
+															icon={<PhotoCameraIcon sx={{ fontSize: "12px !important" }} />}
+															label={item.images.length}
+															variant="outlined"
+															color="primary"
+															onClick={() => openDetails(item)}
+															sx={{ height: 18, fontSize: "0.65rem", fontWeight: "bold", cursor: "pointer" }}
+														/>
+													</Tooltip>
+												)}
+											</Box>
 											<Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
 												{item.description}
 											</Typography>
@@ -496,6 +515,48 @@ export default function FeedbackManager({ promptDelete }) {
 								</Typography>
 							</Paper>
 
+							{/* Attached Pictures & Screenshots */}
+							{selectedReport.images && selectedReport.images.length > 0 && (
+								<Box sx={{ my: 2 }}>
+									<Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: "uppercase", display: "block", mb: 1 }}>
+										📷 Attached Pictures ({selectedReport.images.length}) — Click to enlarge
+									</Typography>
+									<Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+										{selectedReport.images.map((imgUrl, idx) => (
+											<Box
+												key={idx}
+												onClick={() => {
+													setLightboxIndex(idx);
+													setLightboxOpen(true);
+												}}
+												sx={{
+													width: 80,
+													height: 80,
+													borderRadius: 2,
+													overflow: "hidden",
+													border: "2px solid",
+													borderColor: "divider",
+													cursor: "pointer",
+													transition: "all 0.2s ease-in-out",
+													"&:hover": {
+														borderColor: "primary.main",
+														transform: "scale(1.06)",
+														boxShadow: 2,
+													},
+												}}
+											>
+												<Box
+													component="img"
+													src={imgUrl}
+													alt={`Screenshot ${idx + 1}`}
+													sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+												/>
+											</Box>
+										))}
+									</Stack>
+								</Box>
+							)}
+
 							{/* Metadata */}
 							<Stack spacing={1} sx={{ mt: 2, mb: 3 }}>
 								<Box sx={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
@@ -573,6 +634,18 @@ export default function FeedbackManager({ promptDelete }) {
 					</>
 				)}
 			</Dialog>
+
+			{/* Fullscreen Lightbox for Screenshot Inspection */}
+			{selectedReport && selectedReport.images && selectedReport.images.length > 0 && (
+				<MediaLightbox
+					open={lightboxOpen}
+					onClose={() => setLightboxOpen(false)}
+					images={selectedReport.images}
+					initialIndex={lightboxIndex}
+					title={selectedReport.title}
+					authorName={selectedReport.userName}
+				/>
+			)}
 		</Paper>
 	);
 }
