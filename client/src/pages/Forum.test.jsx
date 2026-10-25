@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import Forum from './Forum';
@@ -8,6 +8,16 @@ import { AuthContext } from '../context/AuthContext';
 // Mock the API fetch utility
 vi.mock('../utils/api', () => ({
     default: vi.fn()
+}));
+
+// Mock socket utility
+let socketHandlers = {};
+vi.mock('../utils/socket', () => ({
+    default: {
+        on: vi.fn((event, cb) => { socketHandlers[event] = cb; }),
+        off: vi.fn((event) => { delete socketHandlers[event]; }),
+        emit: vi.fn()
+    }
 }));
 
 // Mock Masonry because JSDOM doesn't support complex CSS grid rendering well
@@ -34,6 +44,7 @@ const mockUser = { id: 'user1', name: 'Test User' };
 describe('Forum Page Component (Community Hub)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        socketHandlers = {};
         // Setup default intersection observer
         const mockIntersectionObserver = vi.fn();
         mockIntersectionObserver.mockReturnValue({
@@ -277,6 +288,113 @@ describe('Forum Page Component (Community Hub)', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Casual rally this Friday')).toBeInTheDocument();
+        });
+    });
+
+    it('does not show new post pill for posts from different category when category filter is active', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false })
+        });
+
+        renderWithProviders();
+
+        const findPlayersChip = screen.getByText('Finding Players');
+        fireEvent.click(findPlayersChip);
+
+        // Simulate incoming post with category "general"
+        if (socketHandlers.postCreated) {
+            act(() => {
+                socketHandlers.postCreated({
+                    _id: 'post999',
+                    title: 'General Chat',
+                    content: 'Hey all',
+                    category: 'general'
+                });
+            });
+        }
+
+        expect(screen.queryByLabelText('Load new posts')).not.toBeInTheDocument();
+    });
+
+    it('matches official match scorecards by team player names in search', async () => {
+        const mockFeed = [
+            {
+                _id: 'match1',
+                type: 'match',
+                team1: ['Huy', 'Minh'],
+                team2: ['Alex', 'David'],
+                team1Score: 21,
+                team2Score: 19,
+                createdAt: new Date().toISOString()
+            }
+        ];
+
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: mockFeed, hasMore: false })
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => {
+            expect(screen.getByText('🏆 Official Match')).toBeInTheDocument();
+        });
+
+        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
+        fireEvent.change(searchInput, { target: { value: 'Minh' } });
+
+        await waitFor(() => {
+            expect(screen.getByText('🏆 Official Match')).toBeInTheDocument();
+        });
+
+        fireEvent.change(searchInput, { target: { value: 'Nonexistent' } });
+        await waitFor(() => {
+            expect(screen.getByText(/No posts match/i)).toBeInTheDocument();
+        });
+    });
+
+    it('filters displayed feed by category in addition to backend request', async () => {
+        const mockFeed = [
+            {
+                _id: 'post1',
+                type: 'post',
+                referenceId: 'p1',
+                title: 'Need 1 for Doubles',
+                content: 'Playing at RAC',
+                category: 'find_partner',
+                createdAt: new Date().toISOString()
+            },
+            {
+                _id: 'post2',
+                type: 'post',
+                referenceId: 'p2',
+                title: 'Yonex Arcsaber 11 Pro',
+                content: 'Selling racket',
+                category: 'gear_exchange',
+                createdAt: new Date().toISOString()
+            }
+        ];
+
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: mockFeed, hasMore: false })
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => {
+            expect(screen.getByText('Need 1 for Doubles')).toBeInTheDocument();
+            expect(screen.getByText('Yonex Arcsaber 11 Pro')).toBeInTheDocument();
+        });
+
+        // Click Finding Players chip
+        const findPlayersChip = screen.getByText('Finding Players');
+        fireEvent.click(findPlayersChip);
+
+        await waitFor(() => {
+            expect(screen.getByText('Need 1 for Doubles')).toBeInTheDocument();
+            expect(screen.queryByText('Yonex Arcsaber 11 Pro')).not.toBeInTheDocument();
         });
     });
 });

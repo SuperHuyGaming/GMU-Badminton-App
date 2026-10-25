@@ -37,6 +37,21 @@ router.get("/", authMiddleware, async (req, res, next) => {
                 matchStage.category = { $in: ["find_partner", "meetup_rally"] };
             } else if (cat === "gear_exchange") {
                 matchStage.category = { $in: ["gear_exchange", "gear_review"] };
+            } else if (cat === "match_result") {
+                const matchResultOr = [{ category: "match_result" }, { type: "match" }];
+                if (matchStage.$and) {
+                    matchStage.$and.push({ $or: matchResultOr });
+                } else {
+                    const visibilityOr = matchStage.$or;
+                    delete matchStage.$or;
+                    matchStage.$and = [
+                        { $or: visibilityOr },
+                        { $or: matchResultOr }
+                    ];
+                }
+            } else if (cat === "general") {
+                matchStage.category = "general";
+                matchStage.type = { $ne: "match" };
             } else {
                 matchStage.category = cat;
             }
@@ -59,15 +74,21 @@ router.get("/", authMiddleware, async (req, res, next) => {
                 { authorName: { $regex: searchRegex } },
                 { tags: searchRegex },
                 { "matchDetails.court": { $regex: searchRegex } },
-                { "playerMatchmaking.preferredCourt": { $regex: searchRegex } }
+                { "playerMatchmaking.preferredCourt": { $regex: searchRegex } },
+                { team1: searchRegex },
+                { team2: searchRegex }
             ];
             
-            const visibilityOr = matchStage.$or;
-            delete matchStage.$or;
-            matchStage.$and = [
-                { $or: visibilityOr },
-                { $or: searchOr }
-            ];
+            if (matchStage.$and) {
+                matchStage.$and.push({ $or: searchOr });
+            } else {
+                const visibilityOr = matchStage.$or;
+                delete matchStage.$or;
+                matchStage.$and = [
+                    { $or: visibilityOr },
+                    { $or: searchOr }
+                ];
+            }
         }
 
         let lastDoc = null;

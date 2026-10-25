@@ -48,9 +48,20 @@ const parseDateRange = (query = {}) => {
 		} else {
 			const parsedEnd = new Date(trimmed);
 			if (!isNaN(parsedEnd.getTime())) {
+				if (!trimmed.includes(":") && !trimmed.includes("T")) {
+					parsedEnd.setHours(23, 59, 59, 999);
+				}
 				end = parsedEnd;
 			}
 		}
+	}
+
+	if (start && end && start.getTime() > end.getTime()) {
+		const temp = start;
+		start = end;
+		end = temp;
+		start.setHours(0, 0, 0, 0);
+		end.setHours(23, 59, 59, 999);
 	}
 
 	return { start, end };

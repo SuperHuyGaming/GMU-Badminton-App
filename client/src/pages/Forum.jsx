@@ -36,6 +36,16 @@ const DATE_OPTIONS = [
 	{ id: "custom", label: "Custom Range" }
 ];
 
+const matchesCategory = (item, cat) => {
+	if (!cat || cat === "all") return true;
+	const itemCat = item.category || (item.type === "match" ? "match_result" : "general");
+	if (cat === "find_partner") return itemCat === "find_partner" || itemCat === "meetup_rally";
+	if (cat === "gear_exchange") return itemCat === "gear_exchange" || itemCat === "gear_review";
+	if (cat === "match_result") return itemCat === "match_result" || item.type === "match";
+	if (cat === "general") return itemCat === "general" && item.type !== "match";
+	return itemCat === cat;
+};
+
 export default function Forum() {
 	const { user: currentUser } = useAuth();
 	const theme = useTheme();
@@ -44,6 +54,10 @@ export default function Forum() {
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
 	const [selectedCategory, setSelectedCategory] = useState("all");
+	const selectedCategoryRef = useRef(selectedCategory);
+	useEffect(() => {
+		selectedCategoryRef.current = selectedCategory;
+	}, [selectedCategory]);
 	const [searchInput, setSearchInput] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -157,6 +171,7 @@ export default function Forum() {
 			setDebouncedSearch(searchInput.trim());
 			setPage(1);
 			setFeed([]);
+			setNewPostsQueue([]);
 		}
 	};
 
@@ -217,23 +232,37 @@ export default function Forum() {
 	}, [tab, page, selectedTag, selectedCategory, debouncedSearch, dateRange, customStartDate, customEndDate]);
 
 	const displayedFeed = useMemo(() => {
-		if (!searchInput.trim()) return feed;
-		const q = searchInput.trim().toLowerCase();
 		return feed.filter(item => {
+			if (!matchesCategory(item, selectedCategory)) return false;
+
+			if (!searchInput.trim()) return true;
+			const q = searchInput.trim().toLowerCase();
 			const title = (item.title || "").toLowerCase();
 			const content = (item.content || "").toLowerCase();
 			const author = (item.authorName || "").toLowerCase();
 			const court1 = (item.matchDetails?.court || "").toLowerCase();
 			const court2 = (item.playerMatchmaking?.preferredCourt || "").toLowerCase();
+			const team1 = Array.isArray(item.team1) ? item.team1.join(" ").toLowerCase() : "";
+			const team2 = Array.isArray(item.team2) ? item.team2.join(" ").toLowerCase() : "";
 			const tags = Array.isArray(item.tags) ? item.tags.join(" ").toLowerCase() : "";
-			return title.includes(q) || content.includes(q) || author.includes(q) || court1.includes(q) || court2.includes(q) || tags.includes(q);
+			return (
+				title.includes(q) ||
+				content.includes(q) ||
+				author.includes(q) ||
+				court1.includes(q) ||
+				court2.includes(q) ||
+				team1.includes(q) ||
+				team2.includes(q) ||
+				tags.includes(q)
+			);
 		});
-	}, [feed, searchInput]);
+	}, [feed, searchInput, selectedCategory]);
 
 	// Listen for real-time updates
 	useEffect(() => {
 		const handleNewPost = (post) => {
 			if (!post || !post._id) return;
+			if (!matchesCategory(post, selectedCategoryRef.current)) return;
 			setFeed(prev => {
 				if (prev.find(p => p._id === post._id || p.referenceId === post._id)) return prev;
 				setNewPostsQueue(q => {
@@ -283,6 +312,7 @@ export default function Forum() {
 		setTab(newValue);
 		setPage(1);
 		setFeed([]);
+		setNewPostsQueue([]);
 	};
 
 	const handleSubmit = async () => {
@@ -489,6 +519,7 @@ export default function Forum() {
 													setDebouncedSearch(''); 
 													setPage(1); 
 													setFeed([]); 
+													setNewPostsQueue([]);
 													searchInputRef.current?.focus(); 
 												}} 
 												aria-label="Clear search"
@@ -514,6 +545,7 @@ export default function Forum() {
 									setDateRange(e.target.value);
 									setPage(1);
 									setFeed([]);
+									setNewPostsQueue([]);
 								}}
 								displayEmpty
 								aria-label="Filter by date range"
@@ -535,6 +567,7 @@ export default function Forum() {
 										setCustomStartDate(e.target.value);
 										setPage(1);
 										setFeed([]);
+										setNewPostsQueue([]);
 									}}
 									slotProps={{ htmlInput: { 'aria-label': 'Start date' } }}
 									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
@@ -548,6 +581,7 @@ export default function Forum() {
 										setCustomEndDate(e.target.value);
 										setPage(1);
 										setFeed([]);
+										setNewPostsQueue([]);
 									}}
 									slotProps={{ htmlInput: { 'aria-label': 'End date' } }}
 									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
@@ -559,7 +593,7 @@ export default function Forum() {
 							variant="outlined" 
 							size="small" 
 							color="inherit"
-							onClick={() => { setPage(1); setFeed([]); }}
+							onClick={() => { setPage(1); setFeed([]); setNewPostsQueue([]); }}
 							sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 38, px: 1.5 }}
 							aria-label="Refresh feed"
 						>
@@ -592,6 +626,7 @@ export default function Forum() {
 								setSelectedCategory(prev => prev === cat.id && cat.id !== "all" ? "all" : cat.id);
 								setPage(1);
 								setFeed([]);
+								setNewPostsQueue([]);
 							}}
 							clickable
 							sx={{ 
@@ -769,25 +804,46 @@ export default function Forum() {
 					</Box>
 				) : displayedFeed.length === 0 ? (
 					<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 1 }}>
-						<Typography color="text.primary">No posts match &quot;{searchInput}&quot;.</Typography>
-						<Button 
-							variant="outlined" 
-							size="small" 
-							onClick={() => {
-								setSearchInput('');
-								setDebouncedSearch('');
-								setPage(1);
-							}}
-						>
-							Clear Search
-						</Button>
+						{searchInput ? (
+							<>
+								<Typography color="text.primary">No posts match &quot;{searchInput}&quot;.</Typography>
+								<Button 
+									variant="outlined" 
+									size="small" 
+									onClick={() => {
+										setSearchInput('');
+										setDebouncedSearch('');
+										setPage(1);
+										setNewPostsQueue([]);
+									}}
+								>
+									Clear Search
+								</Button>
+							</>
+						) : (
+							<>
+								<Typography color="text.primary">No posts match the selected category filter.</Typography>
+								<Button 
+									variant="outlined" 
+									size="small" 
+									onClick={() => {
+										setSelectedCategory('all');
+										setPage(1);
+										setFeed([]);
+										setNewPostsQueue([]);
+									}}
+								>
+									View All Categories
+								</Button>
+							</>
+						)}
 					</Box>
 				) : (
 					displayedFeed.map((item, idx) => {
 						if (item.type === 'post') {
 							// Transform ActivityFeed back to Post format for PostCard component
 							const mockPost = {
-								_id: item.referenceId,
+								_id: item.referenceId || item._id,
 								title: item.title,
 								content: item.content,
 								category: item.category || 'general',

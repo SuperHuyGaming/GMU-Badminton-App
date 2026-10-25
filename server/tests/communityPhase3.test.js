@@ -122,6 +122,24 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			expect(res.start).toBeNull();
 			expect(res.end).toBeNull();
 		});
+
+		it('auto-corrects inverted custom date ranges and preserves day boundaries', () => {
+			const res = parseDateRange({ startDate: '2026-10-25', endDate: '2026-10-15' });
+			expect(res.start).toBeInstanceOf(Date);
+			expect(res.end).toBeInstanceOf(Date);
+			expect(res.start.getDate()).toBe(15);
+			expect(res.end.getDate()).toBe(25);
+			expect(res.start.getHours()).toBe(0);
+			expect(res.end.getHours()).toBe(23);
+			expect(res.end.getTime()).toBeGreaterThan(res.start.getTime());
+		});
+
+		it('normalizes custom endDate strings without time to end of day', () => {
+			const res = parseDateRange({ endDate: '10/25/2026' });
+			expect(res.end).toBeInstanceOf(Date);
+			expect(res.end.getHours()).toBe(23);
+			expect(res.end.getMinutes()).toBe(59);
+		});
 	});
 
 	// ==========================================
@@ -357,6 +375,64 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			expect(matchStep).toBeDefined();
 			expect(matchStep.$match.category).toBe('qa_forum');
 			expect(matchStep.$match.$and).toBeDefined();
+		});
+
+		it('filters by match_result category matching both category and type match', async () => {
+			ActivityFeed.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+
+			const res = await request(app)
+				.get('/api/feed?tab=latest&category=match_result')
+				.set('Authorization', `Bearer ${userToken}`);
+
+			expect(res.status).toBe(200);
+			const matchStage = ActivityFeed.find.mock.calls[0][0];
+			expect(matchStage.$and).toBeDefined();
+			const matchResultClause = matchStage.$and.find(c => c.$or && c.$or.some(o => o.category === 'match_result'));
+			expect(matchResultClause).toBeDefined();
+			expect(matchResultClause.$or).toEqual(
+				expect.arrayContaining([
+					{ category: 'match_result' },
+					{ type: 'match' }
+				])
+			);
+		});
+
+		it('excludes type match from general category filter', async () => {
+			ActivityFeed.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+
+			const res = await request(app)
+				.get('/api/feed?tab=latest&category=general')
+				.set('Authorization', `Bearer ${userToken}`);
+
+			expect(res.status).toBe(200);
+			const matchStage = ActivityFeed.find.mock.calls[0][0];
+			expect(matchStage.category).toBe('general');
+			expect(matchStage.type).toEqual({ $ne: 'match' });
+		});
+
+		it('includes team1 and team2 in feed search regex', async () => {
+			ActivityFeed.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+
+			const res = await request(app)
+				.get('/api/feed?tab=latest&search=Alex')
+				.set('Authorization', `Bearer ${userToken}`);
+
+			expect(res.status).toBe(200);
+			const matchStage = ActivityFeed.find.mock.calls[0][0];
+			const searchClause = matchStage.$and.find(c => c.$or && c.$or.some(o => o.team1));
+			expect(searchClause).toBeDefined();
 		});
 	});
 });
