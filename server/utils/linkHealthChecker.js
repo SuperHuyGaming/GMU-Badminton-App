@@ -38,6 +38,18 @@ function resolveHostClubFallback(tournament = {}) {
     if (handle === 'wm.badminton.official' || handle === 'wmbadminton') {
         return 'https://www.instagram.com/wm.badminton.official/';
     }
+    if (handle === 'dukeclubbadminton' || handle === 'dukebadminton') {
+        return 'https://recreation.duke.edu';
+    }
+    if (handle === 'uncbadminton') {
+        return 'https://carolinabadminton.unc.edu';
+    }
+    if (handle === 'ncsubadminton') {
+        return 'https://getinvolved.ncsu.edu';
+    }
+    if (handle === 'trianglebadminton') {
+        return 'https://trianglebadmintonclub.com';
+    }
     if (handle) {
         return `https://linktr.ee/${handle}`;
     }
@@ -58,6 +70,15 @@ function resolveHostClubFallback(tournament = {}) {
     }
     if (text.includes('northern virginia') || text.includes('nvbc') || text.includes('ashburn')) {
         return 'https://novabadmintonacademy.com';
+    }
+    if (text.includes('duke') || text.includes('durham') || text.includes('card gym') || text.includes('wilson recreation')) {
+        return 'https://recreation.duke.edu';
+    }
+    if (text.includes('unc') || text.includes('chapel hill') || text.includes('carolina badminton') || text.includes('fetzer')) {
+        return 'https://carolinabadminton.unc.edu';
+    }
+    if (text.includes('triangle badminton') || text.includes('morrisville')) {
+        return 'https://trianglebadmintonclub.com';
     }
     if (text.includes('william & mary') || text.includes('william and mary') || text.includes('w&m') || text.includes('williamsburg')) {
         return 'https://www.instagram.com/wm.badminton.official/';

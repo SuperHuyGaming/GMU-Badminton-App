@@ -494,10 +494,16 @@ const SEARCH_QUERIES = [
     "upcoming badminton tournament virginia 2026",
     "maryland open badminton registration",
     "dc badminton tournament open",
-    "site:tournamentsoftware.com badminton virginia OR maryland OR washington"
+    "duke badminton tournament open 2026",
+    "north carolina open badminton tournament 2026",
+    "mid atlantic collegiate team badminton championships 2026",
+    "collegiate badminton tournament open 2026 registration",
+    "site:tournamentsoftware.com badminton virginia OR maryland OR washington OR 'north carolina' OR pennsylvania",
+    "site:outrally.com badminton tournament 2026",
+    "badminton tournament registration google form 2026 2027"
 ];
 
-// Verified DMV badminton collegiate & club discovery seeds
+// Verified DMV and Mid-Atlantic badminton collegiate & club discovery seeds
 const VERIFIED_DMV_SEEDS = [
     {
         url: 'https://linktr.ee/gmubadminton',
@@ -518,6 +524,54 @@ const VERIFIED_DMV_SEEDS = [
     {
         url: 'https://linktr.ee/umd_badminton',
         snippet: '[2026 UMD Terrapin Open] Hosted by University of Maryland Club Badminton at SPH Building, College Park MD. Singles, Doubles, Mixed flights.'
+    },
+    {
+        url: 'https://linktr.ee/dukeclubbadminton',
+        snippet: '[2026 Duke Badminton Open Tournament] Hosted by Duke University Club Badminton at Card Gymnasium / Wilson Recreation Center, Durham NC. Men\'s & Women\'s Singles, Doubles, Mixed Doubles. Register via Duke Linktree / Google Forms.'
+    },
+    {
+        url: 'https://linktr.ee/uncbadminton',
+        snippet: '[2026 Carolina Open Tournament] Hosted by UNC Chapel Hill Club Badminton at Fetzer Hall / Student Recreation Center, Chapel Hill NC. Singles, Doubles, Mixed flights.'
+    },
+    {
+        url: 'https://linktr.ee/ncsubadminton',
+        snippet: '[2026 Wolfpack Open Tournament] Hosted by NC State Club Badminton at Carmichael Complex, Raleigh NC. Adult & Collegiate flights.'
+    },
+    {
+        url: 'https://trianglebadmintonclub.com/',
+        snippet: '[2026 Triangle Open Badminton Championships] Triangle Badminton Club, Morrisville, NC. Open A/B/C/D and Senior/Junior flights.'
+    },
+    {
+        url: 'https://smashbadmintonva.com/',
+        snippet: '[2026 Smash DMV Open Championships] Smash Badminton Center, Herndon, VA. Adult & Junior Open flights.'
+    },
+    {
+        url: 'https://linktr.ee/uvabadminton',
+        snippet: '[2026 UVA Cavalier Open] Hosted by University of Virginia Club Badminton at Memorial Gymnasium, Charlottesville VA.'
+    },
+    {
+        url: 'https://linktr.ee/vtechbadminton',
+        snippet: '[2026 Virginia Tech Hokie Open] Hosted by Virginia Tech Club Badminton at McComas Hall, Blacksburg VA.'
+    },
+    {
+        url: 'https://linktr.ee/vcubadminton',
+        snippet: '[2026 VCU Ram Open] Hosted by VCU Club Badminton at Cary Street Gymnasium, Richmond VA.'
+    },
+    {
+        url: 'https://linktr.ee/jhubadminton',
+        snippet: '[2026 Johns Hopkins Open] Hosted by Johns Hopkins Badminton at Ralph S. O\'Connor Center, Baltimore MD.'
+    },
+    {
+        url: 'https://linktr.ee/psubadminton',
+        snippet: '[2026 Penn State Open] Hosted by Penn State Club Badminton at White Building, State College PA.'
+    },
+    {
+        url: 'https://linktr.ee/upennbadminton',
+        snippet: '[2026 Penn Classic Invitational] Hosted by UPenn Badminton at David Pottruck Center, Philadelphia PA.'
+    },
+    {
+        url: 'https://linktr.ee/cmubadminton',
+        snippet: '[2026 CMU Tartan Open] Hosted by Carnegie Mellon Badminton at Wiegand Gym, Pittsburgh PA.'
     }
 ];
 
@@ -619,6 +673,22 @@ async function huntRegionalClubsAndEnqueue() {
             location: "Northern Virginia Badminton Club, Ashburn, VA",
             dates: "December 2026",
             skillLevels: ["Open", "B", "C", "Junior"]
+        },
+        {
+            name: "Triangle Badminton Club",
+            url: "https://trianglebadmintonclub.com/",
+            tournamentName: "2026 Triangle Open Badminton Championships",
+            location: "Triangle Badminton Club, Morrisville, NC",
+            dates: "November 2026",
+            skillLevels: ["Open", "A", "B", "C", "D", "Senior", "Junior"]
+        },
+        {
+            name: "Smash Badminton Center",
+            url: "https://smashbadmintonva.com/",
+            tournamentName: "2026 Smash DMV Open Championships",
+            location: "Smash Badminton Center, Herndon, VA",
+            dates: "December 2026",
+            skillLevels: ["Open", "A", "B", "C", "Junior"]
         }
     ];
 
