@@ -239,38 +239,38 @@ export default function Forum() {
 
 	return (
 		<Box sx={{ pb: 10 }}>
-			{/* HERO BANNER */}
+			{/* Clean, Modern Header Modeled after Tournaments, Marketplace & Community Directory */}
 			<Box 
 				sx={{ 
-					width: '100%', mb: 4, py: { xs: 4, md: 5 }, px: 3,
-					background: "linear-gradient(135deg, rgba(0, 102, 51, 0.95) 0%, rgba(255, 204, 51, 0.85) 100%)",
-					borderRadius: 4,
-					position: 'relative', overflow: 'hidden',
-					display: 'flex', flexDirection: 'column',
-					alignItems: 'center', justifyContent: 'center',
-					boxShadow: '0 8px 32px rgba(0, 102, 51, 0.18)',
+					display: 'flex', 
+					justifyContent: 'space-between', 
+					alignItems: { xs: 'flex-start', sm: 'center' }, 
+					mb: 3.5, 
+					mt: { xs: 1, sm: 2 },
+					flexWrap: 'wrap', 
+					gap: 2 
 				}}
 			>
-				<Typography variant="h3" fontWeight="900" color="white" align="center" sx={{ textShadow: "0px 2px 6px rgba(0,0,0,0.4)", zIndex: 1, mb: 1, fontSize: { xs: '2rem', sm: '2.8rem' } }}>
-					Community Hub
-				</Typography>
-				<Typography variant="h6" color="rgba(255,255,255,0.95)" align="center" sx={{ zIndex: 1, px: 2, mb: 2.5, maxWidth: 600, fontSize: { xs: '0.95rem', sm: '1.15rem' } }}>
-					Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
-				</Typography>
+				<Box>
+					<Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: 0.5 }}>
+						Community Hub
+					</Typography>
+					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.95rem', sm: '1.05rem' } }}>
+						Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
+					</Typography>
+				</Box>
 				<Button
 					variant="contained"
+					color="primary"
 					onClick={() => setIsModalOpen(true)}
 					sx={{
-						zIndex: 1,
-						bgcolor: 'white',
-						color: '#006633',
-						fontWeight: '900',
-						px: 3.5,
+						borderRadius: 2.5,
+						fontWeight: 'bold',
+						textTransform: 'none',
+						px: 2.5,
 						py: 1,
-						borderRadius: 10,
-						boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-						'&:hover': { bgcolor: 'rgba(255,255,255,0.9)', transform: 'translateY(-2px)' },
-						transition: 'all 0.2s',
+						boxShadow: '0 4px 14px rgba(0, 102, 51, 0.25)',
+						'&:hover': { transform: 'translateY(-1px)' }
 					}}
 				>
 					✍️ Create New Post
