@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, forwardRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, forwardRef, useRef } from 'react';
 import { 
     Box, Typography, Card, CardContent, CardActions, Button, 
     Alert, Grid, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
@@ -218,6 +218,8 @@ export default function Tournaments() {
 
     // Filter states from URL params and instant search input
     const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || '');
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
+    const searchInputRef = useRef(null);
     const searchQuery = searchParams.get('q') || '';
     const filterUpcoming = searchParams.get('upcoming') !== 'false'; // default true
     const filterWeekend = searchParams.get('weekend') === 'true';
@@ -225,6 +227,21 @@ export default function Tournaments() {
         const skills = searchParams.get('skills');
         return skills ? skills.split(',').filter(Boolean) : [];
     }, [searchParams]);
+
+    // Keyboard navigation: Press '/' or 'Cmd+K' / 'Ctrl+K' to quickly focus search
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            if (
+                (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
+                ((e.metaKey || e.ctrlKey) && e.key === 'k')
+            ) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, []);
 
     // Calendar state
     const [calendarDate, setCalendarDate] = useState(() => new Date());
@@ -649,14 +666,17 @@ END:VCALENDAR`;
                     boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
                 }}
             >
-                {/* Search Field */}
+                {/* Search Field with Instant Keyboard Shortcut ('/' or Cmd+K) */}
                 <TextField 
+                    inputRef={searchInputRef}
                     placeholder="Search tournaments, clubs, venues..."
                     size="small"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setIsSearchFocused(false)}
                     sx={{ 
-                        flex: { xs: '1 1 100%', sm: '1 1 320px' },
+                        flex: { xs: '1 1 100%', sm: '1 1 340px' },
                         '& .MuiOutlinedInput-root': {
                             borderRadius: 2.5,
                             transition: 'all 0.2s ease-in-out',
@@ -672,16 +692,36 @@ END:VCALENDAR`;
                         input: {
                             startAdornment: (
                                 <InputAdornment position="start">
-                                    <SearchIcon color="action" />
+                                    <SearchIcon color={isSearchFocused ? "primary" : "action"} />
                                 </InputAdornment>
                             ),
-                            endAdornment: searchInput ? (
-                                <InputAdornment position="end">
-                                    <IconButton size="small" onClick={() => { setSearchInput(''); updateFilters({ q: '' }); }} aria-label="Clear search">
-                                        <ClearIcon fontSize="small" />
-                                    </IconButton>
+                            endAdornment: (
+                                <InputAdornment position="end" sx={{ display: 'flex', gap: 0.8, alignItems: 'center' }}>
+                                    {!isSearchFocused && !searchInput && (
+                                        <Typography 
+                                            variant="caption" 
+                                            sx={{ 
+                                                bgcolor: 'action.hover', 
+                                                px: 0.9, 
+                                                py: 0.4, 
+                                                borderRadius: 1, 
+                                                color: 'text.secondary', 
+                                                fontWeight: 'bold', 
+                                                fontSize: '0.75rem',
+                                                display: { xs: 'none', sm: 'block' }, 
+                                                pointerEvents: 'none' 
+                                            }}
+                                        >
+                                            /
+                                        </Typography>
+                                    )}
+                                    {searchInput && (
+                                        <IconButton size="small" onClick={() => { setSearchInput(''); updateFilters({ q: '' }); searchInputRef.current?.focus(); }} aria-label="Clear search">
+                                            <ClearIcon fontSize="small" />
+                                        </IconButton>
+                                    )}
                                 </InputAdornment>
-                            ) : null
+                            )
                         }
                     }}
                 />
@@ -927,7 +967,10 @@ END:VCALENDAR`;
                                     '&:hover': {
                                         transform: 'translateY(-5px)',
                                         boxShadow: '0 16px 32px rgba(0, 102, 51, 0.12)',
-                                        borderColor: 'primary.light'
+                                        borderColor: 'primary.light',
+                                        '& .tournament-title': {
+                                            color: 'primary.main',
+                                        }
                                     }
                                 }}
                                 onClick={() => setSelectedTournament(tournament)}
@@ -963,7 +1006,7 @@ END:VCALENDAR`;
                                     {/* Host Club / University Tag + Admin Delete */}
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                                         <Typography variant="caption" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: 'primary.main', fontSize: '0.75rem' }}>
-                                            {tournament.hostUniversity || tournament.hostClubHandle || 'Collegiate Tournament'}
+                                            {tournament.hostUniversity || tournament.hostClubHandle || 'Open Tournament'}
                                         </Typography>
                                         {user?.role === 'admin' && (
                                             <Tooltip title="Admin: Delete this tournament">
@@ -985,7 +1028,18 @@ END:VCALENDAR`;
                                     </Box>
 
                                     {/* Tournament Title */}
-                                    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.3, mt: 0.5, fontSize: '1.15rem' }}>
+                                    <Typography 
+                                        className="tournament-title"
+                                        variant="h6" 
+                                        fontWeight="bold" 
+                                        gutterBottom 
+                                        sx={{ 
+                                            lineHeight: 1.3, 
+                                            mt: 0.5, 
+                                            fontSize: '1.15rem',
+                                            transition: 'color 0.2s ease-in-out'
+                                        }}
+                                    >
                                         {tournament.tournamentName}
                                     </Typography>
 

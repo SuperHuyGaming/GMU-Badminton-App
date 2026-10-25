@@ -650,4 +650,25 @@ describe('Public Tournaments Page Component', () => {
             expect(toast.success).toHaveBeenCalledWith('Tournament submitted for admin approval!');
         });
     });
+
+    it('supports keyboard shortcut to focus search input and renders keyboard hint', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Keyboard hint '/' is rendered when search is unfocused and empty
+        expect(screen.getByText('/')).toBeInTheDocument();
+
+        // Trigger global keydown for '/'
+        fireEvent.keyDown(window, { key: '/' });
+
+        const searchInput = screen.getByPlaceholderText(/Search tournaments, clubs, venues/i);
+        expect(document.activeElement).toBe(searchInput);
+    });
 });
