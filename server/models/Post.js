@@ -97,8 +97,8 @@ PostSchema.pre('save', function (next) {
 			"⚡": "clutch"
 		};
 		this.reactions.forEach(r => {
-			if (!r.reactionType && r.emoji && EMOJI_TO_TYPE[r.emoji]) {
-				r.reactionType = EMOJI_TO_TYPE[r.emoji];
+			if (!r.reactionType) {
+				r.reactionType = (r.emoji && EMOJI_TO_TYPE[r.emoji]) || "custom";
 			}
 		});
 	}

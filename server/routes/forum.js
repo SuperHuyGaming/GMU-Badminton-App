@@ -245,6 +245,16 @@ const sendNotification = async (io, targetUserId, message, link) => {
 // ==========================================
 const ALLOWED_CATEGORIES = ['general', 'match_result', 'gear_review', 'meetup_rally', 'training'];
 
+const parseOpponents = (opponents) => {
+	if (Array.isArray(opponents)) {
+		return opponents.map((o) => xss(String(o || "").trim()).slice(0, 100)).filter(Boolean);
+	}
+	if (typeof opponents === "string" && opponents.trim()) {
+		return opponents.split(",").map((o) => xss(o.trim()).slice(0, 100)).filter(Boolean);
+	}
+	return [];
+};
+
 router.get("/", async (req, res) => {
 	try {
 		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -256,8 +266,11 @@ router.get("/", async (req, res) => {
 			status: { $nin: ['quarantined', 'deleted'] }
 		};
 		if (req.query.date && typeof req.query.date === "string") query.targetDate = req.query.date.slice(0, 50);
-		if (req.query.category && typeof req.query.category === "string" && req.query.category !== "all") {
-			query.category = req.query.category.slice(0, 50);
+		if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {
+			const cat = req.query.category.trim().toLowerCase().slice(0, 50);
+			if (ALLOWED_CATEGORIES.includes(cat)) {
+				query.category = cat;
+			}
 		}
 
 		const rawPosts = await Post.find(query)
@@ -298,9 +311,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		if (matchDetails && typeof matchDetails === "object") {
 			cleanMatchDetails = {
 				partner: matchDetails.partner ? xss(String(matchDetails.partner).trim()).slice(0, 100) : "",
-				opponents: Array.isArray(matchDetails.opponents)
-					? matchDetails.opponents.map((o) => xss(String(o || "").trim()).slice(0, 100)).filter(Boolean)
-					: (matchDetails.opponents ? [xss(String(matchDetails.opponents).trim()).slice(0, 100)].filter(Boolean) : []),
+				opponents: parseOpponents(matchDetails.opponents),
 				score: matchDetails.score ? xss(String(matchDetails.score).trim()).slice(0, 100) : "",
 				court: matchDetails.court ? xss(String(matchDetails.court).trim()).slice(0, 100) : "",
 				winner: matchDetails.winner ? xss(String(matchDetails.winner).trim()).slice(0, 100) : "",
@@ -498,9 +509,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			post.matchDetails = {
 				partner: matchDetails.partner !== undefined ? xss(String(matchDetails.partner || "").trim()).slice(0, 100) : (post.matchDetails?.partner || ""),
 				opponents: matchDetails.opponents !== undefined
-					? (Array.isArray(matchDetails.opponents)
-						? matchDetails.opponents.map((o) => xss(String(o || "").trim()).slice(0, 100)).filter(Boolean)
-						: [xss(String(matchDetails.opponents || "").trim()).slice(0, 100)].filter(Boolean))
+					? parseOpponents(matchDetails.opponents)
 					: (post.matchDetails?.opponents || []),
 				score: matchDetails.score !== undefined ? xss(String(matchDetails.score || "").trim()).slice(0, 100) : (post.matchDetails?.score || ""),
 				court: matchDetails.court !== undefined ? xss(String(matchDetails.court || "").trim()).slice(0, 100) : (post.matchDetails?.court || ""),

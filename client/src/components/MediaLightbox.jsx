@@ -59,16 +59,18 @@ export default function MediaLightbox({
 			disableRestoreFocus
 			maxWidth={false}
 			fullScreen
-			PaperProps={{
-				sx: {
-					bgcolor: "rgba(10, 15, 12, 0.94)",
-					backdropFilter: "blur(20px)",
-					boxShadow: "none",
-					color: "white",
-					display: "flex",
-					flexDirection: "column",
-					justifyContent: "space-between",
-					overflow: "hidden",
+			slotProps={{
+				paper: {
+					sx: {
+						bgcolor: "rgba(10, 15, 12, 0.94)",
+						backdropFilter: "blur(20px)",
+						boxShadow: "none",
+						color: "white",
+						display: "flex",
+						flexDirection: "column",
+						justifyContent: "space-between",
+						overflow: "hidden",
+					},
 				},
 			}}
 		>

@@ -1,9 +1,10 @@
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import PostCard from './PostCard';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import apiFetch from '../utils/api';
 
 // Mock the API calls and navigate
 const mockNavigate = vi.fn();
@@ -14,6 +15,13 @@ vi.mock('react-router-dom', async () => {
         useNavigate: () => mockNavigate
     };
 });
+
+vi.mock('../utils/api', () => ({
+    default: vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ reactions: [] })
+    })
+}));
 
 describe('PostCard Component QA Tests', () => {
     const mockPost = {
@@ -142,5 +150,59 @@ describe('PostCard Component QA Tests', () => {
         renderWithContext(reactedPost, mockUser);
         expect(screen.getByText('Ice Drop')).toBeInTheDocument();
         expect(screen.getByText('🧊')).toBeInTheDocument();
+    });
+
+    it('renders active reaction label on primary button when user has reacted with Clutch', () => {
+        const reactedPost = {
+            ...mockPost,
+            reactions: [
+                { userId: mockUser.id, emoji: '⚡', reactionType: 'clutch' }
+            ],
+        };
+        renderWithContext(reactedPost, mockUser);
+        expect(screen.getByText('Clutch')).toBeInTheDocument();
+        expect(screen.getByText('⚡')).toBeInTheDocument();
+    });
+
+    it('supports user objects with _id instead of id for reaction detection', () => {
+        const userWithMongoId = { _id: 'mongo-user-456', name: 'Mongo User' };
+        const reactedPost = {
+            ...mockPost,
+            reactions: [
+                { userId: 'mongo-user-456', emoji: '💥', reactionType: 'smash' }
+            ],
+        };
+        renderWithContext(reactedPost, userWithMongoId);
+        expect(screen.getByText('Smash')).toBeInTheDocument();
+        expect(screen.getByText('💥')).toBeInTheDocument();
+    });
+
+    it('renders scorecard banner when matchDetails only contains winner', () => {
+        const postWithWinnerOnly = {
+            ...mockPost,
+            category: 'match_result',
+            matchDetails: {
+                winner: 'Challenger Duo',
+            },
+        };
+        renderWithContext(postWithWinnerOnly, mockUser);
+        expect(screen.getByText('🏸 Match Scorecard')).toBeInTheDocument();
+        expect(screen.getByText('Winner: Challenger Duo')).toBeInTheDocument();
+    });
+
+    it('optimistically adds reaction when clicking Smash reaction button', async () => {
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                ...mockPost,
+                reactions: [{ userId: mockUser.id, emoji: '💥', reactionType: 'smash' }]
+            })
+        });
+        renderWithContext(mockPost, mockUser);
+        const reactButton = screen.getByRole('button', { name: /React to post/i });
+        fireEvent.click(reactButton);
+        await waitFor(() => {
+            expect(screen.getByText('💥 1')).toBeInTheDocument();
+        });
     });
 });

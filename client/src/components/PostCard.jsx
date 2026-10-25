@@ -1,6 +1,6 @@
 // client/src/components/PostCard.jsx
 // eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
 import apiFetch from "../utils/api";
@@ -55,7 +55,9 @@ import {
 export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser }) {
 	const navigate = useNavigate();
 	const currentUser = propUser || (typeof window !== "undefined" && localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null);
+	const currentUserId = currentUser?.id || currentUser?._id;
     const controls = useAnimation();
+	const touchTimer = useRef(null);
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -100,7 +102,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					recentLikerAvatars: updatedPost.recentLikerAvatars,
 					title: updatedPost.title,
 					content: updatedPost.content,
-					isEdited: updatedPost.isEdited
+					isEdited: updatedPost.isEdited,
+					reactions: updatedPost.reactions || prev.reactions,
+					category: updatedPost.category || prev.category,
+					matchDetails: updatedPost.matchDetails || prev.matchDetails,
 				}));
 			}
 		};
@@ -140,16 +145,17 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 			(acc, c) => acc + 1 + (c.replies?.length || 0),
 			0,
 		) || 0;
-	const hasLiked = localPost.likedBy?.includes(currentUser?.id);
+	const hasLiked = localPost.likedBy?.includes(currentUserId);
+	const currentUserReaction = (localPost.reactions || []).find(
+		(r) => r && String(r.userId) === String(currentUserId)
+	)?.emoji;
 
 	const [showHeart, setShowHeart] = useState(false);
 	const [showReactions, setShowReactions] = useState(false);
 
-
 	const handleDoubleTap = (e) => {
 		e.preventDefault();
-		const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
-		if (!userReaction) {
+		if (!currentUserReaction) {
 			handleReaction('💥');
 		}
 		setShowHeart(true);
@@ -167,19 +173,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 		setIsLiking(true);
 		try {
-			const apiUrl = import.meta.env.VITE_API_URL || "";
-			const res = await fetch(
-				`${apiUrl}/api/forum/${localPost._id}/like`,
-				{
-					method: "PUT",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						userId: currentUser.id,
-						userName: currentUser.name,
-					}),
-				},
-			);
-			if (res.ok) setLocalPost(await res.json());
+			const res = await apiFetch(`/api/forum/${localPost._id}/like`, {
+				method: "PUT",
+				body: JSON.stringify({
+					userId: currentUserId,
+					userName: currentUser.name,
+				}),
+			});
+			if (res && res.ok) setLocalPost(await res.json());
 		} catch (err) {
 			console.error(err);
 		} finally {
@@ -189,42 +190,64 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 	const handleReaction = async (emoji) => {
 		if (!currentUser) return alert("You must be logged in to react to posts!");
+		setShowReactions(false);
+
+		// Optimistic reaction update
+		const prevReactions = localPost.reactions || [];
+		const existingIndex = prevReactions.findIndex(
+			(r) => r && String(r.userId) === String(currentUserId)
+		);
+		let updatedReactions = [...prevReactions];
+		if (existingIndex > -1) {
+			if (prevReactions[existingIndex].emoji === emoji) {
+				// Same emoji -> toggle off
+				updatedReactions.splice(existingIndex, 1);
+			} else {
+				// Different emoji -> switch reaction
+				updatedReactions[existingIndex] = {
+					...updatedReactions[existingIndex],
+					emoji,
+					reactionType: BADMINTON_REACTIONS.find((b) => b.emoji === emoji)?.type || "custom",
+				};
+			}
+		} else {
+			// New reaction
+			updatedReactions.push({
+				userId: currentUserId,
+				userName: currentUser?.name || "Player",
+				emoji,
+				reactionType: BADMINTON_REACTIONS.find((b) => b.emoji === emoji)?.type || "custom",
+				createdAt: new Date(),
+			});
+		}
+		setLocalPost((prev) => ({ ...prev, reactions: updatedReactions }));
+
 		try {
-			const apiUrl = import.meta.env.VITE_API_URL || "";
-			const token = localStorage.getItem("token");
-			const headers = { "Content-Type": "application/json" };
-			if (token) headers["Authorization"] = `Bearer ${token}`;
-			const res = await fetch(
-				`${apiUrl}/api/forum/${localPost._id}/react`,
-				{
-					method: "PUT",
-					headers,
-					body: JSON.stringify({ emoji }),
-				},
-			);
-			if (res.ok) {
+			const res = await apiFetch(`/api/forum/${localPost._id}/react`, {
+				method: "PUT",
+				body: JSON.stringify({ emoji }),
+			});
+			if (res && res.ok) {
 				const updated = await res.json();
-				setLocalPost(updated);
-				setShowReactions(false);
+				if (updated && updated._id) {
+					setLocalPost(updated);
+				}
+			} else {
+				setLocalPost((prev) => ({ ...prev, reactions: prevReactions }));
 			}
 		} catch (err) {
 			console.error("Error submitting reaction:", err);
+			setLocalPost((prev) => ({ ...prev, reactions: prevReactions }));
 		}
 	};
 
 	const handleTogglePin = async () => {
 		if (!currentUser || currentUser.role !== "admin") return;
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}/pin`,
-				{
-					method: "PUT",
-					headers: {
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-				},
-			);
-			if (res.ok) {
+			const res = await apiFetch(`/api/forum/${localPost._id}/pin`, {
+				method: "PUT",
+			});
+			if (res && res.ok) {
 				const data = await res.json();
 				setLocalPost((prev) => ({ ...prev, isPinned: data.isPinned }));
 				toast.success(data.message || "Post pin status updated!");
@@ -248,21 +271,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const handleSaveEdit = async () => {
 		if (!editTitle.trim() || !editContent.trim()) return;
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}`,
-				{
-					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-					body: JSON.stringify({
-						userId: currentUser.id,
-						title: editTitle,
-						content: editContent,
-					}),
-				},
-			);
+			const res = await apiFetch(`/api/forum/${localPost._id}`, {
+				method: "PUT",
+				body: JSON.stringify({
+					userId: currentUserId,
+					title: editTitle,
+					content: editContent,
+				}),
+			});
 			const data = await res.json();
 
 			if (!res.ok) return alert(data.message || "Failed to update.");
@@ -280,17 +296,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 	const confirmDeletePost = async () => {
 		try {
-			await fetch(
-				`${import.meta.env.VITE_API_URL}/api/forum/${localPost._id}`,
-				{
-					method: "DELETE",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-					body: JSON.stringify({ userId: currentUser.id }),
-				},
-			);
+			await apiFetch(`/api/forum/${localPost._id}`, {
+				method: "DELETE",
+				body: JSON.stringify({ userId: currentUserId }),
+			});
 			setIsCommentModalOpen(false);
 		} catch (err) {
 			console.error(err);
@@ -300,15 +309,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	// eslint-disable-next-line no-unused-vars
 	const toggleBookmark = async () => {
 		try {
-			const res = await fetch("/api/forum/" + localPost._id + "/bookmark", {
+			const res = await apiFetch(`/api/forum/${localPost._id}/bookmark`, {
 				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: "Bearer " + localStorage.getItem("token")
-				},
-				body: JSON.stringify({ userId: currentUser.id }),
+				body: JSON.stringify({ userId: currentUserId }),
 			});
-			if (res.ok) {
+			if (res && res.ok) {
 				const data = await res.json();
 				if (onBookmarkToggle) onBookmarkToggle(data.isBookmarked);
 			}
@@ -536,7 +541,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					</Box>
 
 					{/* 3 DOTS MENU */}
-					{(currentUser?.id === localPost.authorId ||
+					{(String(currentUserId) === String(localPost.authorId) ||
 						currentUser?.role === "admin") && (
 						<Box>
 							<IconButton
@@ -558,7 +563,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									},
 								}}
 							>
-								{currentUser?.id === localPost.authorId && (
+								{String(currentUserId) === String(localPost.authorId) && (
 									<MenuItem
 										onClick={() => {
 											setIsEditing(true);
@@ -676,7 +681,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						}}
 					>
 						{/* MATCH SCORECARD BANNER */}
-						{localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court) && (
+						{localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court || localPost.matchDetails.winner) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -882,12 +887,13 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<Box sx={{ display: "flex", gap: 0.8, flexWrap: "wrap", alignItems: "center" }}>
 							{Object.entries(
 								(localPost.reactions || []).reduce((acc, r) => {
-									if (r.emoji) acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+									const emoji = typeof r === 'string' ? r : (r?.emoji || '');
+									if (emoji) acc[emoji] = (acc[emoji] || 0) + 1;
 									return acc;
 								}, {})
 							).map(([emoji, count]) => {
 								const hasReactedWithThis = (localPost.reactions || []).some(
-									(r) => r.userId === currentUser?.id && r.emoji === emoji
+									(r) => r && String(r.userId) === String(currentUserId) && ((typeof r === 'string' ? r : r.emoji) === emoji)
 								);
 								const reactionMeta = BADMINTON_REACTIONS.find((b) => b.emoji === emoji);
 								return (
@@ -1012,6 +1018,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					<Box 
 						onMouseEnter={() => setShowReactions(true)} 
 						onMouseLeave={() => setShowReactions(false)}
+						onTouchStart={() => {
+							touchTimer.current = setTimeout(() => setShowReactions(true), 400);
+						}}
+						onTouchEnd={() => {
+							if (touchTimer.current) clearTimeout(touchTimer.current);
+						}}
 						sx={{ position: 'relative', flex: 1, display: 'flex' }}
 					>
 						{/* Floating Reaction Bar with Badminton Reaction Trio */}
@@ -1041,25 +1053,21 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<Button
 							aria-label="React to post"
 							onClick={() => {
-								const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
-								if (userReaction) handleReaction(userReaction);
+								if (currentUserReaction) handleReaction(currentUserReaction);
 								else handleReaction('💥');
 							}}
-							color={(localPost.reactions || []).some((r) => r.userId === currentUser?.id) || hasLiked ? "primary" : "inherit"}
+							color={currentUserReaction || hasLiked ? "primary" : "inherit"}
 							sx={actionBtnStyle}
 						>
 							<Box sx={{ mr: { xs: 0.5, sm: 1 }, display: "flex", alignItems: "center" }}>
-								{(() => {
-									const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
-									if (userReaction) return <Typography component="span" sx={{ fontSize: "1.1rem" }}>{userReaction}</Typography>;
-									return <Typography component="span" sx={{ fontSize: "1.1rem" }}>💥</Typography>;
-								})()}
+								<Typography component="span" sx={{ fontSize: "1.1rem" }}>
+									{currentUserReaction || '💥'}
+								</Typography>
 							</Box>
 							<Box sx={{ display: { xs: "none", sm: "inline-block" } }}>
 								{(() => {
-									const userReaction = (localPost.reactions || []).find((r) => r.userId === currentUser?.id)?.emoji;
-									if (userReaction) {
-										const match = BADMINTON_REACTIONS.find((b) => b.emoji === userReaction);
+									if (currentUserReaction) {
+										const match = BADMINTON_REACTIONS.find((b) => b.emoji === currentUserReaction);
 										return match ? match.label : "Reacted";
 									}
 									return "Smash";

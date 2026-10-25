@@ -367,5 +367,79 @@ describe('Phase 1: Authentic Badminton Reaction Trio & Post Categorization', () 
 			expect(mockPostDoc.matchDetails.score).toBe('21-15, 21-17');
 			expect(mockPostDoc.matchDetails.court).toBe('Court 4');
 		});
+
+		it('parses comma-separated opponents string into an array of trimmed names', async () => {
+			let savedPostData = null;
+			Post.mockImplementation(function (data) {
+				savedPostData = data;
+				return {
+					...data,
+					_id: postId,
+					save: jest.fn().mockResolvedValue(true),
+					toObject: function () {
+						return { ...data, _id: postId };
+					},
+				};
+			});
+
+			const payload = {
+				title: 'Doubles match with comma opponents',
+				content: 'Great match today',
+				category: 'match_result',
+				matchDetails: {
+					opponents: 'David Kim, Chris Lee ,  Mark Shen ',
+				},
+			};
+
+			const res = await request(app)
+				.post('/api/forum')
+				.set('Authorization', `Bearer ${tokenAuthor}`)
+				.send(payload);
+
+			expect(res.status).toBe(201);
+			expect(savedPostData.matchDetails.opponents).toEqual(['David Kim', 'Chris Lee', 'Mark Shen']);
+		});
+
+		it('allows reacting with { reactionType: "clutch" } without emoji payload', async () => {
+			const mockPostDoc = {
+				_id: postId,
+				authorId,
+				reactions: [],
+				save: jest.fn().mockResolvedValue(true),
+				toObject: function () {
+					return { _id: this._id, reactions: this.reactions };
+				},
+			};
+			Post.findById.mockResolvedValue(mockPostDoc);
+
+			const res = await request(app)
+				.put(`/api/forum/${postId}/react`)
+				.set('Authorization', `Bearer ${tokenReactor}`)
+				.send({ reactionType: 'clutch' });
+
+			expect(res.status).toBe(200);
+			expect(mockPostDoc.reactions[0].emoji).toBe('⚡');
+			expect(mockPostDoc.reactions[0].reactionType).toBe('clutch');
+		});
+
+		it('supports case-insensitive category filtering in GET /api/forum', async () => {
+			Post.find.mockReturnValue({
+				sort: jest.fn().mockReturnValue({
+					skip: jest.fn().mockReturnValue({
+						limit: jest.fn().mockReturnValue({
+							lean: jest.fn().mockResolvedValue([]),
+						}),
+					}),
+				}),
+			});
+
+			const res = await request(app).get('/api/forum?category=MATCH_RESULT');
+			expect(res.status).toBe(200);
+			expect(Post.find).toHaveBeenCalledWith(
+				expect.objectContaining({
+					category: 'match_result',
+				})
+			);
+		});
 	});
 });

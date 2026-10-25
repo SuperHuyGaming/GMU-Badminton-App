@@ -89,7 +89,7 @@ export default function Forum() {
 				const cursorQuery = cursorRef.current ? `&cursor=${cursorRef.current}` : "";
 				const sessionQuery = `&sessionTime=${sessionTimeRef.current}`;
 				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${cursorQuery}${sessionQuery}`);
-				if (res.ok) {
+				if (res && res.ok) {
 					const data = await res.json();
 					cursorRef.current = data.nextCursor;
 					setHasMore(!!data.nextCursor);
@@ -130,13 +130,18 @@ export default function Forum() {
 		};
 
 		const handlePostUpdated = (updatedPost) => {
-			// Update likes/comments inline without changing the array order!
+			// Update likes/comments/reactions/category/matchDetails inline without changing feed order
 			setFeed(prevFeed => prevFeed.map(item => {
 				if (item.type === 'post' && item.referenceId === updatedPost._id) {
 					const totalComments = updatedPost.comments?.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0) || 0;
 					return {
 						...item,
-						likes: updatedPost.likedBy?.length || 0,
+						title: updatedPost.title ?? item.title,
+						content: updatedPost.content ?? item.content,
+						category: updatedPost.category ?? item.category,
+						matchDetails: updatedPost.matchDetails ?? item.matchDetails,
+						reactions: updatedPost.reactions ?? item.reactions,
+						likes: updatedPost.likedBy?.length ?? item.likes,
 						comments: totalComments
 					};
 				}
@@ -224,6 +229,8 @@ export default function Forum() {
 			setPostImages([]);
 			setIsModalOpen(false);
 			toast.success("Post created successfully!");
+			setPage(1);
+			setFeed([]);
 		} catch (error) {
 			setIsUploadingImage(false);
 			console.error("Failed to post", error);
@@ -346,14 +353,21 @@ export default function Forum() {
 				</Box>
 
 				{/* 
-				  Category Group & Feed Filters (Commented out for future sprint to keep feed uncluttered)
-				  The user requested to mess with search, date sorting, and category group filters (finding players/matches/questions) later.
+				  Sprint 2 / Future Sprint Stash (Commented out per explicit directive to keep live feed UI clean and uncluttered):
+				  - Post Search Input (e.g. searching posts by keyword/author)
+				  - Date Range Pickers / Date Filter Dropdowns (e.g. managing posts from different dates)
+				  - Category Group Filter Chips (Finding Players, Finding Matches, Asking Questions, Match Results, Gear, Meetups, Training)
+				  - Advanced Feed Sorting (Top, Latest, Velocity Hot)
 				  <Box sx={{ width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, mb: 1.5 }}>
+				    <TextField size="small" placeholder="Search posts..." />
 				    <Chip label="All" size="small" variant="filled" color="primary" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Finding Players" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Finding Matches" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
 				    <Chip label="Match Results" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Gear" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Meetups" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Training" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Gear Reviews" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Meetup Rally" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Training & Tips" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+				    <Chip label="Ask Questions" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
 				  </Box>
 				*/}
 
