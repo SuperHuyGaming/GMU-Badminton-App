@@ -8,6 +8,7 @@ const rateLimit = require("express-rate-limit");
 const xss = require("xss");
 const { analyzeContent } = require("../utils/aiModeration");
 const { evaluateSpamHeuristics } = require("../utils/spamDetector");
+const { parseDateRange } = require("../utils/dateRange");
 const router = express.Router();
 
 const escapeHtml = (str) => {
@@ -351,12 +352,43 @@ router.get("/", async (req, res) => {
 			isFlagged: { $ne: true },
 			status: { $nin: ['quarantined', 'deleted'] }
 		};
-		if (req.query.date && typeof req.query.date === "string") query.targetDate = req.query.date.slice(0, 50);
+
+		const { start: dateStart, end: dateEnd } = parseDateRange(req.query);
+		if (dateStart || dateEnd) {
+			query.createdAt = {};
+			if (dateStart) query.createdAt.$gte = dateStart;
+			if (dateEnd) query.createdAt.$lte = dateEnd;
+		} else if (req.query.date && typeof req.query.date === "string") {
+			query.targetDate = req.query.date.slice(0, 50);
+		}
+
 		if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {
 			const cat = req.query.category.trim().toLowerCase().slice(0, 50);
-			if (ALLOWED_CATEGORIES.includes(cat)) {
+			if (cat === "find_partner") {
+				query.category = { $in: ["find_partner", "meetup_rally"] };
+			} else if (cat === "gear_exchange") {
+				query.category = { $in: ["gear_exchange", "gear_review"] };
+			} else if (ALLOWED_CATEGORIES.includes(cat)) {
 				query.category = cat;
 			}
+		}
+
+		if (req.query.tag && typeof req.query.tag === "string") {
+			query.tags = req.query.tag.trim().slice(0, 50);
+		}
+
+		const rawSearch = (req.query.search || req.query.q || "").trim();
+		if (rawSearch) {
+			const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
+			const searchRegex = new RegExp(escaped, 'i');
+			query.$or = [
+				{ title: { $regex: searchRegex } },
+				{ content: { $regex: searchRegex } },
+				{ authorName: { $regex: searchRegex } },
+				{ tags: searchRegex },
+				{ "matchDetails.court": { $regex: searchRegex } },
+				{ "playerMatchmaking.preferredCourt": { $regex: searchRegex } }
+			];
 		}
 
 		const rawPosts = await Post.find(query)

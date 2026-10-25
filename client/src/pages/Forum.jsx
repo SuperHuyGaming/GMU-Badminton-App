@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import apiFetch from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-hot-toast";
@@ -7,12 +7,34 @@ import {
 	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
 	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem,
-	Checkbox
+	Checkbox, FormControl, InputAdornment, IconButton
 } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import CloseIcon from "@mui/icons-material/Close";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
 // eslint-disable-next-line no-unused-vars
 import { useNavigate } from "react-router-dom";
+
+const CATEGORY_FILTERS = [
+	{ id: "all", label: "All" },
+	{ id: "find_partner", label: "Finding Players" },
+	{ id: "challenge_match", label: "Finding Matches" },
+	{ id: "qa_forum", label: "Q&A Forums" },
+	{ id: "gear_exchange", label: "Gear Exchange" },
+	{ id: "match_result", label: "Match Scorecards" },
+	{ id: "training", label: "Training & Tips" },
+	{ id: "general", label: "General" }
+];
+
+const DATE_OPTIONS = [
+	{ id: "all", label: "All Dates" },
+	{ id: "today", label: "Today" },
+	{ id: "week", label: "This Week" },
+	{ id: "month", label: "This Month" },
+	{ id: "custom", label: "Custom Range" }
+];
 
 export default function Forum() {
 	const { user: currentUser } = useAuth();
@@ -21,6 +43,14 @@ export default function Forum() {
 
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
+	const [selectedCategory, setSelectedCategory] = useState("all");
+	const [searchInput, setSearchInput] = useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
+	const [isSearchFocused, setIsSearchFocused] = useState(false);
+	const searchInputRef = useRef(null);
+	const [dateRange, setDateRange] = useState("all");
+	const [customStartDate, setCustomStartDate] = useState("");
+	const [customEndDate, setCustomEndDate] = useState("");
 	const [feed, setFeed] = useState([]);
 	const [newPostsQueue, setNewPostsQueue] = useState([]);
 	const [bookmarkedPosts, setBookmarkedPosts] = useState(new Set());
@@ -98,6 +128,38 @@ export default function Forum() {
 		if (node) observer.current.observe(node);
 	}, [isLoading, isFetchingMore, hasMore]);
 
+	// Debounce search input by 250ms
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedSearch(searchInput.trim());
+		}, 250);
+		return () => clearTimeout(timer);
+	}, [searchInput]);
+
+	// Global keyboard shortcuts: Press '/' or 'Cmd+K' / 'Ctrl+K' to quickly focus search
+	useEffect(() => {
+		const handleGlobalKeyDown = (e) => {
+			if (
+				(e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
+				((e.metaKey || e.ctrlKey) && e.key === 'k')
+			) {
+				e.preventDefault();
+				searchInputRef.current?.focus();
+			}
+		};
+		window.addEventListener('keydown', handleGlobalKeyDown);
+		return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+	}, []);
+
+	const handleSearchKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			setDebouncedSearch(searchInput.trim());
+			setPage(1);
+			setFeed([]);
+		}
+	};
+
 	const cursorRef = useRef(null);
 	const sessionTimeRef = useRef(null);
 
@@ -115,9 +177,19 @@ export default function Forum() {
 
 			try {
 				const tagQuery = selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : "";
+				const catQuery = selectedCategory && selectedCategory !== "all" ? `&category=${encodeURIComponent(selectedCategory)}` : "";
+				const searchQuery = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : "";
+				let dateQuery = "";
+				if (dateRange && dateRange !== "all") {
+					dateQuery = `&dateRange=${encodeURIComponent(dateRange)}`;
+					if (dateRange === "custom") {
+						if (customStartDate) dateQuery += `&startDate=${encodeURIComponent(customStartDate)}`;
+						if (customEndDate) dateQuery += `&endDate=${encodeURIComponent(customEndDate)}`;
+					}
+				}
 				const cursorQuery = cursorRef.current ? `&cursor=${cursorRef.current}` : "";
 				const sessionQuery = `&sessionTime=${sessionTimeRef.current}`;
-				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${cursorQuery}${sessionQuery}`);
+				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${catQuery}${searchQuery}${dateQuery}${cursorQuery}${sessionQuery}`);
 				if (res && res.ok) {
 					const data = await res.json();
 					cursorRef.current = data.nextCursor;
@@ -142,7 +214,21 @@ export default function Forum() {
 			}
 		};
 		fetchFeed();
-	}, [tab, page, selectedTag]);
+	}, [tab, page, selectedTag, selectedCategory, debouncedSearch, dateRange, customStartDate, customEndDate]);
+
+	const displayedFeed = useMemo(() => {
+		if (!searchInput.trim()) return feed;
+		const q = searchInput.trim().toLowerCase();
+		return feed.filter(item => {
+			const title = (item.title || "").toLowerCase();
+			const content = (item.content || "").toLowerCase();
+			const author = (item.authorName || "").toLowerCase();
+			const court1 = (item.matchDetails?.court || "").toLowerCase();
+			const court2 = (item.playerMatchmaking?.preferredCourt || "").toLowerCase();
+			const tags = Array.isArray(item.tags) ? item.tags.join(" ").toLowerCase() : "";
+			return title.includes(q) || content.includes(q) || author.includes(q) || court1.includes(q) || court2.includes(q) || tags.includes(q);
+		});
+	}, [feed, searchInput]);
 
 	// Listen for real-time updates
 	useEffect(() => {
@@ -161,7 +247,7 @@ export default function Forum() {
 		const handlePostUpdated = (updatedPost) => {
 			// Update likes/comments/reactions/category/matchDetails inline without changing feed order
 			setFeed(prevFeed => prevFeed.map(item => {
-				if (item.type === 'post' && item.referenceId === updatedPost._id) {
+				if (item.type === 'post' && (item.referenceId === updatedPost._id || item._id === updatedPost._id)) {
 					const totalComments = updatedPost.comments?.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0) || 0;
 					return {
 						...item,
@@ -327,7 +413,198 @@ export default function Forum() {
 					<Tab label="⏱ Latest" value="latest" />
 				</Tabs>
 
-				{/* ACTION BAR (HOT TAGS & TRENDING TOPICS + REFRESH) */}
+				{/* POST SEARCH & DATE RANGE CONTROLS */}
+				<Paper 
+					elevation={0}
+					sx={{ 
+						width: '100%',
+						maxWidth: '800px',
+						display: 'flex', 
+						alignItems: 'center', 
+						justifyContent: 'space-between',
+						gap: 1.5,
+						p: 1.5,
+						borderRadius: 3,
+						border: '1px solid',
+						borderColor: 'divider',
+						bgcolor: 'background.paper',
+						flexWrap: 'wrap'
+					}}
+				>
+					{/* Search Input with Instant Keyboard Shortcut ('/' or Cmd+K) */}
+					<TextField 
+						inputRef={searchInputRef}
+						placeholder="Search posts by title, author, court, tags..."
+						size="small"
+						value={searchInput}
+						onChange={(e) => setSearchInput(e.target.value)}
+						onKeyDown={handleSearchKeyDown}
+						onFocus={() => setIsSearchFocused(true)}
+						onBlur={() => setIsSearchFocused(false)}
+						sx={{ 
+							flex: { xs: '1 1 100%', sm: '1 1 280px' },
+							'& .MuiOutlinedInput-root': {
+								borderRadius: 2.5,
+								transition: 'all 0.2s ease-in-out',
+								'&:hover': {
+									boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+								},
+								'&.Mui-focused': {
+									boxShadow: '0 4px 12px rgba(0, 80, 40, 0.12)'
+								}
+							}
+						}}
+						slotProps={{
+							input: {
+								startAdornment: (
+									<InputAdornment position="start">
+										<SearchIcon color={isSearchFocused ? "primary" : "action"} />
+									</InputAdornment>
+								),
+								endAdornment: (
+									<InputAdornment position="end" sx={{ display: 'flex', gap: 0.8, alignItems: 'center' }}>
+										{!isSearchFocused && !searchInput && (
+											<Typography 
+												variant="caption" 
+												sx={{ 
+													bgcolor: 'action.hover', 
+													px: 0.9, 
+													py: 0.4, 
+													borderRadius: 1, 
+													color: 'text.secondary', 
+													fontWeight: 'bold', 
+													fontSize: '0.75rem',
+													display: { xs: 'none', sm: 'block' }, 
+													pointerEvents: 'none' 
+												}}
+											>
+												/
+											</Typography>
+										)}
+										{searchInput && (
+											<IconButton 
+												size="small" 
+												onClick={() => { 
+													setSearchInput(''); 
+													setDebouncedSearch(''); 
+													setPage(1); 
+													setFeed([]); 
+													searchInputRef.current?.focus(); 
+												}} 
+												aria-label="Clear search"
+											>
+												<CloseIcon fontSize="small" />
+											</IconButton>
+										)}
+									</InputAdornment>
+								),
+								inputProps: {
+									'aria-label': 'Search community posts'
+								}
+							}
+						}}
+					/>
+
+					{/* Date Range Selector & Refresh */}
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+						<FormControl size="small" sx={{ minWidth: 125 }}>
+							<Select
+								value={dateRange}
+								onChange={(e) => {
+									setDateRange(e.target.value);
+									setPage(1);
+									setFeed([]);
+								}}
+								displayEmpty
+								aria-label="Filter by date range"
+								sx={{ borderRadius: 2.5, fontWeight: 600, fontSize: '0.85rem' }}
+							>
+								{DATE_OPTIONS.map(opt => (
+									<MenuItem key={opt.id} value={opt.id}>{opt.label}</MenuItem>
+								))}
+							</Select>
+						</FormControl>
+
+						{dateRange === 'custom' && (
+							<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+								<TextField
+									type="date"
+									size="small"
+									value={customStartDate}
+									onChange={(e) => {
+										setCustomStartDate(e.target.value);
+										setPage(1);
+										setFeed([]);
+									}}
+									slotProps={{ htmlInput: { 'aria-label': 'Start date' } }}
+									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+								/>
+								<Typography variant="caption" color="text.secondary">to</Typography>
+								<TextField
+									type="date"
+									size="small"
+									value={customEndDate}
+									onChange={(e) => {
+										setCustomEndDate(e.target.value);
+										setPage(1);
+										setFeed([]);
+									}}
+									slotProps={{ htmlInput: { 'aria-label': 'End date' } }}
+									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+								/>
+							</Box>
+						)}
+
+						<Button 
+							variant="outlined" 
+							size="small" 
+							color="inherit"
+							onClick={() => { setPage(1); setFeed([]); }}
+							sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 38, px: 1.5 }}
+							aria-label="Refresh feed"
+						>
+							<RefreshIcon sx={{ fontSize: 18 }} />
+							<Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
+						</Button>
+					</Box>
+				</Paper>
+
+				{/* CATEGORY GROUP FILTER BAR */}
+				<Box 
+					sx={{ 
+						width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
+						scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
+					}}
+					role="region"
+					aria-label="Category filters"
+				>
+					<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', whiteSpace: 'nowrap', mr: 0.5 }}>
+						Categories:
+					</Typography>
+					{CATEGORY_FILTERS.map((cat) => (
+						<Chip 
+							key={cat.id} 
+							label={cat.label} 
+							size="small" 
+							variant={selectedCategory === cat.id ? "filled" : "outlined"}
+							color={selectedCategory === cat.id ? "primary" : "default"}
+							onClick={() => {
+								setSelectedCategory(prev => prev === cat.id && cat.id !== "all" ? "all" : cat.id);
+								setPage(1);
+								setFeed([]);
+							}}
+							clickable
+							sx={{ 
+								fontWeight: 'bold', 
+								borderRadius: 2,
+								cursor: 'pointer',
+								transition: 'all 0.2s ease-in-out'
+							}} 
+						/>
+					))}
+				</Box>
+
+				{/* ACTION BAR (HOT TAGS & TRENDING TOPICS) */}
 				<Box 
 					sx={{ 
 						width: '100%', maxWidth: '800px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 1.5, px: 1
@@ -370,37 +647,7 @@ export default function Forum() {
                             />
                         ))}
                     </Box>
-
-                    <Button 
-                        variant="outlined" 
-                        size="small" 
-                        color="inherit"
-                        onClick={() => { setPage(1); setFeed([]); }}
-                        sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 28, px: 1.5 }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.13 15.57a9 9 0 1 0 3.12-11.83l-4.75 4.76"/></svg>
-                        <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
-                    </Button>
 				</Box>
-
-				{/* 
-				  Sprint 2 / Future Sprint Stash (Commented out per explicit directive to keep live feed UI clean and uncluttered):
-				  - Post Search Input (e.g. searching posts by keyword/author)
-				  - Date Range Pickers / Date Filter Dropdowns (e.g. managing posts from different dates)
-				  - Category Group Filter Chips (Finding Players, Finding Matches, Asking Questions, Match Results, Gear, Meetups, Training)
-				  - Advanced Feed Sorting (Top, Latest, Velocity Hot)
-				  <Box sx={{ width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, mb: 1.5 }}>
-				    <TextField size="small" placeholder="Search posts..." />
-				    <Chip label="All" size="small" variant="filled" color="primary" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Finding Players" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Finding Matches" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Match Results" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Gear Reviews" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Meetup Rally" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Training & Tips" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Ask Questions" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				  </Box>
-				*/}
 
 			</Box>
 
@@ -520,8 +767,23 @@ export default function Forum() {
 					<Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', p: 4 }}>
 						<Typography color="text.primary">No activity found.</Typography>
 					</Box>
+				) : displayedFeed.length === 0 ? (
+					<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 1 }}>
+						<Typography color="text.primary">No posts match &quot;{searchInput}&quot;.</Typography>
+						<Button 
+							variant="outlined" 
+							size="small" 
+							onClick={() => {
+								setSearchInput('');
+								setDebouncedSearch('');
+								setPage(1);
+							}}
+						>
+							Clear Search
+						</Button>
+					</Box>
 				) : (
-					feed.map((item, idx) => {
+					displayedFeed.map((item, idx) => {
 						if (item.type === 'post') {
 							// Transform ActivityFeed back to Post format for PostCard component
 							const mockPost = {
@@ -530,6 +792,10 @@ export default function Forum() {
 								content: item.content,
 								category: item.category || 'general',
 								matchDetails: item.matchDetails || null,
+								playerMatchmaking: item.playerMatchmaking || null,
+								challengeMatch: item.challengeMatch || null,
+								qaDetails: item.qaDetails || null,
+								gearDetails: item.gearDetails || null,
 								imageUrl: item.image,
 								imageUrls: item.images || [],
 								authorId: item.authorId,
@@ -545,7 +811,7 @@ export default function Forum() {
 								comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
 							};
 							return (
-								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
+								<Box key={item._id} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 									<PostCard post={mockPost} currentUser={currentUser} isBookmarked={bookmarkedPosts.has(item.referenceId)} onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { const n = new Set(prev); if(isBookmarked) n.add(item.referenceId); else n.delete(item.referenceId); return n; })} onDelete={() => {}} />
 								</Box>
 							);
@@ -556,7 +822,7 @@ export default function Forum() {
 							const team2Wins = item.team2Score > item.team1Score;
 
 							return (
-								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
+								<Box key={item._id} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 									<Paper 
 										elevation={0} 
 										sx={{ 
