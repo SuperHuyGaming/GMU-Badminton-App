@@ -1,5 +1,5 @@
 // client/src/context/FeedbackContext.jsx
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { createContext, useContext, useState, useCallback } from "react";
 
 const FeedbackContext = createContext(null);
 const DRAFT_STORAGE_KEY = "mbc_feedback_draft_v1";
@@ -96,6 +96,7 @@ export function FeedbackProvider({ children }) {
 	);
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFeedback() {
 	const context = useContext(FeedbackContext);
 	if (!context) {

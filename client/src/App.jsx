@@ -26,6 +26,7 @@ import ServerWarmup from "./components/ServerWarmup";
 import { FeedbackProvider } from "./context/FeedbackContext";
 import FeedbackModal from "./components/FeedbackModal";
 import FeedbackFAB from "./components/FeedbackFAB";
+import ErrorBoundary from "./components/ErrorBoundary";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
 
@@ -555,7 +556,9 @@ function App() {
 						}}
 					>
                         {user && <PendingMatchesPrompt />}
-						<AnimatedRoutes />
+						<ErrorBoundary>
+							<AnimatedRoutes />
+						</ErrorBoundary>
 						{user && <PushNotificationPrompt />}
 						<PWAInstallPrompt />
 					</Container>

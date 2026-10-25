@@ -5,7 +5,7 @@ import {
     ToggleButton, ToggleButtonGroup,
     Drawer, Avatar, AvatarGroup, IconButton, FormGroup, FormControlLabel, Checkbox, 
     Divider, Chip, Tooltip, TextField, InputAdornment, Skeleton, Stack, Badge, Paper,
-    Switch, CircularProgress
+    Switch, CircularProgress, Menu, MenuItem
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -25,6 +25,9 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import AddIcon from '@mui/icons-material/Add';
+import ShareIcon from '@mui/icons-material/Share';
+import SortIcon from '@mui/icons-material/Sort';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { VirtuosoGrid } from 'react-virtuoso';
@@ -32,8 +35,10 @@ import { VirtuosoGrid } from 'react-virtuoso';
 import EmptyTournaments from '../components/EmptyTournaments';
 import MapPinIcon from '../components/MapPinIcon';
 import LazyFlyerImage from '../components/LazyFlyerImage';
+import TournamentBracket from '../components/TournamentBracket';
 import apiFetch from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import socket from '../utils/socket';
 
 const SKILL_LEVEL_OPTIONS = ['Beginner', 'Intermediate', 'Advanced', 'Open'];
 
@@ -193,6 +198,7 @@ export default function Tournaments() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [rsvpLoading, setRsvpLoading] = useState({});
+    const [waitlistLoading, setWaitlistLoading] = useState({});
 
     // Admin delete state
     const [deleteConfirmTournament, setDeleteConfirmTournament] = useState(null); // tournament object awaiting deletion
@@ -215,8 +221,12 @@ export default function Tournaments() {
     const [viewMode, setViewMode] = useState(searchParams.get('view') || 'list'); // 'list' | 'calendar'
     const [selectedTournament, setSelectedTournament] = useState(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const [bracketDialogOpen, setBracketDialogOpen] = useState(false);
 
-    // Filter states from URL params and instant search input
+    // Filter and Sort states
+    const [divisionFilter, setDivisionFilter] = useState('all'); // 'all' | 'singles' | 'doubles' | 'mixed'
+    const [sortBy, setSortBy] = useState('date_asc'); // 'date_asc' | 'date_desc' | 'rsvp_desc' | 'name_asc'
+    const [sortAnchorEl, setSortAnchorEl] = useState(null);
     const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || '');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchInputRef = useRef(null);
@@ -322,10 +332,89 @@ export default function Tournaments() {
         fetchTournaments();
     }, [fetchTournaments]);
 
+    // WebSocket real-time subscription for live tournament events
+    useEffect(() => {
+        const handleTournamentApproved = () => {
+            fetchTournaments();
+        };
+        const handleTournamentDeleted = (data) => {
+            const deletedId = typeof data === 'object' && data !== null ? (data.id || data._id || data.tournamentId) : data;
+            if (deletedId) {
+                setTournaments(prev => prev.filter(t => (t._id || t.id) !== deletedId));
+                setSelectedTournament(prev => ((prev && (prev._id || prev.id) === deletedId) ? null : prev));
+            } else {
+                fetchTournaments();
+            }
+        };
+        const handleRsvpUpdated = (data) => {
+            if (!data || !data.tournamentId) return;
+            setTournaments(prev => prev.map(t => {
+                if ((t._id || t.id) === data.tournamentId) {
+                    return {
+                        ...t,
+                        rsvpCount: data.rsvpCount !== undefined ? data.rsvpCount : t.rsvpCount,
+                        attendees: data.attendees || t.attendees
+                    };
+                }
+                return t;
+            }));
+            setSelectedTournament(prev => {
+                if (prev && (prev._id || prev.id) === data.tournamentId) {
+                    return {
+                        ...prev,
+                        rsvpCount: data.rsvpCount !== undefined ? data.rsvpCount : prev.rsvpCount,
+                        attendees: data.attendees || prev.attendees
+                    };
+                }
+                return prev;
+            });
+        };
+
+        socket.on('tournamentApproved', handleTournamentApproved);
+        socket.on('tournamentDeleted', handleTournamentDeleted);
+        socket.on('tournament:rsvpUpdated', handleRsvpUpdated);
+
+        return () => {
+            socket.off('tournamentApproved', handleTournamentApproved);
+            socket.off('tournamentDeleted', handleTournamentDeleted);
+            socket.off('tournament:rsvpUpdated', handleRsvpUpdated);
+        };
+    }, [fetchTournaments]);
+
     const handleClearFilters = () => {
         setSearchInput('');
+        setDivisionFilter('all');
+        setSortBy('date_asc');
         setSearchParams(new URLSearchParams({ upcoming: 'true' }), { replace: true });
     };
+
+    const matchesDivision = useCallback((t, filter) => {
+        if (!filter || filter === 'all') return true;
+        const divisions = Array.isArray(t.divisions) ? t.divisions : [];
+        if (divisions.length === 0) {
+            const text = `${t.tournamentName || ''} ${t.originalCaption || ''}`.toUpperCase();
+            if (filter === 'singles') return text.includes('SINGLES') || text.includes(' MS ') || text.includes(' WS ');
+            if (filter === 'doubles') return text.includes('DOUBLES') || text.includes(' MD ') || text.includes(' WD ');
+            if (filter === 'mixed') return text.includes('MIXED') || text.includes(' XD ');
+            return true;
+        }
+        return divisions.some(d => {
+            let raw = '';
+            if (typeof d === 'string') raw = d;
+            else if (d && typeof d === 'object') raw = `${d.name || ''} ${d.code || ''} ${d.category || ''}`;
+            const upper = raw.toUpperCase();
+            if (filter === 'singles') {
+                return upper.includes('SINGLES') || upper.includes('MS') || upper.includes('WS');
+            }
+            if (filter === 'doubles') {
+                return upper.includes('DOUBLES') || upper.includes('MD') || upper.includes('WD') || upper.includes('XD');
+            }
+            if (filter === 'mixed') {
+                return upper.includes('MIXED') || upper.includes('XD');
+            }
+            return true;
+        });
+    }, []);
 
     // Instant in-memory client-side filtering on keystrokes across tournamentName, hostUniversity, eventLocation, divisions, and skillLevels (< 5ms)
     const matchesSearch = useCallback((t, term) => {
@@ -357,19 +446,50 @@ export default function Tournaments() {
     }, []);
 
     const filteredTournaments = useMemo(() => {
-        const query = searchInput.trim();
-        if (!query) return tournaments;
-        const upperQuery = query.toUpperCase();
-        const reverseAcronym = REVERSE_SYNONYMS[upperQuery];
+        let result = tournaments;
 
-        const tokens = query.split(/\s+/).filter(Boolean);
-        return tournaments.filter(t => {
-            if (reverseAcronym && matchesSearch(t, reverseAcronym)) {
-                return true;
+        // 1. Division filter
+        if (divisionFilter !== 'all') {
+            result = result.filter(t => matchesDivision(t, divisionFilter));
+        }
+
+        // 2. Instant search query filter
+        const query = searchInput.trim();
+        if (query) {
+            const upperQuery = query.toUpperCase();
+            const reverseAcronym = REVERSE_SYNONYMS[upperQuery];
+            const tokens = query.split(/\s+/).filter(Boolean);
+            result = result.filter(t => {
+                if (reverseAcronym && matchesSearch(t, reverseAcronym)) {
+                    return true;
+                }
+                return tokens.every(token => matchesSearch(t, token));
+            });
+        }
+
+        // 3. Sorting
+        result = [...result].sort((a, b) => {
+            if (sortBy === 'date_asc') {
+                const da = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+                const db = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+                return da - db;
             }
-            return tokens.every(token => matchesSearch(t, token));
+            if (sortBy === 'date_desc') {
+                const da = a.startDate ? new Date(a.startDate).getTime() : -Infinity;
+                const db = b.startDate ? new Date(b.startDate).getTime() : -Infinity;
+                return db - da;
+            }
+            if (sortBy === 'rsvp_desc') {
+                return (b.rsvpCount || 0) - (a.rsvpCount || 0);
+            }
+            if (sortBy === 'name_asc') {
+                return (a.tournamentName || '').localeCompare(b.tournamentName || '');
+            }
+            return 0;
         });
-    }, [tournaments, searchInput, matchesSearch]);
+
+        return result;
+    }, [tournaments, divisionFilter, searchInput, sortBy, matchesDivision, matchesSearch]);
 
     // RSVP Toggle handler
     const handleToggleRsvp = async (e, tournament) => {
@@ -463,7 +583,7 @@ DTSTART:${tStart}
 DTEND:${tEnd}
 SUMMARY:${tournament.tournamentName || "Badminton Tournament"}
 LOCATION:${tournament.eventLocation || "TBD"}
-DESCRIPTION:${(tournament.originalCaption || "Collegiate Badminton Tournament").replace(/\n/g, '\\n')}
+DESCRIPTION:${(tournament.originalCaption || "Open Badminton Tournament / Community Event").replace(/\n/g, '\\n')}
 END:VEVENT
 END:VCALENDAR`;
 
@@ -479,11 +599,106 @@ END:VCALENDAR`;
 
     // Check if user is attending a tournament
     const isUserAttending = useCallback((tournament) => {
-        if (!user) return false;
+        if (!user || !tournament) return false;
         const currentUserId = user._id || user.id;
         const attendees = tournament.attendees || [];
         return attendees.some(a => (typeof a === 'string' ? a : a._id || a.id) === currentUserId);
     }, [user]);
+
+    // Check if user is on the waitlist
+    const isUserWaitlisted = useCallback((tournament) => {
+        if (!user || !tournament || !Array.isArray(tournament.waitlist)) return false;
+        const currentUserId = (user._id || user.id || '').toString();
+        return tournament.waitlist.some(w => {
+            const id = (typeof w === 'object' && w !== null ? (w.userId || w._id || w.id || w) : w).toString();
+            return id === currentUserId;
+        });
+    }, [user]);
+
+    // Get 1-indexed position in waitlist
+    const getUserWaitlistPosition = useCallback((tournament) => {
+        if (!user || !tournament || !Array.isArray(tournament.waitlist)) return null;
+        const currentUserId = (user._id || user.id || '').toString();
+        const idx = tournament.waitlist.findIndex(w => {
+            const id = (typeof w === 'object' && w !== null ? (w.userId || w._id || w.id || w) : w).toString();
+            return id === currentUserId;
+        });
+        return idx >= 0 ? idx + 1 : null;
+    }, [user]);
+
+    // Handle Join Waitlist for sold out tournaments
+    const handleJoinWaitlist = async (e, tournament) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (!user) {
+            toast.error('Please sign in to join the waitlist!');
+            return;
+        }
+        const tId = tournament._id || tournament.id;
+        const currentUserId = user._id || user.id;
+        setWaitlistLoading(prev => ({ ...prev, [tId]: true }));
+        try {
+            const res = await apiFetch(`/api/tournaments/${tId}/waitlist`, {
+                method: 'POST'
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || data.message || 'Failed to join waitlist');
+            toast.success(data.message || 'Joined waitlist!');
+            const updatedWaitlist = [...(tournament.waitlist || []), { userId: currentUserId, registeredAt: new Date().toISOString() }];
+            setTournaments(prev => prev.map(t => ((t._id || t.id) === tId ? { ...t, waitlist: updatedWaitlist } : t)));
+            if (selectedTournament && (selectedTournament._id || selectedTournament.id) === tId) {
+                setSelectedTournament(prev => ({ ...prev, waitlist: updatedWaitlist }));
+            }
+        } catch (err) {
+            toast.error(err.message || 'Could not join waitlist.');
+        } finally {
+            setWaitlistLoading(prev => ({ ...prev, [tId]: false }));
+        }
+    };
+
+    // Handle Leave Waitlist for sold out tournaments
+    const handleLeaveWaitlist = async (e, tournament) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (!user) return;
+        const tId = tournament._id || tournament.id;
+        const currentUserId = (user._id || user.id).toString();
+        setWaitlistLoading(prev => ({ ...prev, [tId]: true }));
+        try {
+            const res = await apiFetch(`/api/tournaments/${tId}/waitlist`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || data.message || 'Failed to leave waitlist');
+            toast.success(data.message || 'Removed from waitlist');
+            const filterOutUser = w => {
+                const id = (typeof w === 'object' && w !== null ? (w.userId || w._id || w.id || w) : w).toString();
+                return id !== currentUserId;
+            };
+            setTournaments(prev => prev.map(t => ((t._id || t.id) === tId ? { ...t, waitlist: (t.waitlist || []).filter(filterOutUser) } : t)));
+            if (selectedTournament && (selectedTournament._id || selectedTournament.id) === tId) {
+                setSelectedTournament(prev => ({ ...prev, waitlist: (prev.waitlist || []).filter(filterOutUser) }));
+            }
+        } catch (err) {
+            toast.error(err.message || 'Could not leave waitlist.');
+        } finally {
+            setWaitlistLoading(prev => ({ ...prev, [tId]: false }));
+        }
+    };
+
+    // 1-Click Share Tournament Link with Clipboard Copy
+    const handleShareTournament = (e, tournament) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const tId = tournament._id || tournament.id;
+        const shareUrl = `${window.location.origin}/tournaments?t=${tId}`;
+        if (navigator?.clipboard?.writeText) {
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                toast.success('Tournament link copied to clipboard!');
+            }).catch(() => {
+                toast.success('Tournament link copied!');
+            });
+        } else {
+            toast.success('Tournament link copied!');
+        }
+    };
 
     // Admin: permanently delete a tournament
     const handleAdminDelete = async () => {
@@ -585,10 +800,10 @@ END:VCALENDAR`;
     };
 
     // Active filters count
-
     const activeFilterCount = (searchInput ? 1 : 0) + 
                              (filterWeekend ? 1 : 0) + 
                              (!filterUpcoming ? 1 : 0) + 
+                             (divisionFilter !== 'all' ? 1 : 0) +
                              selectedSkills.length;
 
     // Calendar Grid Data
@@ -803,30 +1018,84 @@ END:VCALENDAR`;
                         </Button>
                     </Tooltip>
 
-                    {/* Clear & Reset Button */}
-                    <Tooltip title="Clear invalid tournaments and reset verified schedule">
-                        <Button
-                            variant="outlined"
-                            color="error"
-                            size="medium"
-                            aria-label="Clear & Reset"
-                            startIcon={clearing ? <CircularProgress size={18} color="inherit" /> : <RestartAltIcon />}
-                            onClick={() => setClearDialogOpen(true)}
-                            disabled={clearing || loading}
-                            sx={{ 
-                                borderRadius: 2.5, 
-                                fontWeight: 600, 
-                                textTransform: 'none',
-                                transition: 'all 0.2s ease-in-out',
-                                '&:hover': {
-                                    transform: 'translateY(-1px)',
-                                    boxShadow: '0 3px 10px rgba(211, 47, 47, 0.12)'
-                                }
-                            }}
+                    {/* Sort By Menu Button */}
+                    <Button 
+                        variant="outlined" 
+                        size="medium"
+                        aria-label="Sort tournaments"
+                        startIcon={<SortIcon />} 
+                        onClick={(e) => setSortAnchorEl(e.currentTarget)}
+                        sx={{ 
+                            borderRadius: 2.5, 
+                            fontWeight: 600, 
+                            textTransform: 'none',
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                                transform: 'translateY(-1px)',
+                                boxShadow: '0 3px 10px rgba(0,0,0,0.06)'
+                            }
+                        }}
+                    >
+                        Sort By
+                    </Button>
+                    <Menu
+                        anchorEl={sortAnchorEl}
+                        open={Boolean(sortAnchorEl)}
+                        onClose={() => setSortAnchorEl(null)}
+                        slotProps={{ paper: { sx: { borderRadius: 2.5, minWidth: 200, mt: 1 } } }}
+                    >
+                        <MenuItem 
+                            selected={sortBy === 'date_asc'} 
+                            onClick={() => { setSortBy('date_asc'); setSortAnchorEl(null); }}
                         >
-                            {clearing ? "Resetting..." : "Clear & Reset"}
-                        </Button>
-                    </Tooltip>
+                            Date (Earliest First)
+                        </MenuItem>
+                        <MenuItem 
+                            selected={sortBy === 'date_desc'} 
+                            onClick={() => { setSortBy('date_desc'); setSortAnchorEl(null); }}
+                        >
+                            Date (Latest First)
+                        </MenuItem>
+                        <MenuItem 
+                            selected={sortBy === 'rsvp_desc'} 
+                            onClick={() => { setSortBy('rsvp_desc'); setSortAnchorEl(null); }}
+                        >
+                            Most Popular (RSVPs)
+                        </MenuItem>
+                        <MenuItem 
+                            selected={sortBy === 'name_asc'} 
+                            onClick={() => { setSortBy('name_asc'); setSortAnchorEl(null); }}
+                        >
+                            Alphabetical (A–Z)
+                        </MenuItem>
+                    </Menu>
+
+                    {/* Clear & Reset Button (Admin Only) */}
+                    {user?.role === 'admin' && (
+                        <Tooltip title="Clear invalid tournaments and reset verified schedule">
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                size="medium"
+                                aria-label="Clear & Reset"
+                                startIcon={clearing ? <CircularProgress size={18} color="inherit" /> : <RestartAltIcon />}
+                                onClick={() => setClearDialogOpen(true)}
+                                disabled={clearing || loading}
+                                sx={{ 
+                                    borderRadius: 2.5, 
+                                    fontWeight: 600, 
+                                    textTransform: 'none',
+                                    transition: 'all 0.2s ease-in-out',
+                                    '&:hover': {
+                                        transform: 'translateY(-1px)',
+                                        boxShadow: '0 3px 10px rgba(211, 47, 47, 0.12)'
+                                    }
+                                }}
+                            >
+                                {clearing ? "Resetting..." : "Clear & Reset"}
+                            </Button>
+                        </Tooltip>
+                    )}
 
                     {/* Submit Discovery Button */}
                     <Button
@@ -852,7 +1121,23 @@ END:VCALENDAR`;
             </Paper>
 
             {/* Quick Filter Chips */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3, alignItems: 'center' }}>
+                {[
+                    { id: 'all', label: 'All Events' },
+                    { id: 'singles', label: 'Singles' },
+                    { id: 'doubles', label: 'Doubles' },
+                    { id: 'mixed', label: 'Mixed' }
+                ].map((div) => (
+                    <Chip 
+                        key={div.id}
+                        label={div.label}
+                        color={divisionFilter === div.id ? "primary" : "default"}
+                        variant={divisionFilter === div.id ? "filled" : "outlined"}
+                        onClick={() => setDivisionFilter(div.id)}
+                        sx={{ fontWeight: 600 }}
+                    />
+                ))}
+                <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 24, alignSelf: 'center' }} />
                 <Chip 
                     label="Upcoming Only" 
                     color={filterUpcoming ? "primary" : "default"}
@@ -970,13 +1255,17 @@ END:VCALENDAR`;
                                         borderColor: 'primary.light',
                                         '& .tournament-title': {
                                             color: 'primary.main',
+                                        },
+                                        '& img': {
+                                            transform: 'scale(1.04)',
+                                            transition: 'transform 0.35s ease'
                                         }
                                     }
                                 }}
                                 onClick={() => setSelectedTournament(tournament)}
                             >
                                 {/* Flyer Container with Status Chips & Elevation */}
-                                <Box sx={{ position: 'relative' }}>
+                                <Box sx={{ position: 'relative', overflow: 'hidden' }}>
                                     <LazyFlyerImage
                                         src={tournament.flyerImageUrl || tournament.bannerUrl}
                                         alt={`${tournament.tournamentName} flyer`}
@@ -1123,20 +1412,56 @@ END:VCALENDAR`;
                                 <CardActions sx={{ px: 2.5, pb: 2.5, pt: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                     <Divider sx={{ width: '100%', mb: 0.5 }} />
 
-                                    {/* RSVP Section */}
+                                    {/* RSVP / Waitlist Section */}
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                        <Button 
-                                            variant={attending ? "contained" : "outlined"} 
-                                            color={attending ? "success" : "primary"}
-                                            size="small"
-                                            disabled={rsvpLoading[tId]}
-                                            startIcon={attending ? <CheckCircleIcon /> : null}
-                                            onClick={(e) => handleToggleRsvp(e, tournament)}
-                                            sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2 }}
-                                            aria-label={attending ? "Remove RSVP" : "RSVP I'm Going"}
-                                        >
-                                            {attending ? "Going ✓" : "I'm Going!"}
-                                        </Button>
+                                        {isSoldOut && !attending ? (
+                                            isUserWaitlisted(tournament) ? (
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Chip 
+                                                        label={`Waitlisted #${getUserWaitlistPosition(tournament) || 1}`} 
+                                                        color="warning" 
+                                                        size="small" 
+                                                        sx={{ fontWeight: 700 }} 
+                                                    />
+                                                    <Button
+                                                        variant="outlined"
+                                                        color="warning"
+                                                        size="small"
+                                                        disabled={waitlistLoading[tId]}
+                                                        onClick={(e) => handleLeaveWaitlist(e, tournament)}
+                                                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                                                        aria-label="Leave Waitlist"
+                                                    >
+                                                        Leave Waitlist
+                                                    </Button>
+                                                </Box>
+                                            ) : (
+                                                <Button
+                                                    variant="contained"
+                                                    color="warning"
+                                                    size="small"
+                                                    disabled={waitlistLoading[tId]}
+                                                    onClick={(e) => handleJoinWaitlist(e, tournament)}
+                                                    sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2 }}
+                                                    aria-label="Join Waitlist"
+                                                >
+                                                    Join Waitlist
+                                                </Button>
+                                            )
+                                        ) : (
+                                            <Button 
+                                                variant={attending ? "contained" : "outlined"} 
+                                                color={attending ? "success" : "primary"}
+                                                size="small"
+                                                disabled={rsvpLoading[tId]}
+                                                startIcon={attending ? <CheckCircleIcon /> : null}
+                                                onClick={(e) => handleToggleRsvp(e, tournament)}
+                                                sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2 }}
+                                                aria-label={attending ? "Remove RSVP" : "RSVP I'm Going"}
+                                            >
+                                                {attending ? "Going ✓" : "I'm Going!"}
+                                            </Button>
+                                        )}
 
                                         {/* Attendees Count & Avatars */}
                                         <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, alignItems: 'center' }}>
@@ -1147,9 +1472,9 @@ END:VCALENDAR`;
                                                 <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 26, height: 26, fontSize: '0.75rem' } }}>
                                                     {attendeesList.map((att, idx) => (
                                                         <Tooltip key={idx} title={typeof att === 'object' ? att.name || 'Player' : 'Player'}>
-                                                             <Avatar 
+                                                            <Avatar 
                                                                 alt={typeof att === 'object' ? att.name : 'Player'} 
-                                                                src={typeof att === 'object' ? att.avatarUrl : ''} 
+                                                                src={typeof att === 'object' ? (att.profilePic || att.avatarUrl || '') : ''} 
                                                             />
                                                         </Tooltip>
                                                     ))}
@@ -1224,6 +1549,17 @@ END:VCALENDAR`;
                                                 Registration TBD
                                             </Button>
                                         )}
+
+                                        <Tooltip title="Share Tournament Link">
+                                            <IconButton 
+                                                color="primary" 
+                                                onClick={(e) => handleShareTournament(e, tournament)}
+                                                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                                                aria-label="Share tournament"
+                                            >
+                                                <ShareIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
 
                                         <Tooltip title="Download .ics Calendar Event">
                                             <IconButton 
@@ -1557,7 +1893,7 @@ END:VCALENDAR`;
                                                         <Tooltip key={idx} title={typeof att === 'object' ? att.name || 'Player' : 'Player'}>
                                                             <Avatar 
                                                                 alt={typeof att === 'object' ? att.name : 'Player'} 
-                                                                src={typeof att === 'object' ? att.avatarUrl : ''} 
+                                                                src={typeof att === 'object' ? (att.profilePic || att.avatarUrl || '') : ''} 
                                                             />
                                                         </Tooltip>
                                                     ))}
@@ -1581,15 +1917,69 @@ END:VCALENDAR`;
                                                 />
                                             </Box>
                                         )}
-                                        <Stack direction="row" spacing={1.5} sx={{ pt: 1.5 }}>
-                                            <Button 
-                                                variant={isUserAttending(selectedTournament) ? "contained" : "outlined"}
-                                                color={isUserAttending(selectedTournament) ? "success" : "primary"}
-                                                onClick={(e) => handleToggleRsvp(e, selectedTournament)}
-                                                startIcon={isUserAttending(selectedTournament) ? <CheckCircleIcon /> : null}
-                                                sx={{ flex: 1, fontWeight: 700, borderRadius: 2 }}
+                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ pt: 1.5, flexWrap: 'wrap' }}>
+                                            {selectedTournament.status === 'sold_out' && !isUserAttending(selectedTournament) ? (
+                                                isUserWaitlisted(selectedTournament) ? (
+                                                    <Stack direction="row" spacing={1} sx={{ flex: 1, alignItems: 'center' }}>
+                                                        <Chip 
+                                                            label={`Waitlisted #${getUserWaitlistPosition(selectedTournament) || 1}`} 
+                                                            color="warning" 
+                                                            sx={{ fontWeight: 700 }} 
+                                                        />
+                                                        <Button
+                                                            variant="outlined"
+                                                            color="warning"
+                                                            disabled={waitlistLoading[selectedTournament._id || selectedTournament.id]}
+                                                            onClick={(e) => handleLeaveWaitlist(e, selectedTournament)}
+                                                            sx={{ flex: 1, fontWeight: 700, borderRadius: 2 }}
+                                                            aria-label="Leave Waitlist"
+                                                        >
+                                                            Leave Waitlist
+                                                        </Button>
+                                                    </Stack>
+                                                ) : (
+                                                    <Button
+                                                        variant="contained"
+                                                        color="warning"
+                                                        disabled={waitlistLoading[selectedTournament._id || selectedTournament.id]}
+                                                        onClick={(e) => handleJoinWaitlist(e, selectedTournament)}
+                                                        sx={{ flex: 1, fontWeight: 700, borderRadius: 2 }}
+                                                        aria-label="Join Waitlist"
+                                                    >
+                                                        Join Waitlist
+                                                    </Button>
+                                                )
+                                            ) : (
+                                                <Button 
+                                                    variant={isUserAttending(selectedTournament) ? "contained" : "outlined"}
+                                                    color={isUserAttending(selectedTournament) ? "success" : "primary"}
+                                                    onClick={(e) => handleToggleRsvp(e, selectedTournament)}
+                                                    startIcon={isUserAttending(selectedTournament) ? <CheckCircleIcon /> : null}
+                                                    sx={{ flex: 1, fontWeight: 700, borderRadius: 2 }}
+                                                >
+                                                    {isUserAttending(selectedTournament) ? "Going ✓" : "I'm Going!"}
+                                                </Button>
+                                            )}
+
+                                            <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                startIcon={<AccountTreeIcon />}
+                                                onClick={() => setBracketDialogOpen(true)}
+                                                sx={{ flex: 1, fontWeight: 700, borderRadius: 2, whiteSpace: 'nowrap' }}
                                             >
-                                                {isUserAttending(selectedTournament) ? "Going ✓" : "I'm Going!"}
+                                                View Draws & Bracket
+                                            </Button>
+
+                                            <Button
+                                                variant="outlined"
+                                                color="inherit"
+                                                startIcon={<ShareIcon />}
+                                                onClick={(e) => handleShareTournament(e, selectedTournament)}
+                                                sx={{ fontWeight: 700, borderRadius: 2, borderColor: 'divider' }}
+                                                aria-label="Share tournament"
+                                            >
+                                                Share
                                             </Button>
 
                                             {selectedTournament.registrationUrl && (
@@ -1613,6 +2003,31 @@ END:VCALENDAR`;
                         </DialogContent>
                     </>
                 )}
+            </Dialog>
+
+            {/* INTERACTIVE TOURNAMENT BRACKET DIALOG */}
+            <Dialog 
+                open={bracketDialogOpen} 
+                onClose={() => setBracketDialogOpen(false)} 
+                maxWidth="lg" 
+                fullWidth
+                disableRestoreFocus
+                slotProps={{ paper: { sx: { borderRadius: 4, height: '85vh', display: 'flex', flexDirection: 'column' } } }}
+            >
+                <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <AccountTreeIcon color="primary" />
+                        <Typography variant="h6" fontWeight="bold">
+                            {selectedTournament?.tournamentName ? `${selectedTournament.tournamentName} — Draws & Brackets` : 'Tournament Draws & Brackets'}
+                        </Typography>
+                    </Box>
+                    <IconButton onClick={() => setBracketDialogOpen(false)} aria-label="Close bracket dialog">
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{ p: 2, flex: 1, overflow: 'auto' }}>
+                    <TournamentBracket />
+                </DialogContent>
             </Dialog>
 
             {/* ADVANCED FILTERS DRAWER */}

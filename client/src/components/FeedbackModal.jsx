@@ -1,5 +1,5 @@
 // client/src/components/FeedbackModal.jsx
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
 	Dialog,
 	DialogTitle,
@@ -74,6 +74,7 @@ export default function FeedbackModal() {
 	const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
 	// Initialize from draft or initialData when opened
+	/* eslint-disable react-hooks/set-state-in-effect */
 	useEffect(() => {
 		if (isOpen) {
 			if (draft && (draft.title || draft.description || (draft.images && draft.images.length > 0))) {
@@ -101,7 +102,8 @@ export default function FeedbackModal() {
 			setUrlInput("");
 			setErrorMessage("");
 		}
-	}, [isOpen, initialData]); // deliberate: only sync when open state triggers
+	}, [isOpen, initialData, draft]);
+	/* eslint-enable react-hooks/set-state-in-effect */
 
 	// Auto-persist draft to context/sessionStorage whenever relevant fields change
 	useEffect(() => {

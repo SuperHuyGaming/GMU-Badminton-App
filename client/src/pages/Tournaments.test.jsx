@@ -201,7 +201,7 @@ describe('Public Tournaments Page Component', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText(/Our AI is Hunting/i)).toBeInTheDocument();
+            expect(screen.getByText(/No approved tournaments currently scheduled/i)).toBeInTheDocument();
         });
     });
 
@@ -330,6 +330,13 @@ describe('Public Tournaments Page Component', () => {
     });
 
     it('opens clear & reset confirmation dialog and executes reset-seed call on confirm', async () => {
+        currentAuthUser = {
+            _id: 'user-admin-1',
+            name: 'Admin Player',
+            role: 'admin',
+            avatarUrl: 'https://example.com/avatar.png'
+        };
+
         apiFetch.mockImplementation(async (url) => {
             if (url === '/api/tournaments/reset-seed') {
                 return {
@@ -511,7 +518,6 @@ describe('Public Tournaments Page Component', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/No approved tournaments currently scheduled. Check back soon or submit a tournament discovery!/i)).toBeInTheDocument();
-            expect(screen.getByText(/Our AI is Hunting/i)).toBeInTheDocument();
         });
     });
 
@@ -670,5 +676,179 @@ describe('Public Tournaments Page Component', () => {
 
         const searchInput = screen.getByPlaceholderText(/Search tournaments, clubs, venues/i);
         expect(document.activeElement).toBe(searchInput);
+    });
+
+    it('strictly hides Clear & Reset button from regular users and shows only for admins', async () => {
+        currentAuthUser = {
+            _id: 'user-regular-1',
+            name: 'Regular Player',
+            role: 'user'
+        };
+
+        const { rerender } = render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Clear & Reset should not be visible for regular users
+        expect(screen.queryByRole('button', { name: /clear & reset/i })).not.toBeInTheDocument();
+
+        // Switch to admin
+        currentAuthUser = {
+            _id: 'user-admin-1',
+            name: 'Admin Player',
+            role: 'admin'
+        };
+
+        rerender(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        expect(screen.getByRole('button', { name: /clear & reset/i })).toBeInTheDocument();
+    });
+
+    it('filters tournaments by division chip (Singles, Doubles, Mixed)', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+            expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+        });
+
+        // Click Singles chip - only Mason (MSO) matches
+        const singlesChip = screen.getByRole('button', { name: 'Singles' });
+        fireEvent.click(singlesChip);
+
+        expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Capital Fall Invitational 2027')).not.toBeInTheDocument();
+
+        // Click Mixed chip - Capital Fall (XDC) matches
+        const mixedChip = screen.getByRole('button', { name: 'Mixed' });
+        fireEvent.click(mixedChip);
+
+        expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+        expect(screen.queryByText('Mason Open Championships 2027')).not.toBeInTheDocument();
+
+        // Click All Events chip restores all
+        const allEventsChip = screen.getByRole('button', { name: 'All Events' });
+        fireEvent.click(allEventsChip);
+
+        expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        expect(screen.getByText('Capital Fall Invitational 2027')).toBeInTheDocument();
+    });
+
+    it('supports 1-click share tournament button with clipboard copy', async () => {
+        Object.assign(navigator, {
+            clipboard: {
+                writeText: vi.fn().mockImplementation(() => Promise.resolve())
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        const shareButtons = screen.getAllByRole('button', { name: /share tournament/i });
+        expect(shareButtons.length).toBeGreaterThan(0);
+
+        fireEvent.click(shareButtons[0]);
+
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('/tournaments?t=t-1'));
+        await waitFor(() => {
+            expect(toast.success).toHaveBeenCalledWith('Tournament link copied to clipboard!');
+        });
+    });
+
+    it('renders waitlist UI when tournament status is sold_out', async () => {
+        const soldOutTournaments = [
+            {
+                ...mockTournaments[0],
+                status: 'sold_out',
+                waitlist: []
+            }
+        ];
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({ tournaments: soldOutTournaments })
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // "Join Waitlist" button should be rendered instead of standard RSVP button
+        const joinWaitlistBtn = screen.getByRole('button', { name: /join waitlist/i });
+        expect(joinWaitlistBtn).toBeInTheDocument();
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({
+                message: 'Added to waitlist',
+                waitlistPosition: 1,
+                waitlistCount: 1
+            })
+        });
+
+        fireEvent.click(joinWaitlistBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/tournaments/t-1/waitlist', { method: 'POST' });
+            expect(toast.success).toHaveBeenCalledWith('Added to waitlist');
+            expect(screen.getByText(/Waitlisted #1/i)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /leave waitlist/i })).toBeInTheDocument();
+        });
+    });
+
+    it('opens interactive Tournament Bracket dialog from detail modal', async () => {
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
+        });
+
+        // Open Detail Modal
+        const viewDetailsBtn = screen.getAllByRole('button', { name: /view details/i })[0];
+        fireEvent.click(viewDetailsBtn);
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /view draws & bracket/i })).toBeInTheDocument();
+        });
+
+        // Click "View Draws & Bracket"
+        fireEvent.click(screen.getByRole('button', { name: /view draws & bracket/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Draws & Brackets/i)).toBeInTheDocument();
+        });
     });
 });

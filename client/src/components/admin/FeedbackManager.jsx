@@ -96,6 +96,7 @@ export default function FeedbackManager({ promptDelete }) {
 	}, [statusFilter, typeFilter]);
 
 	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		fetchFeedback();
 	}, [fetchFeedback]);
 
