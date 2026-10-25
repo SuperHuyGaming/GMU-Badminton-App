@@ -35,3 +35,25 @@ trigger: always_on
 - **Interactive Flyer Management**: Always provide admins the ability to preview, enter image URLs directly, upload image files, or remove flyer graphics.
 - **Editable OCR Captions**: Always render scraped captions and OCR text in multiline editable fields (`TextField multiline`) rather than static read-only containers.
 - **Data Persistence**: Ensure backend PUT and approval routes persist updated flyer URLs and sanitized captions into both `ProposedTournament` and live `Tournament` collections.
+
+## 5. Navigation Architecture & Destination Purity
+- **Primary Navbar Integrity**: The top navigation bar is strictly reserved for primary application destinations (`Dashboard`, `Community`, `Players`, `Tournaments`).
+- **No Secondary Tool Clutter**: Never add utility actions (Feedback, Bug Reports, Settings, Help) as top-level navbar tabs.
+- **Support Access Points**: Support and reporting features must be accessible via:
+  1. Subtle floating action button (FAB) anchored in the bottom-right corner.
+  2. The authenticated user avatar dropdown menu.
+  3. Contextual error triggers (e.g. error boundary / toast actions).
+
+## 6. Non-Blocking Feedback & Bug Reporting Patterns
+- **No Blocking Scrim for Support Forms**: Feedback and bug reporting forms should avoid full-screen blocking modal backdrops where possible, or provide a seamless minimize mechanism.
+- **Collapsible Floating Dock (Gmail / Linear Pattern)**:
+  - Dock the feedback widget in the bottom-right corner with a Minimize/Maximize toggle.
+  - While minimized to a floating pill (`[🐛 Bug Report (Drafting...)]`), the user retains full scroll, click, and inspect capabilities across the entire application.
+- **Persistent Form State (Draft Auto-Save)**:
+  - Cache ongoing form text, selected categories, and staged screenshots in memory/`sessionStorage` so that minimizing, closing, or navigating pages never discards the user's input.
+- **In-App Screen Capture / Evidence Helpers**:
+  - Support direct clipboard paste (`Ctrl+V` / `Cmd+V`) anywhere within the form.
+  - Provide a 1-click "📷 Capture Screen" utility that snapshots the current viewport without requiring external snipping tools.
+- **Contextual Error Reporting**:
+  - Present a "Report this issue" shortcut directly inside error alerts and API error toasts that pre-populates error messages, endpoint URLs, and system context automatically.
+
