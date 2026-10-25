@@ -35,6 +35,9 @@ function resolveHostClubFallback(tournament = {}) {
     if (handle === 'nvbadminton' || handle === 'novabadminton') {
         return 'https://novabadmintonacademy.com';
     }
+    if (handle === 'wm.badminton.official' || handle === 'wmbadminton') {
+        return 'https://www.instagram.com/wm.badminton.official/';
+    }
     if (handle) {
         return `https://linktr.ee/${handle}`;
     }
@@ -55,6 +58,9 @@ function resolveHostClubFallback(tournament = {}) {
     }
     if (text.includes('northern virginia') || text.includes('nvbc') || text.includes('ashburn')) {
         return 'https://novabadmintonacademy.com';
+    }
+    if (text.includes('william & mary') || text.includes('william and mary') || text.includes('w&m') || text.includes('williamsburg')) {
+        return 'https://www.instagram.com/wm.badminton.official/';
     }
     if (text.includes('maryland') || text.includes('umd') || text.includes('terrapin') || text.includes('college park')) {
         return 'https://linktr.ee/umd_badminton';

@@ -24,7 +24,7 @@ const TARGET_CLUBS = [
     { handle: "uvabadminton", name: "University of Virginia", location: "Charlottesville, VA", coordinates: [-78.5079, 38.0335] },
     { handle: "vtechbadminton", name: "Virginia Tech", location: "Blacksburg, VA", coordinates: [-80.4139, 37.2284] },
     { handle: "vcu.badminton", name: "Virginia Commonwealth University", location: "Richmond, VA", coordinates: [-77.4526, 37.5482] },
-    { handle: "wmbadminton", name: "William & Mary", location: "Williamsburg, VA", coordinates: [-76.7144, 37.2709] },
+    { handle: "wm.badminton.official", name: "William & Mary", location: "Williamsburg, VA", coordinates: [-76.7144, 37.2709] },
     { handle: "jmubadminton", name: "James Madison University", location: "Harrisonburg, VA", coordinates: [-78.8697, 38.4350] },
     { handle: "towsonbadminton", name: "Towson University", location: "Towson, MD", coordinates: [-76.6042, 39.3934] },
     // Regional DMV Tournament & Training Hubs

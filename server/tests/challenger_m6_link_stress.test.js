@@ -495,10 +495,20 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
                 clubName: 'VCU (Virginia Commonwealth University)',
                 input: { hostClubHandle: '@vcu.badminton' },
                 expectedFallback: 'https://linktr.ee/vcu.badminton'
+            },
+            {
+                clubName: 'William & Mary Official',
+                input: { hostClubHandle: '@wm.badminton.official' },
+                expectedFallback: 'https://www.instagram.com/wm.badminton.official/'
+            },
+            {
+                clubName: 'William & Mary Legacy Alias',
+                input: { hostClubHandle: 'wmbadminton' },
+                expectedFallback: 'https://www.instagram.com/wm.badminton.official/'
             }
         ];
 
-        test('2.1 Resolves verified HTTPS fallback URLs across all 10 target DMV clubs by handle', () => {
+        test('2.1 Resolves verified HTTPS fallback URLs across target DMV clubs by handle (including William & Mary)', () => {
             for (const { clubName, input, expectedFallback } of TARGET_CLUBS_MATRIX) {
                 const fallback = resolveHostClubFallback(input);
                 expect(fallback).toBe(expectedFallback);
@@ -525,6 +535,10 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
                 {
                     tournament: { tournamentName: 'Terrapin Classic', eventLocation: 'SPH Building, College Park, MD' },
                     expected: 'https://linktr.ee/umd_badminton'
+                },
+                {
+                    tournament: { tournamentName: 'William & Mary Fall Open', eventLocation: 'Student Recreation Center, Williamsburg VA' },
+                    expected: 'https://www.instagram.com/wm.badminton.official/'
                 }
             ];
 
