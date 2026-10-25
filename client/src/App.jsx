@@ -23,6 +23,9 @@ import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
 import ReportMatchModal from "./components/ReportMatchModal";
 import ServerWarmup from "./components/ServerWarmup";
+import { FeedbackProvider } from "./context/FeedbackContext";
+import FeedbackModal from "./components/FeedbackModal";
+import FeedbackFAB from "./components/FeedbackFAB";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
 
@@ -523,6 +526,9 @@ function App() {
 				}} />
 			<ServerWarmup>
 				<BrowserRouter>
+					<FeedbackProvider>
+						<FeedbackModal />
+						<FeedbackFAB />
 					<Navbar />
 
 					<Toaster 
@@ -553,6 +559,7 @@ function App() {
 						{user && <PushNotificationPrompt />}
 						<PWAInstallPrompt />
 					</Container>
+					</FeedbackProvider>
 				</BrowserRouter>
 			</ServerWarmup>
 			</ThemeProvider>
