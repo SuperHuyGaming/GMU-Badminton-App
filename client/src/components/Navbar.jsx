@@ -398,26 +398,6 @@ export default function Navbar() {
 										</Button>
 									);
 								})}
-								<Button
-									onClick={() => openFeedbackModal({ type: "bug" })}
-									sx={{
-										textTransform: "none",
-										fontWeight: 600,
-										color: "#ffffff",
-										backgroundColor: "transparent",
-										borderRadius: "4px 4px 0 0",
-										px: 1.5,
-										"&:hover": {
-											backgroundColor: "rgba(255, 255, 255, 0.22)",
-										},
-										"&:focus-visible": {
-											outline: "2px solid #FFCC33",
-											outlineOffset: "2px",
-										},
-									}}
-								>
-									Feedback
-								</Button>
 								{user && user.role === "admin" && (
 									<>
 										<Button
