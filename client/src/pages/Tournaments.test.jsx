@@ -454,7 +454,7 @@ describe('Public Tournaments Page Component', () => {
         });
     });
 
-    it('renders live tournament stats counter and collegiate badminton badge in modern hero banner', async () => {
+    it('renders clean, human-centered header with inclusive community subtitle matching players tab', async () => {
         render(
             <MemoryRouter initialEntries={['/tournaments']}>
                 <Tournaments />
@@ -465,13 +465,13 @@ describe('Public Tournaments Page Component', () => {
             expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
         });
 
-        // Collegiate badge in hero banner
-        expect(screen.getByText(/Mason Collegiate Circuit & DMV Open Hub/i)).toBeInTheDocument();
+        // Clean typography header
+        expect(screen.getByText('Discover DMV Tournaments')).toBeInTheDocument();
+        expect(screen.getByText(/Open to all players, clubs, and skill levels/i)).toBeInTheDocument();
 
-        // Live stats counters in hero banner
-        expect(screen.getByText(/Active Events/i)).toBeInTheDocument();
-        expect(screen.getByText(/Players RSVP'd/i)).toBeInTheDocument();
-        expect(screen.getByText(/Host Clubs & Colleges/i)).toBeInTheDocument();
+        // Artificial AI-generated badge and stat counter cards are removed
+        expect(screen.queryByText(/Mason Collegiate Circuit & DMV Open Hub/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Active Events/i)).not.toBeInTheDocument();
     });
 
     it('renders crisp View Details call-to-action button and opens detail modal on click', async () => {

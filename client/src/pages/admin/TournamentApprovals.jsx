@@ -38,6 +38,8 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { toast } from "react-hot-toast";
 
 import apiFetch from "../../utils/api";
@@ -333,6 +335,8 @@ export default function TournamentApprovals() {
                 : proposal.skillLevels || "",
             registrationDeadline: formatDateForInput(proposal.registrationDeadline),
             confidenceScore: proposal.confidenceScore ?? 0,
+            rawCaption: proposal.rawCaption || "",
+            flyerImageUrl: proposal.flyerImageUrl || (proposal.scrapedImageUrls && proposal.scrapedImageUrls[0]) || "",
         });
     };
 
@@ -351,6 +355,7 @@ export default function TournamentApprovals() {
 
         try {
             setSubmitting(true);
+            const flyerUrl = editForm.flyerImageUrl ? editForm.flyerImageUrl.trim() : "";
             const payload = {
                 tournamentName: editForm.tournamentName.trim(),
                 location: editForm.location.trim() || "TBD",
@@ -367,6 +372,14 @@ export default function TournamentApprovals() {
                     ? new Date(editForm.registrationDeadline).toISOString()
                     : undefined,
                 confidenceScore: Number(editForm.confidenceScore),
+                rawCaption: typeof editForm.rawCaption === "string" ? editForm.rawCaption.trim() : "",
+                flyerImageUrl: flyerUrl,
+                scrapedImageUrls: flyerUrl
+                    ? [
+                          flyerUrl,
+                          ...(selectedProposal.scrapedImageUrls || []).filter((u) => u !== flyerUrl),
+                      ]
+                    : [],
             };
 
             const res = await apiFetch(`/api/admin/tournaments/${selectedProposal._id}`, {
@@ -1162,16 +1175,28 @@ export default function TournamentApprovals() {
                                         Visual and textual information extracted by the web scraper.
                                     </Typography>
 
-                                    {/* Scraped Flyer Image */}
-                                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                                        Flyer Image Preview:
-                                    </Typography>
-                                    {selectedProposal.scrapedImageUrls &&
-                                    selectedProposal.scrapedImageUrls.length > 0 &&
-                                    selectedProposal.scrapedImageUrls[0] ? (
+                                    {/* Scraped / Uploaded Flyer Image */}
+                                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                                        <Typography variant="subtitle2" fontWeight="bold">
+                                            Flyer Image Preview:
+                                        </Typography>
+                                        {editForm.flyerImageUrl && (
+                                            <Button
+                                                size="small"
+                                                color="error"
+                                                startIcon={<DeleteIcon />}
+                                                onClick={() => setEditForm((prev) => ({ ...prev, flyerImageUrl: "" }))}
+                                                sx={{ textTransform: "none", fontSize: "0.75rem", py: 0 }}
+                                            >
+                                                Remove Flyer
+                                            </Button>
+                                        )}
+                                    </Box>
+
+                                    {editForm.flyerImageUrl ? (
                                         <Box
                                             component="img"
-                                            src={selectedProposal.scrapedImageUrls[0]}
+                                            src={editForm.flyerImageUrl}
                                             alt="Scraped Tournament Flyer"
                                             sx={{
                                                 width: "100%",
@@ -1181,7 +1206,7 @@ export default function TournamentApprovals() {
                                                 bgcolor: "background.default",
                                                 border: "1px solid",
                                                 borderColor: "divider",
-                                                mb: 2,
+                                                mb: 1.5,
                                             }}
                                         />
                                     ) : (
@@ -1191,37 +1216,87 @@ export default function TournamentApprovals() {
                                                 textAlign: "center",
                                                 bgcolor: "background.default",
                                                 borderRadius: 2,
-                                                mb: 2,
+                                                mb: 1.5,
                                                 border: "1px dashed",
                                                 borderColor: "divider",
                                             }}
                                         >
                                             <Typography variant="body2" color="text.secondary">
-                                                No flyer image captured for this proposal.
+                                                No flyer image captured. Enter a direct image URL or upload an image file below.
                                             </Typography>
                                         </Box>
                                     )}
 
-                                    {/* Raw Caption Box */}
+                                    {/* Flyer URL & Upload Controls */}
+                                    <Box sx={{ mb: 2, display: "flex", gap: 1, alignItems: "center" }}>
+                                        <TextField
+                                            fullWidth
+                                            size="small"
+                                            label="Flyer Image URL"
+                                            placeholder="https://example.com/flyer.jpg"
+                                            value={editForm.flyerImageUrl}
+                                            onChange={(e) =>
+                                                setEditForm((prev) => ({ ...prev, flyerImageUrl: e.target.value }))
+                                            }
+                                        />
+                                        <Button
+                                            component="label"
+                                            variant="outlined"
+                                            size="small"
+                                            startIcon={<CloudUploadIcon />}
+                                            sx={{ textTransform: "none", whiteSpace: "nowrap", height: 40 }}
+                                        >
+                                            Upload
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                hidden
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        if (file.size > 5 * 1024 * 1024) {
+                                                            toast.error("Flyer image file must be under 5MB");
+                                                            return;
+                                                        }
+                                                        const reader = new FileReader();
+                                                        reader.onload = (event) => {
+                                                            const dataUrl = event.target?.result;
+                                                            if (typeof dataUrl === "string") {
+                                                                setEditForm((prev) => ({
+                                                                    ...prev,
+                                                                    flyerImageUrl: dataUrl,
+                                                                }));
+                                                            }
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    }
+                                                }}
+                                            />
+                                        </Button>
+                                    </Box>
+
+                                    {/* Raw Caption Box (Editable) */}
                                     <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                                        Raw Post Caption / OCR Text:
+                                        Raw Post Caption / OCR Text (Editable):
                                     </Typography>
-                                    <Paper
-                                        variant="outlined"
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        rows={5}
+                                        size="small"
+                                        placeholder="Edit post caption or extracted flyer OCR context..."
+                                        value={editForm.rawCaption}
+                                        onChange={(e) =>
+                                            setEditForm((prev) => ({ ...prev, rawCaption: e.target.value }))
+                                        }
                                         sx={{
-                                            p: 2,
                                             mb: 2,
-                                            maxHeight: 180,
-                                            overflowY: "auto",
-                                            bgcolor: "background.default",
-                                            fontFamily: "monospace",
-                                            fontSize: "0.85rem",
-                                            whiteSpace: "pre-wrap",
-                                            wordBreak: "break-word",
+                                            "& .MuiInputBase-input": {
+                                                fontFamily: "monospace",
+                                                fontSize: "0.85rem",
+                                            },
                                         }}
-                                    >
-                                        {selectedProposal.rawCaption || "No raw caption text available."}
-                                    </Paper>
+                                    />
 
                                     {/* Source URLs & Links */}
                                     <Typography variant="subtitle2" fontWeight="bold" gutterBottom>

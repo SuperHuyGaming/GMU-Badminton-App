@@ -333,6 +333,65 @@ describe("TournamentApprovals Admin Page Component", () => {
         });
     });
 
+    it("6b. Admin can edit flyer image URL and raw post caption in review modal", async () => {
+        let sentBody = null;
+        apiFetch.mockImplementation(async (url, options) => {
+            if (url === "/api/admin/tournaments/proposed") {
+                return {
+                    ok: true,
+                    json: async () => [...mockProposals],
+                };
+            }
+            if (url.includes("/api/admin/tournaments/prop-high-1") && options?.method === "PUT") {
+                sentBody = JSON.parse(options.body);
+                return {
+                    ok: true,
+                    json: async () => ({
+                        message: "Tournament details updated successfully.",
+                        proposedTournament: {
+                            ...mockProposals[0],
+                            ...sentBody,
+                        },
+                    }),
+                };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("Mason Open 2026")).toBeInTheDocument();
+        });
+
+        // Open review modal
+        const reviewButtons = screen.getAllByRole("button", { name: /Review/i });
+        fireEvent.click(reviewButtons[0]);
+
+        // Edit Flyer Image URL
+        const flyerInput = screen.getByLabelText(/Flyer Image URL/i);
+        fireEvent.change(flyerInput, {
+            target: { value: "https://example.com/custom-flyer.png" },
+        });
+
+        // Edit Raw Caption
+        const captionInput = screen.getByPlaceholderText(/Edit post caption or extracted flyer OCR context/i);
+        fireEvent.change(captionInput, {
+            target: { value: "Updated caption: Open to all regional badminton enthusiasts!" },
+        });
+
+        // Click Save Edits
+        const saveButton = screen.getByRole("button", { name: /Save Edits/i });
+        fireEvent.click(saveButton);
+
+        await waitFor(() => {
+            expect(sentBody).not.toBeNull();
+            expect(sentBody.flyerImageUrl).toBe("https://example.com/custom-flyer.png");
+            expect(sentBody.rawCaption).toBe("Updated caption: Open to all regional badminton enthusiasts!");
+            expect(sentBody.scrapedImageUrls).toContain("https://example.com/custom-flyer.png");
+        });
+    });
+
     it("7. Manual entry button opens form, submits, and calls API", async () => {
         apiFetch.mockImplementation(async (url, options) => {
             if (url === "/api/admin/tournaments/proposed") {

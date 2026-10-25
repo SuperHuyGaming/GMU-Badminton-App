@@ -24,6 +24,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import AddIcon from '@mui/icons-material/Add';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { VirtuosoGrid } from 'react-virtuoso';
@@ -618,158 +619,55 @@ END:VCALENDAR`;
         return tournamentsByDate[calendarSelectedDate] || [];
     }, [calendarSelectedDate, tournamentsByDate]);
 
-    // Live tournament metrics for the modern hero stats counter
-    const totalAttendees = useMemo(() => {
-        return tournaments.reduce((acc, t) => acc + (t.rsvpCount || (t.attendees?.length || 0)), 0);
-    }, [tournaments]);
-
-    const uniqueHostsCount = useMemo(() => {
-        const hosts = new Set();
-        tournaments.forEach(t => {
-            const host = t.hostUniversity || t.hostClubHandle;
-            if (host) hosts.add(host);
-        });
-        return hosts.size;
-    }, [tournaments]);
-
     return (
         <Box sx={{ maxWidth: 1240, mx: 'auto', p: { xs: 2, sm: 3, md: 4 } }}>
-            {/* Sleek Modern Hero Banner with Collegiate Badminton Badge & Live Stats Counter */}
-            <Box 
-                sx={{ 
-                    mb: 4, 
-                    p: { xs: 3, sm: 4, md: 5 }, 
-                    borderRadius: 4, 
-                    background: 'radial-gradient(circle at 12% 20%, rgba(255, 204, 51, 0.16) 0%, transparent 45%), radial-gradient(circle at 88% 80%, rgba(0, 168, 89, 0.22) 0%, transparent 50%), linear-gradient(135deg, #005028 0%, #003618 100%)', 
-                    color: '#ffffff', 
-                    textAlign: 'center',
-                    boxShadow: '0 12px 36px rgba(0, 77, 38, 0.28)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    border: '1px solid rgba(255, 255, 255, 0.12)'
-                }}
-            >
-                {/* Collegiate Badminton Badge */}
-                <Box 
-                    sx={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: 1, 
-                        px: 2, 
-                        py: 0.65, 
-                        borderRadius: 50, 
-                        bgcolor: 'rgba(255, 255, 255, 0.12)', 
-                        backdropFilter: 'blur(8px)', 
-                        border: '1px solid rgba(255, 255, 255, 0.22)', 
-                        mb: 2 
-                    }}
-                >
-                    <EmojiEventsIcon sx={{ fontSize: 18, color: '#FFCC33' }} />
-                    <Typography variant="caption" sx={{ color: '#FFCC33', fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', fontSize: '0.78rem' }}>
-                        🏸 Mason Collegiate Circuit & DMV Open Hub
-                    </Typography>
-                </Box>
-
-                <Typography variant="h3" sx={{ fontWeight: 900, mb: 1.5, fontSize: { xs: '1.95rem', sm: '2.6rem', md: '3.1rem' }, letterSpacing: '-0.5px' }}>
+            {/* Clean, Modern Header Modeled after Community Directory & Premier Event Hubs */}
+            <Box sx={{ mb: 3.5, mt: { xs: 1, sm: 2 } }}>
+                <Typography variant="h3" sx={{ mb: 1, fontWeight: 900, letterSpacing: '-0.5px' }}>
                     Discover DMV Tournaments
                 </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.92, maxWidth: 740, mx: 'auto', fontWeight: 400, fontSize: { xs: '0.95rem', md: '1.15rem' }, lineHeight: 1.6, mb: 3.5 }}>
-                    Real-time badminton tournaments and open invitational events aggregated from collegiate clubs across DC, Maryland, and Virginia.
+                <Typography color="text.secondary" sx={{ fontSize: { xs: '1rem', md: '1.1rem' }, maxWidth: 840, lineHeight: 1.6 }}>
+                    Find upcoming badminton tournaments, open invitationals, and local competitions. Open to all players, clubs, and skill levels.
                 </Typography>
-
-                {/* Live Tournament Stats Counter */}
-                <Grid container spacing={2} sx={{ maxWidth: 840, mx: 'auto', mt: 1, justifyContent: 'center' }}>
-                    <Grid size={{ xs: 6, sm: 4 }}>
-                        <Paper 
-                            elevation={0} 
-                            sx={{ 
-                                py: 1.5, 
-                                px: 2, 
-                                borderRadius: 3, 
-                                bgcolor: 'rgba(255, 255, 255, 0.08)', 
-                                backdropFilter: 'blur(10px)', 
-                                border: '1px solid rgba(255, 255, 255, 0.16)', 
-                                color: '#ffffff', 
-                                textAlign: 'center' 
-                            }}
-                        >
-                            <Typography variant="h4" sx={{ fontWeight: 900, color: '#FFCC33', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
-                                {tournaments.length}
-                            </Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
-                                Active Events
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 4 }}>
-                        <Paper 
-                            elevation={0} 
-                            sx={{ 
-                                py: 1.5, 
-                                px: 2, 
-                                borderRadius: 3, 
-                                bgcolor: 'rgba(255, 255, 255, 0.08)', 
-                                backdropFilter: 'blur(10px)', 
-                                border: '1px solid rgba(255, 255, 255, 0.16)', 
-                                color: '#ffffff', 
-                                textAlign: 'center' 
-                            }}
-                        >
-                            <Typography variant="h4" sx={{ fontWeight: 900, color: '#FFCC33', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
-                                {totalAttendees}
-                            </Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
-                                Players RSVP'd
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
-                        <Paper 
-                            elevation={0} 
-                            sx={{ 
-                                py: 1.5, 
-                                px: 2, 
-                                borderRadius: 3, 
-                                bgcolor: 'rgba(255, 255, 255, 0.08)', 
-                                backdropFilter: 'blur(10px)', 
-                                border: '1px solid rgba(255, 255, 255, 0.16)', 
-                                color: '#ffffff', 
-                                textAlign: 'center' 
-                            }}
-                        >
-                            <Typography variant="h4" sx={{ fontWeight: 900, color: '#FFCC33', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
-                                {uniqueHostsCount || (tournaments.length > 0 ? 3 : 0)}
-                            </Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.72rem' }}>
-                                Host Clubs & Colleges
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                </Grid>
             </Box>
 
             {/* Controls Bar: Search, View Switcher & Filter Toggle */}
             <Paper 
-                elevation={1} 
+                elevation={0} 
                 sx={{ 
                     p: 2, 
                     mb: 3, 
                     borderRadius: 3, 
+                    border: '1px solid',
+                    borderColor: 'divider',
                     display: 'flex', 
                     flexWrap: 'wrap', 
                     gap: 2, 
                     alignItems: 'center', 
                     justifyContent: 'space-between',
-                    bgcolor: 'background.paper'
+                    bgcolor: 'background.paper',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
                 }}
             >
                 {/* Search Field */}
                 <TextField 
-                    placeholder="Search tournaments, clubs, universities..."
+                    placeholder="Search tournaments, clubs, venues..."
                     size="small"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
-                    sx={{ flex: { xs: '1 1 100%', sm: '1 1 280px' } }}
+                    sx={{ 
+                        flex: { xs: '1 1 100%', sm: '1 1 320px' },
+                        '& .MuiOutlinedInput-root': {
+                            borderRadius: 2.5,
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                            },
+                            '&.Mui-focused': {
+                                boxShadow: '0 4px 12px rgba(0, 80, 40, 0.12)'
+                            }
+                        }
+                    }}
                     slotProps={{
                         input: {
                             startAdornment: (
@@ -801,12 +699,22 @@ END:VCALENDAR`;
                             }
                         }}
                         aria-label="tournament view mode"
+                        sx={{
+                            borderRadius: 2.5,
+                            '& .MuiToggleButton-root': {
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                px: 1.75,
+                                transition: 'all 0.2s ease-in-out'
+                            }
+                        }}
                     >
                         <ToggleButton value="list" aria-label="List View">
-                            <ViewListIcon sx={{ mr: 0.5, fontSize: 20 }} /> List
+                            <ViewListIcon sx={{ mr: 0.5, fontSize: 19 }} /> List
                         </ToggleButton>
                         <ToggleButton value="calendar" aria-label="Calendar View">
-                            <CalendarMonthIcon sx={{ mr: 0.5, fontSize: 20 }} /> Calendar
+                            <CalendarMonthIcon sx={{ mr: 0.5, fontSize: 19 }} /> Calendar
                         </ToggleButton>
                     </ToggleButtonGroup>
 
@@ -816,7 +724,16 @@ END:VCALENDAR`;
                             size="medium"
                             startIcon={<FilterListIcon />} 
                             onClick={() => setFiltersOpen(true)}
-                            sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                            sx={{ 
+                                borderRadius: 2.5, 
+                                fontWeight: 600, 
+                                textTransform: 'none',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover': {
+                                    transform: 'translateY(-1px)',
+                                    boxShadow: '0 3px 10px rgba(0,0,0,0.06)'
+                                }
+                            }}
                         >
                             Filters
                         </Button>
@@ -831,7 +748,16 @@ END:VCALENDAR`;
                             startIcon={refreshing ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
                             onClick={handleRefresh}
                             disabled={refreshing || loading}
-                            sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                            sx={{ 
+                                borderRadius: 2.5, 
+                                fontWeight: 600, 
+                                textTransform: 'none',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover': {
+                                    transform: 'translateY(-1px)',
+                                    boxShadow: '0 3px 10px rgba(0,0,0,0.06)'
+                                }
+                            }}
                         >
                             {refreshing ? "Refreshing..." : "Refresh"}
                         </Button>
@@ -847,7 +773,16 @@ END:VCALENDAR`;
                             startIcon={clearing ? <CircularProgress size={18} color="inherit" /> : <RestartAltIcon />}
                             onClick={() => setClearDialogOpen(true)}
                             disabled={clearing || loading}
-                            sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                            sx={{ 
+                                borderRadius: 2.5, 
+                                fontWeight: 600, 
+                                textTransform: 'none',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover': {
+                                    transform: 'translateY(-1px)',
+                                    boxShadow: '0 3px 10px rgba(211, 47, 47, 0.12)'
+                                }
+                            }}
                         >
                             {clearing ? "Resetting..." : "Clear & Reset"}
                         </Button>
@@ -858,8 +793,18 @@ END:VCALENDAR`;
                         variant="contained"
                         size="medium"
                         color="primary"
+                        startIcon={<AddIcon />}
                         onClick={handleOpenSubmitDiscovery}
-                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                        sx={{ 
+                            borderRadius: 2.5, 
+                            fontWeight: 700, 
+                            textTransform: 'none',
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                                transform: 'translateY(-1px)',
+                                boxShadow: '0 4px 14px rgba(0, 80, 40, 0.25)'
+                            }
+                        }}
                     >
                         Submit Discovery
                     </Button>

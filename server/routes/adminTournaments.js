@@ -115,6 +115,8 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
                         divisions: dedupLive.mergedData.divisions,
                         registrationUrl: dedupLive.mergedData.registrationUrl,
                         sourceLinks: dedupLive.mergedData.sourceLinks,
+                        flyerImageUrl: proposed.flyerImageUrl || scrapedImageUrls[0] || "",
+                        originalCaption: proposed.rawCaption || "",
                         isOpenTournament: true,
                         linkStatus: proposed.linkStatus || "unchecked",
                         linkStatusCode: proposed.linkStatusCode,
@@ -134,7 +136,7 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
                 registrationDeadline: proposed.registrationDeadline || proposed.date,
                 registrationUrl: proposed.registrationLink || sourceLinks[0] || proposed.sourceUrl,
                 sourceUrl: proposed.sourceUrl,
-                flyerImageUrl: scrapedImageUrls[0] || "",
+                flyerImageUrl: proposed.flyerImageUrl || scrapedImageUrls[0] || "",
                 skillLevels: proposed.skillLevels || [],
                 originalCaption: proposed.rawCaption || "",
                 isOpenTournament: true,
@@ -295,6 +297,34 @@ router.put("/:id", async (req, res) => {
                 proposed.confidenceScore = score;
             } else {
                 return res.status(400).json({ message: "Confidence score must be a number between 0 and 100." });
+            }
+        }
+
+        if (sourceData.rawCaption !== undefined && typeof sourceData.rawCaption === "string") {
+            proposed.rawCaption = xss(sourceData.rawCaption.trim());
+        }
+
+        if (sourceData.flyerImageUrl !== undefined && typeof sourceData.flyerImageUrl === "string") {
+            const flyerUrl = xss(sourceData.flyerImageUrl.trim());
+            proposed.flyerImageUrl = flyerUrl;
+            if (flyerUrl) {
+                if (!Array.isArray(proposed.scrapedImageUrls)) {
+                    proposed.scrapedImageUrls = [];
+                }
+                if (!proposed.scrapedImageUrls.includes(flyerUrl)) {
+                    proposed.scrapedImageUrls = [flyerUrl, ...proposed.scrapedImageUrls];
+                }
+            } else {
+                proposed.scrapedImageUrls = [];
+            }
+        }
+
+        if (sourceData.scrapedImageUrls !== undefined && Array.isArray(sourceData.scrapedImageUrls)) {
+            proposed.scrapedImageUrls = sourceData.scrapedImageUrls
+                .filter((u) => typeof u === "string")
+                .map((u) => xss(u.trim()));
+            if (proposed.scrapedImageUrls.length > 0 && !proposed.flyerImageUrl) {
+                proposed.flyerImageUrl = proposed.scrapedImageUrls[0];
             }
         }
 

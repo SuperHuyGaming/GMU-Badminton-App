@@ -492,6 +492,34 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
             expect(proposalDoc.tournamentName).toBe("Nested Structured Name");
             expect(proposalDoc.location).toBe("RAC Fieldhouse");
         });
+
+        it("updates rawCaption, flyerImageUrl, and scrapedImageUrls with sanitization", async () => {
+            const proposalDoc = new ProposedTournament({
+                tournamentName: "Caption & Flyer Test",
+                sourceUrl: "https://example.com/test",
+                rawCaption: "Old caption",
+                scrapedImageUrls: ["https://example.com/old-flyer.png"],
+                status: "pending"
+            });
+            proposalDoc.save = jest.fn().mockResolvedValue(proposalDoc);
+
+            jest.spyOn(ProposedTournament, "findById").mockResolvedValue(proposalDoc);
+
+            const res = await request(app)
+                .put(`/api/admin/tournaments/${sampleProposalId}`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({
+                    rawCaption: "Updated admin caption text <script>alert('hack')</script>",
+                    flyerImageUrl: "https://example.com/new-flyer.png"
+                });
+
+            expect(res.status).toBe(200);
+            expect(proposalDoc.rawCaption).toContain("Updated admin caption text");
+            expect(proposalDoc.rawCaption).not.toContain("<script>");
+            expect(proposalDoc.flyerImageUrl).toBe("https://example.com/new-flyer.png");
+            expect(proposalDoc.scrapedImageUrls).toContain("https://example.com/new-flyer.png");
+            expect(proposalDoc.save).toHaveBeenCalled();
+        });
     });
 
     describe("6. ProposedTournament Model Schema & Validation", () => {
