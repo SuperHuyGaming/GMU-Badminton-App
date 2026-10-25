@@ -17,6 +17,10 @@ const activityFeedSchema = new mongoose.Schema({
     tags: { type: [String], default: [] },
     category: { type: String, default: "general" },
     matchDetails: { type: mongoose.Schema.Types.Mixed },
+    playerMatchmaking: { type: mongoose.Schema.Types.Mixed },
+    challengeMatch: { type: mongoose.Schema.Types.Mixed },
+    qaDetails: { type: mongoose.Schema.Types.Mixed },
+    gearDetails: { type: mongoose.Schema.Types.Mixed },
     
     // Match specific
     team1Score: Number,

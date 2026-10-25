@@ -31,7 +31,7 @@ export default function Forum() {
 	const observer = useRef();
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [newPost, setNewPost] = useState({
+	const defaultNewPost = {
 		title: "",
 		content: "",
 		category: "general",
@@ -42,11 +42,40 @@ export default function Forum() {
 			court: "",
 			winner: "",
 		},
+		playerMatchmaking: {
+			format: "Doubles",
+			preferredCourt: "RAC Courts 1-3",
+			skillLevelRequired: "Any",
+			slotsNeeded: 1,
+			timeWindow: "",
+		},
+		challengeMatch: {
+			matchType: "Friendly Scrimmage",
+			gameFormat: "Best of 3 to 21",
+			stipulations: "",
+		},
+		qaDetails: {
+			subtopic: "General",
+		},
+		gearDetails: {
+			gearType: "Racket",
+			brand: "",
+			condition: "Good",
+			tradeType: "For Sale",
+			price: "",
+			specs: {
+				weightCode: "4U",
+				gripSize: "G5",
+				balancePoint: "Head Heavy",
+				currentString: "",
+			},
+		},
 		imageUrl: "",
 		tags: [],
 		visibility: 'PUBLIC',
 		isPinned: false
-	});
+	};
+	const [newPost, setNewPost] = useState(defaultNewPost);
 	const [postImages, setPostImages] = useState([]);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
@@ -140,6 +169,10 @@ export default function Forum() {
 						content: updatedPost.content ?? item.content,
 						category: updatedPost.category ?? item.category,
 						matchDetails: updatedPost.matchDetails ?? item.matchDetails,
+						playerMatchmaking: updatedPost.playerMatchmaking ?? item.playerMatchmaking,
+						challengeMatch: updatedPost.challengeMatch ?? item.challengeMatch,
+						qaDetails: updatedPost.qaDetails ?? item.qaDetails,
+						gearDetails: updatedPost.gearDetails ?? item.gearDetails,
 						reactions: updatedPost.reactions ?? item.reactions,
 						likes: updatedPost.likedBy?.length ?? item.likes,
 						comments: totalComments
@@ -201,6 +234,13 @@ export default function Forum() {
 						court: newPost.matchDetails?.court || "",
 						winner: newPost.matchDetails?.winner || "",
 					} : undefined,
+					playerMatchmaking: (newPost.category === 'find_partner' || newPost.category === 'meetup_rally') ? newPost.playerMatchmaking : undefined,
+					challengeMatch: newPost.category === 'challenge_match' ? newPost.challengeMatch : undefined,
+					qaDetails: newPost.category === 'qa_forum' ? newPost.qaDetails : undefined,
+					gearDetails: (newPost.category === 'gear_exchange' || newPost.category === 'gear_review') ? {
+						...newPost.gearDetails,
+						price: Number(newPost.gearDetails?.price) || 0
+					} : undefined,
 					imageUrl: finalImageUrls[0] || "",
 					imageUrls: finalImageUrls,
 					authorName: currentUser.name,
@@ -216,16 +256,7 @@ export default function Forum() {
 			setIsUploadingImage(false);
 			if (!res.ok) return toast.error(data.message || "Failed to post. Please try again.");
 
-			setNewPost({
-				title: "",
-				content: "",
-				category: "general",
-				matchDetails: { partner: "", opponents: "", score: "", court: "", winner: "" },
-				imageUrl: "",
-				tags: [],
-				visibility: 'PUBLIC',
-				isPinned: false
-			});
+			setNewPost(defaultNewPost);
 			setPostImages([]);
 			setIsModalOpen(false);
 			toast.success("Post created successfully!");
@@ -632,9 +663,11 @@ export default function Forum() {
 								inputProps={{ 'aria-label': 'Post category' }}
 							>
 								<MenuItem value="general">💬 General Discussion</MenuItem>
-								<MenuItem value="match_result">🏸 Match Result</MenuItem>
-								<MenuItem value="gear_review">🎒 Gear Review</MenuItem>
-								<MenuItem value="meetup_rally">🤝 Meetup Rally</MenuItem>
+								<MenuItem value="find_partner">🤝 Find Hitting Partner / Rally</MenuItem>
+								<MenuItem value="challenge_match">⚔️ Match Challenge & Scrimmage</MenuItem>
+								<MenuItem value="qa_forum">💡 Badminton Q&A / Ask Questions</MenuItem>
+								<MenuItem value="gear_exchange">🎒 Gear Trade & Review</MenuItem>
+								<MenuItem value="match_result">🏸 Match Result / Scorecard</MenuItem>
 								<MenuItem value="training">💪 Training & Tips</MenuItem>
 							</Select>
 						</Box>
@@ -687,6 +720,322 @@ export default function Forum() {
                         </Box>
                     </Box>
 					</Box>
+
+					
+					{/* Specialized Sub-Forms per Selected Category */}
+					{/* 1. Player Matchmaking Form */}
+					{(newPost.category === 'find_partner' || newPost.category === 'meetup_rally') && (
+						<Box
+							sx={{
+								p: 2,
+								borderRadius: 2,
+								bgcolor: 'action.hover',
+								border: '1px solid',
+								borderColor: 'divider',
+								display: 'flex',
+								flexDirection: 'column',
+								gap: 2,
+							}}
+						>
+							<Typography variant="subtitle2" fontWeight="bold" color="primary.main">
+								🤝 Player Matchmaking Details
+							</Typography>
+							<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Format</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.playerMatchmaking?.format || 'Doubles'}
+										onChange={(e) => setNewPost({
+											...newPost,
+											playerMatchmaking: { ...newPost.playerMatchmaking, format: e.target.value }
+										})}
+									>
+										<MenuItem value="Doubles">Doubles (2v2)</MenuItem>
+										<MenuItem value="Singles">Singles (1v1)</MenuItem>
+										<MenuItem value="Mixed Doubles">Mixed Doubles</MenuItem>
+										<MenuItem value="Casual Rally">Casual Rally / Drills</MenuItem>
+									</Select>
+								</Box>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Skill Level</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.playerMatchmaking?.skillLevelRequired || 'Any'}
+										onChange={(e) => setNewPost({
+											...newPost,
+											playerMatchmaking: { ...newPost.playerMatchmaking, skillLevelRequired: e.target.value }
+										})}
+									>
+										<MenuItem value="Any">Any Skill Level</MenuItem>
+										<MenuItem value="Beginner">Beginner</MenuItem>
+										<MenuItem value="Intermediate">Intermediate</MenuItem>
+										<MenuItem value="Advanced">Advanced</MenuItem>
+										<MenuItem value="Open">Open / Competitive</MenuItem>
+									</Select>
+								</Box>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Slots Needed</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.playerMatchmaking?.slotsNeeded || 1}
+										onChange={(e) => setNewPost({
+											...newPost,
+											playerMatchmaking: { ...newPost.playerMatchmaking, slotsNeeded: Number(e.target.value) }
+										})}
+									>
+										<MenuItem value={1}>1 Player</MenuItem>
+										<MenuItem value={2}>2 Players</MenuItem>
+										<MenuItem value={3}>3 Players</MenuItem>
+									</Select>
+								</Box>
+							</Box>
+							<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+								<TextField
+									label="Preferred Court / Location"
+									placeholder="e.g. RAC Courts 1-3"
+									size="small"
+									fullWidth
+									value={newPost.playerMatchmaking?.preferredCourt || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										playerMatchmaking: { ...newPost.playerMatchmaking, preferredCourt: e.target.value }
+									})}
+								/>
+								<TextField
+									label="Time Window"
+									placeholder="e.g. Tonight 7:00 PM - 9:00 PM"
+									size="small"
+									fullWidth
+									value={newPost.playerMatchmaking?.timeWindow || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										playerMatchmaking: { ...newPost.playerMatchmaking, timeWindow: e.target.value }
+									})}
+								/>
+							</Box>
+						</Box>
+					)}
+
+					{/* 2. Challenge Match Form */}
+					{newPost.category === 'challenge_match' && (
+						<Box
+							sx={{
+								p: 2,
+								borderRadius: 2,
+								bgcolor: 'action.hover',
+								border: '1px solid',
+								borderColor: 'divider',
+								display: 'flex',
+								flexDirection: 'column',
+								gap: 2,
+							}}
+						>
+							<Typography variant="subtitle2" fontWeight="bold" color="secondary.main">
+								⚔️ Scrimmage & Challenge Details
+							</Typography>
+							<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Challenge Type</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.challengeMatch?.matchType || 'Friendly Scrimmage'}
+										onChange={(e) => setNewPost({
+											...newPost,
+											challengeMatch: { ...newPost.challengeMatch, matchType: e.target.value }
+										})}
+									>
+										<MenuItem value="Friendly Scrimmage">Friendly Scrimmage</MenuItem>
+										<MenuItem value="Ranked Ladder Challenge">Ranked Ladder Challenge</MenuItem>
+									</Select>
+								</Box>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Game Format</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.challengeMatch?.gameFormat || 'Best of 3 to 21'}
+										onChange={(e) => setNewPost({
+											...newPost,
+											challengeMatch: { ...newPost.challengeMatch, gameFormat: e.target.value }
+										})}
+									>
+										<MenuItem value="Best of 3 to 21">Best of 3 to 21</MenuItem>
+										<MenuItem value="1 Set to 30">1 Set to 30</MenuItem>
+										<MenuItem value="Custom Drill Set">Custom Drill Set</MenuItem>
+									</Select>
+								</Box>
+							</Box>
+							<TextField
+								label="Match Stipulations (Optional)"
+								placeholder="e.g. Bring 3-feather shuttles (Victor Master No. 1 or Aeroplane)"
+								size="small"
+								fullWidth
+								value={newPost.challengeMatch?.stipulations || ""}
+								onChange={(e) => setNewPost({
+									...newPost,
+									challengeMatch: { ...newPost.challengeMatch, stipulations: e.target.value }
+								})}
+							/>
+						</Box>
+					)}
+
+					{/* 3. Q&A Forum Form */}
+					{newPost.category === 'qa_forum' && (
+						<Box
+							sx={{
+								p: 2,
+								borderRadius: 2,
+								bgcolor: 'action.hover',
+								border: '1px solid',
+								borderColor: 'divider',
+								display: 'flex',
+								flexDirection: 'column',
+								gap: 2,
+							}}
+						>
+							<Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#512da8' }}>
+								💡 Badminton Question Topic
+							</Typography>
+							<Box sx={{ maxWidth: 300 }}>
+								<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Subtopic</Typography>
+								<Select
+									size="small"
+									fullWidth
+									value={newPost.qaDetails?.subtopic || 'General'}
+									onChange={(e) => setNewPost({
+										...newPost,
+										qaDetails: { ...newPost.qaDetails, subtopic: e.target.value }
+									})}
+								>
+									<MenuItem value="General">General Inquiries</MenuItem>
+									<MenuItem value="Stroke Technique">Stroke Technique & Clears</MenuItem>
+									<MenuItem value="Footwork">Footwork & Agility</MenuItem>
+									<MenuItem value="Rackets & Strings">Rackets, Strings & Grips</MenuItem>
+									<MenuItem value="Injury & Fitness">Injury Prevention & Fitness</MenuItem>
+									<MenuItem value="Rules & Officiating">BWF Rules & Scoring</MenuItem>
+								</Select>
+							</Box>
+						</Box>
+					)}
+
+					{/* 4. Gear Exchange Form */}
+					{(newPost.category === 'gear_exchange' || newPost.category === 'gear_review') && (
+						<Box
+							sx={{
+								p: 2,
+								borderRadius: 2,
+								bgcolor: 'action.hover',
+								border: '1px solid',
+								borderColor: 'divider',
+								display: 'flex',
+								flexDirection: 'column',
+								gap: 2,
+							}}
+						>
+							<Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#d84315' }}>
+								🎒 Gear Exchange & Review Specs
+							</Typography>
+							<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Gear Type</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.gearDetails?.gearType || 'Racket'}
+										onChange={(e) => setNewPost({
+											...newPost,
+											gearDetails: { ...newPost.gearDetails, gearType: e.target.value }
+										})}
+									>
+										<MenuItem value="Racket">Racket</MenuItem>
+										<MenuItem value="Shoes">Shoes</MenuItem>
+										<MenuItem value="Bag">Bag</MenuItem>
+										<MenuItem value="Strings">Strings / Grips</MenuItem>
+										<MenuItem value="Shuttles">Shuttlecocks</MenuItem>
+										<MenuItem value="Accessories">Accessories</MenuItem>
+									</Select>
+								</Box>
+								<TextField
+									label="Brand / Model"
+									placeholder="e.g. Yonex Astrox 100ZZ"
+									size="small"
+									sx={{ flex: 1.5 }}
+									value={newPost.gearDetails?.brand || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										gearDetails: { ...newPost.gearDetails, brand: e.target.value }
+									})}
+								/>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Condition</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.gearDetails?.condition || 'Good'}
+										onChange={(e) => setNewPost({
+											...newPost,
+											gearDetails: { ...newPost.gearDetails, condition: e.target.value }
+										})}
+									>
+										<MenuItem value="Brand New">Brand New</MenuItem>
+										<MenuItem value="Mint">Mint (Like New)</MenuItem>
+										<MenuItem value="Good">Good</MenuItem>
+										<MenuItem value="Fair">Fair</MenuItem>
+									</Select>
+								</Box>
+							</Box>
+							<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+								<Box sx={{ flex: 1 }}>
+									<Typography variant="caption" fontWeight="bold" sx={{ mb: 0.5, display: 'block' }}>Trade Type</Typography>
+									<Select
+										size="small"
+										fullWidth
+										value={newPost.gearDetails?.tradeType || 'For Sale'}
+										onChange={(e) => setNewPost({
+											...newPost,
+											gearDetails: { ...newPost.gearDetails, tradeType: e.target.value }
+										})}
+									>
+										<MenuItem value="For Sale">For Sale</MenuItem>
+										<MenuItem value="Looking to Buy">Looking to Buy</MenuItem>
+										<MenuItem value="Trade Only">Trade Only</MenuItem>
+										<MenuItem value="Review / Discussion">Review / Discussion</MenuItem>
+									</Select>
+								</Box>
+								<TextField
+									label="Price (USD, optional)"
+									placeholder="e.g. 150"
+									type="number"
+									size="small"
+									sx={{ flex: 1 }}
+									value={newPost.gearDetails?.price || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										gearDetails: { ...newPost.gearDetails, price: e.target.value }
+									})}
+								/>
+								<TextField
+									label="Current String / Specs"
+									placeholder="e.g. BG80 @ 27 lbs, 4UG5"
+									size="small"
+									sx={{ flex: 1.5 }}
+									value={newPost.gearDetails?.specs?.currentString || ""}
+									onChange={(e) => setNewPost({
+										...newPost,
+										gearDetails: {
+											...newPost.gearDetails,
+											specs: { ...newPost.gearDetails?.specs, currentString: e.target.value }
+										}
+									})}
+								/>
+							</Box>
+						</Box>
+					)}
 
 					{/* Optional Match Scorecard Fields (when Match Result is selected) */}
 					{newPost.category === 'match_result' && (

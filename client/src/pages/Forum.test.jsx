@@ -119,7 +119,7 @@ describe('Forum Page Component (Community Hub)', () => {
         expect(screen.getByText('#RAC')).toBeInTheDocument();
     });
 
-    it('opens Create Post modal with category selector', async () => {
+    it('opens Create Post modal with category selector and Phase 2 options', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
@@ -132,6 +132,7 @@ describe('Forum Page Component (Community Hub)', () => {
         await waitFor(() => {
             expect(screen.getByText('Create a Post')).toBeInTheDocument();
             expect(screen.getByText('Category')).toBeInTheDocument();
+            expect(screen.getByText(/General Discussion/i)).toBeInTheDocument();
         });
     });
 });

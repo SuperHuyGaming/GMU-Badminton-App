@@ -37,6 +37,10 @@ const CATEGORY_CONFIG = {
 	gear_review: { label: "Gear Review", bg: "rgba(156, 39, 176, 0.12)", color: "#7b1fa2", border: "rgba(156, 39, 176, 0.3)" },
 	meetup_rally: { label: "Meetup Rally", bg: "rgba(76, 175, 80, 0.12)", color: "#2e7d32", border: "rgba(76, 175, 80, 0.3)" },
 	training: { label: "Training", bg: "rgba(255, 152, 0, 0.12)", color: "#e65100", border: "rgba(255, 152, 0, 0.3)" },
+	find_partner: { label: "Find Partner", bg: "rgba(0, 150, 136, 0.12)", color: "#00796b", border: "rgba(0, 150, 136, 0.3)" },
+	challenge_match: { label: "Match Challenge", bg: "rgba(233, 30, 99, 0.12)", color: "#c2185b", border: "rgba(233, 30, 99, 0.3)" },
+	qa_forum: { label: "Badminton Q&A", bg: "rgba(103, 58, 183, 0.12)", color: "#512da8", border: "rgba(103, 58, 183, 0.3)" },
+	gear_exchange: { label: "Gear Exchange", bg: "rgba(255, 87, 34, 0.12)", color: "#d84315", border: "rgba(255, 87, 34, 0.3)" },
 };
 
 // Separated Sub-Components
@@ -69,6 +73,86 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		list: [],
 	});
 	const [isLiking, setIsLiking] = useState(false);
+	const [isRsvping, setIsRsvping] = useState(false);
+	const [isAcceptingChallenge, setIsAcceptingChallenge] = useState(false);
+
+	const handleToggleRsvp = async (e) => {
+		e?.stopPropagation();
+		if (!currentUser) {
+			toast.error("Please log in to RSVP for this rally.");
+			return;
+		}
+		if (isRsvping) return;
+		setIsRsvping(true);
+
+		const prevMatchmaking = localPost.playerMatchmaking;
+		const rsvpList = Array.isArray(prevMatchmaking?.rsvpList) ? [...prevMatchmaking.rsvpList] : [];
+		const idx = rsvpList.findIndex(r => String(r.userId) === String(currentUserId));
+		
+		if (idx > -1) {
+			rsvpList.splice(idx, 1);
+		} else {
+			rsvpList.push({
+				userId: String(currentUserId),
+				userName: currentUser.name || "Player",
+				avatarUrl: currentUser.avatarUrl || currentUser.profilePic || "",
+				status: "confirmed"
+			});
+		}
+
+		const slots = prevMatchmaking?.slotsNeeded || 1;
+		const isFilled = rsvpList.filter(r => r.status === "confirmed").length >= slots;
+		const optimisticMatchmaking = {
+			...prevMatchmaking,
+			rsvpList,
+			isFilled
+		};
+
+		setLocalPost(prev => ({ ...prev, playerMatchmaking: optimisticMatchmaking }));
+
+		try {
+			const res = await apiFetch(`/api/forum/${localPost._id}/rsvp`, { method: "POST" });
+			if (res && res.ok) {
+				const data = await res.json();
+				setLocalPost(prev => ({ ...prev, playerMatchmaking: data.playerMatchmaking }));
+				toast.success(idx > -1 ? "Left the rally." : "You're in! RSVP confirmed.");
+			} else {
+				setLocalPost(prev => ({ ...prev, playerMatchmaking: prevMatchmaking }));
+				toast.error("Failed to update RSVP.");
+			}
+		} catch {
+			setLocalPost(prev => ({ ...prev, playerMatchmaking: prevMatchmaking }));
+			toast.error("Network error updating RSVP.");
+		} finally {
+			setIsRsvping(false);
+		}
+	};
+
+	const handleAcceptChallenge = async (e) => {
+		e?.stopPropagation();
+		if (!currentUser) {
+			toast.error("Please log in to accept this challenge.");
+			return;
+		}
+		if (isAcceptingChallenge) return;
+		setIsAcceptingChallenge(true);
+
+		try {
+			const res = await apiFetch(`/api/forum/${localPost._id}/accept-challenge`, { method: "PUT" });
+			if (res && res.ok) {
+				const data = await res.json();
+				setLocalPost(prev => ({ ...prev, challengeMatch: data.challengeMatch }));
+				toast.success("Match challenge accepted! Prepare for the court.");
+			} else {
+				const errData = await res?.json().catch(() => ({}));
+				toast.error(errData?.message || "Failed to accept challenge.");
+			}
+		} catch {
+			toast.error("Error accepting challenge.");
+		} finally {
+			setIsAcceptingChallenge(false);
+		}
+	};
 
 	const [anchorEl, setAnchorEl] = useState(null);
 	const [isEditing, setIsEditing] = useState(false);
@@ -106,6 +190,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					reactions: updatedPost.reactions || prev.reactions,
 					category: updatedPost.category || prev.category,
 					matchDetails: updatedPost.matchDetails || prev.matchDetails,
+					playerMatchmaking: updatedPost.playerMatchmaking || prev.playerMatchmaking,
+					challengeMatch: updatedPost.challengeMatch || prev.challengeMatch,
+					qaDetails: updatedPost.qaDetails || prev.qaDetails,
+					gearDetails: updatedPost.gearDetails || prev.gearDetails,
 				}));
 			}
 		};
@@ -680,6 +768,245 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							userSelect: 'none' // Prevent text selection on rapid double clicking
 						}}
 					>
+						
+						{/* PLAYER MATCHMAKING BANNER */}
+						{Boolean(localPost.playerMatchmaking || localPost.category === 'find_partner') && (
+							<Paper
+								variant="outlined"
+								sx={{
+									mb: 2,
+									p: 2,
+									borderRadius: 2.5,
+									background: "linear-gradient(135deg, rgba(0, 150, 136, 0.05) 0%, rgba(76, 175, 80, 0.08) 100%)",
+									border: "1px solid",
+									borderColor: "rgba(0, 150, 136, 0.3)",
+									boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+									pointerEvents: "auto",
+								}}
+							>
+								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										<Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#00796b", display: "flex", alignItems: "center", gap: 0.5 }}>
+											🤝 Player Matchmaking
+										</Typography>
+										{localPost.playerMatchmaking?.format && (
+											<Chip label={localPost.playerMatchmaking.format} size="small" sx={{ fontSize: "0.7rem", height: 20, fontWeight: "bold" }} />
+										)}
+										{localPost.playerMatchmaking?.skillLevelRequired && (
+											<Chip label={`Level: ${localPost.playerMatchmaking.skillLevelRequired}`} size="small" variant="outlined" sx={{ fontSize: "0.7rem", height: 20 }} />
+										)}
+									</Box>
+									<Chip
+										label={localPost.playerMatchmaking?.isFilled ? "🔴 Rally Full" : `🟢 Need ${Math.max(0, (localPost.playerMatchmaking?.slotsNeeded || 1) - (localPost.playerMatchmaking?.rsvpList?.filter(r => r.status === 'confirmed').length || 0))} more`}
+										size="small"
+										color={localPost.playerMatchmaking?.isFilled ? "default" : "success"}
+										sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22 }}
+									/>
+								</Box>
+
+								<Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, my: 1, fontSize: "0.85rem", color: "text.secondary" }}>
+									{localPost.playerMatchmaking?.preferredCourt && (
+										<Typography variant="body2">
+											<strong>Court:</strong> {localPost.playerMatchmaking.preferredCourt}
+										</Typography>
+									)}
+									{localPost.playerMatchmaking?.timeWindow && (
+										<Typography variant="body2">
+											<strong>Time:</strong> {localPost.playerMatchmaking.timeWindow}
+										</Typography>
+									)}
+								</Box>
+
+								{/* RSVPs & 1-Tap Join Action */}
+								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1.5, pt: 1, borderTop: "1px dashed", borderColor: "divider", flexWrap: "wrap", gap: 1 }}>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										<Typography variant="caption" sx={{ fontWeight: "bold", color: "text.secondary" }}>
+											Attendees ({localPost.playerMatchmaking?.rsvpList?.length || 0}):
+										</Typography>
+										{localPost.playerMatchmaking?.rsvpList?.length > 0 ? (
+											<AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.7rem' } }}>
+												{localPost.playerMatchmaking.rsvpList.map((r, i) => (
+													<Tooltip key={i} title={`${r.userName} (${r.status})`}>
+														<Avatar src={r.avatarUrl} alt={r.userName}>{r.userName?.charAt(0)}</Avatar>
+													</Tooltip>
+												))}
+											</AvatarGroup>
+										) : (
+											<Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+												Be the first to join!
+											</Typography>
+										)}
+									</Box>
+
+									{currentUser && (
+										<Button
+											size="small"
+											variant={localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) ? "outlined" : "contained"}
+											color={localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) ? "inherit" : "primary"}
+											onClick={handleToggleRsvp}
+											disabled={isRsvping}
+											sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
+										>
+											{localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId))
+												? "✓ You're In (Leave)"
+												: "+ Join Rally (RSVP)"}
+										</Button>
+									)}
+								</Box>
+							</Paper>
+						)}
+
+						{/* MATCH CHALLENGE BANNER */}
+						{Boolean(localPost.challengeMatch || localPost.category === 'challenge_match') && (
+							<Paper
+								variant="outlined"
+								sx={{
+									mb: 2,
+									p: 2,
+									borderRadius: 2.5,
+									background: "linear-gradient(135deg, rgba(233, 30, 99, 0.05) 0%, rgba(156, 39, 176, 0.07) 100%)",
+									border: "1px solid",
+									borderColor: "rgba(233, 30, 99, 0.25)",
+									boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+									pointerEvents: "auto",
+								}}
+							>
+								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										<Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#c2185b", display: "flex", alignItems: "center", gap: 0.5 }}>
+											⚔️ Match Challenge
+										</Typography>
+										{localPost.challengeMatch?.matchType && (
+											<Chip label={localPost.challengeMatch.matchType} size="small" sx={{ fontSize: "0.7rem", height: 20, fontWeight: "bold" }} />
+										)}
+										{localPost.challengeMatch?.gameFormat && (
+											<Chip label={localPost.challengeMatch.gameFormat} size="small" variant="outlined" sx={{ fontSize: "0.7rem", height: 20 }} />
+										)}
+									</Box>
+									<Chip
+										label={localPost.challengeMatch?.matchStatus === 'accepted' ? 'Accepted' : 'Open Challenge'}
+										size="small"
+										color={localPost.challengeMatch?.matchStatus === 'accepted' ? 'success' : 'warning'}
+										sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22 }}
+									/>
+								</Box>
+
+								{localPost.challengeMatch?.stipulations && (
+									<Typography variant="body2" sx={{ my: 0.5, fontStyle: "italic", color: "text.secondary" }}>
+										<strong>Stipulations:</strong> "{localPost.challengeMatch.stipulations}"
+									</Typography>
+								)}
+
+								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1.5, pt: 1, borderTop: "1px dashed", borderColor: "divider", flexWrap: "wrap", gap: 1 }}>
+									<Typography variant="caption" color="text.secondary">
+										{localPost.challengeMatch?.matchStatus === 'accepted'
+											? `Accepted by ${localPost.challengeMatch?.acceptedBy?.map(a => a.userName).join(', ') || 'an opponent'}`
+											: "Awaiting challenger response"}
+									</Typography>
+
+									{currentUser && String(localPost.authorId) !== String(currentUserId) && localPost.challengeMatch?.matchStatus === 'open' && (
+										<Button
+											size="small"
+											variant="contained"
+											color="secondary"
+											onClick={handleAcceptChallenge}
+											disabled={isAcceptingChallenge}
+											sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
+										>
+											⚔️ Accept Challenge
+										</Button>
+									)}
+								</Box>
+							</Paper>
+						)}
+
+						{/* Q&A FORUM BANNER */}
+						{Boolean(localPost.qaDetails || localPost.category === 'qa_forum') && (
+							<Paper
+								variant="outlined"
+								sx={{
+									mb: 2,
+									p: 2,
+									borderRadius: 2.5,
+									background: "linear-gradient(135deg, rgba(103, 58, 183, 0.05) 0%, rgba(33, 150, 243, 0.06) 100%)",
+									border: "1px solid",
+									borderColor: localPost.qaDetails?.isResolved ? "success.main" : "rgba(103, 58, 183, 0.25)",
+									boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+									pointerEvents: "auto",
+								}}
+							>
+								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										<Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#512da8", display: "flex", alignItems: "center", gap: 0.5 }}>
+											💡 Badminton Q&A
+										</Typography>
+										{localPost.qaDetails?.subtopic && (
+											<Chip label={localPost.qaDetails.subtopic} size="small" variant="outlined" sx={{ fontSize: "0.7rem", height: 20 }} />
+										)}
+									</Box>
+									{localPost.qaDetails?.isResolved ? (
+										<Chip
+											label="✅ Solution Accepted"
+											size="small"
+											color="success"
+											sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22 }}
+										/>
+									) : (
+										<Chip
+											label="❓ Needs Answer"
+											size="small"
+											sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22, bgcolor: "action.hover" }}
+										/>
+									)}
+								</Box>
+							</Paper>
+						)}
+
+						{/* GEAR EXCHANGE BANNER */}
+						{Boolean(localPost.gearDetails || localPost.category === 'gear_exchange' || localPost.category === 'gear_review') && localPost.gearDetails?.gearType && (
+							<Paper
+								variant="outlined"
+								sx={{
+									mb: 2,
+									p: 2,
+									borderRadius: 2.5,
+									background: "linear-gradient(135deg, rgba(255, 87, 34, 0.05) 0%, rgba(255, 193, 7, 0.08) 100%)",
+									border: "1px solid",
+									borderColor: "rgba(255, 87, 34, 0.25)",
+									boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+									pointerEvents: "auto",
+								}}
+							>
+								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										<Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#d84315", display: "flex", alignItems: "center", gap: 0.5 }}>
+											🏸 {localPost.gearDetails.gearType}{localPost.gearDetails.brand ? ` • ${localPost.gearDetails.brand}` : ""}
+										</Typography>
+										{localPost.gearDetails.condition && (
+											<Chip label={`Condition: ${localPost.gearDetails.condition}`} size="small" variant="outlined" sx={{ fontSize: "0.7rem", height: 20 }} />
+										)}
+									</Box>
+									<Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+										{localPost.gearDetails.tradeType && (
+											<Chip label={localPost.gearDetails.tradeType} size="small" sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22 }} />
+										)}
+										{localPost.gearDetails.price > 0 && (
+											<Chip label={"$" + localPost.gearDetails.price} size="small" color="primary" sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22 }} />
+										)}
+									</Box>
+								</Box>
+
+								{localPost.gearDetails.specs && (localPost.gearDetails.specs.weightCode || localPost.gearDetails.specs.gripSize || localPost.gearDetails.specs.balancePoint || localPost.gearDetails.specs.currentString) && (
+									<Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8, mt: 1 }}>
+										{localPost.gearDetails.specs.weightCode && <Chip label={localPost.gearDetails.specs.weightCode} size="small" sx={{ height: 20, fontSize: "0.7rem" }} />}
+										{localPost.gearDetails.specs.gripSize && <Chip label={localPost.gearDetails.specs.gripSize} size="small" sx={{ height: 20, fontSize: "0.7rem" }} />}
+										{localPost.gearDetails.specs.balancePoint && <Chip label={localPost.gearDetails.specs.balancePoint} size="small" sx={{ height: 20, fontSize: "0.7rem" }} />}
+										{localPost.gearDetails.specs.currentString && <Chip label={`String: ${localPost.gearDetails.specs.currentString}`} size="small" sx={{ height: 20, fontSize: "0.7rem" }} />}
+									</Box>
+								)}
+							</Paper>
+						)}
+
 						{/* MATCH SCORECARD BANNER */}
 						{localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court || localPost.matchDetails.winner) && (
 							<Paper

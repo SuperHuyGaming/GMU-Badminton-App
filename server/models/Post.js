@@ -12,17 +12,79 @@ const PostSchema = new mongoose.Schema({
 	visibility: { type: String, enum: ['PUBLIC', 'FRIENDS_ONLY', 'ONLY_ME'], default: 'PUBLIC' },
 	category: {
 		type: String,
-		enum: ['general', 'match_result', 'gear_review', 'meetup_rally', 'training'],
+		enum: ['general', 'match_result', 'gear_review', 'meetup_rally', 'training', 'find_partner', 'challenge_match', 'qa_forum', 'gear_exchange'],
 		default: 'general',
 	},
-	matchDetails: {
+		matchDetails: {
 		partner: { type: String, default: "" },
 		opponents: { type: [String], default: [] },
 		score: { type: String, default: "" },
 		court: { type: String, default: "" },
 		winner: { type: String, default: "" },
 	},
-	likedBy: { type: [String], default: [] },
+	playerMatchmaking: {
+		skillLevelRequired: { type: String, default: 'Any' },
+		format: { type: String, default: 'Doubles' },
+		preferredCourt: { type: String, default: 'RAC Courts 1-3' },
+		rallyDate: { type: Date },
+		timeWindow: { type: String, default: '' },
+		slotsNeeded: { type: Number, default: 1 },
+		rsvpList: [
+			{
+				userId: { type: String, required: true },
+				userName: { type: String, default: 'Player' },
+				avatarUrl: { type: String, default: '' },
+				status: { type: String, enum: ['confirmed', 'waitlist'], default: 'confirmed' },
+				joinedAt: { type: Date, default: Date.now }
+			}
+		],
+		isFilled: { type: Boolean, default: false }
+	},
+	challengeMatch: {
+		matchType: { type: String, default: 'Friendly Scrimmage' },
+		gameFormat: { type: String, default: 'Best of 3 to 21' },
+		stipulations: { type: String, default: '' },
+		matchStatus: { type: String, enum: ['open', 'accepted', 'completed', 'declined'], default: 'open' },
+		challengerTeam: [
+			{
+				userId: { type: String, required: true },
+				userName: { type: String, default: 'Challenger' },
+				avatarUrl: { type: String, default: '' }
+			}
+		],
+		acceptedBy: [
+			{
+				userId: { type: String, required: true },
+				userName: { type: String, default: 'Opponent' },
+				avatarUrl: { type: String, default: '' }
+			}
+		],
+		linkedMatchId: { type: String, default: '' }
+	},
+	qaDetails: {
+		subtopic: { type: String, default: 'General' },
+		isResolved: { type: Boolean, default: false },
+		acceptedCommentId: { type: String, default: '' },
+		acceptedBy: {
+			userId: { type: String },
+			userName: { type: String },
+			at: { type: Date }
+		}
+	},
+	gearDetails: {
+		gearType: { type: String, default: 'Racket' },
+		brand: { type: String, default: '' },
+		condition: { type: String, default: 'Good' },
+		specs: {
+			weightCode: { type: String, default: '' },
+			gripSize: { type: String, default: '' },
+			balancePoint: { type: String, default: '' },
+			currentString: { type: String, default: '' }
+		},
+		tradeType: { type: String, default: 'Review / Discussion' },
+		price: { type: Number, default: 0 }
+	},
+likedBy: { type: [String], default: [] },
 	isFlagged: { type: Boolean, default: false },
 	status: {
 		type: String,
@@ -146,8 +208,12 @@ PostSchema.post('save', async function(doc) {
 				images: doc.imageUrls || [],
 				tags: doc.tags || [],
 				isPinned: doc.isPinned || false,
-				category: doc.category || 'general',
+								category: doc.category || 'general',
 				matchDetails: doc.matchDetails || null,
+				playerMatchmaking: doc.playerMatchmaking || null,
+				challengeMatch: doc.challengeMatch || null,
+				qaDetails: doc.qaDetails || null,
+				gearDetails: doc.gearDetails || null,
 				reactions: doc.reactions || [],
 				likes: doc.likedBy?.length || 0,
 				recentLikerAvatars: recentLikerAvatars,

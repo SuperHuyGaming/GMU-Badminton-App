@@ -1,4 +1,3 @@
-
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import PostCard from './PostCard';
@@ -204,5 +203,123 @@ describe('PostCard Component QA Tests', () => {
         await waitFor(() => {
             expect(screen.getByText('💥 1')).toBeInTheDocument();
         });
+    });
+
+    it('renders Player Matchmaking banner and allows toggling RSVP', async () => {
+        const matchmakingPost = {
+            ...mockPost,
+            category: 'find_partner',
+            playerMatchmaking: {
+                format: 'Doubles',
+                preferredCourt: 'RAC Courts 1-3',
+                skillLevelRequired: 'Intermediate',
+                slotsNeeded: 2,
+                timeWindow: 'Tonight 7:00 PM',
+                rsvpList: [],
+                isFilled: false
+            }
+        };
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                ...matchmakingPost,
+                playerMatchmaking: {
+                    ...matchmakingPost.playerMatchmaking,
+                    rsvpList: [{ userId: mockUser.id, userName: mockUser.name, status: 'confirmed' }]
+                }
+            })
+        });
+
+        renderWithContext(matchmakingPost, mockUser);
+        expect(screen.getByText('🤝 Player Matchmaking')).toBeInTheDocument();
+        expect(screen.getByText('RAC Courts 1-3')).toBeInTheDocument();
+        expect(screen.getByText('🟢 Need 2 more')).toBeInTheDocument();
+
+        const joinBtn = screen.getByRole('button', { name: /\+ Join Rally \(RSVP\)/i });
+        fireEvent.click(joinBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/rsvp'), expect.any(Object));
+        });
+    });
+
+    it('renders Match Challenge banner and allows non-author to accept challenge', async () => {
+        const challengePost = {
+            ...mockPost,
+            authorId: 'other-user',
+            category: 'challenge_match',
+            challengeMatch: {
+                matchType: 'Ranked Ladder Challenge',
+                gameFormat: 'Best of 3 to 21',
+                stipulations: 'Bring feathers',
+                matchStatus: 'open',
+                acceptedBy: []
+            }
+        };
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                ...challengePost,
+                challengeMatch: {
+                    ...challengePost.challengeMatch,
+                    matchStatus: 'accepted',
+                    acceptedBy: [{ userId: mockUser.id, userName: mockUser.name }]
+                }
+            })
+        });
+
+        renderWithContext(challengePost, mockUser);
+        expect(screen.getByText('⚔️ Match Challenge')).toBeInTheDocument();
+        expect(screen.getByText('Ranked Ladder Challenge')).toBeInTheDocument();
+        expect(screen.getByText('Open Challenge')).toBeInTheDocument();
+
+        const acceptBtn = screen.getByRole('button', { name: /⚔️ Accept Challenge/i });
+        fireEvent.click(acceptBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/accept-challenge'), expect.any(Object));
+        });
+    });
+
+    it('renders Q&A Forum banner with subtopic and resolved solution status', () => {
+        const qaPost = {
+            ...mockPost,
+            category: 'qa_forum',
+            qaDetails: {
+                subtopic: 'Rackets & Strings',
+                isResolved: true
+            }
+        };
+
+        renderWithContext(qaPost, mockUser);
+        expect(screen.getByText('💡 Badminton Q&A')).toBeInTheDocument();
+        expect(screen.getByText('Rackets & Strings')).toBeInTheDocument();
+        expect(screen.getByText('✅ Solution Accepted')).toBeInTheDocument();
+    });
+
+    it('renders Gear Exchange banner with gear specs and price chip', () => {
+        const gearPost = {
+            ...mockPost,
+            category: 'gear_exchange',
+            gearDetails: {
+                gearType: 'Racket',
+                brand: 'Yonex Astrox 100ZZ',
+                condition: 'Mint',
+                tradeType: 'For Sale',
+                price: 180,
+                specs: {
+                    weightCode: '4U',
+                    currentString: 'BG80 @ 27 lbs'
+                }
+            }
+        };
+
+        renderWithContext(gearPost, mockUser);
+        expect(screen.getByText(/🏸 Racket • Yonex Astrox 100ZZ/i)).toBeInTheDocument();
+        expect(screen.getByText('$180')).toBeInTheDocument();
+        expect(screen.getByText('Condition: Mint')).toBeInTheDocument();
+        expect(screen.getByText('String: BG80 @ 27 lbs')).toBeInTheDocument();
     });
 });

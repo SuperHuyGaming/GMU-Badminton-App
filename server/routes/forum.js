@@ -243,7 +243,93 @@ const sendNotification = async (io, targetUserId, message, link) => {
 // ==========================================
 // POSTS (FETCH & CREATE)
 // ==========================================
-const ALLOWED_CATEGORIES = ['general', 'match_result', 'gear_review', 'meetup_rally', 'training'];
+const ALLOWED_CATEGORIES = [
+	'general',
+	'match_result',
+	'gear_review',
+	'meetup_rally',
+	'training',
+	'find_partner',
+	'challenge_match',
+	'qa_forum',
+	'gear_exchange'
+];
+
+const parsePlayerMatchmaking = (pm) => {
+	if (!pm || typeof pm !== 'object') return undefined;
+	return {
+		skillLevelRequired: pm.skillLevelRequired ? xss(String(pm.skillLevelRequired).trim()).slice(0, 50) : 'Any',
+		format: pm.format ? xss(String(pm.format).trim()).slice(0, 50) : 'Doubles',
+		preferredCourt: pm.preferredCourt ? xss(String(pm.preferredCourt).trim()).slice(0, 100) : 'RAC Courts 1-3',
+		rallyDate: pm.rallyDate ? new Date(pm.rallyDate) : undefined,
+		timeWindow: pm.timeWindow ? xss(String(pm.timeWindow).trim()).slice(0, 50) : '',
+		slotsNeeded: typeof pm.slotsNeeded === 'number' && pm.slotsNeeded > 0 ? Math.min(10, pm.slotsNeeded) : 1,
+		rsvpList: Array.isArray(pm.rsvpList) ? pm.rsvpList.map(r => ({
+			userId: String(r.userId || ''),
+			userName: xss(String(r.userName || 'Player')).slice(0, 60),
+			avatarUrl: r.avatarUrl ? xss(String(r.avatarUrl).trim()) : '',
+			status: r.status === 'waitlist' ? 'waitlist' : 'confirmed',
+			joinedAt: r.joinedAt ? new Date(r.joinedAt) : new Date()
+		})) : [],
+		isFilled: Boolean(pm.isFilled)
+	};
+};
+
+const parseChallengeMatch = (cm, authorInfo) => {
+	if (!cm || typeof cm !== 'object') return undefined;
+	const challengerTeam = Array.isArray(cm.challengerTeam) && cm.challengerTeam.length > 0
+		? cm.challengerTeam.map(c => ({
+			userId: String(c.userId || ''),
+			userName: xss(String(c.userName || 'Challenger')).slice(0, 60),
+			avatarUrl: c.avatarUrl ? xss(String(c.avatarUrl).trim()) : ''
+		}))
+		: (authorInfo ? [{ userId: authorInfo.userId, userName: authorInfo.userName, avatarUrl: authorInfo.avatarUrl || '' }] : []);
+
+	return {
+		matchType: cm.matchType ? xss(String(cm.matchType).trim()).slice(0, 50) : 'Friendly Scrimmage',
+		gameFormat: cm.gameFormat ? xss(String(cm.gameFormat).trim()).slice(0, 50) : 'Best of 3 to 21',
+		stipulations: cm.stipulations ? xss(String(cm.stipulations).trim()).slice(0, 200) : '',
+		matchStatus: ['open', 'accepted', 'completed', 'declined'].includes(cm.matchStatus) ? cm.matchStatus : 'open',
+		challengerTeam,
+		acceptedBy: Array.isArray(cm.acceptedBy) ? cm.acceptedBy.map(a => ({
+			userId: String(a.userId || ''),
+			userName: xss(String(a.userName || 'Opponent')).slice(0, 60),
+			avatarUrl: a.avatarUrl ? xss(String(a.avatarUrl).trim()) : ''
+		})) : [],
+		linkedMatchId: cm.linkedMatchId ? xss(String(cm.linkedMatchId).trim()).slice(0, 60) : ''
+	};
+};
+
+const parseQaDetails = (qa) => {
+	if (!qa || typeof qa !== 'object') return undefined;
+	return {
+		subtopic: qa.subtopic ? xss(String(qa.subtopic).trim()).slice(0, 50) : 'General',
+		isResolved: Boolean(qa.isResolved),
+		acceptedCommentId: qa.acceptedCommentId ? xss(String(qa.acceptedCommentId).trim()).slice(0, 60) : '',
+		acceptedBy: qa.acceptedBy && typeof qa.acceptedBy === 'object' ? {
+			userId: String(qa.acceptedBy.userId || ''),
+			userName: xss(String(qa.acceptedBy.userName || '')).slice(0, 60),
+			at: qa.acceptedBy.at ? new Date(qa.acceptedBy.at) : new Date()
+		} : undefined
+	};
+};
+
+const parseGearDetails = (gd) => {
+	if (!gd || typeof gd !== 'object') return undefined;
+	return {
+		gearType: gd.gearType ? xss(String(gd.gearType).trim()).slice(0, 50) : 'Racket',
+		brand: gd.brand ? xss(String(gd.brand).trim()).slice(0, 50) : '',
+		condition: gd.condition ? xss(String(gd.condition).trim()).slice(0, 50) : 'Good',
+		specs: gd.specs && typeof gd.specs === 'object' ? {
+			weightCode: gd.specs.weightCode ? xss(String(gd.specs.weightCode).trim()).slice(0, 10) : '',
+			gripSize: gd.specs.gripSize ? xss(String(gd.specs.gripSize).trim()).slice(0, 10) : '',
+			balancePoint: gd.specs.balancePoint ? xss(String(gd.specs.balancePoint).trim()).slice(0, 30) : '',
+			currentString: gd.specs.currentString ? xss(String(gd.specs.currentString).trim()).slice(0, 60) : ''
+		} : {},
+		tradeType: gd.tradeType ? xss(String(gd.tradeType).trim()).slice(0, 50) : 'Review / Discussion',
+		price: typeof gd.price === 'number' && gd.price >= 0 ? gd.price : (Number(gd.price) || 0)
+	};
+};
 
 const parseOpponents = (opponents) => {
 	if (Array.isArray(opponents)) {
@@ -286,7 +372,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility, isPinned, category, matchDetails } = req.body;
+		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility, isPinned, category, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
 
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
@@ -340,11 +426,21 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		const status = isFlagged ? 'quarantined' : 'active';
 		const toxicityScore = spamEvaluation.score || aiAnalysis.score || 0;
 
+		const authorInfo = { userId: authorId, userName: authorName, avatarUrl: req.user.profilePic || "" };
+		const cleanPlayerMatchmaking = parsePlayerMatchmaking(playerMatchmaking);
+		const cleanChallengeMatch = parseChallengeMatch(challengeMatch, authorInfo);
+		const cleanQaDetails = parseQaDetails(qaDetails);
+		const cleanGearDetails = parseGearDetails(gearDetails);
+
 		const newPost = new Post({
 			title: cleanTitle,
 			content: cleanContent,
 			category: cleanCategory,
 			matchDetails: cleanMatchDetails,
+			playerMatchmaking: cleanPlayerMatchmaking,
+			challengeMatch: cleanChallengeMatch,
+			qaDetails: cleanQaDetails,
+			gearDetails: cleanGearDetails,
 			imageUrl: cleanImageUrl,
 			imageUrls: cleanImageUrls,
 			tags: cleanTags,
@@ -479,7 +575,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const { title, content, category, matchDetails } = req.body;
+		const { title, content, category, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
 		}
@@ -515,6 +611,19 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 				court: matchDetails.court !== undefined ? xss(String(matchDetails.court || "").trim()).slice(0, 100) : (post.matchDetails?.court || ""),
 				winner: matchDetails.winner !== undefined ? xss(String(matchDetails.winner || "").trim()).slice(0, 100) : (post.matchDetails?.winner || ""),
 			};
+		}
+
+		if (playerMatchmaking && typeof playerMatchmaking === "object") {
+			post.playerMatchmaking = parsePlayerMatchmaking(playerMatchmaking);
+		}
+		if (challengeMatch && typeof challengeMatch === "object") {
+			post.challengeMatch = parseChallengeMatch(challengeMatch, { userId: currentUserId, userName: req.user.name, avatarUrl: req.user.profilePic });
+		}
+		if (qaDetails && typeof qaDetails === "object") {
+			post.qaDetails = parseQaDetails(qaDetails);
+		}
+		if (gearDetails && typeof gearDetails === "object") {
+			post.gearDetails = parseGearDetails(gearDetails);
 		}
 
 		const cleanTitle = xss(title.trim());
@@ -1164,6 +1273,218 @@ router.put("/:postId/react", authMiddleware, async (req, res) => {
 	} catch (error) {
 		console.error("Error handling reaction:", error);
 		res.status(500).json({ message: "Error updating reaction." });
+	}
+});
+
+
+// ==========================================
+// SPECIALIZED COMMUNITY WORKFLOWS (PHASE 2)
+// ==========================================
+
+// 1. Toggle RSVP for Player Matchmaking / Meetup Rally
+router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+		if (post.isFlagged || post.status === "quarantined" || post.status === "deleted") {
+			return res.status(403).json({ message: "Cannot RSVP to this post." });
+		}
+
+		if (!post.playerMatchmaking) {
+			post.playerMatchmaking = {
+				skillLevelRequired: "Any",
+				format: "Doubles",
+				preferredCourt: "RAC Courts 1-3",
+				slotsNeeded: 1,
+				rsvpList: [],
+				isFilled: false
+			};
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const currentUserName = req.user.name || "Player";
+		const userDoc = await User.findById(currentUserId).select("profilePic").lean();
+		const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
+
+		const existingIndex = post.playerMatchmaking.rsvpList.findIndex(
+			r => String(r.userId) === currentUserId
+		);
+
+		let userAction = "joined";
+		if (existingIndex > -1) {
+			// Toggle off (cancel RSVP)
+			post.playerMatchmaking.rsvpList.splice(existingIndex, 1);
+			userAction = "left";
+
+			// If a slot opened, promote the first waitlisted user to confirmed
+			const confirmedCount = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
+			if (confirmedCount < post.playerMatchmaking.slotsNeeded) {
+				const waitlisted = post.playerMatchmaking.rsvpList.find(r => r.status === "waitlist");
+				if (waitlisted) waitlisted.status = "confirmed";
+			}
+		} else {
+			// Toggle on (join)
+			const confirmedCount = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
+			const status = confirmedCount < post.playerMatchmaking.slotsNeeded ? "confirmed" : "waitlist";
+			post.playerMatchmaking.rsvpList.push({
+				userId: currentUserId,
+				userName: currentUserName,
+				avatarUrl,
+				status,
+				joinedAt: new Date()
+			});
+		}
+
+		// Update isFilled status
+		const finalConfirmed = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
+		post.playerMatchmaking.isFilled = finalConfirmed >= post.playerMatchmaking.slotsNeeded;
+
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+
+		// Notify author if user joined
+		if (userAction === "joined" && post.authorId?.toString() !== currentUserId) {
+			await sendNotification(
+				req.io,
+				post.authorId.toString(),
+				`${currentUserName} joined your badminton rally!`,
+				`/post/${post._id}`
+			);
+		}
+
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error toggling RSVP:", error);
+		res.status(500).json({ message: "Error updating RSVP status." });
+	}
+});
+
+// 2. Accept Scrimmage / Match Challenge
+router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		if (post.authorId?.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot accept your own challenge." });
+		}
+
+		if (!post.challengeMatch) {
+			post.challengeMatch = {
+				matchType: "Friendly Scrimmage",
+				gameFormat: "Best of 3 to 21",
+				matchStatus: "open",
+				challengerTeam: [{ userId: post.authorId, userName: post.authorName, avatarUrl: "" }],
+				acceptedBy: []
+			};
+		}
+
+		const alreadyAccepted = post.challengeMatch.acceptedBy?.some(a => String(a.userId) === currentUserId);
+		if (post.challengeMatch.matchStatus === "accepted" && !alreadyAccepted) {
+			return res.status(400).json({ message: "This challenge has already been accepted." });
+		}
+
+		const userDoc = await User.findById(currentUserId).select("name profilePic").lean();
+		const currentUserName = userDoc?.name || req.user.name || "Opponent";
+		const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
+
+		if (!alreadyAccepted) {
+			if (!Array.isArray(post.challengeMatch.acceptedBy)) {
+				post.challengeMatch.acceptedBy = [];
+			}
+			post.challengeMatch.acceptedBy.push({
+				userId: currentUserId,
+				userName: currentUserName,
+				avatarUrl
+			});
+			post.challengeMatch.matchStatus = "accepted";
+			await post.save();
+
+			await sendNotification(
+				req.io,
+				post.authorId.toString(),
+				`${currentUserName} accepted your match challenge!`,
+				`/post/${post._id}`
+			);
+		}
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error accepting challenge:", error);
+		res.status(500).json({ message: "Error accepting challenge." });
+	}
+});
+
+// 3. Mark Comment as Accepted Solution (Q&A Forum)
+router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (req, res) => {
+	try {
+		const { postId, commentId } = req.params;
+		if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
+			return res.status(400).json({ message: "Invalid ID format." });
+		}
+
+		const post = await Post.findById(postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const isAdmin = req.user.role === "admin";
+		if (post.authorId?.toString() !== currentUserId && !isAdmin) {
+			return res.status(403).json({ message: "Only the post author or an admin can mark the accepted answer." });
+		}
+
+		const comment = post.comments.id(commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found." });
+
+		if (!post.qaDetails) {
+			post.qaDetails = { subtopic: "General", isResolved: false };
+		}
+
+		// Toggle accepted answer
+		if (post.qaDetails.isResolved && String(post.qaDetails.acceptedCommentId) === String(commentId)) {
+			// Unmark
+			post.qaDetails.isResolved = false;
+			post.qaDetails.acceptedCommentId = "";
+			post.qaDetails.acceptedBy = undefined;
+		} else {
+			// Mark
+			post.qaDetails.isResolved = true;
+			post.qaDetails.acceptedCommentId = commentId.toString();
+			post.qaDetails.acceptedBy = {
+				userId: currentUserId,
+				userName: req.user.name || "Author",
+				at: new Date()
+			};
+
+			if (comment.authorId?.toString() !== currentUserId) {
+				await sendNotification(
+					req.io,
+					comment.authorId.toString(),
+					`${req.user.name || "The author"} marked your answer as the accepted solution!`,
+					`/post/${post._id}`
+				);
+			}
+		}
+
+		await post.save();
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error marking accepted answer:", error);
+		res.status(500).json({ message: "Error marking accepted answer." });
 	}
 });
 
