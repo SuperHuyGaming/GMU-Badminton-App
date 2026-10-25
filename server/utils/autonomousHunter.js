@@ -510,6 +510,14 @@ const VERIFIED_DMV_SEEDS = [
     {
         url: 'https://novabadmintonacademy.com/',
         snippet: '[2026 NVBC Open Championship] Northern Virginia Badminton Club, Ashburn, VA. Adult & Junior Open flights. December 2026.'
+    },
+    {
+        url: 'https://linktr.ee/wmbirdie23',
+        snippet: '[2026 William & Mary Fall Open Tournament] Hosted by William & Mary Badminton Club at Student Recreation Center, Williamsburg VA. November 14-15, 2026. Flights A, B, C, D in Singles, Doubles, Mixed. Registration deadline November 1, 2026. Register via Linktree / Google Form.'
+    },
+    {
+        url: 'https://linktr.ee/umd_badminton',
+        snippet: '[2026 UMD Terrapin Open] Hosted by University of Maryland Club Badminton at SPH Building, College Park MD. Singles, Doubles, Mixed flights.'
     }
 ];
 

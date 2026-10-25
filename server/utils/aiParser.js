@@ -65,7 +65,13 @@ const CAMPUS_VENUES = [
         keywords: ['ralph s. o\'connor', 'o\'connor recreation', 'jhu open', 'hopkins open'],
         venue: 'Ralph S. O\'Connor Recreation Center, Johns Hopkins University, Baltimore, MD',
         hostUniversity: 'Johns Hopkins University',
-        city: 'Baltimore, MD'
+        city: 'Baltimore, MD'
+    },
+    {
+        keywords: ['student recreation center', 'w&m open', 'william & mary open', 'william and mary open', 'tribelink', 'wmbirdie'],
+        venue: 'Student Recreation Center, College of William & Mary, Williamsburg, VA',
+        hostUniversity: 'College of William & Mary',
+        city: 'Williamsburg, VA'
     },
     {
         keywords: ['northern virginia badminton club', 'nvbc', 'nvbc open', 'atlantic blvd'],
