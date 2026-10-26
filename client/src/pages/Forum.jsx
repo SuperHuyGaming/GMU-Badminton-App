@@ -38,6 +38,15 @@ const DATE_OPTIONS = [
 	{ id: "custom", label: "Custom Range" }
 ];
 
+const DEFAULT_TRENDING_TAGS = [
+	{ tag: "Tournament" },
+	{ tag: "RAC" },
+	{ tag: "Stringing" },
+	{ tag: "Doubles" },
+	{ tag: "Equipment" },
+	{ tag: "Matchmaking" }
+];
+
 const matchesCategory = (item, cat) => {
 	if (!cat || cat === "all") return true;
 	const itemCat = item.category || (item.type === "match" ? "match_result" : "general");
@@ -598,17 +607,17 @@ export default function Forum() {
 					display: 'flex', 
 					justifyContent: 'space-between', 
 					alignItems: { xs: 'flex-start', sm: 'center' }, 
-					mb: 3.5, 
-					mt: { xs: 1, sm: 2 },
+					mb: { xs: 2, sm: 2.5 }, 
+					mt: { xs: 0.5, sm: 1.5 },
 					flexWrap: 'wrap', 
-					gap: 2 
+					gap: 1.5 
 				}}
 			>
 				<Box>
-					<Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: 0.5 }}>
+					<Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: 0.5, fontSize: { xs: '1.6rem', sm: '2.1rem' } }}>
 						Community Hub
 					</Typography>
-					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.95rem', sm: '1.05rem' } }}>
+					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.875rem', sm: '0.95rem' } }}>
 						Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
 					</Typography>
 				</Box>
@@ -650,7 +659,7 @@ export default function Forum() {
 			</Box>
 
 			{/* TABS NAVIGATION */}
-			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3, gap: 2 }}>
+			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2, gap: 1.5 }}>
 				<Tabs 
 					value={tab} 
 					onChange={handleTabChange} 
@@ -658,8 +667,8 @@ export default function Forum() {
 					indicatorColor="primary" 
 					aria-label="Community Hub categories"
 					sx={{ 
-						'& .MuiTab-root': { fontWeight: '900', fontSize: { xs: '0.95rem', sm: '1.05rem' }, textTransform: 'none', px: { xs: 2.5, sm: 4 }, minHeight: 48 },
-						background: 'background.paper', borderRadius: 10, boxShadow: 2, p: 0.6,
+						'& .MuiTab-root': { fontWeight: '900', fontSize: { xs: '0.875rem', sm: '1rem' }, textTransform: 'none', px: { xs: 2, sm: 3.5 }, minHeight: 44 },
+						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5,
 						border: '1px solid', borderColor: 'divider'
 					}}
 				>
@@ -845,46 +854,6 @@ export default function Forum() {
 				</Paper>
 
 				
-				{/* TRENDING HASHTAG STRIP */}
-				{trendingTags.length > 0 && (
-					<Box 
-						sx={{ 
-							width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
-							scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
-						}}
-						data-testid="trending-tags-strip"
-						role="region"
-						aria-label="Trending tags"
-					>
-						<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap', mr: 0.5 }}>
-							🔥 Trending:
-						</Typography>
-						{trendingTags.map((item) => (
-							<Chip 
-								key={item.tag} 
-								label={`#${item.tag} (${item.count})`} 
-								size="small" 
-								variant={selectedTag === item.tag ? "filled" : "outlined"}
-								color={selectedTag === item.tag ? "primary" : "default"}
-								onClick={() => {
-									setSelectedTag(prev => prev === item.tag ? "" : item.tag);
-									setPage(1);
-									setFeed([]);
-									setNewPostsQueue([]);
-								}}
-								clickable
-								sx={{ 
-									fontWeight: 'bold', 
-									borderRadius: 2,
-									cursor: 'pointer',
-									fontSize: '0.75rem',
-									transition: 'all 0.2s ease-in-out'
-								}}
-							/>
-						))}
-					</Box>
-				)}
-
 				{/* CATEGORY GROUP FILTER BAR */}
 				<Box 
 					sx={{ 
@@ -921,108 +890,48 @@ export default function Forum() {
 					))}
 				</Box>
 
-				{/* ACTION BAR (HOT TAGS & TRENDING TOPICS) */}
-				<Box 
-					sx={{ 
-						width: '100%', maxWidth: '800px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 1.5, px: 1
-					}}
-				>
-                    <Box 
-                        sx={{ 
-                            display: 'flex', gap: 1, overflowX: 'auto', pb: 1, flex: 1, alignItems: 'center',
-                            '&::-webkit-scrollbar': { display: 'none' },
-                            msOverflowStyle: 'none', scrollbarWidth: 'none' 
-                        }}
-                    >
-                        <Chip label="🔥 Trending" size="small" sx={{ fontWeight: '900', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: '#000000' }} />
-                        <Chip 
-                            label="All" 
-                            size="small" 
-                            variant={selectedTag === "" ? "filled" : "outlined"}
-                            color={selectedTag === "" ? "primary" : "default"}
-                            onClick={() => {
-                                setSelectedTag("");
-                                setPage(1);
-                            }}
-                            sx={{ fontWeight: 'bold', cursor: 'pointer' }}
-                        />
-                        {['Tournament', 'RAC', 'Stringing', 'Doubles', 'Equipment', 'Matchmaking'].map((tag) => (
-                            <Chip 
-                                key={tag} 
-                                label={`#${tag}`} 
-                                size="small" 
-                                variant={selectedTag === tag ? "filled" : "outlined"}
-                                color={selectedTag === tag ? "primary" : "default"}
-                                onClick={() => {
-                                    setSelectedTag(selectedTag === tag ? "" : tag);
-                                    setPage(1);
-                                }}
-                                sx={{ 
-                                    fontWeight: 'bold', cursor: 'pointer', 
-                                    '&:hover': { bgcolor: 'primary.main', color: 'white', borderColor: 'primary.main' } 
-                                }} 
-                            />
-                        ))}
-                    </Box>
-				</Box>
-
-			</Box>
-
-			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', maxWidth: '680px', mx: 'auto' }}>
-				{/* NEW POST INPUT BOX */}
-				<Paper 
-					elevation={1} 
-					sx={{ 
-						p: 2, 
-						width: '100%', 
-						borderRadius: 4, 
-						display: 'flex', 
-						alignItems: 'center', 
-						gap: 2,
-						mb: -2 
-					}}
-				>
-					<Avatar src={currentUser?.avatarUrl} alt={currentUser?.name} />
-					<TextField
-						fullWidth
-						size="small"
-						aria-label="What's on your mind?"
-						slotProps={{ htmlInput: { 'aria-label': "What's on your mind?" } }}
-						placeholder={`What's on your mind${currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}?`}
-						value={newPost.content}
-						onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
-					/>
-					<Button
-						variant="contained"
-						disabled={!newPost.content.trim()}
-						onClick={async () => {
-							if (!currentUser) return alert("You must be logged in to post!");
-							try {
-								const res = await apiFetch("/api/forum", {
-									method: "POST",
-									body: JSON.stringify({ 
-										title: newPost.content.substring(0, 50) + (newPost.content.length > 50 ? "..." : ""),
-										content: newPost.content,
-										category: "general"
-									})
-								});
-								if (res.ok) {
-									setNewPost({ ...newPost, content: "" });
-									toast.success("Post created successfully!");
+				{/* TRENDING HASHTAG STRIP */}
+				{((trendingTags && trendingTags.length > 0) ? trendingTags : DEFAULT_TRENDING_TAGS).length > 0 && (
+					<Box 
+						sx={{ 
+							width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
+							scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
+						}}
+						data-testid="trending-tags-strip"
+						role="region"
+						aria-label="Trending tags"
+					>
+						<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap', mr: 0.5 }}>
+							🔥 Trending:
+						</Typography>
+						{((trendingTags && trendingTags.length > 0) ? trendingTags : DEFAULT_TRENDING_TAGS).map((item) => (
+							<Chip 
+								key={item.tag} 
+								label={item.count ? `#${item.tag} (${item.count})` : `#${item.tag}`} 
+								size="small" 
+								variant={selectedTag === item.tag ? "filled" : "outlined"}
+								color={selectedTag === item.tag ? "primary" : "default"}
+								onClick={() => {
+									setSelectedTag(prev => prev === item.tag ? "" : item.tag);
 									setPage(1);
 									setFeed([]);
-								} else {
-									toast.error("Failed to create post.");
-								}
-							} catch {
-								toast.error("Error creating post.");
-							}
-						}}
-					>
-						Post
-					</Button>
-				</Paper>
+									setNewPostsQueue([]);
+								}}
+								clickable
+								sx={{ 
+									fontWeight: 'bold', 
+									borderRadius: 2,
+									cursor: 'pointer',
+									fontSize: '0.75rem',
+									transition: 'all 0.2s ease-in-out'
+								}}
+							/>
+						))}
+					</Box>
+				)}
+			</Box>
 
+			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2.5, width: '100%', maxWidth: '680px', mx: 'auto' }}>
 				{/* NEW POSTS PILL */}
 				{newPostsQueue.length > 0 && (
 					<Box 
