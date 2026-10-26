@@ -395,4 +395,78 @@ describe('PostCard Component QA Tests', () => {
         renderWithContext(mockPost, mockUser, { compact: false });
         expect(screen.getByTestId('post-card-comfortable')).toBeInTheDocument();
     });
+
+    // ── Phase 6: Real-Time Presence, Collage Grid ─────────────────────────────
+
+    it('renders online presence badge when isAuthorOnline is true', () => {
+        renderWithContext(mockPost, mockUser, { isAuthorOnline: true });
+        expect(screen.getByTestId('author-online-indicator')).toBeInTheDocument();
+    });
+
+    it('does NOT render online badge when isAuthorOnline is false (default)', () => {
+        renderWithContext(mockPost, mockUser);
+        expect(screen.queryByTestId('author-online-indicator')).not.toBeInTheDocument();
+    });
+
+    it('renders single image as full-width hero (collage-grid-1)', () => {
+        const postWithOneImage = {
+            ...mockPost,
+            mediaUrls: ['https://example.com/photo1.jpg']
+        };
+        renderWithContext(postWithOneImage, mockUser);
+        expect(screen.getByTestId('collage-grid-1')).toBeInTheDocument();
+    });
+
+    it('renders 2-image collage grid (collage-grid-2)', () => {
+        const postWithTwoImages = {
+            ...mockPost,
+            mediaUrls: [
+                'https://example.com/photo1.jpg',
+                'https://example.com/photo2.jpg'
+            ]
+        };
+        renderWithContext(postWithTwoImages, mockUser);
+        expect(screen.getByTestId('collage-grid-2')).toBeInTheDocument();
+    });
+
+    it('renders 3-image collage grid (collage-grid-3)', () => {
+        const postWithThreeImages = {
+            ...mockPost,
+            mediaUrls: [
+                'https://example.com/photo1.jpg',
+                'https://example.com/photo2.jpg',
+                'https://example.com/photo3.jpg'
+            ]
+        };
+        renderWithContext(postWithThreeImages, mockUser);
+        expect(screen.getByTestId('collage-grid-3')).toBeInTheDocument();
+    });
+
+    it('renders 4+ image collage with "+N more" overlay (collage-grid-4)', () => {
+        const postWithSixImages = {
+            ...mockPost,
+            mediaUrls: [
+                'https://example.com/photo1.jpg',
+                'https://example.com/photo2.jpg',
+                'https://example.com/photo3.jpg',
+                'https://example.com/photo4.jpg',
+                'https://example.com/photo5.jpg',
+                'https://example.com/photo6.jpg'
+            ]
+        };
+        renderWithContext(postWithSixImages, mockUser);
+        expect(screen.getByTestId('collage-grid-4')).toBeInTheDocument();
+        expect(screen.getByText('+2 more')).toBeInTheDocument();
+    });
+
+    it('opens lightbox with download button when clicking collage image', () => {
+        const postWithImage = {
+            ...mockPost,
+            mediaUrls: ['https://example.com/photo1.jpg']
+        };
+        renderWithContext(postWithImage, mockUser);
+        const cell = screen.getByTestId('collage-grid-1');
+        fireEvent.click(cell);
+        expect(screen.getByTestId('download-photo-btn')).toBeInTheDocument();
+    });
 });

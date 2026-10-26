@@ -129,6 +129,27 @@ export default function MediaLightbox({
 							}}
 						/>
 					)}
+					
+					<IconButton
+						aria-label="Download image"
+						component="a"
+						href={currentUrl}
+						download={`badminton-photo-${currentIndex + 1}.jpg`}
+						target="_blank"
+						rel="noopener noreferrer"
+						data-testid="download-photo-btn"
+						sx={{
+							color: "white",
+							bgcolor: "rgba(255, 255, 255, 0.1)",
+							"&:hover": { bgcolor: "rgba(255, 255, 255, 0.25)" },
+						}}
+					>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							<polyline points="7 10 12 15 17 10"></polyline>
+							<line x1="12" y1="15" x2="12" y2="3"></line>
+						</svg>
+					</IconButton>
 					<IconButton
 						aria-label="Close fullscreen gallery"
 						onClick={onClose}

@@ -15,6 +15,7 @@ import {
 	CardActions,
 	Avatar,
 	AvatarGroup,
+	Badge,
 	IconButton,
 	Menu,
 	MenuItem,
@@ -62,7 +63,7 @@ import {
 } from "./Icons";
 
 // eslint-disable-next-line no-unused-vars
-export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false }) {
+export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false, isAuthorOnline = false }) {
 	const navigate = useNavigate();
 	const currentUser = propUser || (typeof window !== "undefined" && localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null);
 	const currentUserId = currentUser?.id || currentUser?._id;
@@ -486,7 +487,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		"&:hover": { backgroundColor: "rgba(0,0,0,0.04)" },
 		"&:active": { transform: "scale(0.95)" },
 	};
-	const images = localPost.imageUrls?.length > 0 ? localPost.imageUrls : (localPost.imageUrl ? [localPost.imageUrl] : []);
+	const images = localPost.imageUrls?.length > 0
+		? localPost.imageUrls
+		: (localPost.mediaUrls?.length > 0
+			? localPost.mediaUrls
+			: (localPost.imageUrl ? [localPost.imageUrl] : []));
 	const [activeLightboxIndex, setActiveLightboxIndex] = useState(0);
 
 	const handleDragEnd = (event, info) => {
@@ -582,34 +587,66 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						mb: 2,
 					}}
 				>
-					<Avatar
-						src={localPost.authorPic}
-						alt={localPost.authorName || "Post author"}
-						role="link"
-						tabIndex={0}
-						aria-label={`View ${localPost.authorName || "author"}'s profile`}
-						onClick={() =>
-							localPost.authorId && navigate(`/profile/${localPost.authorId}`)
-						}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								localPost.authorId && navigate(`/profile/${localPost.authorId}`);
-							}
-						}}
+					<Badge
+						overlap="circular"
+						anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+						variant="dot"
+						invisible={!isAuthorOnline}
+						data-testid={isAuthorOnline ? "author-online-indicator" : undefined}
 						sx={{
-							bgcolor: "secondary.main",
-							color: "primary.main",
-							fontWeight: "bold",
-							cursor: "pointer",
-							"&:active": { transform: "scale(0.95)" },
+							'& .MuiBadge-badge': {
+								backgroundColor: '#44b700',
+								color: '#44b700',
+								boxShadow: '0 0 0 2px #fff',
+								'&::after': {
+									position: 'absolute',
+									top: 0,
+									left: 0,
+									width: '100%',
+									height: '100%',
+									borderRadius: '50%',
+									animation: 'onlineRipple 1.4s infinite ease-in-out',
+									border: '1px solid currentColor',
+									content: '""',
+								},
+							},
+							'@keyframes onlineRipple': {
+								'0%': { transform: 'scale(.8)', opacity: 1 },
+								'100%': { transform: 'scale(2.4)', opacity: 0 },
+							},
 						}}
 					>
-						{!localPost.authorPic &&
-							(localPost.authorName
-								? localPost.authorName?.charAt(0).toUpperCase()
-								: "?")}
-					</Avatar>
+						<Avatar
+							src={localPost.authorPic}
+							alt={localPost.authorName || "Post author"}
+							role="link"
+							tabIndex={0}
+							aria-label={`View ${localPost.authorName || "author"}'s profile`}
+							onClick={() =>
+								localPost.authorId && navigate(`/profile/${localPost.authorId}`)
+							}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									localPost.authorId && navigate(`/profile/${localPost.authorId}`);
+								}
+							}}
+							sx={{
+								width: compact ? 34 : 42,
+								height: compact ? 34 : 42,
+								bgcolor: "secondary.main",
+								color: "primary.main",
+								fontWeight: "bold",
+								cursor: "pointer",
+								"&:active": { transform: "scale(0.95)" },
+							}}
+						>
+							{!localPost.authorPic &&
+								(localPost.authorName
+									? localPost.authorName?.charAt(0).toUpperCase()
+									: "?")}
+						</Avatar>
+					</Badge>
 					<Box sx={{ flexGrow: 1 }}>
 						<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
 							{localPost.category && (
@@ -1209,45 +1246,42 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
                         )}
 
 						{images.length === 1 && (
-							<>
-								<Box 
-									role="button"
-									tabIndex={0}
-									aria-label="View post image in fullscreen preview"
-									onClick={() => { setActiveLightboxIndex(0); setIsLightboxOpen(true); }}
-									onKeyDown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											setActiveLightboxIndex(0);
-											setIsLightboxOpen(true);
-										}
-									}}
-									sx={{ 
-										mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 400, 
-										cursor: "pointer", position: "relative",
-										'&::after': {
-											content: '""', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-											background: 'rgba(0,0,0,0)', transition: 'background 0.2s',
-										},
-										'&:hover::after': { background: 'rgba(0,0,0,0.1)' }
-									}}
-								>
-									<img 
-										src={images[0]} 
-										alt="Post attachment" 
-										style={{ width: "100%", height: "100%", objectFit: "cover" }} 
-									/>
-								</Box>
-							</>
+							<Box 
+								data-testid="collage-grid-1"
+								role="button"
+								tabIndex={0}
+								aria-label="View post image in fullscreen preview"
+								onClick={() => { setActiveLightboxIndex(0); setIsLightboxOpen(true); }}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										setActiveLightboxIndex(0);
+										setIsLightboxOpen(true);
+									}
+								}}
+								sx={{ 
+									mt: 2, borderRadius: 3, overflow: "hidden", maxHeight: 420, 
+									cursor: "pointer", position: "relative",
+									'&:hover img': { transform: 'scale(1.02)' }
+								}}
+							>
+								<img 
+									src={images[0]} 
+									alt="Post attachment" 
+									style={{ width: "100%", height: "100%", maxHeight: 420, objectFit: "cover", transition: "transform 0.3s ease" }} 
+								/>
+							</Box>
 						)}
 
-						{images.length > 1 && (
-							<Box sx={{
-								mt: 2, display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', gap: 1, pb: 1,
-								'&::-webkit-scrollbar': { height: 6 },
-								'&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 3 }
-							}}>
-								{images.map((url, i) => (
+						{images.length === 2 && (
+							<Box 
+								data-testid="collage-grid-2"
+								sx={{ 
+									mt: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, 
+									borderRadius: 3, overflow: "hidden", height: { xs: 200, sm: 260 } 
+								}}
+							>
+								{images.slice(0, 2).map((url, i) => (
 									<Box 
 										key={i}
 										role="button"
@@ -1261,23 +1295,103 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												setIsLightboxOpen(true);
 											}
 										}}
-										sx={{ 
-											scrollSnapAlign: 'center', width: '85%', flexShrink: 0,
-											borderRadius: 3, overflow: "hidden", maxHeight: 400, cursor: "pointer", position: "relative",
-											'&::after': {
-												content: '""', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-												background: 'rgba(0,0,0,0)', transition: 'background 0.2s',
-											},
-											'&:hover::after': { background: 'rgba(0,0,0,0.1)' }
-										}}
+										sx={{ width: '100%', height: '100%', overflow: 'hidden', cursor: 'pointer', position: 'relative', '&:hover img': { transform: 'scale(1.03)' } }}
 									>
-										<img 
-											src={url} 
-											alt={`Post attachment ${i+1}`} 
-											style={{ width: "100%", height: "100%", objectFit: "cover" }} 
-										/>
+										<img src={url} alt={`Post attachment ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }} />
 									</Box>
 								))}
+							</Box>
+						)}
+
+						{images.length === 3 && (
+							<Box 
+								data-testid="collage-grid-3"
+								sx={{ 
+									mt: 2, display: 'grid', gridTemplateColumns: '2fr 1fr', gridTemplateRows: '1fr 1fr', gap: 1, 
+									borderRadius: 3, overflow: "hidden", height: { xs: 220, sm: 300 } 
+								}}
+							>
+								<Box 
+									role="button"
+									tabIndex={0}
+									aria-label="View post image 1 in fullscreen preview"
+									onClick={() => { setActiveLightboxIndex(0); setIsLightboxOpen(true); }}
+									onKeyDown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											setActiveLightboxIndex(0);
+											setIsLightboxOpen(true);
+										}
+									}}
+									sx={{ gridRow: 'span 2', width: '100%', height: '100%', overflow: 'hidden', cursor: 'pointer', '&:hover img': { transform: 'scale(1.03)' } }}
+								>
+									<img src={images[0]} alt="Post attachment 1" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }} />
+								</Box>
+								{images.slice(1, 3).map((url, i) => (
+									<Box 
+										key={i + 1}
+										role="button"
+										tabIndex={0}
+										aria-label={`View post image ${i + 2} in fullscreen preview`}
+										onClick={() => { setActiveLightboxIndex(i + 1); setIsLightboxOpen(true); }}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												setActiveLightboxIndex(i + 1);
+												setIsLightboxOpen(true);
+											}
+										}}
+										sx={{ width: '100%', height: '100%', overflow: 'hidden', cursor: 'pointer', '&:hover img': { transform: 'scale(1.03)' } }}
+									>
+										<img src={url} alt={`Post attachment ${i + 2}`} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }} />
+									</Box>
+								))}
+							</Box>
+						)}
+
+						{images.length >= 4 && (
+							<Box 
+								data-testid="collage-grid-4"
+								sx={{ 
+									mt: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 1, 
+									borderRadius: 3, overflow: "hidden", height: { xs: 240, sm: 320 } 
+								}}
+							>
+								{images.slice(0, 4).map((url, i) => {
+									const isFourth = i === 3;
+									const extraCount = images.length - 4;
+									return (
+										<Box 
+											key={i}
+											role="button"
+											tabIndex={0}
+											aria-label={`View post image ${i + 1} in fullscreen preview`}
+											onClick={() => { setActiveLightboxIndex(i); setIsLightboxOpen(true); }}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													setActiveLightboxIndex(i);
+													setIsLightboxOpen(true);
+												}
+											}}
+											sx={{ width: '100%', height: '100%', overflow: 'hidden', cursor: 'pointer', position: 'relative', '&:hover img': { transform: 'scale(1.03)' } }}
+										>
+											<img src={url} alt={`Post attachment ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s ease' }} />
+											{isFourth && extraCount > 0 && (
+												<Box 
+													sx={{ 
+														position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+														bgcolor: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(3px)',
+														display: 'flex', alignItems: 'center', justifyContent: 'center',
+														color: 'white', fontWeight: 900, fontSize: '1.4rem' 
+													}}
+												>
+													+{extraCount} more
+												</Box>
+											)}
+										</Box>
+									);
+								})}
 							</Box>
 						)}
 

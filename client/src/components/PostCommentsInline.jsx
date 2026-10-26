@@ -298,7 +298,7 @@ export default function PostCommentsInline({
 
 			{/* TYPING INDICATOR */}
 			{typingUsers.size > 0 && (
-				<Typography variant="caption" color="text.primary" sx={{ ml: 6, fontStyle: "italic", mb: 0.5, display: "block" }}>
+				<Typography variant="caption" color="text.primary" data-testid="live-typing-indicator" sx={{ ml: 6, fontStyle: "italic", mb: 0.5, display: "block" }}>
 					{Array.from(typingUsers).join(", ")} {typingUsers.size === 1 ? "is" : "are"} typing...
 				</Typography>
 			)}
