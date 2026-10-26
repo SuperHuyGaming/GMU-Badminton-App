@@ -22,6 +22,12 @@ import {
 	Collapse,
 	Chip,
 	Tooltip,
+	Dialog,
+	DialogTitle,
+	DialogContent,
+	DialogActions,
+	FormControl,
+	Select,
 } from "@mui/material";
 
 // Badminton Reaction Trio
@@ -66,6 +72,39 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
+
+	const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+	const [reportReason, setReportReason] = useState("spam_advertising");
+	const [reportDetails, setReportDetails] = useState("");
+	const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+	const [hasReportedPost, setHasReportedPost] = useState(false);
+
+	const handleSubmitReport = async () => {
+		if (!currentUser) return;
+		setIsSubmittingReport(true);
+		try {
+			const res = await apiFetch(`/api/forum/${localPost._id}/report`, {
+				method: "POST",
+				body: JSON.stringify({
+					reason: reportReason,
+					details: reportDetails,
+				}),
+			});
+			const data = await res?.json().catch(() => ({}));
+			if (res && res.ok) {
+				toast.success("Report submitted. Thank you for keeping the community safe.");
+				setHasReportedPost(true);
+				setIsReportDialogOpen(false);
+				setReportDetails("");
+			} else {
+				toast.error(data?.message || "Failed to submit report.");
+			}
+		} catch {
+			toast.error("Network error submitting report.");
+		} finally {
+			setIsSubmittingReport(false);
+		}
+	};
 
 	const [likesModal, setLikesModal] = useState({
 		open: false,
@@ -346,8 +385,21 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	};
 
 	const handleShare = async (e) => {
-		e.stopPropagation();
-		const shareUrl = `${window.location.origin}/forum?postId=${localPost._id}`;
+		e?.stopPropagation();
+		const shareUrl = `${window.location.origin}/community#post-${localPost._id}`;
+		if (navigator.share && (typeof navigator.canShare !== "function" || navigator.canShare({ url: shareUrl }))) {
+			try {
+				await navigator.share({
+					title: localPost.title || "Mason Badminton Connect",
+					text: `Check out "${localPost.title}" by ${localPost.authorName || 'a club member'} on GMU Badminton Connect!`,
+					url: shareUrl,
+				});
+				toast.success("Shared successfully! 🏸");
+				return;
+			} catch (err) {
+				if (err.name === "AbortError") return;
+			}
+		}
 		if (navigator.clipboard) {
 			await navigator.clipboard.writeText(shareUrl);
 			toast.success("Post link copied to clipboard! 📋");
@@ -600,6 +652,45 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								style={{ cursor: "pointer", display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 'bold' }}
 							>
 								{localPost.authorName || "Unknown"}
+								{localPost.authorRole === "admin" && (
+									<Chip
+										label="Club Exec"
+										size="small"
+										sx={{
+											height: 20,
+											fontSize: "0.65rem",
+											fontWeight: "bold",
+											bgcolor: "secondary.main",
+											color: "secondary.contrastText",
+											borderRadius: 1,
+											ml: 0.5,
+										}}
+									/>
+								)}
+								{localPost.authorStreak > 0 && (
+									<Chip
+										label={`⚡ ${localPost.authorStreak} Streak`}
+										size="small"
+										sx={{
+											height: 20,
+											fontSize: "0.65rem",
+											fontWeight: "bold",
+											bgcolor: "warning.main",
+											color: "#000",
+											borderRadius: 1,
+											ml: 0.5,
+										}}
+									/>
+								)}
+								{(hasReportedPost || localPost.reports?.some(r => String(r.reportedBy?._id || r.reportedBy) === String(currentUserId))) && (
+									<Chip
+										label="Reported"
+										size="small"
+										variant="outlined"
+										color="warning"
+										sx={{ height: 20, fontSize: "0.65rem", borderRadius: 1, ml: 0.5 }}
+									/>
+								)}
 								{localPost.authorBadges?.includes("top_contributor") && (
 									<Chip 
 										label="Top Contributor" 
@@ -629,8 +720,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					</Box>
 
 					{/* 3 DOTS MENU */}
-					{(String(currentUserId) === String(localPost.authorId) ||
-						currentUser?.role === "admin") && (
+					{Boolean(currentUser) && (
 						<Box>
 							<IconButton
 								aria-label="More options"
@@ -680,20 +770,46 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										{localPost.isPinned ? "📍 Unpin Megathread" : "📌 Pin Megathread"}
 									</MenuItem>
 								)}
+								{(String(currentUserId) === String(localPost.authorId) || currentUser?.role === "admin") && (
+									<MenuItem
+										onClick={() => {
+											setDeleteConfirmOpen(true);
+											setAnchorEl(null);
+										}}
+										sx={{
+											color: "error.main",
+											fontWeight: "bold",
+											fontSize: "0.9rem",
+										}}
+									>
+										🗑 Delete Post
+									</MenuItem>
+								)}
 								<MenuItem
-									onClick={() => {
-										setDeleteConfirmOpen(true);
+									onClick={(e) => {
+										handleShare(e);
 										setAnchorEl(null);
 									}}
-									sx={{
-										color: "error.main",
-										fontWeight: "bold",
-										fontSize: "0.9rem",
-									}}
+									sx={{ fontWeight: "bold", fontSize: "0.9rem" }}
 								>
-									🗑 Delete Post
+									🔗 Share Post
 								</MenuItem>
-							</Menu>
+								{String(currentUserId) !== String(localPost.authorId) && (
+									<MenuItem
+										onClick={() => {
+											setIsReportDialogOpen(true);
+											setAnchorEl(null);
+										}}
+										sx={{
+											fontWeight: "bold",
+											fontSize: "0.9rem",
+											color: "error.main",
+										}}
+									>
+										🚩 Report Post
+									</MenuItem>
+								)}
+								</Menu>
 						</Box>
 					)}
 				</Box>
@@ -1469,6 +1585,66 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					openLikes={openLikes}
 				/>
 			</Collapse>
+
+			{/* REPORT POST DIALOG */}
+			<Dialog
+				open={isReportDialogOpen}
+				onClose={() => setIsReportDialogOpen(false)}
+				maxWidth="xs"
+				fullWidth
+				slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
+			>
+				<DialogTitle sx={{ fontWeight: "bold", pb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+					<span style={{ fontSize: "1.2rem" }}>🚩</span> Report Community Post
+				</DialogTitle>
+				<DialogContent>
+					<Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+						Help keep our badminton community safe, fair, and welcoming. Please select the primary reason for reporting this post.
+					</Typography>
+					<FormControl fullWidth size="small" sx={{ mb: 2 }}>
+						<Select
+							value={reportReason}
+							onChange={(e) => setReportReason(e.target.value)}
+							sx={{ borderRadius: 2 }}
+							inputProps={{ "aria-label": "Select report reason" }}
+						>
+							<MenuItem value="spam_advertising">Spam, advertising, or unsolicited promotion</MenuItem>
+							<MenuItem value="harassment_toxicity">Harassment, hate speech, or toxic conduct</MenuItem>
+							<MenuItem value="misinformation">False match score or deceptive tournament info</MenuItem>
+							<MenuItem value="inappropriate_content">Inappropriate, vulgar, or offensive media</MenuItem>
+							<MenuItem value="other">Other community guideline violation</MenuItem>
+						</Select>
+					</FormControl>
+					<TextField
+						fullWidth
+						size="small"
+						multiline
+						rows={3}
+						placeholder="Additional context or details (optional)..."
+						value={reportDetails}
+						onChange={(e) => setReportDetails(e.target.value)}
+						slotProps={{ htmlInput: { "aria-label": "Additional report details" } }}
+						sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+					/>
+				</DialogContent>
+				<DialogActions sx={{ px: 3, pb: 2 }}>
+					<Button
+						onClick={() => setIsReportDialogOpen(false)}
+						sx={{ borderRadius: 2, textTransform: "none", color: "text.secondary" }}
+					>
+						Cancel
+					</Button>
+					<Button
+						variant="contained"
+						color="error"
+						onClick={handleSubmitReport}
+						disabled={isSubmittingReport}
+						sx={{ borderRadius: 2, textTransform: "none", fontWeight: "bold" }}
+					>
+						{isSubmittingReport ? "Submitting..." : "Submit Report"}
+					</Button>
+				</DialogActions>
+			</Dialog>
 
 			{/* IMPORTED DELETE CONFIRMATION */}
 			<ConfirmDeleteDialog

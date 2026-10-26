@@ -101,6 +101,7 @@ likedBy: { type: [String], default: [] },
 		{
 			reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 			reason: { type: String, trim: true, default: 'Spam/Abuse' },
+			details: { type: String, trim: true, default: '' },
 			timestamp: { type: Date, default: Date.now }
 		}
 	],
@@ -127,6 +128,16 @@ likedBy: { type: [String], default: [] },
 			timestamp: { type: Date, default: Date.now },
 			likedBy: { type: [String], default: [] },
 			isEdited: { type: Boolean, default: false }, // NEW: Track comment edits
+			isFlagged: { type: Boolean, default: false },
+			reportCount: { type: Number, default: 0 },
+			reports: [
+				{
+					reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+					reason: { type: String, trim: true, default: 'Spam/Abuse' },
+					details: { type: String, trim: true, default: '' },
+					timestamp: { type: Date, default: Date.now },
+				},
+			],
 			replies: [
 				{
 					authorId: String,
@@ -135,6 +146,16 @@ likedBy: { type: [String], default: [] },
 					timestamp: { type: Date, default: Date.now },
 					likedBy: { type: [String], default: [] },
 					isEdited: { type: Boolean, default: false }, // NEW: Track reply edits
+					isFlagged: { type: Boolean, default: false },
+					reportCount: { type: Number, default: 0 },
+					reports: [
+						{
+							reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+							reason: { type: String, trim: true, default: 'Spam/Abuse' },
+							details: { type: String, trim: true, default: '' },
+							timestamp: { type: Date, default: Date.now },
+						},
+					],
 				},
 			],
 		},
@@ -204,6 +225,8 @@ PostSchema.post('save', async function(doc) {
 				authorProfilePic: author?.profilePic,
 				authorSkillLevel: author?.skillLevel,
 				authorBadges: author?.badges || [],
+				authorRole: author?.role || "user",
+				authorStreak: author?.stats?.winStreak || 0,
 				title: doc.title,
 				content: doc.content,
 				image: doc.imageUrl,

@@ -67,6 +67,7 @@ export default function CommentThread({
 			<CommentBubble
 				comment={comment}
 				localPostId={localPost._id}
+				postAuthorId={localPost.authorId}
 				currentUser={currentUser}
 				highlightId={highlightId}
 				openLikes={openLikes}
@@ -119,6 +120,7 @@ export default function CommentThread({
 						reply={reply}
 						commentId={comment._id}
 						localPostId={localPost._id}
+				postAuthorId={localPost.authorId}
 						currentUser={currentUser}
 						highlightId={highlightId}
 						openLikes={openLikes}

@@ -11,14 +11,18 @@ import {
 	IconButton,
 	Menu,
 	MenuItem,
+	Chip,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { MoreVertIcon } from "../Icons";
+import apiFetch from "../../utils/api";
+import { toast } from "react-hot-toast";
 
 export default function ReplyBubble({
 	reply,
 	commentId,
 	localPostId,
+	postAuthorId,
 	currentUser,
 	highlightId,
 	openLikes,
@@ -136,6 +140,54 @@ export default function ReplyBubble({
 							sx={{ fontSize: "0.8rem", ...clickableStyle }}
 						>
 							{reply.authorName}
+							{String(reply.authorId) === String(postAuthorId) && (
+								<Chip
+									label="OP"
+									size="small"
+									sx={{
+										height: 16,
+										fontSize: "0.6rem",
+										fontWeight: "900",
+										bgcolor: "primary.main",
+										color: "primary.contrastText",
+										borderRadius: "4px",
+										px: 0.2,
+										ml: 0.5,
+									}}
+								/>
+							)}
+							{(reply.authorRole === "admin" || reply.authorBadges?.includes("club_executive")) && (
+								<Chip
+									label="Club Exec"
+									size="small"
+									sx={{
+										height: 16,
+										fontSize: "0.6rem",
+										fontWeight: "bold",
+										bgcolor: "secondary.main",
+										color: "secondary.contrastText",
+										borderRadius: "4px",
+										px: 0.2,
+										ml: 0.5,
+									}}
+								/>
+							)}
+							{reply.authorBadges?.includes("tournament_director") && (
+								<Chip
+									label="TD"
+									size="small"
+									sx={{
+										height: 16,
+										fontSize: "0.6rem",
+										fontWeight: "bold",
+										bgcolor: "info.main",
+										color: "info.contrastText",
+										borderRadius: "4px",
+										px: 0.2,
+										ml: 0.5,
+									}}
+								/>
+							)}
 							{reply.isEdited && (
 								<Typography
 									component="span"
@@ -152,8 +204,7 @@ export default function ReplyBubble({
 							)}
 						</Typography>
 
-						{(currentUser?.id === reply.authorId ||
-							currentUser?.role === "admin") && (
+						{Boolean(currentUser) && (
 							<IconButton
 								aria-label="Reply options"
 								size="small"
@@ -291,19 +342,62 @@ export default function ReplyBubble({
 							✎ Edit
 						</MenuItem>
 					)}
+					{(currentUser?.id === reply.authorId || currentUser?.role === "admin") && (
+						<MenuItem
+							onClick={() => {
+								promptDelete();
+								closeMenu();
+							}}
+							sx={{
+								fontSize: "0.875rem",
+								color: "error.main",
+								fontWeight: "bold",
+							}}
+						>
+							🗑 Delete
+						</MenuItem>
+					)}
 					<MenuItem
 						onClick={() => {
-							promptDelete();
+							const link = `${window.location.origin}/community?postId=${localPostId}&highlight=${reply._id}#comment-${reply._id}`;
+							if (navigator.clipboard) {
+								navigator.clipboard.writeText(link);
+								toast.success("Reply link copied! 📋");
+							}
 							closeMenu();
 						}}
-						sx={{
-							fontSize: "0.875rem",
-							color: "error.main",
-							fontWeight: "bold",
-						}}
+						sx={{ fontSize: "0.875rem", fontWeight: "bold" }}
 					>
-						🗑 Delete
+						📋 Copy Link
 					</MenuItem>
+					{currentUser && currentUser.id !== reply.authorId && (
+						<MenuItem
+							onClick={async () => {
+								closeMenu();
+								try {
+									const res = await apiFetch(`/api/forum/${localPostId}/comments/${commentId}/replies/${reply._id}/report`, {
+										method: "POST",
+										body: JSON.stringify({ reason: "Inappropriate or Offensive" }),
+									});
+									const data = await res?.json().catch(() => ({}));
+									if (res && res.ok) {
+										toast.success("Reply reported. Thank you for keeping our community safe.");
+									} else {
+										toast.error(data?.message || "Failed to report reply.");
+									}
+								} catch {
+									toast.error("Network error reporting reply.");
+								}
+							}}
+							sx={{
+								fontSize: "0.875rem",
+								color: "error.main",
+								fontWeight: "bold",
+							}}
+						>
+							🚩 Report Reply
+						</MenuItem>
+					)}
 				</Menu>
 
 				<Box sx={{ display: "flex", gap: 2, ml: 1, mt: 0.5 }}>
