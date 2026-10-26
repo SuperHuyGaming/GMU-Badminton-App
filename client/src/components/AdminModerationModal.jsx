@@ -77,6 +77,7 @@ export default function AdminModerationModal({ open, onClose, onPostResolved }) 
 			onClose={onClose}
 			maxWidth="md"
 			fullWidth
+			aria-labelledby="moderation-queue-dialog-title"
 			slotProps={{
 				paper: {
 					sx: {
@@ -87,7 +88,7 @@ export default function AdminModerationModal({ open, onClose, onPostResolved }) 
 				},
 			}}
 		>
-			<DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
+			<DialogTitle id="moderation-queue-dialog-title" sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
 				<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
 					<ShieldIcon color="error" sx={{ fontSize: 28 }} />
 					<Box>
