@@ -14,6 +14,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import PostCard from "../components/PostCard";
+import AdminModerationModal from "../components/AdminModerationModal";
 import socket from "../utils/socket";
 // eslint-disable-next-line no-unused-vars
 import { useNavigate, useParams, useLocation } from "react-router-dom";
@@ -116,6 +117,8 @@ export default function Forum() {
  // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
 	const [selectedCategory, setSelectedCategory] = useState("all");
+	const currentUserRef = useRef(currentUser);
+	useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 	const selectedCategoryRef = useRef(selectedCategory);
 	useEffect(() => {
 		selectedCategoryRef.current = selectedCategory;
@@ -179,6 +182,7 @@ export default function Forum() {
 	}, [routePostId, location.search, location.hash, feed.length, isLoading]);
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [isModQueueOpen, setIsModQueueOpen] = useState(false);
 	const defaultNewPost = {
 		title: "",
 		content: "",
@@ -236,6 +240,10 @@ export default function Forum() {
 	}, [newPost]);
 
 	const handleOpenCreatePost = () => {
+		if (!currentUser) {
+			toast.error("Please log in to create a post.");
+			return;
+		}
 		if (!newPost.title && !newPost.content && typeof window !== 'undefined') {
 			try {
 				const saved = sessionStorage.getItem("mbc_community_post_draft");
@@ -439,6 +447,11 @@ export default function Forum() {
 			if (!matchesCategory(post, selectedCategoryRef.current)) return;
 			const alreadyInFeed = feedRef.current.some(p => p._id === post._id || p.referenceId === post._id);
 			if (alreadyInFeed) return;
+			const isAuthor = currentUserRef.current && String(post.authorId) === String(currentUserRef.current.id || currentUserRef.current._id);
+			if (isAuthor) {
+				setFeed(prev => [{ ...post, type: post.type || 'post' }, ...prev.filter(p => (p._id || p.referenceId) !== post._id)]);
+				return;
+			}
 			setNewPostsQueue(q => {
 				if (q.some(p => p._id === post._id || p.referenceId === post._id)) return q;
 				return [{ ...post, type: post.type || 'post' }, ...q];
@@ -506,7 +519,7 @@ export default function Forum() {
 				const formData = new FormData();
 				postImages.forEach(file => formData.append("images", file));
 				formData.append("type", "postAttachment");
-				formData.append("userId", currentUser.id);
+				formData.append("userId", currentUser.id || currentUser._id);
 
 				const uploadRes = await apiFetch("/api/upload/images", { method: "POST", body: formData });
 				const uploadData = await uploadRes.json();
@@ -540,8 +553,8 @@ export default function Forum() {
 					} : undefined,
 					imageUrl: finalImageUrls[0] || "",
 					imageUrls: finalImageUrls,
-					authorName: currentUser.name,
-					authorId: currentUser.id,
+					authorName: currentUser.name || "Member",
+					authorId: currentUser.id || currentUser._id,
 					tags: newPost.tags,
 					visibility: newPost.visibility || 'PUBLIC',
 					isPinned: Boolean(newPost.isPinned),
@@ -558,8 +571,8 @@ export default function Forum() {
 			setIsModalOpen(false);
 			if (typeof window !== "undefined") sessionStorage.removeItem("mbc_community_post_draft");
 			toast.success("Post created successfully!");
-			setPage(1);
-			setFeed([]);
+			tabsCacheRef.current = {};
+			setFeed(prev => [data, ...prev.filter(p => (p._id || p.referenceId) !== data._id)]);
 		} catch (error) {
 			setIsUploadingImage(false);
 			console.error("Failed to post", error);
@@ -599,6 +612,24 @@ export default function Forum() {
 						Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
 					</Typography>
 				</Box>
+				<Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+					{currentUser?.role === 'admin' && (
+						<Button
+							variant="outlined"
+							color="error"
+							onClick={() => setIsModQueueOpen(true)}
+							data-testid="admin-moderation-queue-btn"
+							sx={{
+								borderRadius: 2.5,
+								fontWeight: 'bold',
+								textTransform: 'none',
+								px: 2,
+								py: 1,
+							}}
+						>
+							🛡️ Moderation Queue
+						</Button>
+					)}
 				<Button
 					variant="contained"
 					color="primary"
@@ -615,6 +646,7 @@ export default function Forum() {
 				>
 					✍️ Create New Post
 				</Button>
+				</Box>
 			</Box>
 
 			{/* TABS NAVIGATION */}
@@ -1176,6 +1208,7 @@ export default function Forum() {
 						// Post items (either type === 'post' or standard Post objects from real-time events)
 						const mockPost = {
 							_id: item.referenceId || item._id,
+							referenceId: item.referenceId,
 							title: item.title,
 							content: item.content,
 							category: item.category || 'general',
@@ -1798,6 +1831,16 @@ export default function Forum() {
 				</IconButton>
 			)}
 
+		
+			<AdminModerationModal
+				open={isModQueueOpen}
+				onClose={() => setIsModQueueOpen(false)}
+				onPostResolved={(postId, action) => {
+					if (action === "delete" || action === "quarantine") {
+						setFeed((prev) => prev.filter((p) => (p._id || p.referenceId) !== postId));
+					}
+				}}
+			/>
 		</Box>
 	);
 }
