@@ -612,7 +612,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		}
 
 		let cleanMatchDetails = undefined;
-		if (matchDetails && typeof matchDetails === "object") {
+		if (matchDetails && typeof matchDetails === "object" && cleanCategory === 'match_result') {
 			cleanMatchDetails = {
 				partner: matchDetails.partner ? xss(String(matchDetails.partner).trim()).slice(0, 100) : "",
 				opponents: parseOpponents(matchDetails.opponents),
@@ -645,10 +645,10 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		const toxicityScore = spamEvaluation.score || aiAnalysis.score || 0;
 
 		const authorInfo = { userId: authorId, userName: authorName, avatarUrl: req.user.profilePic || "" };
-		const cleanPlayerMatchmaking = parsePlayerMatchmaking(playerMatchmaking);
-		const cleanChallengeMatch = parseChallengeMatch(challengeMatch, authorInfo);
-		const cleanQaDetails = parseQaDetails(qaDetails);
-		const cleanGearDetails = parseGearDetails(gearDetails);
+		const cleanPlayerMatchmaking = (cleanCategory === 'find_partner' || cleanCategory === 'meetup_rally') ? parsePlayerMatchmaking(playerMatchmaking) : undefined;
+		const cleanChallengeMatch = cleanCategory === 'challenge_match' ? parseChallengeMatch(challengeMatch, authorInfo) : undefined;
+		const cleanQaDetails = cleanCategory === 'qa_forum' ? parseQaDetails(qaDetails) : undefined;
+		const cleanGearDetails = (cleanCategory === 'gear_exchange' || cleanCategory === 'gear_review') ? parseGearDetails(gearDetails) : undefined;
 
 		const newPost = new Post({
 			title: cleanTitle,
