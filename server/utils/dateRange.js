@@ -3,14 +3,17 @@
  */
 
 const parseDateRange = (query = {}) => {
-	const q = query || {};
-	const { dateRange, startDate, endDate, from, to } = q;
+	const q = typeof query === "string" ? { dateRange: query } : (query || {});
+	const dateRangeVal = Array.isArray(q.dateRange) ? q.dateRange[0] : q.dateRange;
+	const customStart = Array.isArray(q.startDate || q.from) ? (q.startDate || q.from)[0] : (q.startDate || q.from);
+	const customEnd = Array.isArray(q.endDate || q.to) ? (q.endDate || q.to)[0] : (q.endDate || q.to);
+
 	let start = null;
 	let end = null;
 	const now = new Date();
 
-	if (dateRange && typeof dateRange === "string") {
-		const range = dateRange.toLowerCase().trim();
+	if (dateRangeVal && typeof dateRangeVal === "string") {
+		const range = dateRangeVal.toLowerCase().trim();
 		if (range === "today") {
 			start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 			end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -24,10 +27,12 @@ const parseDateRange = (query = {}) => {
 		}
 	}
 
-	const customStart = startDate || from;
-	const customEnd = endDate || to;
-
-	if (customStart && typeof customStart === "string") {
+	if (customStart instanceof Date) {
+		if (!isNaN(customStart.getTime())) start = new Date(customStart.getTime());
+	} else if (typeof customStart === "number") {
+		const dt = new Date(customStart);
+		if (!isNaN(dt.getTime())) start = dt;
+	} else if (customStart && typeof customStart === "string") {
 		const trimmed = customStart.trim();
 		if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
 			const [y, m, d] = trimmed.split("-").map(Number);
@@ -40,7 +45,13 @@ const parseDateRange = (query = {}) => {
 			}
 		}
 	}
-	if (customEnd && typeof customEnd === "string") {
+
+	if (customEnd instanceof Date) {
+		if (!isNaN(customEnd.getTime())) end = new Date(customEnd.getTime());
+	} else if (typeof customEnd === "number") {
+		const dt = new Date(customEnd);
+		if (!isNaN(dt.getTime())) end = dt;
+	} else if (customEnd && typeof customEnd === "string") {
 		const trimmed = customEnd.trim();
 		if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
 			const [y, m, d] = trimmed.split("-").map(Number);

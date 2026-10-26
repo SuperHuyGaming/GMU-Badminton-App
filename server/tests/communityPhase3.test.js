@@ -140,6 +140,32 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			expect(res.end.getHours()).toBe(23);
 			expect(res.end.getMinutes()).toBe(59);
 		});
+
+		it('supports Date objects and numeric timestamps as custom bounds', () => {
+			const startDateObj = new Date(2026, 9, 1, 0, 0, 0);
+			const endDateObj = new Date(2026, 9, 15, 23, 59, 59);
+			const resDates = parseDateRange({ startDate: startDateObj, endDate: endDateObj });
+			expect(resDates.start).toBeInstanceOf(Date);
+			expect(resDates.end).toBeInstanceOf(Date);
+			expect(resDates.start.getTime()).toBe(startDateObj.getTime());
+			expect(resDates.end.getTime()).toBe(endDateObj.getTime());
+
+			const resNum = parseDateRange({ from: startDateObj.getTime(), to: endDateObj.getTime() });
+			expect(resNum.start).toBeInstanceOf(Date);
+			expect(resNum.end).toBeInstanceOf(Date);
+			expect(resNum.start.getTime()).toBe(startDateObj.getTime());
+		});
+
+		it('supports direct string input and array dateRange parameters', () => {
+			const resStr = parseDateRange('today');
+			expect(resStr.start).toBeInstanceOf(Date);
+			expect(resStr.end).toBeInstanceOf(Date);
+			expect(resStr.start.getHours()).toBe(0);
+
+			const resArr = parseDateRange({ dateRange: ['this_week', 'month'] });
+			expect(resArr.start).toBeInstanceOf(Date);
+			expect(resArr.end).toBeInstanceOf(Date);
+		});
 	});
 
 	// ==========================================
@@ -451,6 +477,70 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 				.set('Authorization', `Bearer ${userToken}`);
 
 			expect(res.status).toBe(200);
+		});
+
+		it('searches by gearDetails.brand and gearDetails.gearType in feed and forum routes', async () => {
+			ActivityFeed.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+
+			const res = await request(app)
+				.get('/api/feed?tab=latest&search=Yonex')
+				.set('Authorization', `Bearer ${userToken}`);
+
+			expect(res.status).toBe(200);
+			const matchStage = ActivityFeed.find.mock.calls[0][0];
+			const searchClause = matchStage.$and.find(c => c.$or && c.$or.some(o => o['gearDetails.brand']));
+			expect(searchClause).toBeDefined();
+			expect(searchClause.$or.some(o => o['gearDetails.gearType'])).toBe(true);
+
+			// Check forum route as well
+			Post.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				skip: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+			const forumRes = await request(app)
+				.get('/api/forum?search=Yonex')
+				.set('Authorization', `Bearer ${userToken}`);
+			expect(forumRes.status).toBe(200);
+			const forumQuery = Post.find.mock.calls[0][0];
+			expect(forumQuery.$or.some(o => o['gearDetails.brand'])).toBe(true);
+		});
+
+		it('safely handles non-string search parameters without crashing with TypeError', async () => {
+			ActivityFeed.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+
+			// Object parameter: search[foo]=bar
+			const resObj = await request(app)
+				.get('/api/feed?tab=latest&search[foo]=bar')
+				.set('Authorization', `Bearer ${userToken}`);
+			expect(resObj.status).toBe(200);
+
+			// Duplicate query param (array): search=first&search=second
+			const resArr = await request(app)
+				.get('/api/feed?tab=latest&search=first&search=second')
+				.set('Authorization', `Bearer ${userToken}`);
+			expect(resArr.status).toBe(200);
+
+			// Forum route with object query param
+			Post.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				skip: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+			const resForumObj = await request(app)
+				.get('/api/forum?search[foo]=bar')
+				.set('Authorization', `Bearer ${userToken}`);
+			expect(resForumObj.status).toBe(200);
 		});
 	});
 });

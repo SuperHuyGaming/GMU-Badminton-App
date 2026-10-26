@@ -66,6 +66,10 @@ export default function Forum() {
 	const [customStartDate, setCustomStartDate] = useState("");
 	const [customEndDate, setCustomEndDate] = useState("");
 	const [feed, setFeed] = useState([]);
+	const feedRef = useRef(feed);
+	useEffect(() => {
+		feedRef.current = feed;
+	}, [feed]);
 	const [newPostsQueue, setNewPostsQueue] = useState([]);
 	const [bookmarkedPosts, setBookmarkedPosts] = useState(new Set());
 	const [page, setPage] = useState(1);
@@ -146,6 +150,7 @@ export default function Forum() {
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setDebouncedSearch(searchInput.trim());
+			setPage(1);
 		}, 250);
 		return () => clearTimeout(timer);
 	}, [searchInput]);
@@ -153,6 +158,9 @@ export default function Forum() {
 	// Global keyboard shortcuts: Press '/' or 'Cmd+K' / 'Ctrl+K' to quickly focus search
 	useEffect(() => {
 		const handleGlobalKeyDown = (e) => {
+			if (isModalOpen || document.querySelector('[role="dialog"]') || document.querySelector('.MuiDialog-root')) {
+				return;
+			}
 			if (
 				(e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
 				((e.metaKey || e.ctrlKey) && e.key === 'k')
@@ -163,7 +171,7 @@ export default function Forum() {
 		};
 		window.addEventListener('keydown', handleGlobalKeyDown);
 		return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-	}, []);
+	}, [isModalOpen]);
 
 	const handleSearchKeyDown = (e) => {
 		if (e.key === 'Enter') {
@@ -172,6 +180,14 @@ export default function Forum() {
 			setPage(1);
 			setFeed([]);
 			setNewPostsQueue([]);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			if (searchInput) {
+				setSearchInput('');
+				setDebouncedSearch('');
+				setPage(1);
+			}
+			searchInputRef.current?.blur();
 		}
 	};
 
@@ -179,6 +195,7 @@ export default function Forum() {
 	const sessionTimeRef = useRef(null);
 
 	useEffect(() => {
+		let isCancelled = false;
 		const fetchFeed = async () => {
 			const isFirstPage = page === 1;
 			if (isFirstPage) {
@@ -205,8 +222,9 @@ export default function Forum() {
 				const cursorQuery = cursorRef.current ? `&cursor=${cursorRef.current}` : "";
 				const sessionQuery = `&sessionTime=${sessionTimeRef.current}`;
 				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${catQuery}${searchQuery}${dateQuery}${cursorQuery}${sessionQuery}`);
-				if (res && res.ok) {
+				if (!isCancelled && res && res.ok) {
 					const data = await res.json();
+					if (isCancelled) return;
 					cursorRef.current = data.nextCursor;
 					setHasMore(!!data.nextCursor);
 					if (data.bookmarkedPosts) setBookmarkedPosts(new Set(data.bookmarkedPosts));
@@ -222,13 +240,20 @@ export default function Forum() {
 					}
 				}
 			} catch (e) {
-				console.error("Failed to load community feed", e);
+				if (!isCancelled) {
+					console.error("Failed to load community feed", e);
+				}
 			} finally {
-				setIsLoading(false);
-				setIsFetchingMore(false);
+				if (!isCancelled) {
+					setIsLoading(false);
+					setIsFetchingMore(false);
+				}
 			}
 		};
 		fetchFeed();
+		return () => {
+			isCancelled = true;
+		};
 	}, [tab, page, selectedTag, selectedCategory, debouncedSearch, dateRange, customStartDate, customEndDate]);
 
 	const displayedFeed = useMemo(() => {
@@ -248,6 +273,8 @@ export default function Forum() {
 				: (item.matchDetails?.opponents || "").toLowerCase();
 			const team1 = Array.isArray(item.team1) ? item.team1.join(" ").toLowerCase() : (typeof item.team1 === 'string' ? item.team1.toLowerCase() : "");
 			const team2 = Array.isArray(item.team2) ? item.team2.join(" ").toLowerCase() : (typeof item.team2 === 'string' ? item.team2.toLowerCase() : "");
+			const gearBrand = (item.gearDetails?.brand || "").toLowerCase();
+			const gearType = (item.gearDetails?.gearType || "").toLowerCase();
 			const tags = Array.isArray(item.tags) ? item.tags.join(" ").toLowerCase() : (typeof item.tags === 'string' ? item.tags.toLowerCase() : "");
 			return (
 				title.includes(q) ||
@@ -257,6 +284,8 @@ export default function Forum() {
 				court2.includes(q) ||
 				partner.includes(q) ||
 				opponents.includes(q) ||
+				gearBrand.includes(q) ||
+				gearType.includes(q) ||
 				team1.includes(q) ||
 				team2.includes(q) ||
 				tags.includes(q)
@@ -269,13 +298,11 @@ export default function Forum() {
 		const handleNewPost = (post) => {
 			if (!post || !post._id) return;
 			if (!matchesCategory(post, selectedCategoryRef.current)) return;
-			setFeed(prev => {
-				if (prev.find(p => p._id === post._id || p.referenceId === post._id)) return prev;
-				setNewPostsQueue(q => {
-					if (q.find(p => p._id === post._id || p.referenceId === post._id)) return q;
-					return [{ ...post, type: post.type || 'post' }, ...q];
-				});
-				return prev;
+			const alreadyInFeed = feedRef.current.some(p => p._id === post._id || p.referenceId === post._id);
+			if (alreadyInFeed) return;
+			setNewPostsQueue(q => {
+				if (q.some(p => p._id === post._id || p.referenceId === post._id)) return q;
+				return [{ ...post, type: post.type || 'post' }, ...q];
 			});
 		};
 
@@ -804,10 +831,6 @@ export default function Forum() {
                             <Skeleton variant="rounded" height={100} sx={{ borderRadius: 2 }} />
                         </Paper>
 					))
-				) : feed.length === 0 ? (
-					<Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', p: 4 }}>
-						<Typography color="text.primary">No activity found.</Typography>
-					</Box>
 				) : displayedFeed.length === 0 ? (
 					<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 1 }}>
 						{searchInput ? (
@@ -826,7 +849,7 @@ export default function Forum() {
 									Clear Search
 								</Button>
 							</>
-						) : (
+						) : selectedCategory !== 'all' ? (
 							<>
 								<Typography color="text.primary">No posts match the selected category filter.</Typography>
 								<Button 
@@ -842,6 +865,24 @@ export default function Forum() {
 									View All Categories
 								</Button>
 							</>
+						) : dateRange !== 'all' ? (
+							<>
+								<Typography color="text.primary">No posts match the selected date range.</Typography>
+								<Button 
+									variant="outlined" 
+									size="small" 
+									onClick={() => {
+										setDateRange('all');
+										setPage(1);
+										setFeed([]);
+										setNewPostsQueue([]);
+									}}
+								>
+									View All Dates
+								</Button>
+							</>
+						) : (
+							<Typography color="text.primary">No activity found.</Typography>
 						)}
 					</Box>
 				) : (
