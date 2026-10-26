@@ -135,6 +135,16 @@ const hydrateWithPictures = async (data) => {
 // ==========================================
 
 // ==========================================
+
+// ==========================================
+// ACTIVE ONLINE USERS PRESENCE
+// ==========================================
+router.get("/online-users", (req, res) => {
+	const onlineUsersMap = req.app.get("onlineUsers");
+	const onlineUserIds = onlineUsersMap ? Array.from(onlineUsersMap.keys()) : [];
+	res.json({ onlineUserIds });
+});
+
 // TRENDING TAGS (Cached with 2-minute TTL)
 // ==========================================
 router.get("/trending-tags", async (req, res, next) => {

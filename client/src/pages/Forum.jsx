@@ -74,6 +74,32 @@ export default function Forum() {
 		return () => window.removeEventListener("scroll", handleScroll);
 	}, []);
 
+	
+	const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+	useEffect(() => {
+		let isMounted = true;
+		apiFetch("/api/forum/online-users")
+			.then(res => (res && res.ok ? res.json() : null))
+			.then(data => {
+				if (isMounted && data?.onlineUserIds && Array.isArray(data.onlineUserIds)) {
+					setOnlineUserIds(new Set(data.onlineUserIds.map(String)));
+				}
+			})
+			.catch(err => console.error("Failed to load initial online users:", err));
+
+		const handleOnlineUpdate = (userIds) => {
+			if (isMounted && Array.isArray(userIds)) {
+				setOnlineUserIds(new Set(userIds.map(String)));
+			}
+		};
+
+		socket.on("onlineUsersUpdate", handleOnlineUpdate);
+		return () => {
+			isMounted = false;
+			socket.off("onlineUsersUpdate", handleOnlineUpdate);
+		};
+	}, []);
+
 	const [trendingTags, setTrendingTags] = useState([]);
 	useEffect(() => {
 		let isMounted = true;
@@ -1181,6 +1207,7 @@ export default function Forum() {
 									post={mockPost} 
 									compact={feedDensity === "compact"} 
 									currentUser={currentUser} 
+									isAuthorOnline={onlineUserIds.has(String(mockPost.authorId))} 
 									isBookmarked={bookmarkedPosts.has(item.referenceId || item._id)} 
 									onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { 
 										const n = new Set(prev); 

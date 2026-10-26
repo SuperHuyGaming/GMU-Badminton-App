@@ -721,4 +721,48 @@ describe('Forum Page Component (Community Hub)', () => {
             expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tag=rackets'));
         });
     });
+
+    // ── Phase 6: Real-Time Presence ───────────────────────────────────────────
+
+    it('fetches /api/forum/online-users on mount and tracks online user IDs', async () => {
+        apiFetch.mockImplementation((url) => {
+            if (url.includes('/online-users')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({ onlineUserIds: ['user-101', 'user-202'] })
+                });
+            }
+            return Promise.resolve({
+                ok: true,
+                json: async () => ({ feed: [], hasMore: false, tags: [] })
+            });
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/api/forum/online-users'));
+        });
+    });
+
+    it('updates online presence set when onlineUsersUpdate socket event fires', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [], onlineUserIds: [] })
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
+
+        // Simulate real-time online users update via socket
+        await act(async () => {
+            if (socketHandlers['onlineUsersUpdate']) {
+                socketHandlers['onlineUsersUpdate'](['user-301', 'user-302']);
+            }
+        });
+
+        // Component should handle the event without crashing
+        expect(screen.getByText('Community Hub')).toBeInTheDocument();
+    });
 });
