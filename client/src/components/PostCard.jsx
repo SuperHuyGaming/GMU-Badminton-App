@@ -111,6 +111,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		open: false,
 		title: "",
 		list: [],
+		reactions: [],
+		initialTab: "all",
 	});
 	const [isLiking, setIsLiking] = useState(false);
 	const [isRsvping, setIsRsvping] = useState(false);
@@ -290,9 +292,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		setTimeout(() => setShowHeart(false), 1000);
 	};
 
-	const openLikes = (e, title, list) => {
-		e.stopPropagation();
-		if (list?.length > 0) setLikesModal({ open: true, title, list });
+	const openLikes = (e, title, list = [], reactions = [], initialTab = "all") => {
+		e?.stopPropagation();
+		if ((list && list.length > 0) || (reactions && reactions.length > 0)) {
+			setLikesModal({ open: true, title, list: list || [], reactions: reactions || [], initialTab });
+		}
 	};
 
 	const handleLike = async () => {
@@ -727,6 +731,45 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										variant="outlined"
 										color="warning"
 										sx={{ height: 20, fontSize: "0.65rem", borderRadius: 1, ml: 0.5 }}
+									/>
+								)}
+								{localPost.authorBadges?.includes("smash_master") && (
+									<Chip 
+										data-testid="badge-smash-master"
+										label="Smash Master" 
+										size="small" 
+										icon={<span style={{ marginLeft: 4 }}>🏸</span>}
+										sx={{ 
+											height: 20, fontSize: '0.65rem', fontWeight: 'bold', 
+											bgcolor: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', 
+											border: '1px solid rgba(239, 68, 68, 0.3)', ml: 0.5 
+										}} 
+									/>
+								)}
+								{localPost.authorBadges?.includes("clutch_performer") && (
+									<Chip 
+										data-testid="badge-clutch-performer"
+										label="Clutch Performer" 
+										size="small" 
+										icon={<span style={{ marginLeft: 4 }}>⚡</span>}
+										sx={{ 
+											height: 20, fontSize: '0.65rem', fontWeight: 'bold', 
+											bgcolor: 'rgba(234, 179, 8, 0.15)', color: '#ca8a04', 
+											border: '1px solid rgba(234, 179, 8, 0.3)', ml: 0.5 
+										}} 
+									/>
+								)}
+								{localPost.authorBadges?.includes("community_guide") && (
+									<Chip 
+										data-testid="badge-community-guide"
+										label="Community Guide" 
+										size="small" 
+										icon={<span style={{ marginLeft: 4 }}>🌟</span>}
+										sx={{ 
+											height: 20, fontSize: '0.65rem', fontWeight: 'bold', 
+											bgcolor: 'rgba(16, 185, 129, 0.15)', color: '#059669', 
+											border: '1px solid rgba(16, 185, 129, 0.3)', ml: 0.5 
+										}} 
 									/>
 								)}
 								{localPost.authorBadges?.includes("top_contributor") && (
@@ -1474,6 +1517,24 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									</Tooltip>
 								);
 							})}
+							{localPost.reactions?.length > 0 && (
+								<Chip
+									data-testid="view-reactions-btn"
+									aria-label="View who reacted to this post"
+									label={`${localPost.reactions.length} ${localPost.reactions.length === 1 ? 'reaction' : 'reactions'}`}
+									size="small"
+									variant="outlined"
+									onClick={(e) => openLikes(e, "Post Reactions", localPost.likedByDetails, localPost.reactions, "all")}
+									sx={{
+										cursor: "pointer",
+										fontWeight: "bold",
+										fontSize: "0.75rem",
+										height: 24,
+										bgcolor: "background.paper",
+										"&:hover": { bgcolor: "action.hover" },
+									}}
+								/>
+							)}
 						</Box>
 
 						{/* LIKES & COMMENTS COUNTERS */}
@@ -1685,8 +1746,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				open={likesModal.open}
 				title={likesModal.title}
 				list={likesModal.list}
+				reactions={likesModal.reactions}
+				initialTab={likesModal.initialTab}
 				onClose={() =>
-					setLikesModal({ open: false, title: "", list: [] })
+					setLikesModal({ open: false, title: "", list: [], reactions: [], initialTab: "all" })
 				}
 			/>
 

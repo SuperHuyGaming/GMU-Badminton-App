@@ -54,6 +54,11 @@ const hydrateWithPictures = async (data) => {
 	posts.forEach(post => {
 		if (post.authorId) userIds.add(post.authorId.toString());
 		if (Array.isArray(post.likedBy)) post.likedBy.forEach(id => userIds.add(id.toString()));
+		if (Array.isArray(post.reactions)) {
+			post.reactions.forEach(r => {
+				if (r && r.userId) userIds.add(r.userId.toString());
+			});
+		}
 		
 		post.comments?.forEach(comment => {
 			if (comment.authorId) userIds.add(comment.authorId.toString());
@@ -1516,7 +1521,7 @@ const ALLOWED_EMOJIS = [
 	"🏸", "🔥", "💯", "❤️", "👏", "👍", // Legacy emojis for backward compatibility
 ];
 
-router.put("/:postId/react", authMiddleware, async (req, res) => {
+const handleReactionRoute = async (req, res) => {
 	try {
 		if (!mongoose.isValidObjectId(req.params.postId)) {
 			return res.status(400).json({ message: "Invalid post ID format." });
@@ -1576,6 +1581,12 @@ router.put("/:postId/react", authMiddleware, async (req, res) => {
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
 			req.io.emit("postUpdated", hydratedPost);
+			req.io.emit("reactionUpdated", {
+				postId: post._id.toString(),
+				reactions: hydratedPost.reactions || [],
+				action,
+				userId,
+			});
 			if (action === "added" && post.authorId?.toString() !== userId.toString()) {
 				const notificationSuffix = BADMINTON_REACTIONS_MAP[emoji]?.notificationText || `reacted with ${emoji} to your post.`;
 				await sendNotification(
@@ -1592,7 +1603,10 @@ router.put("/:postId/react", authMiddleware, async (req, res) => {
 		console.error("Error handling reaction:", error);
 		res.status(500).json({ message: "Error updating reaction." });
 	}
-});
+};
+
+router.put("/:postId/react", authMiddleware, handleReactionRoute);
+router.put("/:postId/reaction", authMiddleware, handleReactionRoute);
 
 
 // ==========================================
