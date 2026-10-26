@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import Forum from './Forum';
@@ -764,5 +764,73 @@ describe('Forum Page Component (Community Hub)', () => {
 
         // Component should handle the event without crashing
         expect(screen.getByText('Community Hub')).toBeInTheDocument();
+    });
+
+    // ── Facebook UI & Single-Step Post Creation Overhaul ──────────────────────
+
+    it('renders Facebook-style composer card ("What\'s on your mind?") and opens dialog when clicked', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [], onlineUserIds: [] })
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+        expect(screen.getByText(/What's on your mind/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        await waitFor(() => {
+            expect(screen.getByRole('dialog')).toBeInTheDocument();
+            expect(screen.getByText('Create a Post')).toBeInTheDocument();
+        });
+    });
+
+    it('allows posting with only content (auto-deriving title from content, eliminating "two make a posts" confusion)', async () => {
+        apiFetch.mockImplementation((url, opts) => {
+            if (opts && opts.method === 'POST') {
+                const body = JSON.parse(opts.body);
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({
+                        _id: 'new-post-1',
+                        title: body.title,
+                        content: body.content,
+                        category: 'general',
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            }
+            return Promise.resolve({
+                ok: true,
+                json: async () => ({ feed: [], hasMore: false, tags: [], onlineUserIds: [] })
+            });
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        const dialog = await screen.findByRole('dialog');
+        expect(dialog).toBeInTheDocument();
+
+        // Type ONLY into "What's on your mind?" field (leaving Title optional/blank)
+        const contentInput = within(dialog).getByLabelText(/What's on your mind\?/i);
+        fireEvent.change(contentInput, { target: { value: 'Playing badminton at the RAC court 3 today at 5pm!' } });
+
+        // Submit button should be ENABLED even without filling Title!
+        const submitBtn = within(dialog).getByRole('button', { name: /^Post$/i });
+        expect(submitBtn).not.toBeDisabled();
+
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/forum', expect.objectContaining({
+                method: 'POST',
+                body: expect.stringContaining('Playing badminton at the RAC court 3 today at 5pm!')
+            }));
+        });
     });
 });
