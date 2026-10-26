@@ -300,19 +300,23 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	};
 
 	const handleLike = async () => {
+		const targetPostId = localPost._id || localPost.referenceId;
 		if (!currentUser) return alert("You must be logged in to like posts!");
 		if (isLiking) return;
 
 		setIsLiking(true);
 		try {
-			const res = await apiFetch(`/api/forum/${localPost._id}/like`, {
+			const res = await apiFetch(`/api/forum/${targetPostId}/like`, {
 				method: "PUT",
 				body: JSON.stringify({
 					userId: currentUserId,
 					userName: currentUser.name,
 				}),
 			});
-			if (res && res.ok) setLocalPost(await res.json());
+			if (res && res.ok) {
+				const updated = await res.json();
+				setLocalPost(prev => ({ ...prev, ...updated, _id: prev._id }));
+			}
 		} catch (err) {
 			console.error(err);
 		} finally {
@@ -321,6 +325,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	};
 
 	const handleReaction = async (emoji) => {
+		const targetPostId = localPost._id || localPost.referenceId;
 		if (!currentUser) return alert("You must be logged in to react to posts!");
 		setShowReactions(false);
 
@@ -355,14 +360,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		setLocalPost((prev) => ({ ...prev, reactions: updatedReactions }));
 
 		try {
-			const res = await apiFetch(`/api/forum/${localPost._id}/react`, {
+			const res = await apiFetch(`/api/forum/${targetPostId}/react`, {
 				method: "PUT",
 				body: JSON.stringify({ emoji }),
 			});
 			if (res && res.ok) {
 				const updated = await res.json();
-				if (updated && updated._id) {
-					setLocalPost(updated);
+				if (updated && (updated._id || updated.referenceId)) {
+					setLocalPost(prev => ({ ...prev, ...updated, _id: prev._id, reactions: updated.reactions || prev.reactions }));
 				}
 			} else {
 				setLocalPost((prev) => ({ ...prev, reactions: prevReactions }));

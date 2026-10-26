@@ -3,7 +3,8 @@ const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
-const { authMiddleware } = require("../middleware/auth");
+const ActivityFeed = require("../models/ActivityFeed");
+const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
 const xss = require("xss");
 const { analyzeContent } = require("../utils/aiModeration");
@@ -11,6 +12,28 @@ const { evaluateSpamHeuristics } = require("../utils/spamDetector");
 const { parseDateRange } = require("../utils/dateRange");
 const feedCache = require("../utils/feedCache");
 const router = express.Router();
+
+
+// Helper to look up post by either Post._id or ActivityFeed._id
+const findPostByIdOrActivityFeed = async (postId, options = {}) => {
+	if (!postId || !mongoose.isValidObjectId(postId)) return null;
+	let query = Post.findById(postId);
+	if (options.lean && query && typeof query.lean === 'function') {
+		query = query.lean();
+	}
+	let post = await query;
+	if (!post) {
+		const feedItem = await ActivityFeed.findById(postId);
+		if (feedItem?.referenceId && mongoose.isValidObjectId(feedItem.referenceId)) {
+			let refQuery = Post.findById(feedItem.referenceId);
+			if (options.lean && refQuery && typeof refQuery.lean === 'function') {
+				refQuery = refQuery.lean();
+			}
+			post = await refQuery;
+		}
+	}
+	return post;
+};
 
 const escapeHtml = (str) => {
 	if (!str || typeof str !== "string") return "";
@@ -605,7 +628,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
 		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
 
-		const authorId = (req.user.id || req.user.userId).toString();
+		const authorId = (req.user.id || req.user.userId || req.user._id).toString();
 		const authorName = req.user.name || req.body.authorName || "Member";
 
 		const spamEvaluation = await evaluateSpamHeuristics({
@@ -647,6 +670,46 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		});
 
 		await newPost.save();
+
+		try {
+			await ActivityFeed.findOneAndUpdate(
+				{ type: "post", referenceId: newPost._id },
+				{
+					type: "post",
+					referenceId: newPost._id,
+					authorId: newPost.authorId,
+					authorName: newPost.authorName,
+					authorProfilePic: req.user.profilePic || "",
+					authorSkillLevel: req.user.skillLevel || "Beginner",
+					authorBadges: req.user.badges || [],
+					authorRole: req.user.role || "user",
+					authorStreak: req.user.stats?.winStreak || 0,
+					title: newPost.title,
+					content: newPost.content,
+					image: newPost.imageUrl,
+					images: newPost.imageUrls || [],
+					tags: newPost.tags || [],
+					isPinned: newPost.isPinned || false,
+					category: newPost.category || "general",
+					matchDetails: newPost.matchDetails || null,
+					playerMatchmaking: newPost.playerMatchmaking || null,
+					challengeMatch: newPost.challengeMatch || null,
+					qaDetails: newPost.qaDetails || null,
+					gearDetails: newPost.gearDetails || null,
+					reactions: newPost.reactions || [],
+					likes: 0,
+					comments: 0,
+					createdAt: newPost.createdAt,
+					visibility: newPost.visibility,
+					score: (newPost.isPinned ? 1000 : 0)
+				},
+				{ upsert: true, returnDocument: "after" }
+			);
+		} catch (feedSyncErr) {
+			console.error("ActivityFeed initial sync error:", feedSyncErr);
+		}
+		feedCache.invalidateFeed();
+
 
 		if (isFlagged) {
 			return res
@@ -701,7 +764,7 @@ router.post("/:postId/report", authMiddleware, async (req, res) => {
 		}
 
 		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const post = await Post.findById(postId);
+		const post = await findPostByIdOrActivityFeed(postId);
 		if (!post) {
 			return res.status(404).json({ message: "Post not found." });
 		}
@@ -836,6 +899,17 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 		post.isEdited = true; // NEW: Set edited flag
 		await post.save();
 
+			try {
+			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
+				const p = ActivityFeed.updateOne(
+					{ referenceId: post._id },
+					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
+				);
+				if (p && typeof p.catch === 'function') p.catch(() => {});
+			}
+		} catch (_) {}
+		feedCache.invalidateFeed();
+
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) req.io.emit("postUpdated", hydratedPost);
 		res.json(hydratedPost);
@@ -871,13 +945,81 @@ router.delete("/:postId", authMiddleware, async (req, res) => {
 // ==========================================
 // GET SINGLE POST BY ID (URL DEEP-LINKING)
 // ==========================================
+
+// ==========================================
+// PHASE 9: MODERATION QUEUE & RESOLUTION
+// ==========================================
+router.get("/reports", authMiddleware, adminMiddleware, async (req, res) => {
+	try {
+		const reportedPosts = await Post.find({
+			$or: [
+				{ "reports.0": { $exists: true } },
+				{ isFlagged: true },
+				{ status: "quarantined" }
+			]
+		})
+			.populate("reports.reportedBy", "name profilePic email")
+			.sort({ "reports.createdAt": -1, createdAt: -1 })
+			.lean();
+
+		res.json(await hydrateWithPictures(reportedPosts));
+	} catch (error) {
+		res.status(500).json({ message: "Error fetching reported posts" });
+	}
+});
+
+router.put("/reports/:postId/resolve", authMiddleware, adminMiddleware, async (req, res) => {
+	try {
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		const { action } = req.body;
+
+		if (action === "approve") {
+			post.reports = [];
+			post.reportCount = 0;
+			post.isFlagged = false;
+			post.status = "active";
+			await post.save();
+			feedCache.invalidateFeed();
+			const hydrated = await hydrateWithPictures(post.toObject());
+			if (req.io) req.io.emit("postCreated", hydrated);
+			return res.json({ message: "Post approved and reinstated.", post: hydrated });
+		}
+
+		if (action === "quarantine") {
+			post.status = "quarantined";
+			post.isFlagged = true;
+			await post.save();
+			await ActivityFeed.deleteOne({ type: "post", referenceId: post._id });
+			feedCache.invalidateFeed();
+			if (req.io) req.io.emit("postDeleted", post._id.toString());
+			return res.json({ message: "Post moved to quarantine.", post });
+		}
+
+		if (action === "delete") {
+			post.status = "deleted";
+			post.isFlagged = true;
+			await post.save();
+			await ActivityFeed.deleteOne({ type: "post", referenceId: post._id });
+			feedCache.invalidateFeed();
+			if (req.io) req.io.emit("postDeleted", post._id.toString());
+			return res.json({ message: "Post deleted permanently from community.", post });
+		}
+
+		return res.status(400).json({ message: "Invalid resolution action. Use approve, quarantine, or delete." });
+	} catch (error) {
+		res.status(500).json({ message: "Error resolving report" });
+	}
+});
+
 router.get("/:postId", async (req, res) => {
 	try {
 		if (!mongoose.isValidObjectId(req.params.postId)) {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await Post.findById(req.params.postId).lean();
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
 		if (!post) return res.status(404).json({ message: "Post not found" });
 		if (post.status === "quarantined" || post.status === "deleted") {
 			return res.status(404).json({ message: "Post not available" });
@@ -901,7 +1043,7 @@ router.get("/:postId/comments", async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await Post.findById(req.params.postId).lean();
+		const post = await findPostByIdOrActivityFeed(req.params.postId).lean();
 		if (!post) return res.status(404).json({ message: "Post not found" });
 
 		const hydratedPost = await hydrateWithPictures(post);
@@ -927,7 +1069,7 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 		const authorName = req.user.name || req.body.authorName || "Member";
 		const cleanContent = xss(content.trim());
 		const cleanAuthorName = xss(authorName);
-		const post = await Post.findById(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found" });
 
 		const isSpam = await checkSpam(cleanContent);
@@ -1387,7 +1529,7 @@ router.put("/:postId/like", authMiddleware, async (req, res) => {
 
 		const userId = (req.user.id || req.user.userId).toString();
 		const userName = req.user.name || req.body.userName || "Player";
-		const post = await Post.findById(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found" });
 
 		const hasLiked = post.likedBy.some(
@@ -1401,6 +1543,17 @@ router.put("/:postId/like", authMiddleware, async (req, res) => {
 			post.likedBy.push(userId);
 		}
 		await post.save();
+
+		try {
+			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
+				const p = ActivityFeed.updateOne(
+					{ referenceId: post._id },
+					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
+				);
+				if (p && typeof p.catch === 'function') p.catch(() => {});
+			}
+		} catch (_) {}
+		feedCache.invalidateFeed();
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
@@ -1530,7 +1683,7 @@ router.put("/:postId/pin", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await Post.findById(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found." });
 
 		post.isPinned = !post.isPinned;
@@ -1588,10 +1741,51 @@ const handleReactionRoute = async (req, res) => {
 
 		const resolvedReactionType = reactionType || BADMINTON_REACTIONS_MAP[emoji]?.reactionType || "custom";
 
-		const userId = (req.user.id || req.user.userId).toString();
+		const userId = (req.user.id || req.user.userId || req.user._id).toString();
 		const userName = req.user.name || "Player";
-		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found." });
+		let post = await findPostByIdOrActivityFeed(req.params.postId);
+
+		if (!post) {
+			const feedItem = await ActivityFeed.findById(req.params.postId);
+			if (feedItem) {
+				if (!Array.isArray(feedItem.reactions)) feedItem.reactions = [];
+				const existingIndex = feedItem.reactions.findIndex(
+					(r) => r.userId && r.userId.toString() === userId.toString()
+				);
+				let feedAction = "added";
+				if (existingIndex !== -1) {
+					if (feedItem.reactions[existingIndex].emoji === emoji) {
+						feedItem.reactions.splice(existingIndex, 1);
+						feedAction = "removed";
+					} else {
+						feedItem.reactions[existingIndex].emoji = emoji;
+						feedItem.reactions[existingIndex].reactionType = resolvedReactionType;
+						feedItem.reactions[existingIndex].createdAt = new Date();
+						feedAction = "updated";
+					}
+				} else {
+					feedItem.reactions.push({
+						userId,
+						userName,
+						emoji,
+						reactionType: resolvedReactionType,
+						createdAt: new Date(),
+					});
+				}
+				await feedItem.save();
+				feedCache.invalidateFeed();
+				if (req.io) {
+					req.io.emit("reactionUpdated", {
+						postId: feedItem._id.toString(),
+						reactions: feedItem.reactions,
+						action: feedAction,
+						userId,
+					});
+				}
+				return res.json(feedItem);
+			}
+			return res.status(404).json({ message: "Post not found." });
+		}
 
 		if (!Array.isArray(post.reactions)) {
 			post.reactions = [];
@@ -1627,6 +1821,17 @@ const handleReactionRoute = async (req, res) => {
 		}
 
 		await post.save();
+
+		try {
+			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
+				const p = ActivityFeed.updateOne(
+					{ referenceId: post._id },
+					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
+				);
+				if (p && typeof p.catch === 'function') p.catch(() => {});
+			}
+		} catch (_) {}
+		feedCache.invalidateFeed();
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
@@ -1670,7 +1875,7 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await Post.findById(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found." });
 		if (post.isFlagged || post.status === "quarantined" || post.status === "deleted") {
 			return res.status(403).json({ message: "Cannot RSVP to this post." });
@@ -1754,7 +1959,7 @@ router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await Post.findById(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found." });
 
 		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
@@ -1818,7 +2023,7 @@ router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (
 			return res.status(400).json({ message: "Invalid ID format." });
 		}
 
-		const post = await Post.findById(postId);
+		const post = await findPostByIdOrActivityFeed(postId);
 		if (!post) return res.status(404).json({ message: "Post not found." });
 
 		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
@@ -1869,6 +2074,7 @@ router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (
 		res.status(500).json({ message: "Error marking accepted answer." });
 	}
 });
+
 
 module.exports = router;
 

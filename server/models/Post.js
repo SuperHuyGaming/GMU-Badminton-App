@@ -254,6 +254,9 @@ PostSchema.post('save', async function(doc) {
 			},
 			{ upsert: true, returnDocument: 'after' }
 		);
+
+		const feedCache = require('../utils/feedCache');
+		feedCache.invalidateFeed();
 	} catch (e) {
 		console.error("ActivityFeed sync error (Post):", e);
 	}
