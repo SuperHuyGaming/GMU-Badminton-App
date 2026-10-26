@@ -937,6 +937,7 @@ export default function Forum() {
 					<Box 
 						role="button"
 						tabIndex={0}
+						aria-live="polite"
 						aria-label="Load new posts"
 						onClick={() => {
 							setFeed(prev => [...newPostsQueue, ...prev]);
