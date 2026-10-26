@@ -8,6 +8,8 @@ const activityFeedSchema = new mongoose.Schema({
     authorProfilePic: { type: String },
     authorSkillLevel: { type: String },
     authorBadges: { type: [String], default: [] },
+    authorRole: { type: String, default: "user" },
+    authorStreak: { type: Number, default: 0 },
     
     // Extracted payload for O(1) reads without population
     title: { type: String },
@@ -15,6 +17,12 @@ const activityFeedSchema = new mongoose.Schema({
     image: { type: String },
     images: { type: [String], default: [] },
     tags: { type: [String], default: [] },
+    category: { type: String, default: "general" },
+    matchDetails: { type: mongoose.Schema.Types.Mixed },
+    playerMatchmaking: { type: mongoose.Schema.Types.Mixed },
+    challengeMatch: { type: mongoose.Schema.Types.Mixed },
+    qaDetails: { type: mongoose.Schema.Types.Mixed },
+    gearDetails: { type: mongoose.Schema.Types.Mixed },
     
     // Match specific
     team1Score: Number,
@@ -37,6 +45,8 @@ const activityFeedSchema = new mongoose.Schema({
             userId: String,
             userName: String,
             emoji: String,
+            reactionType: String,
+            createdAt: { type: Date, default: Date.now },
         }
     ],
 
@@ -50,6 +60,8 @@ activityFeedSchema.index({ createdAt: -1 });
 // Index for algorithmic sorting
 activityFeedSchema.index({ isPinned: -1, score: -1, createdAt: -1 });
 activityFeedSchema.index({ score: -1, createdAt: -1 });
+activityFeedSchema.index({ category: 1, createdAt: -1 });
+activityFeedSchema.index({ tags: 1, createdAt: -1 });
 // Ensure we don't duplicate events
 activityFeedSchema.index({ type: 1, referenceId: 1 }, { unique: true });
 

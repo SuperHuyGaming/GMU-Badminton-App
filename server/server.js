@@ -228,7 +228,8 @@ app.use("/api/feedback", require("./routes/feedback"));
 app.set("io", io);
 
 // Multi-tab tracking: Map<userId, Set<socketId>>
-const onlineUsers = new Map();
+const onlineUsers = new Map();
+app.set("onlineUsers", onlineUsers);
 
 io.on("connection", (socket) => {
 	console.log("New socket connection:", socket.id);
@@ -273,6 +274,18 @@ io.on("connection", (socket) => {
 		}
 	});
 
+	
+	socket.on("joinPostRoom", (postId) => {
+		if (postId && typeof postId === "string") {
+			socket.join(`post_${postId}`);
+		}
+	});
+
+	socket.on("leavePostRoom", (postId) => {
+		if (postId && typeof postId === "string") {
+			socket.leave(`post_${postId}`);
+		}
+	});
 	socket.on("commentTyping", (data) => {
 		socket.broadcast.emit("commentTyping", { ...data, socketId: socket.id });
 	});

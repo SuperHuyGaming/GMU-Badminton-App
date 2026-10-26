@@ -41,6 +41,7 @@ async function seedFeed() {
         for (const match of matches) {
             await ActivityFeed.create({
                 type: "match",
+                category: "match_result",
                 referenceId: match._id,
                 authorId: match.submitterId?._id,
                 authorName: match.submitterId?.name,

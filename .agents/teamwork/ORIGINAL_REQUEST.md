@@ -516,3 +516,37 @@ Construct automated verification scripts and test suites to objectively validate
   - (1) GET `/api/tournaments` returns only human-approved tournaments.
   - (2) Link health verification correctly flags unreachable URLs and assigns verified club fallbacks.
   - (3) Dateless tournaments remain in the review queue with TBD status.
+
+
+## 2026-10-25T19:20:06Z
+
+This is a single self-contained fix; keep it small and focused. Activate and integrate Phase 3 of the GMU Badminton Community Hub: post search engine with debounce, date range management, and category group filters (finding players, finding matches, Q&A forums, gear exchange, match scorecards).
+
+Working directory: D:/GMU Badminton App
+Branch: develop (STRICT: NEVER merge or push to main)
+Integrity mode: development
+
+## Requirements
+
+### R1. Post Search Engine with Debounce
+Implement responsive, debounced search across community posts by text, title, court, tags, and author. Ensure smooth live filtering without layout jitter or feed jumping.
+
+### R2. Category Group Filtering System
+Activate the commented-out category filter bar in the Community Feed (`client/src/pages/Forum.jsx`), providing 1-tap filtering across `find_partner`, `challenge_match`, `qa_forum`, `gear_exchange`, `match_result`, `training`, and `general` while preserving Phase 2 banners and interactive states (RSVP, challenge acceptance, solutions). Ensure styles align with the clean design of Tournaments and Players tabs.
+
+### R3. Date Range Management Engine
+Support date-based post filtering ("Today", "This Week", "This Month", and custom date ranges) connecting `Forum.jsx` with backend index querying in `server/routes/forum.js` and `server/routes/feed.js`.
+
+### R4. Zero Regression & Test Verification
+Maintain 100% test passing rate across server and client suites, and ensure zero ESLint warnings (`--max-warnings 0`).
+
+## Acceptance Criteria
+
+### Functionality & UI Consistency
+- [ ] Category filter chips toggle active states cleanly matching the styling of Tournaments and Players tabs.
+- [ ] Search input handles keyboard shortcut ('/' or Enter) and debounced typing.
+- [ ] Feed updates dynamically when switching categories or date windows without page reload.
+- [ ] All Phase 2 interactive features (RSVP buttons, Match Challenge acceptance, Accepted Answer badges) work seamlessly under filtered views.
+- [ ] All existing test suites pass: 42/42 server suites and 29/29 client suites.
+- [ ] Client lint passes with 0 errors and 0 warnings (`--max-warnings 0`).
+- [ ] Client production build succeeds (`npm run build --prefix client`).

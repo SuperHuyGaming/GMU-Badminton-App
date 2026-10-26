@@ -11,13 +11,17 @@ import {
 	IconButton,
 	Menu,
 	MenuItem,
+	Chip,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { MoreVertIcon } from "../Icons";
+import apiFetch from "../../utils/api";
+import { toast } from "react-hot-toast";
 
 export default function CommentBubble({
 	comment,
 	localPostId,
+	postAuthorId,
 	currentUser,
 	openLikes,
 	handleToggleLike,
@@ -121,6 +125,54 @@ export default function CommentBubble({
 							sx={{ lineHeight: 1, ...clickableStyle }}
 						>
 							{comment.authorName}
+							{String(comment.authorId) === String(postAuthorId) && (
+								<Chip
+									label="OP"
+									size="small"
+									sx={{
+										height: 18,
+										fontSize: "0.62rem",
+										fontWeight: "900",
+										bgcolor: "primary.main",
+										color: "primary.contrastText",
+										borderRadius: "4px",
+										px: 0.2,
+										ml: 0.75,
+									}}
+								/>
+							)}
+							{(comment.authorRole === "admin" || comment.authorBadges?.includes("club_executive")) && (
+								<Chip
+									label="Club Exec"
+									size="small"
+									sx={{
+										height: 18,
+										fontSize: "0.62rem",
+										fontWeight: "bold",
+										bgcolor: "secondary.main",
+										color: "secondary.contrastText",
+										borderRadius: "4px",
+										px: 0.2,
+										ml: 0.5,
+									}}
+								/>
+							)}
+							{comment.authorBadges?.includes("tournament_director") && (
+								<Chip
+									label="TD"
+									size="small"
+									sx={{
+										height: 18,
+										fontSize: "0.62rem",
+										fontWeight: "bold",
+										bgcolor: "info.main",
+										color: "info.contrastText",
+										borderRadius: "4px",
+										px: 0.2,
+										ml: 0.5,
+									}}
+								/>
+							)}
 							{comment.isEdited && (
 								<Typography
 									component="span"
@@ -137,8 +189,8 @@ export default function CommentBubble({
 							)}
 						</Typography>
 
-						{(currentUser?.id === comment.authorId ||
-							currentUser?.role === "admin") && (
+						{Boolean(currentUser) && (
+
 							<IconButton
 								aria-label="Comment options"
 								size="small"
@@ -276,19 +328,62 @@ export default function CommentBubble({
 							✎ Edit
 						</MenuItem>
 					)}
+					{(currentUser?.id === comment.authorId || currentUser?.role === "admin") && (
+						<MenuItem
+							onClick={() => {
+								promptDelete();
+								closeMenu();
+							}}
+							sx={{
+								fontSize: "0.875rem",
+								color: "error.main",
+								fontWeight: "bold",
+							}}
+						>
+							🗑 Delete
+						</MenuItem>
+					)}
 					<MenuItem
 						onClick={() => {
-							promptDelete();
+							const link = `${window.location.origin}/community?postId=${localPostId}&highlight=${comment._id}#comment-${comment._id}`;
+							if (navigator.clipboard) {
+								navigator.clipboard.writeText(link);
+								toast.success("Comment link copied! 📋");
+							}
 							closeMenu();
 						}}
-						sx={{
-							fontSize: "0.875rem",
-							color: "error.main",
-							fontWeight: "bold",
-						}}
+						sx={{ fontSize: "0.875rem", fontWeight: "bold" }}
 					>
-						🗑 Delete
+						📋 Copy Link
 					</MenuItem>
+					{currentUser && currentUser.id !== comment.authorId && (
+						<MenuItem
+							onClick={async () => {
+								closeMenu();
+								try {
+									const res = await apiFetch(`/api/forum/${localPostId}/comments/${comment._id}/report`, {
+										method: "POST",
+										body: JSON.stringify({ reason: "Inappropriate or Offensive" }),
+									});
+									const data = await res?.json().catch(() => ({}));
+									if (res && res.ok) {
+										toast.success("Comment reported. Thank you for keeping our community safe.");
+									} else {
+										toast.error(data?.message || "Failed to report comment.");
+									}
+								} catch {
+									toast.error("Network error reporting comment.");
+								}
+							}}
+							sx={{
+								fontSize: "0.875rem",
+								color: "error.main",
+								fontWeight: "bold",
+							}}
+						>
+							🚩 Report Comment
+						</MenuItem>
+					)}
 				</Menu>
 
 				<Box sx={{ display: "flex", gap: 2, ml: 1, mt: 0.5 }}>
