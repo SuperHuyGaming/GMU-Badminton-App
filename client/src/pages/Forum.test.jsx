@@ -161,12 +161,9 @@ describe('Forum Page Component (Community Hub)', () => {
 
         expect(screen.getByPlaceholderText(/Search posts by title, author, court, tags/i)).toBeInTheDocument();
         expect(screen.getByRole('combobox', { name: /Filter by date range/i })).toBeInTheDocument();
-        expect(screen.getByText('Finding Players')).toBeInTheDocument();
-        expect(screen.getByText('Finding Matches')).toBeInTheDocument();
-        expect(screen.getByText('Q&A Forums')).toBeInTheDocument();
-        expect(screen.getByText('Gear Exchange')).toBeInTheDocument();
-        expect(screen.getByText('Match Scorecards')).toBeInTheDocument();
-        expect(screen.getByText('Training & Tips')).toBeInTheDocument();
+        expect(screen.getByText('💬 General')).toBeInTheDocument();
+        expect(screen.getByText('🤝 Find Players')).toBeInTheDocument();
+        expect(screen.getByText('🎒 Gear & Equipment')).toBeInTheDocument();
     });
 
     it('focuses search input on pressing "/" keyboard shortcut', async () => {
@@ -192,7 +189,7 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
 
-        const findPlayersChip = screen.getByText('Finding Players');
+        const findPlayersChip = screen.getByText('🤝 Find Players');
         fireEvent.click(findPlayersChip);
 
         await waitFor(() => {
@@ -304,7 +301,7 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
 
-        const findPlayersChip = screen.getByText('Finding Players');
+        const findPlayersChip = screen.getByText('🤝 Find Players');
         fireEvent.click(findPlayersChip);
 
         await waitFor(() => {
@@ -476,7 +473,7 @@ describe('Forum Page Component (Community Hub)', () => {
         });
 
         // Click Finding Players chip
-        const findPlayersChip = screen.getByText('Finding Players');
+        const findPlayersChip = screen.getByText('🤝 Find Players');
         fireEvent.click(findPlayersChip);
 
         await waitFor(() => {
@@ -510,7 +507,7 @@ describe('Forum Page Component (Community Hub)', () => {
         await waitFor(() => {
             expect(screen.getByText('Community Hub')).toBeInTheDocument();
         });
-        const qaChip = screen.getByText('Q&A Forums');
+        const qaChip = screen.getByText('🎒 Gear & Equipment');
         fireEvent.click(qaChip);
 
         await waitFor(() => {

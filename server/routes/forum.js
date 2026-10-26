@@ -451,7 +451,8 @@ const parsePlayerMatchmaking = (pm) => {
 			status: r.status === 'waitlist' ? 'waitlist' : 'confirmed',
 			joinedAt: r.joinedAt ? new Date(r.joinedAt) : new Date()
 		})) : [],
-		isFilled: Boolean(pm.isFilled)
+		isFilled: Boolean(pm.isFilled),
+		isEnabled: Boolean(pm.isEnabled)
 	};
 };
 
@@ -507,7 +508,8 @@ const parseGearDetails = (gd) => {
 			currentString: gd.specs.currentString ? xss(String(gd.specs.currentString).trim()).slice(0, 60) : ''
 		} : {},
 		tradeType: gd.tradeType ? xss(String(gd.tradeType).trim()).slice(0, 50) : 'Review / Discussion',
-		price: typeof gd.price === 'number' && gd.price >= 0 ? gd.price : (Number(gd.price) || 0)
+		price: typeof gd.price === 'number' && gd.price >= 0 ? gd.price : (Number(gd.price) || 0),
+		isEnabled: Boolean(gd.isEnabled)
 	};
 };
 
