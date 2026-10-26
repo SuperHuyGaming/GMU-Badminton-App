@@ -44,10 +44,10 @@ const CATEGORY_CONFIG = {
 	gear_review: { label: "Gear Review", bg: "rgba(156, 39, 176, 0.12)", color: "#7b1fa2", border: "rgba(156, 39, 176, 0.3)" },
 	meetup_rally: { label: "Meetup Rally", bg: "rgba(76, 175, 80, 0.12)", color: "#2e7d32", border: "rgba(76, 175, 80, 0.3)" },
 	training: { label: "Training", bg: "rgba(255, 152, 0, 0.12)", color: "#e65100", border: "rgba(255, 152, 0, 0.3)" },
-	find_partner: { label: "Find Partner", bg: "rgba(0, 150, 136, 0.12)", color: "#00796b", border: "rgba(0, 150, 136, 0.3)" },
+	find_partner: { label: "Find Players", bg: "rgba(0, 150, 136, 0.12)", color: "#00796b", border: "rgba(0, 150, 136, 0.3)" },
 	challenge_match: { label: "Match Challenge", bg: "rgba(233, 30, 99, 0.12)", color: "#c2185b", border: "rgba(233, 30, 99, 0.3)" },
 	qa_forum: { label: "Badminton Q&A", bg: "rgba(103, 58, 183, 0.12)", color: "#512da8", border: "rgba(103, 58, 183, 0.3)" },
-	gear_exchange: { label: "Gear Exchange", bg: "rgba(255, 87, 34, 0.12)", color: "#d84315", border: "rgba(255, 87, 34, 0.3)" },
+	gear_exchange: { label: "Gear & Equipment", bg: "rgba(255, 87, 34, 0.12)", color: "#d84315", border: "rgba(255, 87, 34, 0.3)" },
 };
 
 // Separated Sub-Components
@@ -978,7 +978,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					>
 						
 						{/* PLAYER MATCHMAKING BANNER - ONLY on Find Partner / Rally posts */}
-						{Boolean((localPost.category === 'find_partner' || localPost.category === 'meetup_rally') && localPost.playerMatchmaking) && (
+						{Boolean((localPost.category === 'find_partner' || localPost.category === 'meetup_rally') && localPost.playerMatchmaking && (localPost.playerMatchmaking.isEnabled || localPost.playerMatchmaking.timeWindow || (localPost.playerMatchmaking.rsvpList && localPost.playerMatchmaking.rsvpList.length > 0) || localPost.playerMatchmaking.isFilled || localPost.playerMatchmaking.preferredCourt)) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1171,7 +1171,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						)}
 
 						{/* GEAR EXCHANGE BANNER - ONLY on Gear posts */}
-						{Boolean((localPost.category === 'gear_exchange' || localPost.category === 'gear_review') && localPost.gearDetails && localPost.gearDetails?.gearType) && (
+						{Boolean((localPost.category === 'gear_exchange' || localPost.category === 'gear_review') && localPost.gearDetails && (localPost.gearDetails.isEnabled || localPost.gearDetails.brand || localPost.gearDetails.price > 0 || localPost.gearDetails.specs?.currentString || localPost.gearDetails.specs?.weightCode)) && (
 							<Paper
 								variant="outlined"
 								sx={{

@@ -23,6 +23,7 @@ const PostSchema = new mongoose.Schema({
 		winner: { type: String, default: "" },
 	},
 	playerMatchmaking: {
+		isEnabled: { type: Boolean, default: false },
 		skillLevelRequired: { type: String, default: 'Any' },
 		format: { type: String, default: 'Doubles' },
 		preferredCourt: { type: String, default: 'RAC Courts 1-3' },
@@ -41,6 +42,7 @@ const PostSchema = new mongoose.Schema({
 		isFilled: { type: Boolean, default: false }
 	},
 	challengeMatch: {
+		isEnabled: { type: Boolean, default: false },
 		matchType: { type: String, default: 'Friendly Scrimmage' },
 		gameFormat: { type: String, default: 'Best of 3 to 21' },
 		stipulations: { type: String, default: '' },
@@ -62,6 +64,7 @@ const PostSchema = new mongoose.Schema({
 		linkedMatchId: { type: String, default: '' }
 	},
 	qaDetails: {
+		isEnabled: { type: Boolean, default: false },
 		subtopic: { type: String, default: 'General' },
 		isResolved: { type: Boolean, default: false },
 		acceptedCommentId: { type: String, default: '' },
@@ -72,6 +75,7 @@ const PostSchema = new mongoose.Schema({
 		}
 	},
 	gearDetails: {
+		isEnabled: { type: Boolean, default: false },
 		gearType: { type: String, default: 'Racket' },
 		brand: { type: String, default: '' },
 		condition: { type: String, default: 'Good' },
