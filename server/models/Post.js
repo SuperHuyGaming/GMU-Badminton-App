@@ -212,11 +212,16 @@ PostSchema.post('save', async function(doc) {
         }
 
 		const User = require('./User');
-		const author = await User.findById(doc.authorId).lean();
+		const author = (doc.authorId && mongoose.isValidObjectId(doc.authorId))
+			? await User.findById(doc.authorId).lean()
+			: null;
 		
 		let recentLikerAvatars = [];
 		if (doc.likedBy && doc.likedBy.length > 0) {
-			const recentLikers = await User.find({ _id: { $in: doc.likedBy.slice(-3) } }).select('profilePic').lean();
+			const validLikers = doc.likedBy.slice(-3).filter(id => id && mongoose.isValidObjectId(id));
+			const recentLikers = validLikers.length > 0
+				? await User.find({ _id: { $in: validLikers } }).select('profilePic').lean()
+				: [];
 			recentLikerAvatars = recentLikers.map(u => u.profilePic).filter(Boolean);
 		}
 

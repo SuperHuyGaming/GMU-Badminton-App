@@ -94,7 +94,10 @@ const hydrateWithPictures = async (data) => {
 		});
 	});
 
-	const users = await User.find({ _id: { $in: Array.from(userIds) } }).select("_id name profilePic role badges stats").lean();
+	const validUserIds = Array.from(userIds).filter((id) => id && mongoose.isValidObjectId(id));
+	const users = validUserIds.length > 0
+		? await User.find({ _id: { $in: validUserIds } }).select("_id name profilePic role badges stats").lean()
+		: [];
 	const userMap = {};
 	users.forEach(
 		(u) =>
@@ -724,7 +727,8 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		if (req.io) req.io.emit("postCreated", hydratedPost);
 		res.status(201).json(hydratedPost);
 	} catch (error) {
-		res.status(500).json({ message: "Error creating post" });
+		console.error("Error creating post:", error);
+		res.status(500).json({ message: "Error creating post", error: error.message });
 	}
 });
 
@@ -1569,7 +1573,8 @@ router.put("/:postId/like", authMiddleware, async (req, res) => {
 		}
 		res.json(hydratedPost);
 	} catch (error) {
-		res.status(500).json({ message: "Error toggling like" });
+		console.error("Error toggling like:", error);
+		res.status(500).json({ message: "Error toggling like", error: error.message });
 	}
 });
 
@@ -1856,7 +1861,7 @@ const handleReactionRoute = async (req, res) => {
 		res.json(hydratedPost);
 	} catch (error) {
 		console.error("Error handling reaction:", error);
-		res.status(500).json({ message: "Error updating reaction." });
+		res.status(500).json({ message: "Error updating reaction.", error: error.message });
 	}
 };
 

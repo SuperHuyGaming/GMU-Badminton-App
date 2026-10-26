@@ -239,7 +239,8 @@ export default function Forum() {
 	const [newPost, setNewPost] = useState(defaultNewPost);
 	const [postImages, setPostImages] = useState([]);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
-	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
+	// Validation: user can either provide content or title (or both) like Facebook
+	const isFormValid = Boolean((newPost.content && newPost.content.trim().length > 0) || (newPost.title && newPost.title.trim().length > 0));
 
 	// Draft auto-save to sessionStorage
 	useEffect(() => {
@@ -540,11 +541,15 @@ export default function Forum() {
 			}
 
 			// Submit Post (using Forum API which syncs ActivityFeed)
+			const postTitle = newPost.title?.trim() 
+				|| (newPost.content?.trim().split('\n')[0].slice(0, 80) || "Community Post");
+			const postContent = newPost.content?.trim() || postTitle;
+
 			const res = await apiFetch("/api/forum", {
 				method: "POST",
 				body: JSON.stringify({
-					title: newPost.title,
-					content: newPost.content,
+					title: postTitle,
+					content: postContent,
 					category: newPost.category || 'general',
 					matchDetails: newPost.category === 'match_result' ? {
 						partner: newPost.matchDetails?.partner || "",
@@ -601,23 +606,23 @@ export default function Forum() {
 					}
 				`}
 			</style>
-			{/* Clean, Modern Header Modeled after Tournaments, Marketplace & Community Directory */}
+			{/* Clean, Modern Header Modeled after Facebook & Community Directory */}
 			<Box 
 				sx={{ 
 					display: 'flex', 
 					justifyContent: 'space-between', 
 					alignItems: { xs: 'flex-start', sm: 'center' }, 
-					mb: { xs: 2, sm: 2.5 }, 
+					mb: { xs: 1.5, sm: 2.5 }, 
 					mt: { xs: 0.5, sm: 1.5 },
 					flexWrap: 'wrap', 
 					gap: 1.5 
 				}}
 			>
 				<Box>
-					<Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: 0.5, fontSize: { xs: '1.6rem', sm: '2.1rem' } }}>
+					<Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: { xs: 0, sm: 0.5 }, fontSize: { xs: '1.4rem', sm: '2.1rem' } }}>
 						Community Hub
 					</Typography>
-					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.875rem', sm: '0.95rem' } }}>
+					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' }, display: { xs: 'none', sm: 'block' } }}>
 						Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
 					</Typography>
 				</Box>
@@ -632,29 +637,31 @@ export default function Forum() {
 								borderRadius: 2.5,
 								fontWeight: 'bold',
 								textTransform: 'none',
-								px: 2,
-								py: 1,
+								px: { xs: 1.5, sm: 2 },
+								py: { xs: 0.6, sm: 1 },
+								fontSize: { xs: '0.8rem', sm: '0.875rem' }
 							}}
 						>
 							🛡️ Moderation Queue
 						</Button>
 					)}
-				<Button
-					variant="contained"
-					color="primary"
-					onClick={handleOpenCreatePost}
-					sx={{
-						borderRadius: 2.5,
-						fontWeight: 'bold',
-						textTransform: 'none',
-						px: 2.5,
-						py: 1,
-						boxShadow: '0 4px 14px rgba(0, 102, 51, 0.25)',
-						'&:hover': { transform: 'translateY(-1px)' }
-					}}
-				>
-					✍️ Create New Post
-				</Button>
+					<Button
+						variant="contained"
+						color="primary"
+						onClick={handleOpenCreatePost}
+						sx={{
+							borderRadius: 2.5,
+							fontWeight: 'bold',
+							textTransform: 'none',
+							px: { xs: 1.8, sm: 2.5 },
+							py: { xs: 0.6, sm: 1 },
+							fontSize: { xs: '0.82rem', sm: '0.9rem' },
+							boxShadow: '0 4px 14px rgba(0, 102, 51, 0.25)',
+							'&:hover': { transform: 'translateY(-1px)' }
+						}}
+					>
+						✍️ Create New Post
+					</Button>
 				</Box>
 			</Box>
 
@@ -665,10 +672,15 @@ export default function Forum() {
 					onChange={handleTabChange} 
 					textColor="primary" 
 					indicatorColor="primary" 
+					variant="scrollable"
+					scrollButtons="auto"
+					allowScrollButtonsMobile
 					aria-label="Community Hub categories"
 					sx={{ 
-						'& .MuiTab-root': { fontWeight: '900', fontSize: { xs: '0.875rem', sm: '1rem' }, textTransform: 'none', px: { xs: 2, sm: 3.5 }, minHeight: 44 },
-						background: 'background.paper', borderRadius: 10, boxShadow: 1, p: 0.5,
+						width: '100%',
+						maxWidth: '680px',
+						'& .MuiTab-root': { fontWeight: '900', fontSize: { xs: '0.82rem', sm: '0.95rem' }, textTransform: 'none', px: { xs: 2, sm: 3 }, minHeight: 42 },
+						background: 'background.paper', borderRadius: { xs: 2.5, sm: 10 }, boxShadow: 1, p: 0.5,
 						border: '1px solid', borderColor: 'divider'
 					}}
 				>
@@ -678,12 +690,91 @@ export default function Forum() {
 					<Tab label="🔖 Saved" value="saved" />
 				</Tabs>
 
+				{/* FACEBOOK-STYLE COMPOSER CARD */}
+				{Boolean(currentUser) && (
+					<Paper 
+						elevation={0}
+						data-testid="facebook-composer-card"
+						onClick={handleOpenCreatePost}
+						role="button"
+						tabIndex={0}
+						aria-label="What's on your mind? Start a post"
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								handleOpenCreatePost();
+							}
+						}}
+						sx={{
+							width: '100%',
+							maxWidth: '680px',
+							p: { xs: 1.5, sm: 2 },
+							borderRadius: { xs: 2.5, sm: 3 },
+							border: '1px solid',
+							borderColor: 'divider',
+							bgcolor: 'background.paper',
+							display: 'flex',
+							alignItems: 'center',
+							gap: 1.5,
+							cursor: 'pointer',
+							boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+							transition: 'all 0.2s ease-in-out',
+							'&:hover': {
+								borderColor: 'primary.light',
+								boxShadow: '0 4px 14px rgba(0, 102, 51, 0.08)'
+							}
+						}}
+					>
+						<Avatar 
+							src={currentUser?.profilePic} 
+							alt={currentUser?.name || "User"}
+							sx={{ 
+								width: 40, 
+								height: 40, 
+								bgcolor: 'secondary.main', 
+								color: 'primary.main', 
+								fontWeight: 'bold',
+								fontSize: '1rem',
+								border: '1px solid',
+								borderColor: 'divider'
+							}}
+						>
+							{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
+						</Avatar>
+						<Box 
+							sx={{ 
+								flex: 1, 
+								py: 1.2, 
+								px: 2, 
+								borderRadius: 8, 
+								bgcolor: 'action.hover', 
+								color: 'text.secondary', 
+								fontSize: { xs: '0.88rem', sm: '0.95rem' },
+								fontWeight: 500,
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'space-between',
+								userSelect: 'none'
+							}}
+						>
+							<span>
+								{currentUser?.name 
+									? `What's on your mind, ${currentUser.name.split(' ')[0]}?` 
+									: "What's on your mind?"}
+							</span>
+							<Typography variant="body2" sx={{ opacity: 0.7, fontSize: '1rem', display: { xs: 'none', sm: 'inline' } }}>
+								✍️
+							</Typography>
+						</Box>
+					</Paper>
+				)}
+
 				{/* POST SEARCH & DATE RANGE CONTROLS */}
 				<Paper 
 					elevation={0}
 					sx={{ 
 						width: '100%',
-						maxWidth: '800px',
+						maxWidth: '680px',
 						display: 'flex', 
 						alignItems: 'center', 
 						justifyContent: 'space-between',
@@ -857,7 +948,7 @@ export default function Forum() {
 				{/* CATEGORY GROUP FILTER BAR */}
 				<Box 
 					sx={{ 
-						width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
+						width: '100%', maxWidth: '680px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
 						scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
 					}}
 					role="region"
@@ -894,7 +985,7 @@ export default function Forum() {
 				{((trendingTags && trendingTags.length > 0) ? trendingTags : DEFAULT_TRENDING_TAGS).length > 0 && (
 					<Box 
 						sx={{ 
-							width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
+							width: '100%', maxWidth: '680px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
 							scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
 						}}
 						data-testid="trending-tags-strip"
@@ -1186,9 +1277,25 @@ export default function Forum() {
 				slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
 			>
 				<DialogTitle id="create-post-dialog-title" sx={{ fontWeight: "bold", fontSize: "1.5rem" }}>Create a Post</DialogTitle>
-				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, mt: 1 }}>
-					<TextField label="Title" variant="outlined" fullWidth value={newPost.title} onChange={(e) => setNewPost({ ...newPost, title: e.target.value })} />
-					<TextField label="What's on your mind?" multiline rows={4} variant="outlined" fullWidth value={newPost.content} onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} />
+				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}>
+					<TextField 
+						label="Title (Optional)" 
+						placeholder="Add a title or leave blank to use your post text"
+						variant="outlined" 
+						fullWidth 
+						value={newPost.title} 
+						onChange={(e) => setNewPost({ ...newPost, title: e.target.value })} 
+					/>
+					<TextField 
+						label="What's on your mind?" 
+						placeholder="Share match thoughts, rallies, questions, or badminton tips..."
+						multiline 
+						rows={4} 
+						variant="outlined" 
+						fullWidth 
+						value={newPost.content} 
+						onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} 
+					/>
 					
 					<Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
 						{/* Category Selection */}

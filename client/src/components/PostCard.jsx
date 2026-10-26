@@ -489,6 +489,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const actionBtnStyle = {
 		textTransform: "none",
 		fontWeight: 600,
+		fontSize: { xs: "0.8rem", sm: "0.875rem" },
+		py: { xs: 0.8, sm: 1 },
+		minHeight: 44,
 		flex: 1,
 		minWidth: 0,
 		borderRadius: 2,
@@ -551,22 +554,22 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					width: "100%",
 					display: "block",
 					boxSizing: "border-box",
-					p: compact ? { xs: 1.5, sm: 2 } : { xs: 2, sm: 3 },
+					p: compact ? { xs: 1.5, sm: 2 } : { xs: 2, sm: 2.75 },
 					border: localPost.isPinned ? "2px solid" : "1px solid",
 					borderColor: localPost.isPinned ? "warning.main" : "divider",
-					borderRadius: compact ? 3 : 4,
+					borderRadius: compact ? { xs: 2, sm: 3 } : { xs: 2.5, sm: 3.5 },
 					userSelect: "none",
 					bgcolor: 'background.paper',
 					backgroundImage: localPost.isPinned 
 						? 'linear-gradient(to bottom right, rgba(255, 179, 0, 0.08), rgba(0, 102, 51, 0.04))' 
 						: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
 					backdropFilter: 'blur(10px)',
-					boxShadow: localPost.isPinned ? '0 8px 24px rgba(255, 165, 0, 0.12)' : 'none',
+					boxShadow: localPost.isPinned ? '0 8px 24px rgba(255, 165, 0, 0.12)' : '0 2px 8px rgba(0,0,0,0.03)',
 					transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
 					"&:hover": {
 						borderColor: localPost.isPinned ? "warning.dark" : "primary.light",
-						boxShadow: localPost.isPinned ? "0 14px 32px rgba(255, 165, 0, 0.22)" : "0 12px 30px rgba(0, 102, 51, 0.12)",
-						transform: "translateY(-4px)",
+						boxShadow: localPost.isPinned ? "0 14px 32px rgba(255, 165, 0, 0.22)" : "0 10px 24px rgba(0, 102, 51, 0.1)",
+						transform: "translateY(-3px)",
 					},
 				}}
 			>
@@ -678,7 +681,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								variant={compact ? "subtitle1" : "h6"}
 								fontWeight="bold"
 								color="text.primary"
-								sx={{ lineHeight: 1.2 }}
+								sx={{ 
+									lineHeight: 1.25,
+									display: (localPost.title && localPost.content && localPost.title.trim().toLowerCase() === localPost.content.trim().toLowerCase()) ? 'none' : 'block'
+								}}
 							>
 								{localPost.title}
 							</Typography>
@@ -1270,7 +1276,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<Typography
 							variant="body1"
 							color="text.primary"
-							sx={{ whiteSpace: "pre-wrap", pointerEvents: 'none', mb: localPost.tags?.length ? 2 : 0, ...(compact ? { display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}) }}
+							sx={{ 
+								whiteSpace: "pre-wrap", 
+								pointerEvents: 'none', 
+								lineHeight: 1.6,
+								fontSize: { xs: '0.92rem', sm: '1rem' },
+								mb: localPost.tags?.length ? 2 : 0, 
+								...(compact ? { display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}) 
+							}}
 						>
 							{localPost.content}
 						</Typography>
@@ -1688,7 +1701,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									{currentUserReaction || '💥'}
 								</Typography>
 							</Box>
-							<Box sx={{ display: { xs: "none", sm: "inline-block" } }}>
+							<Box sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
 								{(() => {
 									if (currentUserReaction) {
 										const match = BADMINTON_REACTIONS.find((b) => b.emoji === currentUserReaction);
@@ -1716,7 +1729,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							<MessageCircleIcon />
 						</Box>
 						<Box
-							sx={{ display: { xs: "none", sm: "inline-block" } }}
+							sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
 						>
 							Comment{totalCommentsCount > 0 ? ` (${totalCommentsCount})` : ""}
 						</Box>
@@ -1738,7 +1751,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							<ShareIcon />
 						</Box>
 						<Box
-							sx={{ display: { xs: "none", sm: "inline-block" } }}
+							sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
 						>
 							Share
 						</Box>
