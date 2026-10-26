@@ -187,7 +187,9 @@ PostSchema.pre('save', function (next) {
 			}
 		});
 	}
-	next();
+	if (typeof next === 'function') {
+		next();
+	}
 });
 
 PostSchema.post('save', async function(doc) {

@@ -1,4 +1,4 @@
-﻿// server/models/CoachChat.js
+// server/models/CoachChat.js
 const mongoose = require("mongoose");
 
 const coachMessageSchema = new mongoose.Schema({
@@ -38,7 +38,9 @@ const coachChatSchema = new mongoose.Schema({
 // Auto-update the updatedAt timestamp
 coachChatSchema.pre("save", function (next) {
     this.updatedAt = new Date();
-    next();
+    if (typeof next === 'function') {
+        next();
+    }
 });
 
 // Keep only the last 50 messages per user to control token costs
