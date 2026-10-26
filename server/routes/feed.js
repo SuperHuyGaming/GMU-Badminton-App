@@ -4,6 +4,7 @@ const router = express.Router();
 const ActivityFeed = require("../models/ActivityFeed");
 const { authMiddleware } = require("../middleware/auth");
 const User = require("../models/User");
+const { parseDateRange } = require("../utils/dateRange");
 
 router.get("/", authMiddleware, async (req, res, next) => {
     try {
@@ -31,7 +32,70 @@ router.get("/", authMiddleware, async (req, res, next) => {
         }
 
         if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {
-            matchStage.category = req.query.category.trim().toLowerCase().slice(0, 50);
+            const cat = req.query.category.trim().toLowerCase().slice(0, 50);
+            if (cat === "find_partner") {
+                matchStage.category = { $in: ["find_partner", "meetup_rally"] };
+            } else if (cat === "gear_exchange") {
+                matchStage.category = { $in: ["gear_exchange", "gear_review"] };
+            } else if (cat === "match_result") {
+                const matchResultOr = [{ category: "match_result" }, { type: "match" }];
+                if (matchStage.$and) {
+                    matchStage.$and.push({ $or: matchResultOr });
+                } else {
+                    const visibilityOr = matchStage.$or;
+                    delete matchStage.$or;
+                    matchStage.$and = [
+                        { $or: visibilityOr },
+                        { $or: matchResultOr }
+                    ];
+                }
+            } else if (cat === "general") {
+                matchStage.category = "general";
+                matchStage.type = { $ne: "match" };
+            } else {
+                matchStage.category = cat;
+            }
+        }
+
+        const { start: dateStart, end: dateEnd } = parseDateRange(req.query);
+        if (dateStart || dateEnd) {
+            matchStage.createdAt = matchStage.createdAt || {};
+            if (dateStart) matchStage.createdAt.$gte = dateStart;
+            if (dateEnd) matchStage.createdAt.$lte = dateEnd;
+        }
+
+        const rawQuerySearch = typeof req.query.search === "string"
+            ? req.query.search
+            : (typeof req.query.q === "string" ? req.query.q : (Array.isArray(req.query.search) && typeof req.query.search[0] === "string" ? req.query.search[0] : ""));
+        const rawSearch = rawQuerySearch.trim().slice(0, 100);
+        if (rawSearch) {
+            const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const searchRegex = new RegExp(escaped, 'i');
+            const searchOr = [
+                { title: { $regex: searchRegex } },
+                { content: { $regex: searchRegex } },
+                { authorName: { $regex: searchRegex } },
+                { tags: searchRegex },
+                { "matchDetails.court": { $regex: searchRegex } },
+                { "matchDetails.partner": { $regex: searchRegex } },
+                { "matchDetails.opponents": searchRegex },
+                { "playerMatchmaking.preferredCourt": { $regex: searchRegex } },
+                { "gearDetails.brand": { $regex: searchRegex } },
+                { "gearDetails.gearType": { $regex: searchRegex } },
+                { team1: searchRegex },
+                { team2: searchRegex }
+            ];
+            
+            if (matchStage.$and) {
+                matchStage.$and.push({ $or: searchOr });
+            } else {
+                const visibilityOr = matchStage.$or;
+                delete matchStage.$or;
+                matchStage.$and = [
+                    { $or: visibilityOr },
+                    { $or: searchOr }
+                ];
+            }
         }
 
         let lastDoc = null;
@@ -55,7 +119,12 @@ router.get("/", authMiddleware, async (req, res, next) => {
         if (tab === "saved") {
             matchStage.referenceId = { $in: currentUser.bookmarkedPosts || [] };
             matchStage.type = "post";
-            if (lastDoc) matchStage.createdAt = { $lt: lastDoc.createdAt };
+            if (lastDoc) {
+                matchStage.createdAt = {
+                    ...(matchStage.createdAt || {}),
+                    $lt: lastDoc.createdAt
+                };
+            }
             
             const feedItems = await ActivityFeed.find(matchStage).sort({ createdAt: -1 }).limit(limit + 1).lean();
             const hasMore = feedItems.length > limit;
@@ -65,7 +134,12 @@ router.get("/", authMiddleware, async (req, res, next) => {
         }
 
         if (tab === "latest") {
-            if (lastDoc) matchStage.createdAt = { $lt: lastDoc.createdAt };
+            if (lastDoc) {
+                matchStage.createdAt = {
+                    ...(matchStage.createdAt || {}),
+                    $lt: lastDoc.createdAt
+                };
+            }
             const feedItems = await ActivityFeed.find(matchStage).sort({ isPinned: -1, createdAt: -1 }).limit(limit + 1).lean();
             const hasMore = feedItems.length > limit;
             if (hasMore) feedItems.pop();

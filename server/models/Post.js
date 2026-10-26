@@ -145,6 +145,8 @@ likedBy: { type: [String], default: [] },
 PostSchema.index({ status: 1, isPinned: -1, createdAt: -1 });
 PostSchema.index({ category: 1, createdAt: -1 });
 PostSchema.index({ tags: 1, createdAt: -1 });
+PostSchema.index({ createdAt: -1 });
+PostSchema.index({ timestamp: -1 });
 
 PostSchema.pre('save', function (next) {
 	if (!this.createdAt && this.timestamp) {

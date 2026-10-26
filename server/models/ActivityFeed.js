@@ -58,6 +58,8 @@ activityFeedSchema.index({ createdAt: -1 });
 // Index for algorithmic sorting
 activityFeedSchema.index({ isPinned: -1, score: -1, createdAt: -1 });
 activityFeedSchema.index({ score: -1, createdAt: -1 });
+activityFeedSchema.index({ category: 1, createdAt: -1 });
+activityFeedSchema.index({ tags: 1, createdAt: -1 });
 // Ensure we don't duplicate events
 activityFeedSchema.index({ type: 1, referenceId: 1 }, { unique: true });
 

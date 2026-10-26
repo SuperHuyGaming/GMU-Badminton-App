@@ -44,6 +44,9 @@ describe("Cloudinary Helper Utility", () => {
 
     it("handles uploadMultipleFlyers correctly", async () => {
         expect(await uploadMultipleFlyers(null)).toEqual([]);
+        jest.spyOn(cloudinary.uploader, "upload").mockResolvedValue({
+            secure_url: "https://res.cloudinary.com/real_cloud_name/image/upload/v1/tournaments/flyer.jpg"
+        });
         const list = ["https://example.com/1.png", "https://example.com/2.png"];
         const res = await uploadMultipleFlyers(list);
         expect(res).toHaveLength(2);

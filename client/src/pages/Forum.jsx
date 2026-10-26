@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import apiFetch from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-hot-toast";
@@ -7,12 +7,44 @@ import {
 	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
 	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem,
-	Checkbox
+	Checkbox, FormControl, InputAdornment, IconButton
 } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import CloseIcon from "@mui/icons-material/Close";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
 // eslint-disable-next-line no-unused-vars
 import { useNavigate } from "react-router-dom";
+
+const CATEGORY_FILTERS = [
+	{ id: "all", label: "All" },
+	{ id: "find_partner", label: "Finding Players" },
+	{ id: "challenge_match", label: "Finding Matches" },
+	{ id: "qa_forum", label: "Q&A Forums" },
+	{ id: "gear_exchange", label: "Gear Exchange" },
+	{ id: "match_result", label: "Match Scorecards" },
+	{ id: "training", label: "Training & Tips" },
+	{ id: "general", label: "General" }
+];
+
+const DATE_OPTIONS = [
+	{ id: "all", label: "All Dates" },
+	{ id: "today", label: "Today" },
+	{ id: "week", label: "This Week" },
+	{ id: "month", label: "This Month" },
+	{ id: "custom", label: "Custom Range" }
+];
+
+const matchesCategory = (item, cat) => {
+	if (!cat || cat === "all") return true;
+	const itemCat = item.category || (item.type === "match" ? "match_result" : "general");
+	if (cat === "find_partner") return itemCat === "find_partner" || itemCat === "meetup_rally";
+	if (cat === "gear_exchange") return itemCat === "gear_exchange" || itemCat === "gear_review";
+	if (cat === "match_result") return itemCat === "match_result" || item.type === "match";
+	if (cat === "general") return itemCat === "general" && item.type !== "match";
+	return itemCat === cat;
+};
 
 export default function Forum() {
 	const { user: currentUser } = useAuth();
@@ -21,7 +53,23 @@ export default function Forum() {
 
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
+	const [selectedCategory, setSelectedCategory] = useState("all");
+	const selectedCategoryRef = useRef(selectedCategory);
+	useEffect(() => {
+		selectedCategoryRef.current = selectedCategory;
+	}, [selectedCategory]);
+	const [searchInput, setSearchInput] = useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
+	const [isSearchFocused, setIsSearchFocused] = useState(false);
+	const searchInputRef = useRef(null);
+	const [dateRange, setDateRange] = useState("all");
+	const [customStartDate, setCustomStartDate] = useState("");
+	const [customEndDate, setCustomEndDate] = useState("");
 	const [feed, setFeed] = useState([]);
+	const feedRef = useRef(feed);
+	useEffect(() => {
+		feedRef.current = feed;
+	}, [feed]);
 	const [newPostsQueue, setNewPostsQueue] = useState([]);
 	const [bookmarkedPosts, setBookmarkedPosts] = useState(new Set());
 	const [page, setPage] = useState(1);
@@ -98,10 +146,56 @@ export default function Forum() {
 		if (node) observer.current.observe(node);
 	}, [isLoading, isFetchingMore, hasMore]);
 
+	// Debounce search input by 250ms
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedSearch(searchInput.trim());
+			setPage(1);
+		}, 250);
+		return () => clearTimeout(timer);
+	}, [searchInput]);
+
+	// Global keyboard shortcuts: Press '/' or 'Cmd+K' / 'Ctrl+K' to quickly focus search
+	useEffect(() => {
+		const handleGlobalKeyDown = (e) => {
+			if (isModalOpen || document.querySelector('[role="dialog"]') || document.querySelector('.MuiDialog-root')) {
+				return;
+			}
+			if (
+				(e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
+				((e.metaKey || e.ctrlKey) && e.key === 'k')
+			) {
+				e.preventDefault();
+				searchInputRef.current?.focus();
+			}
+		};
+		window.addEventListener('keydown', handleGlobalKeyDown);
+		return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+	}, [isModalOpen]);
+
+	const handleSearchKeyDown = (e) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			setDebouncedSearch(searchInput.trim());
+			setPage(1);
+			setFeed([]);
+			setNewPostsQueue([]);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			if (searchInput) {
+				setSearchInput('');
+				setDebouncedSearch('');
+				setPage(1);
+			}
+			searchInputRef.current?.blur();
+		}
+	};
+
 	const cursorRef = useRef(null);
 	const sessionTimeRef = useRef(null);
 
 	useEffect(() => {
+		let isCancelled = false;
 		const fetchFeed = async () => {
 			const isFirstPage = page === 1;
 			if (isFirstPage) {
@@ -115,11 +209,22 @@ export default function Forum() {
 
 			try {
 				const tagQuery = selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : "";
+				const catQuery = selectedCategory && selectedCategory !== "all" ? `&category=${encodeURIComponent(selectedCategory)}` : "";
+				const searchQuery = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : "";
+				let dateQuery = "";
+				if (dateRange && dateRange !== "all") {
+					dateQuery = `&dateRange=${encodeURIComponent(dateRange)}`;
+					if (dateRange === "custom") {
+						if (customStartDate) dateQuery += `&startDate=${encodeURIComponent(customStartDate)}`;
+						if (customEndDate) dateQuery += `&endDate=${encodeURIComponent(customEndDate)}`;
+					}
+				}
 				const cursorQuery = cursorRef.current ? `&cursor=${cursorRef.current}` : "";
 				const sessionQuery = `&sessionTime=${sessionTimeRef.current}`;
-				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${cursorQuery}${sessionQuery}`);
-				if (res && res.ok) {
+				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${catQuery}${searchQuery}${dateQuery}${cursorQuery}${sessionQuery}`);
+				if (!isCancelled && res && res.ok) {
 					const data = await res.json();
+					if (isCancelled) return;
 					cursorRef.current = data.nextCursor;
 					setHasMore(!!data.nextCursor);
 					if (data.bookmarkedPosts) setBookmarkedPosts(new Set(data.bookmarkedPosts));
@@ -135,33 +240,76 @@ export default function Forum() {
 					}
 				}
 			} catch (e) {
-				console.error("Failed to load community feed", e);
+				if (!isCancelled) {
+					console.error("Failed to load community feed", e);
+				}
 			} finally {
-				setIsLoading(false);
-				setIsFetchingMore(false);
+				if (!isCancelled) {
+					setIsLoading(false);
+					setIsFetchingMore(false);
+				}
 			}
 		};
 		fetchFeed();
-	}, [tab, page, selectedTag]);
+		return () => {
+			isCancelled = true;
+		};
+	}, [tab, page, selectedTag, selectedCategory, debouncedSearch, dateRange, customStartDate, customEndDate]);
+
+	const displayedFeed = useMemo(() => {
+		return feed.filter(item => {
+			if (!matchesCategory(item, selectedCategory)) return false;
+
+			if (!searchInput.trim()) return true;
+			const q = searchInput.trim().toLowerCase();
+			const title = (item.title || "").toLowerCase();
+			const content = (item.content || "").toLowerCase();
+			const author = (item.authorName || "").toLowerCase();
+			const court1 = (item.matchDetails?.court || "").toLowerCase();
+			const court2 = (item.playerMatchmaking?.preferredCourt || "").toLowerCase();
+			const partner = (item.matchDetails?.partner || "").toLowerCase();
+			const opponents = Array.isArray(item.matchDetails?.opponents)
+				? item.matchDetails.opponents.join(" ").toLowerCase()
+				: (item.matchDetails?.opponents || "").toLowerCase();
+			const team1 = Array.isArray(item.team1) ? item.team1.join(" ").toLowerCase() : (typeof item.team1 === 'string' ? item.team1.toLowerCase() : "");
+			const team2 = Array.isArray(item.team2) ? item.team2.join(" ").toLowerCase() : (typeof item.team2 === 'string' ? item.team2.toLowerCase() : "");
+			const gearBrand = (item.gearDetails?.brand || "").toLowerCase();
+			const gearType = (item.gearDetails?.gearType || "").toLowerCase();
+			const tags = Array.isArray(item.tags) ? item.tags.join(" ").toLowerCase() : (typeof item.tags === 'string' ? item.tags.toLowerCase() : "");
+			return (
+				title.includes(q) ||
+				content.includes(q) ||
+				author.includes(q) ||
+				court1.includes(q) ||
+				court2.includes(q) ||
+				partner.includes(q) ||
+				opponents.includes(q) ||
+				gearBrand.includes(q) ||
+				gearType.includes(q) ||
+				team1.includes(q) ||
+				team2.includes(q) ||
+				tags.includes(q)
+			);
+		});
+	}, [feed, searchInput, selectedCategory]);
 
 	// Listen for real-time updates
 	useEffect(() => {
 		const handleNewPost = (post) => {
 			if (!post || !post._id) return;
-			setFeed(prev => {
-				if (prev.find(p => p._id === post._id || p.referenceId === post._id)) return prev;
-				setNewPostsQueue(q => {
-					if (q.find(p => p._id === post._id || p.referenceId === post._id)) return q;
-					return [post, ...q];
-				});
-				return prev;
+			if (!matchesCategory(post, selectedCategoryRef.current)) return;
+			const alreadyInFeed = feedRef.current.some(p => p._id === post._id || p.referenceId === post._id);
+			if (alreadyInFeed) return;
+			setNewPostsQueue(q => {
+				if (q.some(p => p._id === post._id || p.referenceId === post._id)) return q;
+				return [{ ...post, type: post.type || 'post' }, ...q];
 			});
 		};
 
 		const handlePostUpdated = (updatedPost) => {
 			// Update likes/comments/reactions/category/matchDetails inline without changing feed order
 			setFeed(prevFeed => prevFeed.map(item => {
-				if (item.type === 'post' && item.referenceId === updatedPost._id) {
+				if (item.type === 'post' && (item.referenceId === updatedPost._id || item._id === updatedPost._id)) {
 					const totalComments = updatedPost.comments?.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0) || 0;
 					return {
 						...item,
@@ -197,6 +345,7 @@ export default function Forum() {
 		setTab(newValue);
 		setPage(1);
 		setFeed([]);
+		setNewPostsQueue([]);
 	};
 
 	const handleSubmit = async () => {
@@ -327,7 +476,203 @@ export default function Forum() {
 					<Tab label="⏱ Latest" value="latest" />
 				</Tabs>
 
-				{/* ACTION BAR (HOT TAGS & TRENDING TOPICS + REFRESH) */}
+				{/* POST SEARCH & DATE RANGE CONTROLS */}
+				<Paper 
+					elevation={0}
+					sx={{ 
+						width: '100%',
+						maxWidth: '800px',
+						display: 'flex', 
+						alignItems: 'center', 
+						justifyContent: 'space-between',
+						gap: 1.5,
+						p: 1.5,
+						borderRadius: 3,
+						border: '1px solid',
+						borderColor: 'divider',
+						bgcolor: 'background.paper',
+						flexWrap: 'wrap'
+					}}
+				>
+					{/* Search Input with Instant Keyboard Shortcut ('/' or Cmd+K) */}
+					<TextField 
+						inputRef={searchInputRef}
+						placeholder="Search posts by title, author, court, tags..."
+						size="small"
+						value={searchInput}
+						onChange={(e) => setSearchInput(e.target.value)}
+						onKeyDown={handleSearchKeyDown}
+						onFocus={() => setIsSearchFocused(true)}
+						onBlur={() => setIsSearchFocused(false)}
+						sx={{ 
+							flex: { xs: '1 1 100%', sm: '1 1 280px' },
+							'& .MuiOutlinedInput-root': {
+								borderRadius: 2.5,
+								transition: 'all 0.2s ease-in-out',
+								'&:hover': {
+									boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+								},
+								'&.Mui-focused': {
+									boxShadow: '0 4px 12px rgba(0, 80, 40, 0.12)'
+								}
+							}
+						}}
+						slotProps={{
+							input: {
+								startAdornment: (
+									<InputAdornment position="start">
+										<SearchIcon color={isSearchFocused ? "primary" : "action"} />
+									</InputAdornment>
+								),
+								endAdornment: (
+									<InputAdornment position="end" sx={{ display: 'flex', gap: 0.8, alignItems: 'center' }}>
+										{!isSearchFocused && !searchInput && (
+											<Typography 
+												variant="caption" 
+												sx={{ 
+													bgcolor: 'action.hover', 
+													px: 0.9, 
+													py: 0.4, 
+													borderRadius: 1, 
+													color: 'text.secondary', 
+													fontWeight: 'bold', 
+													fontSize: '0.75rem',
+													display: { xs: 'none', sm: 'block' }, 
+													pointerEvents: 'none' 
+												}}
+											>
+												/
+											</Typography>
+										)}
+										{searchInput && (
+											<IconButton 
+												size="small" 
+												onClick={() => { 
+													setSearchInput(''); 
+													setDebouncedSearch(''); 
+													setPage(1); 
+													setFeed([]); 
+													setNewPostsQueue([]);
+													searchInputRef.current?.focus(); 
+												}} 
+												aria-label="Clear search"
+											>
+												<CloseIcon fontSize="small" />
+											</IconButton>
+										)}
+									</InputAdornment>
+								),
+								inputProps: {
+									'aria-label': 'Search community posts'
+								}
+							}
+						}}
+					/>
+
+					{/* Date Range Selector & Refresh */}
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+						<FormControl size="small" sx={{ minWidth: 125 }}>
+							<Select
+								value={dateRange}
+								onChange={(e) => {
+									setDateRange(e.target.value);
+									setPage(1);
+									setFeed([]);
+									setNewPostsQueue([]);
+								}}
+								displayEmpty
+								aria-label="Filter by date range"
+								sx={{ borderRadius: 2.5, fontWeight: 600, fontSize: '0.85rem' }}
+							>
+								{DATE_OPTIONS.map(opt => (
+									<MenuItem key={opt.id} value={opt.id}>{opt.label}</MenuItem>
+								))}
+							</Select>
+						</FormControl>
+
+						{dateRange === 'custom' && (
+							<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+								<TextField
+									type="date"
+									size="small"
+									value={customStartDate}
+									onChange={(e) => {
+										setCustomStartDate(e.target.value);
+										setPage(1);
+										setFeed([]);
+										setNewPostsQueue([]);
+									}}
+									slotProps={{ htmlInput: { 'aria-label': 'Start date' } }}
+									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+								/>
+								<Typography variant="caption" color="text.secondary">to</Typography>
+								<TextField
+									type="date"
+									size="small"
+									value={customEndDate}
+									onChange={(e) => {
+										setCustomEndDate(e.target.value);
+										setPage(1);
+										setFeed([]);
+										setNewPostsQueue([]);
+									}}
+									slotProps={{ htmlInput: { 'aria-label': 'End date' } }}
+									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+								/>
+							</Box>
+						)}
+
+						<Button 
+							variant="outlined" 
+							size="small" 
+							color="inherit"
+							onClick={() => { setPage(1); setFeed([]); setNewPostsQueue([]); }}
+							sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 38, px: 1.5 }}
+							aria-label="Refresh feed"
+						>
+							<RefreshIcon sx={{ fontSize: 18 }} />
+							<Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
+						</Button>
+					</Box>
+				</Paper>
+
+				{/* CATEGORY GROUP FILTER BAR */}
+				<Box 
+					sx={{ 
+						width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
+						scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
+					}}
+					role="region"
+					aria-label="Category filters"
+				>
+					<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', whiteSpace: 'nowrap', mr: 0.5 }}>
+						Categories:
+					</Typography>
+					{CATEGORY_FILTERS.map((cat) => (
+						<Chip 
+							key={cat.id} 
+							label={cat.label} 
+							size="small" 
+							variant={selectedCategory === cat.id ? "filled" : "outlined"}
+							color={selectedCategory === cat.id ? "primary" : "default"}
+							onClick={() => {
+								setSelectedCategory(prev => prev === cat.id && cat.id !== "all" ? "all" : cat.id);
+								setPage(1);
+								setFeed([]);
+								setNewPostsQueue([]);
+							}}
+							clickable
+							sx={{ 
+								fontWeight: 'bold', 
+								borderRadius: 2,
+								cursor: 'pointer',
+								transition: 'all 0.2s ease-in-out'
+							}} 
+						/>
+					))}
+				</Box>
+
+				{/* ACTION BAR (HOT TAGS & TRENDING TOPICS) */}
 				<Box 
 					sx={{ 
 						width: '100%', maxWidth: '800px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, gap: 1.5, px: 1
@@ -370,37 +715,7 @@ export default function Forum() {
                             />
                         ))}
                     </Box>
-
-                    <Button 
-                        variant="outlined" 
-                        size="small" 
-                        color="inherit"
-                        onClick={() => { setPage(1); setFeed([]); }}
-                        sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 28, px: 1.5 }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.13 15.57a9 9 0 1 0 3.12-11.83l-4.75 4.76"/></svg>
-                        <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
-                    </Button>
 				</Box>
-
-				{/* 
-				  Sprint 2 / Future Sprint Stash (Commented out per explicit directive to keep live feed UI clean and uncluttered):
-				  - Post Search Input (e.g. searching posts by keyword/author)
-				  - Date Range Pickers / Date Filter Dropdowns (e.g. managing posts from different dates)
-				  - Category Group Filter Chips (Finding Players, Finding Matches, Asking Questions, Match Results, Gear, Meetups, Training)
-				  - Advanced Feed Sorting (Top, Latest, Velocity Hot)
-				  <Box sx={{ width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, mb: 1.5 }}>
-				    <TextField size="small" placeholder="Search posts..." />
-				    <Chip label="All" size="small" variant="filled" color="primary" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Finding Players" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Finding Matches" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Match Results" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Gear Reviews" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Meetup Rally" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Training & Tips" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				    <Chip label="Ask Questions" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
-				  </Box>
-				*/}
 
 			</Box>
 
@@ -516,47 +831,68 @@ export default function Forum() {
                             <Skeleton variant="rounded" height={100} sx={{ borderRadius: 2 }} />
                         </Paper>
 					))
-				) : feed.length === 0 ? (
-					<Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', p: 4 }}>
-						<Typography color="text.primary">No activity found.</Typography>
+				) : displayedFeed.length === 0 ? (
+					<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 1 }}>
+						{searchInput ? (
+							<>
+								<Typography color="text.primary">No posts match &quot;{searchInput}&quot;.</Typography>
+								<Button 
+									variant="outlined" 
+									size="small" 
+									onClick={() => {
+										setSearchInput('');
+										setDebouncedSearch('');
+										setPage(1);
+										setNewPostsQueue([]);
+									}}
+								>
+									Clear Search
+								</Button>
+							</>
+						) : selectedCategory !== 'all' ? (
+							<>
+								<Typography color="text.primary">No posts match the selected category filter.</Typography>
+								<Button 
+									variant="outlined" 
+									size="small" 
+									onClick={() => {
+										setSelectedCategory('all');
+										setPage(1);
+										setFeed([]);
+										setNewPostsQueue([]);
+									}}
+								>
+									View All Categories
+								</Button>
+							</>
+						) : dateRange !== 'all' ? (
+							<>
+								<Typography color="text.primary">No posts match the selected date range.</Typography>
+								<Button 
+									variant="outlined" 
+									size="small" 
+									onClick={() => {
+										setDateRange('all');
+										setPage(1);
+										setFeed([]);
+										setNewPostsQueue([]);
+									}}
+								>
+									View All Dates
+								</Button>
+							</>
+						) : (
+							<Typography color="text.primary">No activity found.</Typography>
+						)}
 					</Box>
 				) : (
-					feed.map((item, idx) => {
-						if (item.type === 'post') {
-							// Transform ActivityFeed back to Post format for PostCard component
-							const mockPost = {
-								_id: item.referenceId,
-								title: item.title,
-								content: item.content,
-								category: item.category || 'general',
-								matchDetails: item.matchDetails || null,
-								imageUrl: item.image,
-								imageUrls: item.images || [],
-								authorId: item.authorId,
-								authorName: item.authorName,
-								authorBadges: item.authorBadges,
-								authorPic: item.authorProfilePic,
-								timestamp: item.createdAt,
-								tags: item.tags || [],
-								isPinned: Boolean(item.isPinned),
-								reactions: item.reactions || [],
-								likedBy: new Array(Math.max(0, item.likes || 0)).fill('mock_id'), // PostCard only cares about length
-								recentLikerAvatars: item.recentLikerAvatars || [],
-								comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
-							};
-							return (
-								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
-									<PostCard post={mockPost} currentUser={currentUser} isBookmarked={bookmarkedPosts.has(item.referenceId)} onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { const n = new Set(prev); if(isBookmarked) n.add(item.referenceId); else n.delete(item.referenceId); return n; })} onDelete={() => {}} />
-								</Box>
-							);
-						}
-						
+					displayedFeed.map((item, idx) => {
 						if (item.type === 'match') {
 							const team1Wins = item.team1Score > item.team2Score;
 							const team2Wins = item.team2Score > item.team1Score;
 
 							return (
-								<Box key={item._id} ref={idx === feed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
+								<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 									<Paper 
 										elevation={0} 
 										sx={{ 
@@ -581,13 +917,13 @@ export default function Forum() {
 										<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 3, position: 'relative' }}>
 											{/* TEAM 1 */}
 											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
-												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
+												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem' }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team1Avatars?.map((avatar, i) => (
 														<Avatar key={i} src={avatar} alt={item.team1?.[i] || `Team 1 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
-												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
+												<Typography variant="body2" fontWeight="900" align="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
 													{item.team1?.map(name => name.split(' ')[0]).join(' & ')}
 												</Typography>
 											</Box>
@@ -604,13 +940,13 @@ export default function Forum() {
 
 											{/* TEAM 2 */}
 											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
-												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
+												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem' }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team2Avatars?.map((avatar, i) => (
 														<Avatar key={i} src={avatar} alt={item.team2?.[i] || `Team 2 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
-												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
+												<Typography variant="body2" fontWeight="900" align="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
 													{item.team2?.map(name => name.split(' ')[0]).join(' & ')}
 												</Typography>
 											</Box>
@@ -619,8 +955,52 @@ export default function Forum() {
 								</Box>
 							);
 						}
-						
-						return null;
+
+						// Post items (either type === 'post' or standard Post objects from real-time events)
+						const mockPost = {
+							_id: item.referenceId || item._id,
+							title: item.title,
+							content: item.content,
+							category: item.category || 'general',
+							matchDetails: item.matchDetails || null,
+							playerMatchmaking: item.playerMatchmaking || null,
+							challengeMatch: item.challengeMatch || null,
+							qaDetails: item.qaDetails || null,
+							gearDetails: item.gearDetails || null,
+							imageUrl: item.image || item.imageUrl,
+							imageUrls: item.images || item.imageUrls || [],
+							authorId: item.authorId,
+							authorName: item.authorName,
+							authorBadges: item.authorBadges || [],
+							authorPic: item.authorProfilePic || item.authorPic,
+							authorSkillLevel: item.authorSkillLevel,
+							timestamp: item.createdAt || item.timestamp,
+							createdAt: item.createdAt || item.timestamp,
+							tags: item.tags || [],
+							isPinned: Boolean(item.isPinned),
+							reactions: item.reactions || [],
+							likes: item.likes ?? item.likedBy?.length ?? 0,
+							likedBy: Array.isArray(item.likedBy) ? item.likedBy : new Array(Math.max(0, item.likes || 0)).fill('mock_id'),
+							recentLikerAvatars: item.recentLikerAvatars || [],
+							comments: Array.isArray(item.comments) ? item.comments : new Array(Math.max(0, typeof item.comments === 'number' ? item.comments : 0)).fill({}), 
+						};
+						return (
+							<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
+								<PostCard 
+									post={mockPost} 
+									currentUser={currentUser} 
+									isBookmarked={bookmarkedPosts.has(item.referenceId || item._id)} 
+									onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { 
+										const n = new Set(prev); 
+										const targetId = item.referenceId || item._id; 
+										if (isBookmarked) n.add(targetId); 
+										else n.delete(targetId); 
+										return n; 
+									})} 
+									onDelete={() => {}} 
+								/>
+							</Box>
+						);
 					})
 				)}
 			</Box>
