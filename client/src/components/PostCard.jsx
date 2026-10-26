@@ -977,8 +977,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						}}
 					>
 						
-						{/* PLAYER MATCHMAKING BANNER */}
-						{Boolean(localPost.playerMatchmaking || localPost.category === 'find_partner') && (
+						{/* PLAYER MATCHMAKING BANNER - ONLY on Find Partner / Rally posts */}
+						{Boolean((localPost.category === 'find_partner' || localPost.category === 'meetup_rally') && localPost.playerMatchmaking) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1064,8 +1064,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							</Paper>
 						)}
 
-						{/* MATCH CHALLENGE BANNER */}
-						{Boolean(localPost.challengeMatch || localPost.category === 'challenge_match') && (
+						{/* MATCH CHALLENGE BANNER - ONLY on Challenge Match posts */}
+						{Boolean(localPost.category === 'challenge_match' && localPost.challengeMatch) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1128,8 +1128,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							</Paper>
 						)}
 
-						{/* Q&A FORUM BANNER */}
-						{Boolean(localPost.qaDetails || localPost.category === 'qa_forum') && (
+						{/* Q&A FORUM BANNER - ONLY on Q&A posts */}
+						{Boolean(localPost.category === 'qa_forum' && localPost.qaDetails) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1170,8 +1170,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							</Paper>
 						)}
 
-						{/* GEAR EXCHANGE BANNER */}
-						{Boolean(localPost.gearDetails || localPost.category === 'gear_exchange' || localPost.category === 'gear_review') && localPost.gearDetails?.gearType && (
+						{/* GEAR EXCHANGE BANNER - ONLY on Gear posts */}
+						{Boolean((localPost.category === 'gear_exchange' || localPost.category === 'gear_review') && localPost.gearDetails && localPost.gearDetails?.gearType) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1215,8 +1215,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							</Paper>
 						)}
 
-						{/* MATCH SCORECARD BANNER */}
-						{localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court || localPost.matchDetails.winner) && (
+						{/* MATCH SCORECARD BANNER - ONLY on Match Result posts */}
+						{Boolean(localPost.category === 'match_result' && localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court || localPost.matchDetails.winner)) && (
 							<Paper
 								variant="outlined"
 								sx={{
