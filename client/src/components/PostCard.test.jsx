@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import PostCard from './PostCard';
 import { BrowserRouter } from 'react-router-dom';
@@ -64,7 +64,7 @@ describe('PostCard Component QA Tests', () => {
         expect(screen.getByText('📌 Pinned Megathread')).toBeInTheDocument();
     });
 
-    it('renders interactive badminton emoji reaction chips', () => {
+    it('renders Facebook-style reaction emoji cluster and total count', () => {
         const postWithReactions = {
             ...mockPost,
             reactions: [
@@ -74,8 +74,10 @@ describe('PostCard Component QA Tests', () => {
             ],
         };
         renderWithContext(postWithReactions, mockUser);
-        expect(screen.getByText('🏸 2')).toBeInTheDocument();
-        expect(screen.getByText('🔥 1')).toBeInTheDocument();
+        const reactionsBtn = screen.getByTestId('view-reactions-btn');
+        expect(within(reactionsBtn).getByText('🏸')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('🔥')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('3')).toBeInTheDocument();
     });
 
     it('toggles comment accordion when Comment button is clicked', () => {
@@ -96,9 +98,11 @@ describe('PostCard Component QA Tests', () => {
             ],
         };
         renderWithContext(postWithTrio, mockUser);
-        expect(screen.getByText('💥 2')).toBeInTheDocument();
-        expect(screen.getByText('🧊 1')).toBeInTheDocument();
-        expect(screen.getByText('⚡ 1')).toBeInTheDocument();
+        const reactionsBtn = screen.getByTestId('view-reactions-btn');
+        expect(within(reactionsBtn).getByText('💥')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('🧊')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('⚡')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('4')).toBeInTheDocument();
     });
 
     it('renders category badge when category is specified', () => {
@@ -147,8 +151,9 @@ describe('PostCard Component QA Tests', () => {
             ],
         };
         renderWithContext(reactedPost, mockUser);
-        expect(screen.getByText('Ice Drop')).toBeInTheDocument();
-        expect(screen.getByText('🧊')).toBeInTheDocument();
+        const reactButton = screen.getByRole('button', { name: /React to post/i });
+        expect(within(reactButton).getByText('Ice Drop')).toBeInTheDocument();
+        expect(within(reactButton).getByText('🧊')).toBeInTheDocument();
     });
 
     it('renders active reaction label on primary button when user has reacted with Clutch', () => {
@@ -159,8 +164,9 @@ describe('PostCard Component QA Tests', () => {
             ],
         };
         renderWithContext(reactedPost, mockUser);
-        expect(screen.getByText('Clutch')).toBeInTheDocument();
-        expect(screen.getByText('⚡')).toBeInTheDocument();
+        const reactButton = screen.getByRole('button', { name: /React to post/i });
+        expect(within(reactButton).getByText('Clutch')).toBeInTheDocument();
+        expect(within(reactButton).getByText('⚡')).toBeInTheDocument();
     });
 
     it('supports user objects with _id instead of id for reaction detection', () => {
@@ -172,8 +178,9 @@ describe('PostCard Component QA Tests', () => {
             ],
         };
         renderWithContext(reactedPost, userWithMongoId);
-        expect(screen.getByText('Smash')).toBeInTheDocument();
-        expect(screen.getByText('💥')).toBeInTheDocument();
+        const reactButton = screen.getByRole('button', { name: /React to post/i });
+        expect(within(reactButton).getByText('Smash')).toBeInTheDocument();
+        expect(within(reactButton).getByText('💥')).toBeInTheDocument();
     });
 
     it('renders scorecard banner when matchDetails only contains winner', () => {
@@ -201,7 +208,9 @@ describe('PostCard Component QA Tests', () => {
         const reactButton = screen.getByRole('button', { name: /React to post/i });
         fireEvent.click(reactButton);
         await waitFor(() => {
-            expect(screen.getByText('💥 1')).toBeInTheDocument();
+            const reactionsBtn = screen.getByTestId('view-reactions-btn');
+            expect(within(reactionsBtn).getByText('💥')).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('1')).toBeInTheDocument();
         });
     });
 
@@ -484,7 +493,7 @@ describe('PostCard Component QA Tests', () => {
 
         const viewReactionsBtn = screen.getByTestId('view-reactions-btn');
         expect(viewReactionsBtn).toBeInTheDocument();
-        expect(viewReactionsBtn).toHaveTextContent('2 reactions');
+        expect(viewReactionsBtn).toHaveTextContent('2');
 
         fireEvent.click(viewReactionsBtn);
         expect(screen.getByTestId('likes-modal')).toBeInTheDocument();

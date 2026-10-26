@@ -1,6 +1,6 @@
 /* global process, global */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import fs from 'fs';
 import path from 'path';
@@ -504,11 +504,12 @@ describe('🤖 5-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
             expect(screen.getByText(/Review BWF service parity rules/i)).toBeInTheDocument();
             expect(screen.getByText('Sarah Chen')).toBeInTheDocument();
 
-            // 2. Reaction chips
-            expect(screen.getByText('🏸 2')).toBeInTheDocument();
-            expect(screen.getByText('🔥 1')).toBeInTheDocument();
-            const fireChip = screen.getByText('🔥 1');
-            fireEvent.click(fireChip);
+            // 2. Facebook-style Reactions cluster
+            const reactionsBtn = screen.getByTestId('view-reactions-btn');
+            expect(reactionsBtn).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('🏸')).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('🔥')).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('4')).toBeInTheDocument();
 
             // 3. Comment accordion toggle
             const commentBtn = screen.getByRole('button', { name: /Comment \(\d+\)/i });
