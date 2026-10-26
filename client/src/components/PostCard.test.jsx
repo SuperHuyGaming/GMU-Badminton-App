@@ -469,4 +469,42 @@ describe('PostCard Component QA Tests', () => {
         fireEvent.click(cell);
         expect(screen.getByTestId('download-photo-btn')).toBeInTheDocument();
     });
+
+    // ── Phase 7: Interactive Reactions, Who Reacted Modal & Badges ───────────
+
+    it('renders view-reactions-btn and opens Who Reacted modal on click', () => {
+        const postWithReactions = {
+            ...mockPost,
+            reactions: [
+                { userId: 'u-1', userName: 'Alex', emoji: '💥', reactionType: 'smash' },
+                { userId: 'u-2', userName: 'Ben', emoji: '🧊', reactionType: 'ice_drop' }
+            ]
+        };
+        renderWithContext(postWithReactions, mockUser);
+
+        const viewReactionsBtn = screen.getByTestId('view-reactions-btn');
+        expect(viewReactionsBtn).toBeInTheDocument();
+        expect(viewReactionsBtn).toHaveTextContent('2 reactions');
+
+        fireEvent.click(viewReactionsBtn);
+        expect(screen.getByTestId('likes-modal')).toBeInTheDocument();
+        expect(screen.getByText('Post Reactions')).toBeInTheDocument();
+    });
+
+    it('renders badminton gamification badges (Smash Master, Clutch Performer, Community Guide)', () => {
+        const gamifiedPost = {
+            ...mockPost,
+            authorBadges: ['smash_master', 'clutch_performer', 'community_guide']
+        };
+        renderWithContext(gamifiedPost, mockUser);
+
+        expect(screen.getByTestId('badge-smash-master')).toBeInTheDocument();
+        expect(screen.getByText('Smash Master')).toBeInTheDocument();
+
+        expect(screen.getByTestId('badge-clutch-performer')).toBeInTheDocument();
+        expect(screen.getByText('Clutch Performer')).toBeInTheDocument();
+
+        expect(screen.getByTestId('badge-community-guide')).toBeInTheDocument();
+        expect(screen.getByText('Community Guide')).toBeInTheDocument();
+    });
 });
