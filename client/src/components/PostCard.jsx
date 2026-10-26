@@ -1,6 +1,6 @@
 // client/src/components/PostCard.jsx
 // eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
 import apiFetch from "../utils/api";
@@ -279,6 +279,23 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const currentUserReaction = (localPost.reactions || []).find(
 		(r) => r && String(r.userId) === String(currentUserId)
 	)?.emoji;
+
+	const totalReactionsCount = (localPost.reactions?.length || 0) + (localPost.likedBy?.length || 0);
+	const distinctReactionEmojis = useMemo(() => {
+		const emojis = [];
+		const seen = new Set();
+		(localPost.reactions || []).forEach((r) => {
+			const emoji = typeof r === 'string' ? r : r?.emoji;
+			if (emoji && !seen.has(emoji)) {
+				seen.add(emoji);
+				emojis.push(emoji);
+			}
+		});
+		if (localPost.likedBy?.length > 0 && !seen.has('👍')) {
+			emojis.push('👍');
+		}
+		return emojis;
+	}, [localPost.reactions, localPost.likedBy]);
 
 	const [showHeart, setShowHeart] = useState(false);
 	const [showReactions, setShowReactions] = useState(false);
@@ -1491,8 +1508,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					</Box>
 				)}
 
-				{/* STATS (Reactions, Likes & Comments counts) */}
-				{(localPost.likedBy?.length > 0 || (localPost.reactions && localPost.reactions.length > 0) || totalCommentsCount > 0) && (
+				{/* STATS (Facebook-style Reactions & Comments Summary) */}
+				{(totalReactionsCount > 0 || totalCommentsCount > 0) && (
 					<Box
 						sx={{
 							display: "flex",
@@ -1502,143 +1519,139 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							mb: 1,
 						}}
 					>
-						{/* REACTION CHIPS */}
-						<Box sx={{ display: "flex", gap: 0.8, flexWrap: "wrap", alignItems: "center" }}>
-							{Object.entries(
-								(localPost.reactions || []).reduce((acc, r) => {
-									const emoji = typeof r === 'string' ? r : (r?.emoji || '');
-									if (emoji) acc[emoji] = (acc[emoji] || 0) + 1;
-									return acc;
-								}, {})
-							).map(([emoji, count]) => {
-								const hasReactedWithThis = (localPost.reactions || []).some(
-									(r) => r && String(r.userId) === String(currentUserId) && ((typeof r === 'string' ? r : r.emoji) === emoji)
-								);
-								const reactionMeta = BADMINTON_REACTIONS.find((b) => b.emoji === emoji);
-								return (
-									<Tooltip key={emoji} title={reactionMeta ? reactionMeta.tooltip : emoji} arrow>
-										<Chip
-											label={`${emoji} ${count}`}
-											size="small"
-											variant={hasReactedWithThis ? "filled" : "outlined"}
-											color={hasReactedWithThis ? "primary" : "default"}
-											onClick={() => handleReaction(emoji)}
-											sx={{
-												cursor: "pointer",
-												fontWeight: "bold",
-												fontSize: "0.75rem",
-												height: 24,
-												transition: "transform 0.15s ease",
-												"&:hover": { transform: "scale(1.1)" },
-											}}
-										/>
-									</Tooltip>
-								);
-							})}
-							{localPost.reactions?.length > 0 && (
-								<Chip
-									data-testid="view-reactions-btn"
-									aria-label="View who reacted to this post"
-									label={`${localPost.reactions.length} ${localPost.reactions.length === 1 ? 'reaction' : 'reactions'}`}
-									size="small"
-									variant="outlined"
-									onClick={(e) => openLikes(e, "Post Reactions", localPost.likedByDetails, localPost.reactions, "all")}
-									sx={{
-										cursor: "pointer",
-										fontWeight: "bold",
-										fontSize: "0.75rem",
-										height: 24,
-										bgcolor: "background.paper",
-										"&:hover": { bgcolor: "action.hover" },
-									}}
-								/>
-							)}
-						</Box>
-
-						{/* LIKES & COMMENTS COUNTERS */}
-						<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-							{totalCommentsCount > 0 && (
-								<Typography
-									role="button"
-									tabIndex={0}
-									variant="body2"
-									color="text.primary"
-									sx={{
-										cursor: "pointer",
-										"&:hover": { textDecoration: "underline" },
-									}}
-									onClick={() => setIsCommentModalOpen((prev) => !prev)}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											setIsCommentModalOpen((prev) => !prev);
-										}
-									}}
-								>
-									{totalCommentsCount}{" "}
-									{totalCommentsCount === 1 ? "comment" : "comments"}
-								</Typography>
-							)}
-							{localPost.likedBy?.length > 0 && (
-								<Box
-									role="button"
-									tabIndex={0}
-									aria-label="View users who liked this post"
-									onClick={(e) =>
+						{/* Facebook-style Reactions Cluster & Single Total Number */}
+						{totalReactionsCount > 0 ? (
+							<Box
+								role="button"
+								tabIndex={0}
+								data-testid="view-reactions-btn"
+								aria-label={`View ${totalReactionsCount} reactions`}
+								onClick={(e) =>
+									openLikes(
+										e,
+										"Post Reactions",
+										localPost.likedByDetails,
+										localPost.reactions,
+										"all"
+									)
+								}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
 										openLikes(
 											e,
-											"Post Likes",
+											"Post Reactions",
 											localPost.likedByDetails,
-										)
+											localPost.reactions,
+											"all"
+										);
 									}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											openLikes(
-												e,
-												"Post Likes",
-												localPost.likedByDetails,
-											);
-										}
-									}}
+								}}
+								sx={{
+									display: "inline-flex",
+									alignItems: "center",
+									gap: 0.75,
+									cursor: "pointer",
+									py: 0.3,
+									px: 0.5,
+									borderRadius: 4,
+									userSelect: "none",
+									"&:hover": {
+										"& .reaction-count-total": {
+											textDecoration: "underline",
+										},
+									},
+								}}
+							>
+								{/* Overlapping distinct reaction emojis */}
+								<Box sx={{ display: "inline-flex", alignItems: "center" }}>
+									{distinctReactionEmojis.slice(0, 3).map((emoji, index) => (
+										<Box
+											key={emoji}
+											component="span"
+											onClick={(e) => {
+												e.stopPropagation();
+												let tab = "all";
+												if (emoji === "💥") tab = "smash";
+												else if (emoji === "🧊") tab = "ice_drop";
+												else if (emoji === "⚡") tab = "clutch";
+												openLikes(
+													e,
+													"Post Reactions",
+													localPost.likedByDetails,
+													localPost.reactions,
+													tab
+												);
+											}}
+											sx={{
+												display: "inline-flex",
+												alignItems: "center",
+												justifyContent: "center",
+												width: 20,
+												height: 20,
+												fontSize: "0.85rem",
+												borderRadius: "50%",
+												bgcolor: "background.paper",
+												border: "1.5px solid",
+												borderColor: "background.paper",
+												ml: index > 0 ? -0.7 : 0,
+												zIndex: 3 - index,
+												boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+												transition: "transform 0.15s ease",
+												"&:hover": {
+													transform: "scale(1.25)",
+													zIndex: 10,
+												},
+											}}
+										>
+											{emoji}
+										</Box>
+									))}
+								</Box>
+
+								{/* Only a single number total for those reactions */}
+								<Typography
+									className="reaction-count-total"
+									variant="body2"
+									color="text.secondary"
 									sx={{
-										display: "flex",
-										alignItems: "center",
-										gap: 0.5,
-										cursor: "pointer",
-										"&:hover": { textDecoration: "underline" },
+										fontSize: "0.85rem",
+										fontWeight: 600,
+										lineHeight: 1,
 									}}
 								>
-									{(localPost.recentLikerAvatars?.length > 0 || localPost.likedByDetails?.length > 0) && (
-										<AvatarGroup max={3} sx={{ mr: 0.5, '& .MuiAvatar-root': { width: 22, height: 22, fontSize: 10, border: '1px solid', borderColor: 'background.paper' } }}>
-											{(localPost.likedByDetails || localPost.recentLikerAvatars || []).slice(0, 3).map((liker, i) => {
-												const url = typeof liker === 'string' ? liker : liker.profilePic;
-												if (!url) return null;
-												return <Avatar key={i} src={url} alt="User Avatar" />;
-											})}
-										</AvatarGroup>
-									)}
-									<Typography
-										variant="body2"
-										color="text.primary"
-									>
-										{localPost.likedBy.length}
-									</Typography>
-									<Avatar
-										sx={{
-											width: 20,
-											height: 20,
-											bgcolor: "primary.main",
-											color: "white",
-										}}
-									>
-										<ThumbUpFilled
-											style={{ width: 12, height: 12 }}
-										/>
-									</Avatar>
-								</Box>
-							)}
-						</Box>
+									{totalReactionsCount}
+								</Typography>
+							</Box>
+						) : (
+							<Box />
+						)}
+
+						{/* COMMENTS COUNT */}
+						{totalCommentsCount > 0 && (
+							<Typography
+								role="button"
+								tabIndex={0}
+								variant="body2"
+								color="text.secondary"
+								sx={{
+									cursor: "pointer",
+									fontSize: "0.85rem",
+									fontWeight: 500,
+									"&:hover": { textDecoration: "underline" },
+								}}
+								onClick={() => setIsCommentModalOpen((prev) => !prev)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										setIsCommentModalOpen((prev) => !prev);
+									}
+								}}
+							>
+								{totalCommentsCount}{" "}
+								{totalCommentsCount === 1 ? "comment" : "comments"}
+							</Typography>
+						)}
 					</Box>
 				)}
 
