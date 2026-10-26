@@ -62,7 +62,7 @@ import {
 } from "./Icons";
 
 // eslint-disable-next-line no-unused-vars
-export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser }) {
+export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false }) {
 	const navigate = useNavigate();
 	const currentUser = propUser || (typeof window !== "undefined" && localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null);
 	const currentUserId = currentUser?.id || currentUser?._id;
@@ -526,6 +526,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				onDragEnd={handleDragEnd}
 				animate={controls}
 				id={`post-${localPost._id}`}
+				data-testid={compact ? "post-card-compact" : "post-card-comfortable"}
 				elevation={0}
 				className={
 					urlPostId === localPost._id && !highlightId
@@ -536,10 +537,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					width: "100%",
 					display: "block",
 					boxSizing: "border-box",
-					p: { xs: 2, sm: 3 },
+					p: compact ? { xs: 1.5, sm: 2 } : { xs: 2, sm: 3 },
 					border: localPost.isPinned ? "2px solid" : "1px solid",
 					borderColor: localPost.isPinned ? "warning.main" : "divider",
-					borderRadius: 4,
+					borderRadius: compact ? 3 : 4,
 					userSelect: "none",
 					bgcolor: 'background.paper',
 					backgroundImage: localPost.isPinned 
@@ -628,7 +629,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								/>
 							)}
 							<Typography
-								variant="h6"
+								variant={compact ? "subtitle1" : "h6"}
 								fontWeight="bold"
 								color="text.primary"
 								sx={{ lineHeight: 1.2 }}
@@ -1184,7 +1185,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<Typography
 							variant="body1"
 							color="text.primary"
-							sx={{ whiteSpace: "pre-wrap", pointerEvents: 'none', mb: localPost.tags?.length ? 2 : 0 }}
+							sx={{ whiteSpace: "pre-wrap", pointerEvents: 'none', mb: localPost.tags?.length ? 2 : 0, ...(compact ? { display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}) }}
 						>
 							{localPost.content}
 						</Typography>

@@ -7,11 +7,12 @@ import {
 	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
 	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem,
-	Checkbox, FormControl, InputAdornment, IconButton
+	Checkbox, FormControl, InputAdornment, IconButton, Tooltip
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
 // eslint-disable-next-line no-unused-vars
@@ -53,7 +54,40 @@ export default function Forum() {
 	const { postId: routePostId } = useParams();
 	const location = useLocation();
 
-	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
+	const [tab, setTab] = useState("foryou");
+	const tabsCacheRef = useRef({});
+	const [feedDensity, setFeedDensity] = useState(() => {
+		return typeof window !== 'undefined' ? (localStorage.getItem("mbc_feed_density") || "comfortable") : "comfortable";
+	});
+	const handleToggleDensity = () => {
+		const next = feedDensity === "comfortable" ? "compact" : "comfortable";
+		setFeedDensity(next);
+		if (typeof window !== 'undefined') localStorage.setItem("mbc_feed_density", next);
+	};
+
+	const [showBackToTop, setShowBackToTop] = useState(false);
+	useEffect(() => {
+		const handleScroll = () => {
+			setShowBackToTop(window.scrollY > 350);
+		};
+		window.addEventListener("scroll", handleScroll, { passive: true });
+		return () => window.removeEventListener("scroll", handleScroll);
+	}, []);
+
+	const [trendingTags, setTrendingTags] = useState([]);
+	useEffect(() => {
+		let isMounted = true;
+		apiFetch("/api/feed/trending-tags")
+			.then(res => (res && res.ok ? res.json() : null))
+			.then(data => {
+				if (isMounted && data?.tags && Array.isArray(data.tags)) {
+					setTrendingTags(data.tags);
+				}
+			})
+			.catch(err => console.error("Failed to fetch trending tags:", err));
+		return () => { isMounted = false; };
+	}, []);
+ // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
 	const [selectedCategory, setSelectedCategory] = useState("all");
 	const selectedCategoryRef = useRef(selectedCategory);
@@ -168,6 +202,32 @@ export default function Forum() {
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const isFormValid = newPost.title.length > 0 && newPost.content.length > 0;
 
+	// Draft auto-save to sessionStorage
+	useEffect(() => {
+		if (typeof window !== 'undefined' && (newPost.title.trim() || newPost.content.trim())) {
+			sessionStorage.setItem("mbc_community_post_draft", JSON.stringify(newPost));
+		}
+	}, [newPost]);
+
+	const handleOpenCreatePost = () => {
+		if (!newPost.title && !newPost.content && typeof window !== 'undefined') {
+			try {
+				const saved = sessionStorage.getItem("mbc_community_post_draft");
+				if (saved) {
+					const parsed = JSON.parse(saved);
+					if (parsed && (parsed.title || parsed.content)) {
+						setNewPost(prev => ({ ...prev, ...parsed }));
+						toast("Draft restored from previous session", { icon: "📝" });
+					}
+				}
+			} catch (err) {
+				console.error("Draft restore error:", err);
+			}
+		}
+		setIsModalOpen(true);
+	};
+
+
 	const formatTime = (dateString) => {
 		if (!dateString) return "";
 		return new Date(dateString).toLocaleDateString("en-US", {
@@ -271,11 +331,24 @@ export default function Forum() {
 					
 					if (isFirstPage) {
 						setFeed(data.feed);
+						tabsCacheRef.current[tab] = {
+							feed: data.feed,
+							nextCursor: data.nextCursor,
+							hasMore: !!data.nextCursor,
+							timestamp: Date.now()
+						};
 					} else {
 						setFeed(prev => {
 							const existingIds = new Set(prev.map(item => item._id));
 							const newItems = data.feed.filter(item => !existingIds.has(item._id));
-							return [...prev, ...newItems];
+							const updated = [...prev, ...newItems];
+							tabsCacheRef.current[tab] = {
+								feed: updated,
+								nextCursor: data.nextCursor,
+								hasMore: !!data.nextCursor,
+								timestamp: Date.now()
+							};
+							return updated;
 						});
 					}
 				}
@@ -384,8 +457,17 @@ export default function Forum() {
 	const handleTabChange = (event, newValue) => {
 		setTab(newValue);
 		setPage(1);
-		setFeed([]);
 		setNewPostsQueue([]);
+		const cached = tabsCacheRef.current[newValue];
+		if (cached && Array.isArray(cached.feed) && cached.feed.length > 0) {
+			setFeed(cached.feed);
+			cursorRef.current = cached.nextCursor;
+			setHasMore(cached.hasMore);
+			setIsLoading(false);
+		} else {
+			setFeed([]);
+			setIsLoading(true);
+		}
 	};
 
 	const handleSubmit = async () => {
@@ -448,6 +530,7 @@ export default function Forum() {
 			setNewPost(defaultNewPost);
 			setPostImages([]);
 			setIsModalOpen(false);
+			if (typeof window !== "undefined") sessionStorage.removeItem("mbc_community_post_draft");
 			toast.success("Post created successfully!");
 			setPage(1);
 			setFeed([]);
@@ -493,7 +576,7 @@ export default function Forum() {
 				<Button
 					variant="contained"
 					color="primary"
-					onClick={() => setIsModalOpen(true)}
+					onClick={handleOpenCreatePost}
 					sx={{
 						borderRadius: 2.5,
 						fontWeight: 'bold',
@@ -525,6 +608,7 @@ export default function Forum() {
 					<Tab label="✨ For You" value="foryou" />
 					<Tab label="🔥 Top" value="top" />
 					<Tab label="⏱ Latest" value="latest" />
+					<Tab label="🔖 Saved" value="saved" />
 				</Tabs>
 
 				{/* POST SEARCH & DATE RANGE CONTROLS */}
@@ -684,8 +768,64 @@ export default function Forum() {
 							<RefreshIcon sx={{ fontSize: 18 }} />
 							<Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
 						</Button>
+
+						<Tooltip title={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}>
+							<Button 
+								variant={feedDensity === "compact" ? "contained" : "outlined"} 
+								size="small" 
+								color="primary"
+								onClick={handleToggleDensity}
+								data-testid="feed-density-toggle"
+								aria-label={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}
+								sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 0.8, fontWeight: 'bold', height: 38, px: 1.5 }}
+							>
+								{feedDensity === "compact" ? "📋 Compact" : "🖼 Comfortable"}
+							</Button>
+						</Tooltip>
+
 					</Box>
 				</Paper>
+
+				
+				{/* TRENDING HASHTAG STRIP */}
+				{trendingTags.length > 0 && (
+					<Box 
+						sx={{ 
+							width: '100%', maxWidth: '800px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
+							scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
+						}}
+						data-testid="trending-tags-strip"
+						role="region"
+						aria-label="Trending tags"
+					>
+						<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap', mr: 0.5 }}>
+							🔥 Trending:
+						</Typography>
+						{trendingTags.map((item) => (
+							<Chip 
+								key={item.tag} 
+								label={`#${item.tag} (${item.count})`} 
+								size="small" 
+								variant={selectedTag === item.tag ? "filled" : "outlined"}
+								color={selectedTag === item.tag ? "primary" : "default"}
+								onClick={() => {
+									setSelectedTag(prev => prev === item.tag ? "" : item.tag);
+									setPage(1);
+									setFeed([]);
+									setNewPostsQueue([]);
+								}}
+								clickable
+								sx={{ 
+									fontWeight: 'bold', 
+									borderRadius: 2,
+									cursor: 'pointer',
+									fontSize: '0.75rem',
+									transition: 'all 0.2s ease-in-out'
+								}}
+							/>
+						))}
+					</Box>
+				)}
 
 				{/* CATEGORY GROUP FILTER BAR */}
 				<Box 
@@ -1039,6 +1179,7 @@ export default function Forum() {
 							<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 								<PostCard 
 									post={mockPost} 
+									compact={feedDensity === "compact"} 
 									currentUser={currentUser} 
 									isBookmarked={bookmarkedPosts.has(item.referenceId || item._id)} 
 									onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { 
@@ -1587,12 +1728,49 @@ export default function Forum() {
 					</Box>
 				</DialogContent>
 				<DialogActions sx={{ px: 3, pb: 2 }}>
+					
+					{(newPost.title || newPost.content) && (
+						<Button 
+							onClick={() => {
+								setNewPost(defaultNewPost);
+								if (typeof window !== "undefined") sessionStorage.removeItem("mbc_community_post_draft");
+								toast.success("Draft cleared");
+							}} 
+							color="error" 
+							size="small"
+							sx={{ fontWeight: "bold", mr: "auto" }}
+						>
+							Clear Draft
+						</Button>
+					)}
+
 					<Button onClick={() => setIsModalOpen(false)} color="inherit" sx={{ fontWeight: "bold" }}>Cancel</Button>
 					<Button onClick={handleSubmit} variant="contained" disabled={!isFormValid || isUploadingImage} sx={{ fontWeight: "bold", px: 4, borderRadius: 2 }}>
 						{isUploadingImage ? <CircularProgress size={24} color="inherit" /> : "Post"}
 					</Button>
 				</DialogActions>
 			</Dialog>
+			{showBackToTop && (
+				<IconButton
+					aria-label="Back to top"
+					data-testid="back-to-top-btn"
+					onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+					sx={{
+						position: 'fixed',
+						bottom: { xs: 80, sm: 36 },
+						right: { xs: 16, sm: 36 },
+						zIndex: 1100,
+						bgcolor: 'primary.main',
+						color: 'primary.contrastText',
+						boxShadow: '0 6px 20px rgba(0, 102, 51, 0.4)',
+						'&:hover': { bgcolor: 'primary.dark', transform: 'translateY(-3px)' },
+						transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+					}}
+				>
+					<KeyboardArrowUpIcon />
+				</IconButton>
+			)}
+
 		</Box>
 	);
 }
