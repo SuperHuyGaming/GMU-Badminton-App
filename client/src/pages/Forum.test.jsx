@@ -637,4 +637,88 @@ describe('Forum Page Component (Community Hub)', () => {
         fireEvent.keyDown(window, { key: '/' });
         expect(document.activeElement).not.toBe(searchInput);
     });
+
+    it('toggles feed density between Comfortable and Compact view modes', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [] })
+        });
+
+        renderWithProviders();
+
+        const densityBtn = screen.getByTestId('feed-density-toggle');
+        expect(densityBtn).toBeInTheDocument();
+        expect(densityBtn.textContent).toMatch(/Comfortable/i);
+
+        fireEvent.click(densityBtn);
+        expect(densityBtn.textContent).toMatch(/Compact/i);
+        expect(localStorage.getItem('mbc_feed_density')).toBe('compact');
+
+        fireEvent.click(densityBtn);
+        expect(densityBtn.textContent).toMatch(/Comfortable/i);
+        expect(localStorage.getItem('mbc_feed_density')).toBe('comfortable');
+    });
+
+    it('restores post creation draft from sessionStorage and allows clearing it', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [] })
+        });
+
+        sessionStorage.setItem('mbc_community_post_draft', JSON.stringify({
+            title: 'Draft Saved Title',
+            content: 'Draft Saved Content details here'
+        }));
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
+
+        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
+        fireEvent.click(createBtn);
+
+        await waitFor(() => {
+            expect(screen.getByDisplayValue('Draft Saved Title')).toBeInTheDocument();
+            expect(screen.getAllByDisplayValue('Draft Saved Content details here').length).toBeGreaterThan(0);
+        });
+
+        const clearDraftBtn = screen.getByRole('button', { name: /Clear Draft/i });
+        expect(clearDraftBtn).toBeInTheDocument();
+        fireEvent.click(clearDraftBtn);
+
+        expect(sessionStorage.getItem('mbc_community_post_draft')).toBeNull();
+    });
+
+    it('renders trending tags strip and triggers filtering on tag click', async () => {
+        apiFetch.mockImplementation((url) => {
+            if (url.includes('/trending-tags')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({
+                        tags: [
+                            { tag: 'rackets', count: 9 },
+                            { tag: 'rac-court', count: 4 }
+                        ]
+                    })
+                });
+            }
+            return Promise.resolve({
+                ok: true,
+                json: async () => ({ feed: [], hasMore: false })
+            });
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => {
+            expect(screen.getByText(/#rackets/i)).toBeInTheDocument();
+            expect(screen.getByText(/#rac-court/i)).toBeInTheDocument();
+        });
+
+        const racketChip = screen.getByText(/#rackets/i);
+        fireEvent.click(racketChip);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tag=rackets'));
+        });
+    });
 });

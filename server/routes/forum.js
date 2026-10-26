@@ -9,6 +9,7 @@ const xss = require("xss");
 const { analyzeContent } = require("../utils/aiModeration");
 const { evaluateSpamHeuristics } = require("../utils/spamDetector");
 const { parseDateRange } = require("../utils/dateRange");
+const feedCache = require("../utils/feedCache");
 const router = express.Router();
 
 const escapeHtml = (str) => {
@@ -132,6 +133,100 @@ const hydrateWithPictures = async (data) => {
 // ==========================================
 // NOTIFICATIONS
 // ==========================================
+
+// ==========================================
+// TRENDING TAGS (Cached with 2-minute TTL)
+// ==========================================
+router.get("/trending-tags", async (req, res, next) => {
+	try {
+		const cached = feedCache.get("trending_tags");
+		if (cached) {
+			if (req.headers["if-none-match"] === cached.etag) {
+				return res.status(304).end();
+			}
+			res.setHeader("ETag", cached.etag);
+			res.setHeader("X-Feed-Cache", "HIT");
+			return res.json(cached.data);
+		}
+
+		const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+		let tagsAggregation = await Post.aggregate([
+			{
+				$match: {
+					status: { $nin: ["quarantined", "deleted"] },
+					isFlagged: { $ne: true },
+					createdAt: { $gte: twoDaysAgo },
+					tags: { $exists: true, $ne: [] }
+				}
+			},
+			{ $unwind: "$tags" },
+			{
+				$project: {
+					tag: { $trim: { input: { $toLower: "$tags" } } }
+				}
+			},
+			{ $match: { tag: { $ne: "" } } },
+			{
+				$group: {
+					_id: "$tag",
+					count: { $sum: 1 }
+				}
+			},
+			{ $sort: { count: -1, _id: 1 } },
+			{ $limit: 10 },
+			{
+				$project: {
+					_id: 0,
+					tag: "$_id",
+					count: 1
+				}
+			}
+		]);
+
+		if (tagsAggregation.length < 3) {
+			tagsAggregation = await Post.aggregate([
+				{
+					$match: {
+						status: { $nin: ["quarantined", "deleted"] },
+						isFlagged: { $ne: true },
+						tags: { $exists: true, $ne: [] }
+					}
+				},
+				{ $unwind: "$tags" },
+				{
+					$project: {
+						tag: { $trim: { input: { $toLower: "$tags" } } }
+					}
+				},
+				{ $match: { tag: { $ne: "" } } },
+				{
+					$group: {
+						_id: "$tag",
+						count: { $sum: 1 }
+					}
+				},
+				{ $sort: { count: -1, _id: 1 } },
+				{ $limit: 10 },
+				{
+					$project: {
+						_id: 0,
+						tag: "$_id",
+						count: 1
+					}
+				}
+			]);
+		}
+
+		const payload = { tags: tagsAggregation };
+		const etag = feedCache.set("trending_tags", payload, 120);
+		res.setHeader("ETag", etag);
+		res.setHeader("X-Feed-Cache", "MISS");
+		return res.json(payload);
+	} catch (err) {
+		next(err);
+	}
+});
+
 router.get("/share/:postId", async (req, res) => {
     try {
         if (!mongoose.isValidObjectId(req.params.postId)) {

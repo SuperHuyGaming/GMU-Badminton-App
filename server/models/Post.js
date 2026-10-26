@@ -192,6 +192,11 @@ PostSchema.pre('save', function (next) {
 
 PostSchema.post('save', async function(doc) {
 	try {
+		const feedCache = require('../utils/feedCache');
+		feedCache.invalidateFeed();
+	} catch (err) {}
+
+	try {
 		const { publishEvent } = require('../utils/kafkaProducer');
 		await publishEvent("post-events", { type: "post.updated", payload: doc });
 	} catch (err) {
@@ -255,6 +260,11 @@ PostSchema.post('save', async function(doc) {
 });
 
 PostSchema.post('findOneAndDelete', async function(doc) {
+	try {
+		const feedCache = require('../utils/feedCache');
+		feedCache.invalidateFeed();
+	} catch (err) {}
+
 	if (!doc) return;
 	try {
 		const { publishEvent } = require('../utils/kafkaProducer');

@@ -36,11 +36,11 @@ describe('PostCard Component QA Tests', () => {
 
     const mockUser = { id: 'user-123', name: 'Test Author' };
     
-    const renderWithContext = (post, user) => {
+    const renderWithContext = (post, user, extraProps = {}) => {
         return render(
             <AuthContext.Provider value={{ user, token: 'fake-token' }}>
                 <BrowserRouter>
-                    <PostCard post={post} currentUser={user} onLike={vi.fn()} onComment={vi.fn()} />
+                    <PostCard post={post} currentUser={user} onLike={vi.fn()} onComment={vi.fn()} {...extraProps} />
                 </BrowserRouter>
             </AuthContext.Provider>
         );
@@ -384,5 +384,15 @@ describe('PostCard Component QA Tests', () => {
                 })
             );
         });
+    });
+
+    it('supports compact feed density mode and renders with post-card-compact testid', () => {
+        renderWithContext(mockPost, mockUser, { compact: true });
+        expect(screen.getByTestId('post-card-compact')).toBeInTheDocument();
+    });
+
+    it('renders comfortable mode by default with post-card-comfortable testid', () => {
+        renderWithContext(mockPost, mockUser, { compact: false });
+        expect(screen.getByTestId('post-card-comfortable')).toBeInTheDocument();
     });
 });
