@@ -56,5 +56,28 @@ tournamentSchema.index({ status: 1, startDate: 1 });
 tournamentSchema.index({ linkStatus: 1 });
 tournamentSchema.index({ "waitlist.userId": 1 });
 tournamentSchema.index({ "waitlist.idempotencyKey": 1 }, { sparse: true });
+tournamentSchema.index(
+    {
+        tournamentName: "text",
+        hostUniversity: "text",
+        "divisions.name": "text",
+        "divisions.code": "text",
+        eventLocation: "text",
+        skillLevels: "text",
+        originalCaption: "text"
+    },
+    {
+        weights: {
+            tournamentName: 10,
+            hostUniversity: 8,
+            "divisions.name": 6,
+            "divisions.code": 5,
+            eventLocation: 4,
+            skillLevels: 3,
+            originalCaption: 1
+        },
+        name: "TournamentCompoundTextIndex"
+    }
+);
 
 module.exports = mongoose.model("Tournament", tournamentSchema);

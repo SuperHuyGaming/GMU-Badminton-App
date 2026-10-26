@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 
 import apiFetch from "../utils/api";
+import FeedbackManager from "../components/admin/FeedbackManager";
 
 // Sleek Trash Icon
 const TrashIcon = () => (
@@ -116,6 +117,8 @@ export default function Admin() {
 				await apiFetch(`/api/admin/messages/${id}`, { method: "DELETE" });
 				setFlaggedMessages(flaggedMessages.filter((m) => m._id !== id));
 				setAllMessages(allMessages.filter((m) => m._id !== id));
+			} else if (type === "feedback") {
+				await apiFetch(`/api/feedback/admin/${id}`, { method: "DELETE" });
 			}
 		} catch (err) {
 			console.error(err);
@@ -188,6 +191,9 @@ export default function Admin() {
 					Open Tournament Approvals
 				</Button>
 			</Paper>
+
+			{/* USER FEEDBACK & ERROR REPORTS */}
+			<FeedbackManager promptDelete={promptDelete} />
 
 			{/* MODERATION QUEUE */}
 			<Typography
@@ -711,7 +717,9 @@ export default function Admin() {
 							? "user"
 							: deleteConfirm.type === "spam"
 								? "spam post"
-								: deleteConfirm.type === "message"
+								: deleteConfirm.type === "feedback"
+									? "feedback report"
+									: deleteConfirm.type === "message"
 									? "private message"
 									: "post"}
 						? This action cannot be undone.

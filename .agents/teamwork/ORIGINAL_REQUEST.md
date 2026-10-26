@@ -467,3 +467,86 @@ All features and refactors must follow the project's PR workflow (`feature branc
 3. Hybrid ML Ensemble (`computeTitleSimilarity`):
    - Fuses Cosine Similarity (40%), Jaro-Winkler (35%), and Levenshtein (25%)
 Ensure `worker_m1_ingestion_8` includes tests for `shouldPruneCandidate`, `computeTfIdfVector`, `cosineSimilarity`, and the ensemble similarity in `server/tests/titan_m1_ingestion_dedup.test.js`.
+
+
+## 2026-10-23T19:54:51Z
+
+Develop a comprehensive 50-idea master innovation roadmap and technical blueprint for Mason Badminton Connect (GMU Badminton App), focusing on an enterprise-grade Autonomous AI Tournament Hunter, multimodal flyer vision parsing, deep link crawling, and admin governance.
+
+Working directory: D:\GMU Badminton App
+Integrity mode: development
+
+## Requirements
+
+### R1. 50-Idea Comprehensive Innovation Roadmap
+Synthesize exactly 50 categorized, scored, and prioritized enhancement ideas for the Mason Badminton Connect ecosystem. The roadmap must span:
+1. Autonomous AI Tournament Hunter & Scraper Ecosystem (Multimodal Vision for flyers, Linktree/Forms deep crawling, geofencing, temporal validation)
+2. Ingestion Quality & Duplicate Prevention (Fuzzy clustering, cross-collection indexing, conflict guards)
+3. Link Health & Reliability (Automated HTTP probing, 404 detection, verified fallback routing)
+4. Admin Governance & Human-in-the-Loop Workflow (Review queue, inline date/division editing, one-click approvals)
+5. Community Platform & Real-Time Engagement (Elo ratings, live RAC court tracking, matchmaking)
+
+Each idea must include a clear problem statement, proposed technical capability, expected impact score (1-10), and implementation complexity (Low/Medium/High).
+
+### R2. Tournament Hunter Deep-Dive & Architectural Blueprints
+Deliver production-ready architectural blueprints and integration designs for the top-priority Tournament Hunter capabilities:
+- Multimodal Vision AI ingestion for Instagram flyer graphics (extracting dates, venues, entry fees, and flight divisions directly from image pixels).
+- Deep Linktree and Google Forms crawler to capture tournament specifics where captions omit details.
+- Pre-flight automated link health verification to detect and prevent broken URLs from reaching public feeds.
+- Human-admin review queue guarantees ensuring zero unapproved tournaments are ever published live.
+
+### R3. Programmatic Verification & Audit Harness
+Construct automated verification scripts and test suites to objectively validate:
+- Zero unapproved tournaments are exposed on the public `/api/tournaments` endpoint.
+- Broken registration links (e.g. 404s, DNS failures) are automatically detected and flagged with verified host club fallbacks.
+- New discoveries without dates are safely enqueued as pending proposals with TBD markers rather than dropped or fabricated.
+
+## Acceptance Criteria
+
+### Roadmap Completeness
+- [ ] Exactly 50 distinct, actionable ideas are articulated with problem, solution, impact (1-10), and complexity ratings.
+- [ ] At least 25 of the 50 ideas directly address the Tournament Hunter, scraper accuracy, flyer OCR, and link verification.
+
+### Architectural Rigor
+- [ ] Detailed technical designs are provided for Multimodal Vision flyer extraction, Linktree/Google Forms deep parsing, and pre-flight link health probing.
+- [ ] The human-in-the-loop governance model strictly preserves the invariant that zero unapproved tournaments appear in the public live feed.
+
+### Objective Verification
+- [ ] Programmatic test scripts execute cleanly and verify:
+  - (1) GET `/api/tournaments` returns only human-approved tournaments.
+  - (2) Link health verification correctly flags unreachable URLs and assigns verified club fallbacks.
+  - (3) Dateless tournaments remain in the review queue with TBD status.
+
+
+## 2026-10-25T19:20:06Z
+
+This is a single self-contained fix; keep it small and focused. Activate and integrate Phase 3 of the GMU Badminton Community Hub: post search engine with debounce, date range management, and category group filters (finding players, finding matches, Q&A forums, gear exchange, match scorecards).
+
+Working directory: D:/GMU Badminton App
+Branch: develop (STRICT: NEVER merge or push to main)
+Integrity mode: development
+
+## Requirements
+
+### R1. Post Search Engine with Debounce
+Implement responsive, debounced search across community posts by text, title, court, tags, and author. Ensure smooth live filtering without layout jitter or feed jumping.
+
+### R2. Category Group Filtering System
+Activate the commented-out category filter bar in the Community Feed (`client/src/pages/Forum.jsx`), providing 1-tap filtering across `find_partner`, `challenge_match`, `qa_forum`, `gear_exchange`, `match_result`, `training`, and `general` while preserving Phase 2 banners and interactive states (RSVP, challenge acceptance, solutions). Ensure styles align with the clean design of Tournaments and Players tabs.
+
+### R3. Date Range Management Engine
+Support date-based post filtering ("Today", "This Week", "This Month", and custom date ranges) connecting `Forum.jsx` with backend index querying in `server/routes/forum.js` and `server/routes/feed.js`.
+
+### R4. Zero Regression & Test Verification
+Maintain 100% test passing rate across server and client suites, and ensure zero ESLint warnings (`--max-warnings 0`).
+
+## Acceptance Criteria
+
+### Functionality & UI Consistency
+- [ ] Category filter chips toggle active states cleanly matching the styling of Tournaments and Players tabs.
+- [ ] Search input handles keyboard shortcut ('/' or Enter) and debounced typing.
+- [ ] Feed updates dynamically when switching categories or date windows without page reload.
+- [ ] All Phase 2 interactive features (RSVP buttons, Match Challenge acceptance, Accepted Answer badges) work seamlessly under filtered views.
+- [ ] All existing test suites pass: 42/42 server suites and 29/29 client suites.
+- [ ] Client lint passes with 0 errors and 0 warnings (`--max-warnings 0`).
+- [ ] Client production build succeeds (`npm run build --prefix client`).

@@ -17,6 +17,10 @@ const ProposedTournament = require('../models/ProposedTournament');
 const Court = require('../models/Court');
 const TournamentMatch = require('../models/TournamentMatch');
 const { getGuaranteedTournamentsList, wipeAndRestartTournamentSystem } = require('../utils/autonomousHunter');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'gmu_badminton_super_secret_key_2026';
+const adminToken = jwt.sign({ id: 'test-admin', role: 'admin' }, JWT_SECRET);
 
 describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Engine", () => {
     let app;
@@ -168,7 +172,9 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
 
             const concurrentReqs = 20;
             const promises = Array.from({ length: concurrentReqs }, () =>
-                request(app).post('/api/tournaments/reset-seed')
+                request(app)
+                    .post('/api/tournaments/reset-seed')
+                    .set('Authorization', `Bearer ${adminToken}`)
             );
 
             const responses = await Promise.all(promises);

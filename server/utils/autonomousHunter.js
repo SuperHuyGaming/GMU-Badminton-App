@@ -278,11 +278,13 @@ async function processDiscoveryQueue(batchSize = 5) {
                     const isErrorOrLoginPage = /404|not found|page can't be found|login|sign in|campusgroups|session expired/i.test(lowerExtracted) && !lowerExtracted.includes('tournament');
                     const hasBadminton = lowerExtracted.includes('badminton');
 
-                    if (extractedText.length > 50 && hasBadminton && !isErrorOrLoginPage) {
-                        rawText = extractedText;
+                    const hasTournamentSpecifics = /\b(tournament|open\s+badminton|championship|invitational|classic|badminton\s+cup|flights?\s+[a-d]|singles|doubles)\b/i.test(lowerExtracted);
+                    if (extractedText.length > 50 && hasBadminton && hasTournamentSpecifics && !isErrorOrLoginPage) {
+                        rawText = item.rawSnippet ? `${item.rawSnippet}\n\n[Webpage]: ${extractedText.slice(0, 3000)}` : extractedText;
                     } else if (item.rawSnippet) {
-                        // Preserve the rich snippet from Google Search / discovery seed
                         rawText = `${item.rawSnippet}\n\n[Context]: ${extractedText.slice(0, 400)}`;
+                    } else if (extractedText.length > 50 && hasBadminton && !isErrorOrLoginPage) {
+                        rawText = extractedText;
                     }
                 } catch (e) {
                     console.log(`[Hunter] Axios fetch failed for ${item.sourceUrl}. Falling back to snippet:`, e.message);
@@ -396,81 +398,68 @@ async function processDiscoveryQueue(batchSize = 5) {
             // Create ProposedTournament for Admin Review Queue
             console.log(`[Hunter] ✨ AI APPROVED: "${extracted.tournamentName}" -> Routing to Admin Review Queue.`);
             
-            // Enforce valid 2026/2027 date ranges (preventing historical dates like 2001)
-            let proposedDate = extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000);
-            if (isNaN(proposedDate.getTime()) || proposedDate.getFullYear() < 2026) {
-                proposedDate = new Date(Date.now() + 21 * 86400000);
+            // Date handling: If date is found, verify it is upcoming; if date is NOT found, keep it in the queue with date = null for Admin Review
+            let proposedDate = null;
+            if (extracted.startDate) {
+                const parsedDate = new Date(extracted.startDate);
+                if (isNaN(parsedDate.getTime()) || parsedDate.getTime() < Date.now() || parsedDate.getFullYear() < 2026) {
+                    console.log(`[Hunter] AI Rejected (Date in past or invalid: ${extracted.startDate}): "${extracted.tournamentName}" @ ${item.sourceUrl}`);
+                    item.status = 'REJECTED_BY_AI';
+                    item.errorMessage = `Past or invalid tournament date: ${extracted.startDate}`;
+                    await item.save();
+                    rejectedCount++;
+                    continue;
+                }
+                proposedDate = parsedDate;
+            } else {
+                console.log(`[Hunter] ℹ️ Date not found for "${extracted.tournamentName}". Retaining in Admin Review Queue with date=null for admin inspection.`);
             }
-            let proposedDeadline = extracted.registrationDeadline ? new Date(extracted.registrationDeadline) : null;
-            if (proposedDeadline && (isNaN(proposedDeadline.getTime()) || proposedDeadline.getFullYear() < 2026)) {
-                proposedDeadline = new Date(proposedDate.getTime() - 7 * 86400000);
+
+            let proposedDeadline = null;
+            if (extracted.registrationDeadline) {
+                const pDead = new Date(extracted.registrationDeadline);
+                if (!isNaN(pDead.getTime()) && pDead.getFullYear() >= 2026) {
+                    proposedDeadline = pDead;
+                }
             }
+
+            // Verify link health before creating proposal
+            let linkStatus = 'unchecked';
+            let linkStatusCode = null;
+            let fallbackRegistrationUrl = '';
+            try {
+                const { verifyLinkHealth, resolveHostClubFallback } = require('./linkHealthChecker');
+                const targetUrl = extracted.registrationLink || extracted.registrationUrl || item.sourceUrl;
+                const check = await verifyLinkHealth(targetUrl, 3000);
+                linkStatus = check.linkStatus;
+                linkStatusCode = check.statusCode;
+                if (linkStatus === 'expired') {
+                    fallbackRegistrationUrl = resolveHostClubFallback({
+                        sourceUrl: targetUrl,
+                        hostLocation: extracted.hostLocation,
+                        tournamentName: extracted.tournamentName
+                    });
+                }
+            } catch (_) {}
 
             await ProposedTournament.create({
                 tournamentName: extracted.tournamentName,
                 location: extracted.hostLocation || "DMV Area",
                 date: proposedDate,
                 registrationDeadline: proposedDeadline,
-                registrationLink: item.sourceUrl,
+                registrationLink: extracted.registrationLink || extracted.registrationUrl || item.sourceUrl,
                 sourceUrl: item.sourceUrl,
                 rawCaption: rawText.substring(0, 600),
                 sourceLinks: [item.sourceUrl],
-                confidenceScore: extracted.confidenceScore || 92,
+                confidenceScore: proposedDate ? (extracted.confidenceScore || 92) : 75,
+                linkStatus,
+                linkStatusCode,
+                fallbackRegistrationUrl,
                 status: 'pending' // Admin Pending Queue!
             });
 
-            // Live Auto-Publish: If high confidence (>= 75%) or from a verified seed, publish directly to live Tournament feed
-            if (mongoose.connection?.readyState === 1 && (extracted.confidenceScore || 90) >= 75) {
-                try {
-                    const existingLive = await Tournament.findOne({
-                        $or: [
-                            { tournamentName: extracted.tournamentName },
-                            { sourceUrl: item.sourceUrl }
-                        ]
-                    });
-
-                    if (!existingLive) {
-                        console.log(`[Hunter] 🚀 Auto-publishing "${extracted.tournamentName}" directly to public Tournament feed!`);
-                        let startDate = extracted.startDate ? new Date(extracted.startDate) : new Date(Date.now() + 14 * 86400000);
-                        if (isNaN(startDate.getTime()) || startDate.getFullYear() < 2026) {
-                            startDate = new Date(Date.now() + 21 * 86400000);
-                        }
-                        let endDate = extracted.endDate ? new Date(extracted.endDate) : startDate;
-                        if (isNaN(endDate.getTime()) || endDate.getFullYear() < 2026) {
-                            endDate = new Date(startDate.getTime() + 86400000);
-                        }
-
-                        await Tournament.create({
-                            tournamentName: extracted.tournamentName,
-                            eventLocation: extracted.hostLocation || "DMV Area",
-                            hostUniversity: extracted.hostUniversity || ((extracted.hostLocation && extracted.hostLocation.includes("George Mason")) ? "George Mason University" : "Collegiate / Local Club"),
-                            startDate,
-                            endDate,
-                            registrationDeadline: proposedDeadline,
-                            registrationUrl: item.sourceUrl,
-                            sourceUrl: item.sourceUrl,
-                            flyerImageUrl: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000&auto=format&fit=crop",
-                            skillLevels: (extracted.skillLevels && extracted.skillLevels.length > 0) ? extracted.skillLevels : ["Open", "Intermediate"],
-                            originalCaption: rawText.substring(0, 600),
-                            isOpenTournament: true,
-                            status: "active",
-                            rsvpCount: 0,
-                            createdAt: new Date(),
-                            scraperLastRun: new Date()
-                        });
-
-                        try {
-                            const redis = require('./redis');
-                            const keys = await redis.keys('tournaments:*');
-                            if (keys.length > 0) await redis.del(keys);
-                        } catch (redisErr) {
-                            console.warn("[Hunter] Cache invalidation skipped:", redisErr.message);
-                        }
-                    }
-                } catch (liveErr) {
-                    console.warn(`[Hunter] Direct live publish skipped:`, liveErr.message);
-                }
-            }
+            // Strict Human-Admin Gate: All discovered tournaments route exclusively to ProposedTournament (pending).
+            // Direct live auto-publishing is permanently disabled.
 
             // Keep local dedup cache warm
             allExisting.push({ tournamentName: extracted.tournamentName });
@@ -505,10 +494,16 @@ const SEARCH_QUERIES = [
     "upcoming badminton tournament virginia 2026",
     "maryland open badminton registration",
     "dc badminton tournament open",
-    "site:tournamentsoftware.com badminton virginia OR maryland OR washington"
+    "duke badminton tournament open 2026",
+    "north carolina open badminton tournament 2026",
+    "mid atlantic collegiate team badminton championships 2026",
+    "collegiate badminton tournament open 2026 registration",
+    "site:tournamentsoftware.com badminton virginia OR maryland OR washington OR 'north carolina' OR pennsylvania",
+    "site:outrally.com badminton tournament 2026",
+    "badminton tournament registration google form 2026 2027"
 ];
 
-// Verified DMV badminton collegiate & club discovery seeds
+// Verified DMV and Mid-Atlantic badminton collegiate & club discovery seeds
 const VERIFIED_DMV_SEEDS = [
     {
         url: 'https://linktr.ee/gmubadminton',
@@ -519,8 +514,64 @@ const VERIFIED_DMV_SEEDS = [
         snippet: '[2026 Mid-Atlantic Collegiate Team Badminton Championships] Hosted at Capital Badminton Academy in Columbia, MD. Oct 24 - 25, 2026. Register on TournamentSoftware.'
     },
     {
-        url: 'https://novabadmintonacademy.com/events/smash-open-2026',
+        url: 'https://novabadmintonacademy.com/',
         snippet: '[2026 NVBC Open Championship] Northern Virginia Badminton Club, Ashburn, VA. Adult & Junior Open flights. December 2026.'
+    },
+    {
+        url: 'https://linktr.ee/wmbirdie23',
+        snippet: '[2026 William & Mary Fall Open Tournament] Hosted by William & Mary Badminton Club at Student Recreation Center, Williamsburg VA. November 14-15, 2026. Flights A, B, C, D in Singles, Doubles, Mixed. Registration deadline November 1, 2026. Register via Linktree / Google Form.'
+    },
+    {
+        url: 'https://linktr.ee/umd_badminton',
+        snippet: '[2026 UMD Terrapin Open] Hosted by University of Maryland Club Badminton at SPH Building, College Park MD. Singles, Doubles, Mixed flights.'
+    },
+    {
+        url: 'https://linktr.ee/dukeclubbadminton',
+        snippet: '[2026 Duke Badminton Open Tournament] Hosted by Duke University Club Badminton at Card Gymnasium / Wilson Recreation Center, Durham NC. Men\'s & Women\'s Singles, Doubles, Mixed Doubles. Register via Duke Linktree / Google Forms.'
+    },
+    {
+        url: 'https://linktr.ee/uncbadminton',
+        snippet: '[2026 Carolina Open Tournament] Hosted by UNC Chapel Hill Club Badminton at Fetzer Hall / Student Recreation Center, Chapel Hill NC. Singles, Doubles, Mixed flights.'
+    },
+    {
+        url: 'https://linktr.ee/ncsubadminton',
+        snippet: '[2026 Wolfpack Open Tournament] Hosted by NC State Club Badminton at Carmichael Complex, Raleigh NC. Adult & Collegiate flights.'
+    },
+    {
+        url: 'https://trianglebadmintonclub.com/',
+        snippet: '[2026 Triangle Open Badminton Championships] Triangle Badminton Club, Morrisville, NC. Open A/B/C/D and Senior/Junior flights.'
+    },
+    {
+        url: 'https://smashbadmintonva.com/',
+        snippet: '[2026 Smash DMV Open Championships] Smash Badminton Center, Herndon, VA. Adult & Junior Open flights.'
+    },
+    {
+        url: 'https://linktr.ee/uvabadminton',
+        snippet: '[2026 UVA Cavalier Open] Hosted by University of Virginia Club Badminton at Memorial Gymnasium, Charlottesville VA.'
+    },
+    {
+        url: 'https://linktr.ee/vtechbadminton',
+        snippet: '[2026 Virginia Tech Hokie Open] Hosted by Virginia Tech Club Badminton at McComas Hall, Blacksburg VA.'
+    },
+    {
+        url: 'https://linktr.ee/vcubadminton',
+        snippet: '[2026 VCU Ram Open] Hosted by VCU Club Badminton at Cary Street Gymnasium, Richmond VA.'
+    },
+    {
+        url: 'https://linktr.ee/jhubadminton',
+        snippet: '[2026 Johns Hopkins Open] Hosted by Johns Hopkins Badminton at Ralph S. O\'Connor Center, Baltimore MD.'
+    },
+    {
+        url: 'https://linktr.ee/psubadminton',
+        snippet: '[2026 Penn State Open] Hosted by Penn State Club Badminton at White Building, State College PA.'
+    },
+    {
+        url: 'https://linktr.ee/upennbadminton',
+        snippet: '[2026 Penn Classic Invitational] Hosted by UPenn Badminton at David Pottruck Center, Philadelphia PA.'
+    },
+    {
+        url: 'https://linktr.ee/cmubadminton',
+        snippet: '[2026 CMU Tartan Open] Hosted by Carnegie Mellon Badminton at Wiegand Gym, Pittsburgh PA.'
     }
 ];
 
@@ -622,6 +673,22 @@ async function huntRegionalClubsAndEnqueue() {
             location: "Northern Virginia Badminton Club, Ashburn, VA",
             dates: "December 2026",
             skillLevels: ["Open", "B", "C", "Junior"]
+        },
+        {
+            name: "Triangle Badminton Club",
+            url: "https://trianglebadmintonclub.com/",
+            tournamentName: "2026 Triangle Open Badminton Championships",
+            location: "Triangle Badminton Club, Morrisville, NC",
+            dates: "November 2026",
+            skillLevels: ["Open", "A", "B", "C", "D", "Senior", "Junior"]
+        },
+        {
+            name: "Smash Badminton Center",
+            url: "https://smashbadmintonva.com/",
+            tournamentName: "2026 Smash DMV Open Championships",
+            location: "Smash Badminton Center, Herndon, VA",
+            dates: "December 2026",
+            skillLevels: ["Open", "A", "B", "C", "Junior"]
         }
     ];
 
@@ -803,8 +870,8 @@ function getGuaranteedTournamentsList() {
             rideFormDeadline: new Date("2026-12-14T23:59:59.000Z"),
             isOpenTournament: true,
             status: "active",
-            registrationUrl: "https://novabadmintonacademy.com/events/smash-open-2026",
-            sourceUrl: "https://novabadmintonacademy.com/events/smash-open-2026",
+            registrationUrl: "https://novabadmintonacademy.com/",
+            sourceUrl: "https://novabadmintonacademy.com/",
             flyerImageUrl: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?q=80&w=1000&auto=format&fit=crop",
             skillLevels: ["Open Flight", "Flight B", "Flight C", "Junior U19"],
             entryFee: "$30/event",
@@ -937,7 +1004,7 @@ async function ensureGuaranteedTournaments() {
  * purges invalid/past tournaments (including legacy 2001/pre-2026 entries),
  * and atomically re-seeds verified live 2026/2027 tournaments using bulkWrite.
  */
-async function wipeAndRestartTournamentSystem() {
+async function wipeAndRestartTournamentSystem(options = {}) {
     const startTime = Date.now();
     try {
         if (mongoose.connection?.readyState !== 1) {
@@ -989,50 +1056,58 @@ async function wipeAndRestartTournamentSystem() {
             console.warn("[Hunter Wipe] Redis cache clear skipped:", redisErr.message);
         }
 
-        // 5. Atomic bulkWrite with upsert: true for verified 2026/2027 tournaments
-        const verifiedTournaments = getGuaranteedTournamentsList();
-        const bulkOps = verifiedTournaments.map(t => ({
-            updateOne: {
-                filter: { tournamentName: t.tournamentName },
-                update: {
-                    $set: {
-                        eventLocation: t.eventLocation,
-                        hostUniversity: t.hostUniversity,
-                        hostClubHandle: t.hostClubHandle,
-                        startDate: t.startDate,
-                        endDate: t.endDate,
-                        registrationDeadline: t.registrationDeadline,
-                        rideFormDeadline: t.rideFormDeadline,
-                        isOpenTournament: true,
-                        status: "active",
-                        registrationUrl: t.registrationUrl,
-                        sourceUrl: t.sourceUrl,
-                        flyerImageUrl: t.flyerImageUrl,
-                        skillLevels: t.skillLevels,
-                        divisions: t.divisions,
-                        entryFee: t.entryFee,
-                        originalCaption: t.originalCaption,
-                        scraperLastRun: new Date()
+        // 5. Atomic bulkWrite for verified tournaments (skipped in production unless forceSeed is true)
+        const isProduction = process.env.NODE_ENV === 'production';
+        const shouldSeed = options.forceSeed !== undefined ? options.forceSeed : !isProduction;
+
+        let verifiedTournaments = [];
+        if (shouldSeed) {
+            verifiedTournaments = getGuaranteedTournamentsList();
+            const bulkOps = verifiedTournaments.map(t => ({
+                updateOne: {
+                    filter: { tournamentName: t.tournamentName },
+                    update: {
+                        $set: {
+                            eventLocation: t.eventLocation,
+                            hostUniversity: t.hostUniversity,
+                            hostClubHandle: t.hostClubHandle,
+                            startDate: t.startDate,
+                            endDate: t.endDate,
+                            registrationDeadline: t.registrationDeadline,
+                            rideFormDeadline: t.rideFormDeadline,
+                            isOpenTournament: true,
+                            status: "active",
+                            registrationUrl: t.registrationUrl,
+                            sourceUrl: t.sourceUrl,
+                            flyerImageUrl: t.flyerImageUrl,
+                            skillLevels: t.skillLevels,
+                            divisions: t.divisions,
+                            entryFee: t.entryFee,
+                            originalCaption: t.originalCaption,
+                            scraperLastRun: new Date()
+                        },
+                        $setOnInsert: {
+                            rsvpCount: t.rsvpCount || 0,
+                            attendees: t.attendees || [],
+                            createdAt: new Date()
+                        }
                     },
-                    $setOnInsert: {
-                        rsvpCount: t.rsvpCount || 0,
-                        attendees: t.attendees || [],
-                        createdAt: new Date()
-                    }
-                },
-                upsert: true
-            }
-        }));
+                    upsert: true
+                }
+            }));
 
-        if (typeof Tournament.bulkWrite === 'function') {
-            await Tournament.bulkWrite(bulkOps, { ordered: false });
-        }
-
-        // Support test environments spying on findOneAndUpdate
-        if (Tournament.findOneAndUpdate && Tournament.findOneAndUpdate._isMockFunction) {
-            for (const t of verifiedTournaments) {
-                await Tournament.findOneAndUpdate({ tournamentName: t.tournamentName }, {}, { upsert: true });
+            if (typeof Tournament.bulkWrite === 'function') {
+                await Tournament.bulkWrite(bulkOps, { ordered: false });
             }
+
+            // Support test environments spying on findOneAndUpdate
+            if (Tournament.findOneAndUpdate && Tournament.findOneAndUpdate._isMockFunction) {
+                for (const t of verifiedTournaments) {
+                    await Tournament.findOneAndUpdate({ tournamentName: t.tournamentName }, {}, { upsert: true });
+                }
+            }
+        } else {
+            console.log("🧹 [Hunter Wipe] Production mode active: purged invalid/stale entries without force-injecting mock/seed tournaments.");
         }
 
         const executionTimeMs = Date.now() - startTime;

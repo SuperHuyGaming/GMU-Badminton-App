@@ -21,7 +21,8 @@ const HEALTHCHECK_HEADERS = {
  * @returns {string} Fallback URL
  */
 function resolveHostClubFallback(tournament = {}) {
-    const handle = (tournament.hostClubHandle || '').replace('@', '').toLowerCase();
+    const t = tournament || {};
+    const handle = (t.hostClubHandle || '').replace('@', '').toLowerCase();
     if (handle === 'gmu_badminton' || handle === 'gmubadminton') {
         return 'https://linktr.ee/gmubadminton';
     }
@@ -34,32 +35,59 @@ function resolveHostClubFallback(tournament = {}) {
     if (handle === 'nvbadminton' || handle === 'novabadminton') {
         return 'https://novabadmintonacademy.com';
     }
+    if (handle === 'wm.badminton.official' || handle === 'wmbadminton') {
+        return 'https://www.instagram.com/wm.badminton.official/';
+    }
+    if (handle === 'dukeclubbadminton' || handle === 'dukebadminton') {
+        return 'https://recreation.duke.edu';
+    }
+    if (handle === 'uncbadminton') {
+        return 'https://carolinabadminton.unc.edu';
+    }
+    if (handle === 'ncsubadminton') {
+        return 'https://getinvolved.ncsu.edu';
+    }
+    if (handle === 'trianglebadminton') {
+        return 'https://trianglebadmintonclub.com';
+    }
     if (handle) {
         return `https://linktr.ee/${handle}`;
     }
 
     const text = [
-        tournament.hostUniversity || '',
-        tournament.hostClubHandle || '',
-        tournament.eventLocation || '',
-        tournament.tournamentName || '',
-        tournament.sourceUrl || ''
+        t.hostUniversity || '',
+        t.hostClubHandle || '',
+        t.eventLocation || '',
+        t.tournamentName || '',
+        t.sourceUrl || ''
     ].join(' ').toLowerCase();
 
     if (text.includes('george mason') || text.includes('gmu') || text.includes('rac gym') || text.includes('fairfax')) {
         return 'https://linktr.ee/gmubadminton';
     }
-    if (text.includes('capital badminton') || text.includes('columbia, md')) {
+    if (text.includes('capital badminton') || text.includes('columbia') || /\bcba\b/.test(text)) {
         return 'https://www.capitalbadminton.com';
     }
     if (text.includes('northern virginia') || text.includes('nvbc') || text.includes('ashburn')) {
         return 'https://novabadmintonacademy.com';
     }
+    if (text.includes('duke') || text.includes('durham') || text.includes('card gym') || text.includes('wilson recreation')) {
+        return 'https://recreation.duke.edu';
+    }
+    if (text.includes('unc') || text.includes('chapel hill') || text.includes('carolina badminton') || text.includes('fetzer')) {
+        return 'https://carolinabadminton.unc.edu';
+    }
+    if (text.includes('triangle badminton') || text.includes('morrisville')) {
+        return 'https://trianglebadmintonclub.com';
+    }
+    if (text.includes('william & mary') || text.includes('william and mary') || text.includes('w&m') || text.includes('williamsburg')) {
+        return 'https://www.instagram.com/wm.badminton.official/';
+    }
     if (text.includes('maryland') || text.includes('umd') || text.includes('terrapin') || text.includes('college park')) {
         return 'https://linktr.ee/umd_badminton';
     }
 
-    return tournament.sourceUrl || 'https://linktr.ee/gmubadminton';
+    return t.sourceUrl || 'https://linktr.ee/gmubadminton';
 }
 
 /**

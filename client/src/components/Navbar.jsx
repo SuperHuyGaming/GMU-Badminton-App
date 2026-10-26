@@ -13,6 +13,7 @@ import { ColorModeContext } from '../App';
 import LanguageSwitcher from './LanguageSwitcher';
 import { motion } from 'framer-motion';
 import apiFetch from '../utils/api';
+import { useFeedback } from '../context/FeedbackContext';
 
 const HamburgerIcon = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -279,6 +280,7 @@ export default function Navbar() {
     const theme = useTheme();
     const colorMode = useContext(ColorModeContext);
     const { user, logout } = useAuth();
+    const { openFeedbackModal } = useFeedback();
     useTranslation();
     const { notifications, unreadCount, unreadMessages, markAsRead, markSingleAsRead, clearNotifications } = useNotifications();
     // eslint-disable-next-line no-unused-vars
@@ -787,6 +789,22 @@ export default function Navbar() {
 										>
 											View Profile
 										</MenuItem>
+										<MenuItem
+											onClick={() => {
+												handleMenuClose();
+												openFeedbackModal({ type: "feedback" });
+											}}
+											sx={{ 
+												fontWeight: "bold",
+												color: "text.primary",
+												"&:focus-visible": {
+													outline: '2px solid #FFCC33',
+													outlineOffset: '-2px',
+												}
+											}}
+										>
+											Feedback & Report Bug
+										</MenuItem>
 										<Divider />
 										<MenuItem
 											onClick={(e) => {
@@ -900,6 +918,30 @@ export default function Navbar() {
 									</ListItemButton>
 								);
 							})}
+							<ListItemButton
+								onClick={() => {
+									handleDrawerToggle();
+									openFeedbackModal({ type: "bug" });
+								}}
+								sx={{
+									textAlign: "center",
+									color: "#FFCC33",
+									backgroundColor: "transparent",
+									borderLeft: "4px solid transparent",
+									"&:focus-visible": {
+										outline: "2px solid #FFCC33",
+										outlineOffset: "-2px",
+									},
+								}}
+							>
+								<ListItemText
+									primaryTypographyProps={{
+										fontWeight: "bold",
+										color: "#FFCC33",
+									}}
+									primary="Feedback & Report Bug"
+								/>
+							</ListItemButton>
 							{user && user.role === "admin" && (
 								<>
 									<ListItemButton

@@ -1,7 +1,9 @@
+require('dotenv').config();
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const axios = require("axios");
 
 jest.mock("../utils/redis", () => ({
     keys: jest.fn().mockResolvedValue([]),
@@ -209,6 +211,7 @@ describe("Autonomous Tournament Hunter Suite", () => {
 
     describe("4. Discovery Queue Processing & AI Evaluation", () => {
         let memSpy = null;
+        let axiosSpy = null;
 
         beforeEach(() => {
             // Isolate test runner memory so CI or cumulative multi-suite memory (>200MB) does not trigger heap guards
@@ -218,12 +221,19 @@ describe("Autonomous Tournament Hunter Suite", () => {
                 rss: 160 * 1024 * 1024,
                 external: 5 * 1024 * 1024
             });
+            axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                data: '<html><body>DMV Badminton 2027</body></html>'
+            });
         });
 
         afterEach(() => {
             if (memSpy) {
                 memSpy.mockRestore();
                 memSpy = null;
+            }
+            if (axiosSpy) {
+                axiosSpy.mockRestore();
+                axiosSpy = null;
             }
         });
 

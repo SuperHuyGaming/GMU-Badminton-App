@@ -1,3 +1,4 @@
+require('dotenv').config();
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -248,7 +249,10 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
                 skillLevels: ["Open", "A", "B"],
                 rawCaption: "Annual GMU Fall Open Championship!",
                 confidenceScore: 88,
-                status: "pending"
+                status: "pending",
+                linkStatus: "expired",
+                linkStatusCode: 404,
+                fallbackRegistrationUrl: "https://novabadmintonacademy.com/"
             });
             proposalDoc.save = jest.fn().mockResolvedValue(proposalDoc);
 
@@ -270,6 +274,9 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
             expect(res.body.tournament.registrationUrl).toBe("https://tournamentsoftware.com/gmu2026");
             expect(res.body.tournament.flyerImageUrl).toBe("https://cdn.example.com/flyer1.png");
             expect(res.body.tournament.rsvpCount).toBe(0);
+            expect(res.body.tournament.linkStatus).toBe("expired");
+            expect(res.body.tournament.linkStatusCode).toBe(404);
+            expect(res.body.tournament.fallbackRegistrationUrl).toBe("https://novabadmintonacademy.com/");
 
             // Proposal State Transition Verification
             expect(proposalDoc.status).toBe("approved");
@@ -484,6 +491,34 @@ describe("Admin Tournaments API & Proposed Tournament System", () => {
             expect(res.status).toBe(200);
             expect(proposalDoc.tournamentName).toBe("Nested Structured Name");
             expect(proposalDoc.location).toBe("RAC Fieldhouse");
+        });
+
+        it("updates rawCaption, flyerImageUrl, and scrapedImageUrls with sanitization", async () => {
+            const proposalDoc = new ProposedTournament({
+                tournamentName: "Caption & Flyer Test",
+                sourceUrl: "https://example.com/test",
+                rawCaption: "Old caption",
+                scrapedImageUrls: ["https://example.com/old-flyer.png"],
+                status: "pending"
+            });
+            proposalDoc.save = jest.fn().mockResolvedValue(proposalDoc);
+
+            jest.spyOn(ProposedTournament, "findById").mockResolvedValue(proposalDoc);
+
+            const res = await request(app)
+                .put(`/api/admin/tournaments/${sampleProposalId}`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({
+                    rawCaption: "Updated admin caption text <script>alert('hack')</script>",
+                    flyerImageUrl: "https://example.com/new-flyer.png"
+                });
+
+            expect(res.status).toBe(200);
+            expect(proposalDoc.rawCaption).toContain("Updated admin caption text");
+            expect(proposalDoc.rawCaption).not.toContain("<script>");
+            expect(proposalDoc.flyerImageUrl).toBe("https://example.com/new-flyer.png");
+            expect(proposalDoc.scrapedImageUrls).toContain("https://example.com/new-flyer.png");
+            expect(proposalDoc.save).toHaveBeenCalled();
         });
     });
 

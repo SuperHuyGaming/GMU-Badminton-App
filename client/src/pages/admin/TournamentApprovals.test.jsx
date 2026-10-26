@@ -333,6 +333,65 @@ describe("TournamentApprovals Admin Page Component", () => {
         });
     });
 
+    it("6b. Admin can edit flyer image URL and raw post caption in review modal", async () => {
+        let sentBody = null;
+        apiFetch.mockImplementation(async (url, options) => {
+            if (url === "/api/admin/tournaments/proposed") {
+                return {
+                    ok: true,
+                    json: async () => [...mockProposals],
+                };
+            }
+            if (url.includes("/api/admin/tournaments/prop-high-1") && options?.method === "PUT") {
+                sentBody = JSON.parse(options.body);
+                return {
+                    ok: true,
+                    json: async () => ({
+                        message: "Tournament details updated successfully.",
+                        proposedTournament: {
+                            ...mockProposals[0],
+                            ...sentBody,
+                        },
+                    }),
+                };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("Mason Open 2026")).toBeInTheDocument();
+        });
+
+        // Open review modal
+        const reviewButtons = screen.getAllByRole("button", { name: /Review/i });
+        fireEvent.click(reviewButtons[0]);
+
+        // Edit Flyer Image URL
+        const flyerInput = screen.getByLabelText(/Flyer Image URL/i);
+        fireEvent.change(flyerInput, {
+            target: { value: "https://example.com/custom-flyer.png" },
+        });
+
+        // Edit Raw Caption
+        const captionInput = screen.getByPlaceholderText(/Edit post caption or extracted flyer OCR context/i);
+        fireEvent.change(captionInput, {
+            target: { value: "Updated caption: Open to all regional badminton enthusiasts!" },
+        });
+
+        // Click Save Edits
+        const saveButton = screen.getByRole("button", { name: /Save Edits/i });
+        fireEvent.click(saveButton);
+
+        await waitFor(() => {
+            expect(sentBody).not.toBeNull();
+            expect(sentBody.flyerImageUrl).toBe("https://example.com/custom-flyer.png");
+            expect(sentBody.rawCaption).toBe("Updated caption: Open to all regional badminton enthusiasts!");
+            expect(sentBody.scrapedImageUrls).toContain("https://example.com/custom-flyer.png");
+        });
+    });
+
     it("7. Manual entry button opens form, submits, and calls API", async () => {
         apiFetch.mockImplementation(async (url, options) => {
             if (url === "/api/admin/tournaments/proposed") {
@@ -527,5 +586,81 @@ describe("TournamentApprovals Admin Page Component", () => {
             );
         });
     });
+
+    it("11. Renders warning alert and Use Verified Fallback button when proposal has expired linkStatus", async () => {
+        const expiredProposal = {
+            ...mockProposals[0],
+            _id: "prop-expired-1",
+            tournamentName: "NVBC Fall Smash 2026",
+            linkStatus: "expired",
+            linkStatusCode: 404,
+            registrationLink: "https://novabadmintonacademy.com/events/smash-open-2026",
+            fallbackRegistrationUrl: "https://novabadmintonacademy.com/",
+        };
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => [expiredProposal],
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("NVBC Fall Smash 2026")).toBeInTheDocument();
+        });
+
+        // Open review modal
+        const reviewBtn = screen.getByRole("button", { name: /Review/i });
+        fireEvent.click(reviewBtn);
+
+        // Warning alert should be rendered
+        expect(screen.getByTestId("expired-link-alert")).toBeInTheDocument();
+        expect(screen.getByText(/Registration link is expired or broken/i)).toBeInTheDocument();
+
+        // Check registration link initially has the broken URL
+        const regLinkInput = screen.getByLabelText(/Registration Link \/ URL/i);
+        expect(regLinkInput).toHaveValue("https://novabadmintonacademy.com/events/smash-open-2026");
+
+        // Click "Use Verified Fallback" button
+        const fallbackBtn = screen.getByTestId("btn-use-verified-fallback");
+        expect(fallbackBtn).toBeInTheDocument();
+        fireEvent.click(fallbackBtn);
+
+        // Input field should now have the fallback URL
+        expect(regLinkInput).toHaveValue("https://novabadmintonacademy.com/");
+    });
+
+    it("12. Renders disabled fallback button when proposal has expired linkStatus without fallbackRegistrationUrl", async () => {
+        const expiredProposalNoFallback = {
+            ...mockProposals[0],
+            _id: "prop-expired-no-fallback",
+            tournamentName: "DMV Spring Open 2026",
+            linkStatus: "expired",
+            linkStatusCode: 410,
+            registrationLink: "https://badmintonclub.org/old-event",
+            fallbackRegistrationUrl: "",
+        };
+
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => [expiredProposalNoFallback],
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("DMV Spring Open 2026")).toBeInTheDocument();
+        });
+
+        const reviewBtn = screen.getByRole("button", { name: /Review/i });
+        fireEvent.click(reviewBtn);
+
+        expect(screen.getByTestId("expired-link-alert")).toBeInTheDocument();
+        const fallbackBtn = screen.getByTestId("btn-use-verified-fallback");
+        expect(fallbackBtn).toBeInTheDocument();
+        expect(fallbackBtn).toBeDisabled();
+        expect(screen.getByText(/No verified fallback URL registered/i)).toBeInTheDocument();
+    });
 });
+
 

@@ -12,11 +12,18 @@ jest.mock("../utils/redis", () => ({
 
 const tournamentRoutes = require("../routes/tournaments");
 const Tournament = require("../models/Tournament");
+const TournamentMatch = require("../models/TournamentMatch");
+const User = require("../models/User");
 
 const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
 const userId = "650000000000000000000001";
 const userToken = jwt.sign(
     { id: userId, userId: userId, role: "user", name: "Player One" },
+    JWT_SECRET
+);
+const adminId = "650000000000000000000002";
+const adminToken = jwt.sign(
+    { id: adminId, userId: adminId, role: "admin", name: "Admin User" },
     JWT_SECRET
 );
 
@@ -89,6 +96,86 @@ describe("Public Tournaments API & RSVP System", () => {
                 $or: expect.arrayContaining([
                     expect.objectContaining({ endDate: expect.any(Object) }),
                     expect.objectContaining({ startDate: expect.any(Object) })
+                ])
+            }));
+        });
+
+        it("supports multi-skill filtering with skills parameter", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?skills=Beginner,Advanced");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                skillLevels: { $in: ["Beginner", "Advanced"] }
+            }));
+        });
+
+        it("supports compound text search with badminton synonym expansion for GMU", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?search=GMU");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                $text: { $search: expect.stringMatching(/GMU.*George Mason|George Mason/i) }
+            }));
+        });
+
+        it("falls back to regex search for short prefix matching (< 3 characters)", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?search=GM");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ tournamentName: { $regex: "GM", $options: "i" } }),
+                    expect.objectContaining({ hostUniversity: { $regex: "GM", $options: "i" } })
+                ])
+            }));
+        });
+
+        it("supports badminton synonym expansion in short prefix matching (< 3 characters) for VT", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            await request(app).get("/api/tournaments?search=VT");
+
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ tournamentName: { $regex: "VT", $options: "i" } }),
+                    expect.objectContaining({ hostUniversity: { $regex: "Virginia Tech", $options: "i" } })
+                ])
+            }));
+        });
+
+        it("safely escapes regex control characters in search query and location", async () => {
+            const mockQuery = {
+                populate: jest.fn().mockReturnThis(),
+                sort: jest.fn().mockResolvedValue([])
+            };
+            const findSpy = jest.spyOn(Tournament, "find").mockReturnValue(mockQuery);
+
+            const res = await request(app).get("/api/tournaments?search=(*&location=Fairfax (RAC)");
+
+            expect(res.status).toBe(200);
+            expect(findSpy).toHaveBeenCalledWith(expect.objectContaining({
+                eventLocation: { $regex: "Fairfax \\(RAC\\)", $options: "i" },
+                $or: expect.arrayContaining([
+                    expect.objectContaining({ tournamentName: { $regex: "\\(\\\*", $options: "i" } }),
                 ])
             }));
         });
@@ -173,4 +260,155 @@ describe("Public Tournaments API & RSVP System", () => {
             expect(mockTournamentDoc.save).toHaveBeenCalled();
         });
     });
+
+    describe("DELETE /api/tournaments/:id", () => {
+        it("returns 401 when unauthenticated", async () => {
+            const res = await request(app)
+                .delete("/api/tournaments/650000000000000000000101");
+
+            expect(res.status).toBe(401);
+        });
+
+        it("returns 403 when authenticated as regular user (non-admin)", async () => {
+            const res = await request(app)
+                .delete("/api/tournaments/650000000000000000000101")
+                .set("Authorization", `Bearer ${userToken}`);
+
+            expect(res.status).toBe(403);
+            expect(res.body.message).toMatch(/admin/i);
+        });
+
+        it("returns 400 for invalid tournament ID", async () => {
+            const res = await request(app)
+                .delete("/api/tournaments/invalid-id-format")
+                .set("Authorization", `Bearer ${adminToken}`);
+
+            expect(res.status).toBe(400);
+            expect(res.body.message).toMatch(/invalid tournament id/i);
+        });
+
+        it("returns 404 when tournament does not exist", async () => {
+            jest.spyOn(Tournament, "findByIdAndDelete").mockResolvedValue(null);
+
+            const res = await request(app)
+                .delete("/api/tournaments/650000000000000000000999")
+                .set("Authorization", `Bearer ${adminToken}`);
+
+            expect(res.status).toBe(404);
+            expect(res.body.message).toMatch(/not found/i);
+        });
+
+        it("deletes tournament successfully when requested by admin", async () => {
+            const tourneyId = "650000000000000000000101";
+            jest.spyOn(Tournament, "findByIdAndDelete").mockResolvedValue({
+                _id: new mongoose.Types.ObjectId(tourneyId),
+                tournamentName: "GMU Spring Open"
+            });
+
+            const res = await request(app)
+                .delete(`/api/tournaments/${tourneyId}`)
+                .set("Authorization", `Bearer ${adminToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.message).toMatch(/deleted successfully/i);
+            expect(res.body._id).toBe(tourneyId);
+        });
+    });
+
+    describe("GET /api/tournaments/:tournamentId/matches", () => {
+        it("returns 400 for invalid tournamentId format", async () => {
+            const res = await request(app).get("/api/tournaments/not-an-objectid/matches");
+            expect(res.status).toBe(400);
+            expect(res.body.error).toContain("Invalid tournament ID format");
+        });
+
+        it("returns bracket matches sorted by matchNumber and round", async () => {
+            const tourneyId = "650000000000000000000101";
+            const mockMatches = [
+                { _id: "m-1", tournamentId: tourneyId, round: "R16", matchNumber: 1 },
+                { _id: "m-2", tournamentId: tourneyId, round: "QF", matchNumber: 2 }
+            ];
+
+            const sortSpy = jest.fn().mockResolvedValue(mockMatches);
+            jest.spyOn(TournamentMatch, "find").mockReturnValue({ sort: sortSpy });
+
+            const res = await request(app).get(`/api/tournaments/${tourneyId}/matches?division=Singles&round=R16`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.count).toBe(2);
+            expect(res.body.matches).toEqual(mockMatches);
+            expect(TournamentMatch.find).toHaveBeenCalledWith({
+                tournamentId: tourneyId,
+                division: "Singles",
+                round: "R16"
+            });
+            expect(sortSpy).toHaveBeenCalledWith({ matchNumber: 1, round: 1 });
+        });
+    });
+
+    describe("User.rsvpedTournaments Synchronization Pipeline", () => {
+        it("synchronizes User.rsvpedTournaments with $addToSet when joining RSVP", async () => {
+            const tourneyId = "650000000000000000000101";
+            const mockTourney = {
+                _id: tourneyId,
+                status: "active",
+                maxCapacity: 64,
+                rsvpCount: 0,
+                attendees: [],
+                save: jest.fn().mockResolvedValue(true),
+                populate: jest.fn().mockResolvedValue(true)
+            };
+
+            jest.spyOn(Tournament, "findById").mockResolvedValue(mockTourney);
+            jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue(mockTourney);
+            const userUpdateSpy = jest.spyOn(User, "updateOne").mockResolvedValue({ acknowledged: true });
+
+            const res = await request(app)
+                .post(`/api/tournaments/${tourneyId}/rsvp`)
+                .set("Authorization", `Bearer ${userToken}`);
+
+            expect(res.status).toBe(200);
+            expect(userUpdateSpy).toHaveBeenCalledWith(
+                { _id: userId },
+                { $addToSet: { rsvpedTournaments: tourneyId } }
+            );
+        });
+
+        it("synchronizes User.rsvpedTournaments with $pull when cancelling RSVP", async () => {
+            const tourneyId = "650000000000000000000101";
+            jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({
+                _id: tourneyId,
+                rsvpCount: 0
+            });
+            const userUpdateSpy = jest.spyOn(User, "updateOne").mockResolvedValue({ acknowledged: true });
+
+            const res = await request(app)
+                .post(`/api/tournaments/${tourneyId}/cancel-rsvp`)
+                .set("Authorization", `Bearer ${userToken}`);
+
+            expect(res.status).toBe(200);
+            expect(userUpdateSpy).toHaveBeenCalledWith(
+                { _id: userId },
+                { $pull: { rsvpedTournaments: tourneyId } }
+            );
+        });
+    });
+
+    describe("POST /api/tournaments/reset-seed Security & Gate Tests", () => {
+        it("strictly returns 401 when unauthenticated", async () => {
+            const res = await request(app).post("/api/tournaments/reset-seed");
+            expect(res.status).toBe(401);
+            expect(res.body.message).toMatch(/no token|authorization denied/i);
+        });
+
+        it("strictly returns 403 when authenticated as regular user (non-admin)", async () => {
+            const res = await request(app)
+                .post("/api/tournaments/reset-seed")
+                .set("Authorization", `Bearer ${userToken}`);
+            expect(res.status).toBe(403);
+            expect(res.body.message).toMatch(/admins only/i);
+        });
+    });
 });
+

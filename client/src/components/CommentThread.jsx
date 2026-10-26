@@ -67,6 +67,7 @@ export default function CommentThread({
 			<CommentBubble
 				comment={comment}
 				localPostId={localPost._id}
+				postAuthorId={localPost.authorId}
 				currentUser={currentUser}
 				highlightId={highlightId}
 				openLikes={openLikes}
@@ -88,6 +89,7 @@ export default function CommentThread({
 				<Typography
 					role="button"
 					tabIndex={0}
+					data-testid="toggle-subthread-btn"
 					aria-expanded={isExpanded}
 					variant="caption"
 					onClick={() => setIsExpanded(!isExpanded)}
@@ -111,33 +113,49 @@ export default function CommentThread({
 				</Typography>
 			)}
 
-			{/* NESTED REPLIES LOOP */}
-			{isExpanded &&
-				comment.replies?.map((reply) => (
-					<ReplyBubble
-						key={reply._id}
-						reply={reply}
-						commentId={comment._id}
-						localPostId={localPost._id}
-						currentUser={currentUser}
-						highlightId={highlightId}
-						openLikes={openLikes}
-						handleToggleLike={handleToggleLike}
-						formatTime={formatTime}
-						renderContentWithTags={renderContentWithTags}
-						clickableStyle={clickableStyle}
-						promptDelete={() =>
-							setDeleteTarget({
-								isReply: true,
-								replyId: reply._id,
-							})
-						}
-						onReply={() => {
-							setIsReplying(true);
-							setNestedReplyText(`@${reply.authorName} `);
-						}}
-					/>
-				))}
+			{/* NESTED REPLIES LOOP WITH VERTICAL THREADLINE */}
+			{isExpanded && (
+				<Box
+					data-testid="subthread-container"
+					sx={{
+						borderLeft: "2px solid",
+						borderColor: "divider",
+						ml: { xs: 2.5, sm: 4 },
+						pl: { xs: 1, sm: 1.5 },
+						mt: 0.5,
+						display: "flex",
+						flexDirection: "column",
+						gap: 1,
+					}}
+				>
+					{comment.replies?.map((reply) => (
+						<ReplyBubble
+							key={reply._id}
+							reply={reply}
+							commentId={comment._id}
+							localPostId={localPost._id}
+							postAuthorId={localPost.authorId}
+							currentUser={currentUser}
+							highlightId={highlightId}
+							openLikes={openLikes}
+							handleToggleLike={handleToggleLike}
+							formatTime={formatTime}
+							renderContentWithTags={renderContentWithTags}
+							clickableStyle={clickableStyle}
+							promptDelete={() =>
+								setDeleteTarget({
+									isReply: true,
+									replyId: reply._id,
+								})
+							}
+							onReply={() => {
+								setIsReplying(true);
+								setNestedReplyText(`@${reply.authorName} `);
+							}}
+						/>
+					))}
+				</Box>
+			)}
 
 			{/* NESTED REPLY INPUT */}
 			{isReplying && (

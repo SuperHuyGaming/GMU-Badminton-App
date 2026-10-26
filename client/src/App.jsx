@@ -23,6 +23,10 @@ import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
 import ReportMatchModal from "./components/ReportMatchModal";
 import ServerWarmup from "./components/ServerWarmup";
+import { FeedbackProvider } from "./context/FeedbackContext";
+import FeedbackModal from "./components/FeedbackModal";
+import FeedbackFAB from "./components/FeedbackFAB";
+import ErrorBoundary from "./components/ErrorBoundary";
 import socket from "./utils/socket";
 import posthog from 'posthog-js';
 
@@ -159,7 +163,11 @@ const AnimatedRoutes = () => {
 						}
 					/>
 					<Route
+						path="/forum" element={<Navigate to="/community" replace />}
+					/>
+					<Route
 						path="/community"
+
 						element={
 							user ? (
 								<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
@@ -523,6 +531,9 @@ function App() {
 				}} />
 			<ServerWarmup>
 				<BrowserRouter>
+					<FeedbackProvider>
+						<FeedbackModal />
+						<FeedbackFAB />
 					<Navbar />
 
 					<Toaster 
@@ -549,10 +560,13 @@ function App() {
 						}}
 					>
                         {user && <PendingMatchesPrompt />}
-						<AnimatedRoutes />
+						<ErrorBoundary>
+							<AnimatedRoutes />
+						</ErrorBoundary>
 						{user && <PushNotificationPrompt />}
 						<PWAInstallPrompt />
 					</Container>
+					</FeedbackProvider>
 				</BrowserRouter>
 			</ServerWarmup>
 			</ThemeProvider>

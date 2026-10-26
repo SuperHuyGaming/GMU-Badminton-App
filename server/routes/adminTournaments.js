@@ -115,7 +115,12 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
                         divisions: dedupLive.mergedData.divisions,
                         registrationUrl: dedupLive.mergedData.registrationUrl,
                         sourceLinks: dedupLive.mergedData.sourceLinks,
-                        isOpenTournament: true
+                        flyerImageUrl: proposed.flyerImageUrl || scrapedImageUrls[0] || "",
+                        originalCaption: proposed.rawCaption || "",
+                        isOpenTournament: true,
+                        linkStatus: proposed.linkStatus || "unchecked",
+                        linkStatusCode: proposed.linkStatusCode,
+                        fallbackRegistrationUrl: proposed.fallbackRegistrationUrl || ""
                     }
                 },
                 { new: true }
@@ -131,10 +136,13 @@ router.post("/approve/:id", adminActionLimiter, async (req, res) => {
                 registrationDeadline: proposed.registrationDeadline || proposed.date,
                 registrationUrl: proposed.registrationLink || sourceLinks[0] || proposed.sourceUrl,
                 sourceUrl: proposed.sourceUrl,
-                flyerImageUrl: scrapedImageUrls[0] || "",
+                flyerImageUrl: proposed.flyerImageUrl || scrapedImageUrls[0] || "",
                 skillLevels: proposed.skillLevels || [],
                 originalCaption: proposed.rawCaption || "",
                 isOpenTournament: true,
+                linkStatus: proposed.linkStatus || "unchecked",
+                linkStatusCode: proposed.linkStatusCode,
+                fallbackRegistrationUrl: proposed.fallbackRegistrationUrl || "",
                 rsvpCount: 0,
                 hasSentDeadlineWarning: false,
                 createdAt: new Date()
@@ -289,6 +297,34 @@ router.put("/:id", async (req, res) => {
                 proposed.confidenceScore = score;
             } else {
                 return res.status(400).json({ message: "Confidence score must be a number between 0 and 100." });
+            }
+        }
+
+        if (sourceData.rawCaption !== undefined && typeof sourceData.rawCaption === "string") {
+            proposed.rawCaption = xss(sourceData.rawCaption.trim());
+        }
+
+        if (sourceData.flyerImageUrl !== undefined && typeof sourceData.flyerImageUrl === "string") {
+            const flyerUrl = xss(sourceData.flyerImageUrl.trim());
+            proposed.flyerImageUrl = flyerUrl;
+            if (flyerUrl) {
+                if (!Array.isArray(proposed.scrapedImageUrls)) {
+                    proposed.scrapedImageUrls = [];
+                }
+                if (!proposed.scrapedImageUrls.includes(flyerUrl)) {
+                    proposed.scrapedImageUrls = [flyerUrl, ...proposed.scrapedImageUrls];
+                }
+            } else {
+                proposed.scrapedImageUrls = [];
+            }
+        }
+
+        if (sourceData.scrapedImageUrls !== undefined && Array.isArray(sourceData.scrapedImageUrls)) {
+            proposed.scrapedImageUrls = sourceData.scrapedImageUrls
+                .filter((u) => typeof u === "string")
+                .map((u) => xss(u.trim()));
+            if (proposed.scrapedImageUrls.length > 0 && !proposed.flyerImageUrl) {
+                proposed.flyerImageUrl = proposed.scrapedImageUrls[0];
             }
         }
 
@@ -540,7 +576,9 @@ router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => 
  */
 router.post("/wipe-and-restart", adminActionLimiter, async (req, res) => {
     try {
-        const result = await wipeAndRestartTournamentSystem();
+        const isProduction = process.env.NODE_ENV === 'production';
+        const shouldSeed = req.body?.forceSeed !== undefined ? req.body.forceSeed : !isProduction;
+        const result = await wipeAndRestartTournamentSystem({ forceSeed: shouldSeed });
         return res.status(200).json({
             message: "Tournament system wiped and restarted successfully",
             result

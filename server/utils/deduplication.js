@@ -54,7 +54,7 @@ const COLLEGIATE_ENTITY_RULES = [
     { id: 'wm', regex: /\b(w&m|wm|william\s+(?:&|and)\s+mary|tribe)\b/i },
     { id: 'nvbc', regex: /\b(nvbc|northern\s+virginia\s+badminton(?:\s+club)?|nova\s+badminton)\b/i },
     { id: 'cba', regex: /\b(cba|capital\s+badminton(?:\s+academy)?)\b/i },
-];
+    ];
 
 /**
  * Extracts recognized collegiate entity IDs from a tournament title or tournament object.
@@ -134,7 +134,13 @@ const COLLEGIATE_ACRONYMS = {
     'william and mary': 'william and mary',
     'rac': 'recreation athletic complex',
     'nvbc': 'northern virginia badminton club',
-    'cba': 'capital badminton academy'
+    'cba': 'capital badminton academy',
+    'duke': 'duke university',
+    'unc': 'university of north carolina',
+    'ncsu': 'north carolina state university',
+    'nc state': 'north carolina state university',
+    'psu': 'penn state university',
+    'upenn': 'university of pennsylvania'
 };
 
 /**

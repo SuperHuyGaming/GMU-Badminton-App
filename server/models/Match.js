@@ -35,6 +35,7 @@ matchSchema.post('save', async function(doc) {
 			{ type: "match", referenceId: doc._id },
 			{
 				type: "match",
+				category: "match_result",
 				referenceId: doc._id,
 				authorId: doc.submittedBy,
 				authorName: submitter?.name,

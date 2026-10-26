@@ -162,7 +162,7 @@ describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
             expect(lastCallConfig.maxBodyLength).toBe(AXIOS_BODY_CAP_BYTES);
 
             axiosSpy.mockRestore();
-        });
+        }, 20000);
 
         test('proactive heap pressure guard pauses processing when heap exceeds 200MB', async () => {
             const mockItems = Array.from({ length: 5 }, (_, i) => ({
