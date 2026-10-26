@@ -150,6 +150,36 @@ router.get("/online-users", (req, res) => {
 	res.json({ onlineUserIds });
 });
 
+// ==========================================
+// MENTION SUGGESTIONS (Phase 8 Autocomplete)
+// ==========================================
+router.get("/mention-suggestions", authMiddleware, async (req, res) => {
+	try {
+		const query = (req.query.q || "").trim();
+		let filter = {};
+		if (query) {
+			filter = { name: { $regex: query, $options: "i" } };
+		}
+		const users = await User.find(filter)
+			.select("_id name profilePic role badges")
+			.limit(8)
+			.lean();
+
+		const formatted = users.map((u) => ({
+			id: u._id.toString(),
+			name: u.name,
+			profilePic: u.profilePic || "",
+			role: u.role || "user",
+			badges: Array.isArray(u.badges) ? u.badges : [],
+		}));
+
+		res.json({ users: formatted });
+	} catch (err) {
+		console.error("Error fetching mention suggestions:", err);
+		res.status(500).json({ message: "Failed to fetch suggestions" });
+	}
+});
+
 // TRENDING TAGS (Cached with 2-minute TTL)
 // ==========================================
 router.get("/trending-tags", async (req, res, next) => {
@@ -925,6 +955,26 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 					`${authorName} commented: "${truncateText(content)}"`,
 					`/forum?postId=${post._id}&highlight=${newComment._id}`,
 				);
+			}
+
+			// Phase 8: Mention Notifications
+			const mentionMatches = cleanContent.match(/@([a-zA-Z0-9_\s]{2,30})/g);
+			if (mentionMatches && mentionMatches.length > 0) {
+				const rawNames = mentionMatches.map((m) => m.substring(1).trim());
+				const mentionedUsers = await User.find({
+					name: { $in: rawNames }
+				}).select('_id name').lean();
+
+				for (const u of mentionedUsers) {
+					if (u._id.toString() !== authorId && u._id.toString() !== post.authorId?.toString()) {
+						await sendNotification(
+							req.io,
+							u._id.toString(),
+							`${authorName} mentioned you in a badminton comment: "${truncateText(content)}"`,
+							`/forum?postId=${post._id}`
+						);
+					}
+				}
 			}
 		}
 		res.json(hydratedPost);
