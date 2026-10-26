@@ -322,4 +322,67 @@ describe('PostCard Component QA Tests', () => {
         expect(screen.getByText('Condition: Mint')).toBeInTheDocument();
         expect(screen.getByText('String: BG80 @ 27 lbs')).toBeInTheDocument();
     });
+
+    it('handles 1-tap post sharing using clipboard copy fallback with toast confirmation', async () => {
+        const writeTextMock = vi.fn().mockResolvedValue();
+        Object.assign(navigator, {
+            clipboard: {
+                writeText: writeTextMock,
+            },
+        });
+
+        renderWithContext(mockPost, mockUser);
+        const shareBtn = screen.getByRole('button', { name: /share/i });
+        fireEvent.click(shareBtn);
+
+        expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining(`/community#post-${mockPost._id}`));
+    });
+
+    it('renders Club Exec badge and active win streak chip on author header', () => {
+        const authorWithStats = {
+            ...mockPost,
+            authorRole: 'admin',
+            authorStreak: 7
+        };
+
+        renderWithContext(authorWithStats, mockUser);
+        expect(screen.getByText('Club Exec')).toBeInTheDocument();
+        expect(screen.getByText('⚡ 7 Streak')).toBeInTheDocument();
+    });
+
+    it('allows a non-author to open Report Post dialog and submit report', async () => {
+        const viewerUser = { id: 'viewer-456', name: 'Other Member' };
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ success: true, reportCount: 1 })
+        });
+
+        renderWithContext(mockPost, viewerUser);
+
+        // Click 3 dots menu
+        const moreBtn = screen.getByRole('button', { name: /more options/i });
+        fireEvent.click(moreBtn);
+
+        // Click Report Post in menu
+        const reportOption = screen.getByRole('menuitem', { name: /🚩 Report Post/i });
+        fireEvent.click(reportOption);
+
+        // Dialog should be open
+        expect(screen.getByText(/Report Community Post/i)).toBeInTheDocument();
+        expect(screen.getByText(/Help keep our badminton community safe/i)).toBeInTheDocument();
+
+        // Submit report
+        const submitBtn = screen.getByRole('button', { name: /Submit Report/i });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                expect.stringContaining(`/api/forum/${mockPost._id}/report`),
+                expect.objectContaining({
+                    method: 'POST',
+                    body: expect.stringContaining('spam_advertising')
+                })
+            );
+        });
+    });
 });

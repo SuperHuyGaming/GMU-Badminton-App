@@ -586,6 +586,39 @@ describe('Forum Page Component (Community Hub)', () => {
         });
     });
 
+    it('fetches deep-linked post if not present in initial feed and triggers auto-scroll highlight', async () => {
+        window.location.hash = '#post-deep-123';
+        const deepPost = {
+            _id: 'deep-123',
+            type: 'post',
+            title: 'Deep Linked Tournament Highlight',
+            content: 'Discussing final rallies',
+            authorName: 'Kevin Lin',
+            createdAt: new Date().toISOString()
+        };
+
+        apiFetch.mockImplementation((url) => {
+            if (url.includes('/api/forum/deep-123')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => deepPost
+                });
+            }
+            return Promise.resolve({
+                ok: true,
+                json: async () => ({ feed: [], hasMore: false })
+            });
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => {
+            expect(screen.getByText('Deep Linked Tournament Highlight')).toBeInTheDocument();
+        });
+
+        window.location.hash = '';
+    });
+
     it('does not trigger "/" search shortcut when modal is open', async () => {
         apiFetch.mockResolvedValue({
             ok: true,

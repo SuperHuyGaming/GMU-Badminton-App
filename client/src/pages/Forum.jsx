@@ -15,7 +15,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import PostCard from "../components/PostCard";
 import socket from "../utils/socket";
 // eslint-disable-next-line no-unused-vars
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 
 const CATEGORY_FILTERS = [
 	{ id: "all", label: "All" },
@@ -50,6 +50,8 @@ export default function Forum() {
 	const { user: currentUser } = useAuth();
 	const theme = useTheme();
 	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
+	const { postId: routePostId } = useParams();
+	const location = useLocation();
 
 	const [tab, setTab] = useState("foryou"); // "foryou", "top", "latest"
 	const [selectedTag, setSelectedTag] = useState("");
@@ -77,6 +79,44 @@ export default function Forum() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isFetchingMore, setIsFetchingMore] = useState(false);
 	const observer = useRef();
+
+	// Deep-link scroll, fetch, and highlight handler
+	useEffect(() => {
+		const searchParams = new URLSearchParams(location.search);
+		const hash = location.hash || window.location.hash || "";
+		const targetId = routePostId || searchParams.get("postId") || (hash.startsWith("#post-") ? hash.replace("#post-", "") : null);
+		if (!targetId) return;
+
+		// If post not present in active feed, fetch directly and prepend
+		const exists = feedRef.current.some(p => String(p._id) === String(targetId) || String(p.referenceId) === String(targetId));
+		if (!exists && !isLoading) {
+			apiFetch(`/api/forum/${targetId}`)
+				.then(res => (res && res.ok ? res.json() : null))
+				.then(singlePost => {
+					if (singlePost && singlePost._id) {
+						setFeed(prev => {
+							if (prev.some(p => String(p._id) === String(singlePost._id))) return prev;
+							return [singlePost, ...prev];
+						});
+					}
+				})
+				.catch(err => console.error("Error fetching deep-linked post:", err));
+		}
+
+		// Smooth scroll and pulse highlight
+		const timer = setTimeout(() => {
+			const el = document.getElementById(`post-${targetId}`);
+			if (el) {
+				el.scrollIntoView({ behavior: "smooth", block: "center" });
+				el.classList.add("highlight-post-active");
+				setTimeout(() => {
+					el.classList.remove("highlight-post-active");
+				}, 3200);
+			}
+		}, 350);
+
+		return () => clearTimeout(timer);
+	}, [routePostId, location.search, location.hash, feed.length, isLoading]);
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const defaultNewPost = {
@@ -419,6 +459,17 @@ export default function Forum() {
 
 	return (
 		<Box sx={{ pb: 10 }}>
+			<style>
+				{`
+					@keyframes highlightPostFlash {
+						0% { border-color: #006633; box-shadow: 0 0 24px rgba(0, 102, 51, 0.5); transform: scale(1.02); }
+						100% { border-color: inherit; box-shadow: inherit; transform: scale(1); }
+					}
+					.highlight-post-active {
+						animation: highlightPostFlash 3.2s cubic-bezier(0.16, 1, 0.3, 1);
+					}
+				`}
+			</style>
 			{/* Clean, Modern Header Modeled after Tournaments, Marketplace & Community Directory */}
 			<Box 
 				sx={{ 

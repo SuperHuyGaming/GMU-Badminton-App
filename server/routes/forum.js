@@ -65,18 +65,25 @@ const hydrateWithPictures = async (data) => {
 		});
 	});
 
-	const users = await User.find({ _id: { $in: Array.from(userIds) } }).select("_id name profilePic").lean();
+	const users = await User.find({ _id: { $in: Array.from(userIds) } }).select("_id name profilePic role badges stats").lean();
 	const userMap = {};
 	users.forEach(
 		(u) =>
 			(userMap[u._id.toString()] = {
 				name: u.name,
 				profilePic: u.profilePic,
+				role: u.role || "user",
+				badges: Array.isArray(u.badges) ? u.badges : [],
+				streak: u.stats?.winStreak || 0,
 			}),
 	);
 
 	const attach = (post) => {
-		post.authorPic = userMap[post.authorId?.toString()]?.profilePic || "";
+		const authorInfo = userMap[post.authorId?.toString()];
+		post.authorPic = authorInfo?.profilePic || "";
+		post.authorRole = authorInfo?.role || "user";
+		post.authorBadges = authorInfo?.badges || [];
+		post.authorStreak = authorInfo?.streak || 0;
 		post.likedByDetails = Array.isArray(post.likedBy)
 			? post.likedBy.map((id) => ({
 					id,
@@ -88,6 +95,9 @@ const hydrateWithPictures = async (data) => {
 		post.comments?.forEach((comment) => {
 			comment.authorPic =
 				userMap[comment.authorId?.toString()]?.profilePic || "";
+			comment.authorRole = userMap[comment.authorId?.toString()]?.role || "user";
+			comment.authorBadges = userMap[comment.authorId?.toString()]?.badges || [];
+			comment.authorStreak = userMap[comment.authorId?.toString()]?.streak || 0;
 			comment.likedByDetails = Array.isArray(comment.likedBy)
 				? comment.likedBy.map((id) => ({
 						id,
@@ -99,6 +109,9 @@ const hydrateWithPictures = async (data) => {
 			comment.replies?.forEach((reply) => {
 				reply.authorPic =
 					userMap[reply.authorId?.toString()]?.profilePic || "";
+				reply.authorRole = userMap[reply.authorId?.toString()]?.role || "user";
+				reply.authorBadges = userMap[reply.authorId?.toString()]?.badges || [];
+				reply.authorStreak = userMap[reply.authorId?.toString()]?.streak || 0;
 				reply.likedByDetails = Array.isArray(reply.likedBy)
 					? reply.likedBy.map((id) => ({
 							id,
@@ -668,7 +681,8 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 		const cleanTitle = xss(title.trim());
 		const cleanContent = xss(content.trim());
 
-		if (await checkSpam(cleanTitle) || await checkSpam(cleanContent)) {
+		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
+		if (aiAnalysis.isFlagged || await checkSpam(cleanTitle) || await checkSpam(cleanContent)) {
 			post.isFlagged = true;
 			await post.save();
 			if (req.io) req.io.emit("postDeleted", post._id);
@@ -710,6 +724,30 @@ router.delete("/:postId", authMiddleware, async (req, res) => {
 		res.json({ success: true });
 	} catch (error) {
 		res.status(500).json({ message: "Error deleting post" });
+	}
+});
+
+// ==========================================
+// ==========================================
+// GET SINGLE POST BY ID (URL DEEP-LINKING)
+// ==========================================
+router.get("/:postId", async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await Post.findById(req.params.postId).lean();
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		if (post.status === "quarantined" || post.status === "deleted") {
+			return res.status(404).json({ message: "Post not available" });
+		}
+
+		const hydratedPost = await hydrateWithPictures(post);
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error fetching single post:", error);
+		res.status(500).json({ message: "Server error fetching post" });
 	}
 });
 
@@ -805,7 +843,10 @@ router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 
 		if (comment.authorId.toString() !== currentUserId && req.user.role !== "admin")
 			return res.status(403).json({ message: "Unauthorized" });
-		if (await checkSpam(cleanContent))
+		const aiAnalysis = await analyzeContent(cleanContent);
+		if (aiAnalysis.isFlagged || await checkSpam(cleanContent))
+			return res.status(400).json({ message: "Comment rejected: Spam or toxicity detected." });
+		if (false)
 			return res.json(await hydrateWithPictures(post.toObject()));
 
 		comment.content = cleanContent;
@@ -937,7 +978,10 @@ router.put(
 
 			if (reply.authorId.toString() !== currentUserId && req.user.role !== "admin")
 				return res.status(403).json({ message: "Unauthorized" });
-			if (await checkSpam(cleanContent))
+			const aiAnalysis = await analyzeContent(cleanContent);
+		if (aiAnalysis.isFlagged || await checkSpam(cleanContent))
+			return res.status(400).json({ message: "Comment rejected: Spam or toxicity detected." });
+		if (false)
 				return res.json(await hydrateWithPictures(post.toObject()));
 
 			reply.content = cleanContent;
@@ -986,6 +1030,136 @@ router.delete(
 );
 
 // ==========================================
+// ==========================================
+// REPORT COMMENTS & REPLIES
+// ==========================================
+router.post("/:postId/comments/:commentId/report", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
+		}
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found." });
+
+		if (comment.authorId && comment.authorId.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot report your own comment." });
+		}
+
+		if (!Array.isArray(comment.reports)) comment.reports = [];
+		const alreadyReported = comment.reports.some(
+			(r) => r.reportedBy && r.reportedBy.toString() === currentUserId
+		);
+		if (alreadyReported) {
+			return res.status(400).json({ message: "You have already reported this comment." });
+		}
+
+		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Abuse";
+		const details = req.body.details ? xss(String(req.body.details).trim()).slice(0, 500) : "";
+		comment.reports.push({
+			reportedBy: currentUserId,
+			reason,
+			details,
+			timestamp: new Date(),
+		});
+		comment.reportCount = comment.reports.length;
+
+		let flagged = false;
+		if (comment.reportCount >= 3) {
+			comment.isFlagged = true;
+			flagged = true;
+		}
+
+		await post.save();
+
+		const updatedPost = await Post.findById(req.params.postId).lean();
+		const hydratedPost = await hydrateWithPictures(updatedPost);
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+
+		return res.status(200).json({
+			success: true,
+			message: flagged
+				? "Comment has received 3 reports and has been flagged for review."
+				: "Comment reported successfully.",
+			reportCount: comment.reportCount,
+			isFlagged: comment.isFlagged,
+		});
+	} catch (err) {
+		console.error("Error reporting comment:", err);
+		return res.status(500).json({ message: "Internal server error reporting comment." });
+	}
+});
+
+router.post("/:postId/comments/:commentId/replies/:replyId/report", authMiddleware, async (req, res) => {
+	try {
+		if (
+			!mongoose.isValidObjectId(req.params.postId) ||
+			!mongoose.isValidObjectId(req.params.commentId) ||
+			!mongoose.isValidObjectId(req.params.replyId)
+		) {
+			return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
+		}
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found." });
+
+		const reply = comment.replies.id(req.params.replyId);
+		if (!reply) return res.status(404).json({ message: "Reply not found." });
+
+		if (reply.authorId && reply.authorId.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot report your own reply." });
+		}
+
+		if (!Array.isArray(reply.reports)) reply.reports = [];
+		const alreadyReported = reply.reports.some(
+			(r) => r.reportedBy && r.reportedBy.toString() === currentUserId
+		);
+		if (alreadyReported) {
+			return res.status(400).json({ message: "You have already reported this reply." });
+		}
+
+		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Abuse";
+		const details = req.body.details ? xss(String(req.body.details).trim()).slice(0, 500) : "";
+		reply.reports.push({
+			reportedBy: currentUserId,
+			reason,
+			details,
+			timestamp: new Date(),
+		});
+		reply.reportCount = reply.reports.length;
+
+		let flagged = false;
+		if (reply.reportCount >= 3) {
+			reply.isFlagged = true;
+			flagged = true;
+		}
+
+		await post.save();
+
+		const updatedPost = await Post.findById(req.params.postId).lean();
+		const hydratedPost = await hydrateWithPictures(updatedPost);
+		if (req.io) req.io.emit("postUpdated", hydratedPost);
+
+		return res.status(200).json({
+			success: true,
+			message: flagged
+				? "Reply has received 3 reports and has been flagged for review."
+				: "Reply reported successfully.",
+			reportCount: reply.reportCount,
+			isFlagged: reply.isFlagged,
+		});
+	} catch (err) {
+		console.error("Error reporting reply:", err);
+		return res.status(500).json({ message: "Internal server error reporting reply." });
+	}
+});
+
 // BOOKMARKS
 // ==========================================
 
