@@ -3,7 +3,8 @@
  */
 
 const parseDateRange = (query = {}) => {
-	const { dateRange, startDate, endDate, from, to } = query;
+	const q = query || {};
+	const { dateRange, startDate, endDate, from, to } = q;
 	let start = null;
 	let end = null;
 	const now = new Date();

@@ -53,6 +53,7 @@ describe('Forum Page Component (Community Hub)', () => {
             disconnect: () => null
         });
         window.IntersectionObserver = mockIntersectionObserver;
+        window.scrollTo = vi.fn();
     });
 
     const renderWithProviders = () => {
@@ -302,6 +303,10 @@ describe('Forum Page Component (Community Hub)', () => {
         const findPlayersChip = screen.getByText('Finding Players');
         fireEvent.click(findPlayersChip);
 
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalled();
+        });
+
         // Simulate incoming post with category "general"
         if (socketHandlers.postCreated) {
             act(() => {
@@ -315,6 +320,43 @@ describe('Forum Page Component (Community Hub)', () => {
         }
 
         expect(screen.queryByLabelText('Load new posts')).not.toBeInTheDocument();
+    });
+
+    it('renders real-time incoming post without crashing when user clicks new post pill', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false })
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => {
+            expect(screen.getByText('No activity found.')).toBeInTheDocument();
+        });
+
+        // Incoming socket post from Post model (no type: post, comments as array)
+        if (socketHandlers.postCreated) {
+            act(() => {
+                socketHandlers.postCreated({
+                    _id: 'socket_post_100',
+                    title: 'Live Racket Session',
+                    content: 'Court 4 is available right now',
+                    category: 'general',
+                    comments: [{ text: 'Coming in 5 mins!' }],
+                    createdAt: new Date().toISOString()
+                });
+            });
+        }
+
+        const loadPill = await screen.findByLabelText('Load new posts');
+        expect(loadPill).toBeInTheDocument();
+
+        fireEvent.click(loadPill);
+
+        await waitFor(() => {
+            expect(screen.getByText('Live Racket Session')).toBeInTheDocument();
+            expect(screen.getByText('Court 4 is available right now')).toBeInTheDocument();
+        });
     });
 
     it('matches official match scorecards by team player names in search', async () => {
@@ -351,6 +393,47 @@ describe('Forum Page Component (Community Hub)', () => {
         fireEvent.change(searchInput, { target: { value: 'Nonexistent' } });
         await waitFor(() => {
             expect(screen.getByText(/No posts match/i)).toBeInTheDocument();
+        });
+    });
+
+    it('matches match post by partner or opponents in search', async () => {
+        const mockFeed = [
+            {
+                _id: 'post_partner_1',
+                type: 'post',
+                title: 'Great Doubles Rally',
+                content: 'Close match at RAC',
+                category: 'match_result',
+                matchDetails: {
+                    partner: 'Sarah',
+                    opponents: ['Kevin', 'Leo']
+                },
+                createdAt: new Date().toISOString()
+            }
+        ];
+
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: mockFeed, hasMore: false })
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => {
+            expect(screen.getByText('Great Doubles Rally')).toBeInTheDocument();
+        });
+
+        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
+        fireEvent.change(searchInput, { target: { value: 'Sarah' } });
+
+        await waitFor(() => {
+            expect(screen.getByText('Great Doubles Rally')).toBeInTheDocument();
+        });
+
+        fireEvent.change(searchInput, { target: { value: 'Leo' } });
+
+        await waitFor(() => {
+            expect(screen.getByText('Great Doubles Rally')).toBeInTheDocument();
         });
     });
 

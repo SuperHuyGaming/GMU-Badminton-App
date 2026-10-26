@@ -377,9 +377,9 @@ router.get("/", async (req, res) => {
 			query.tags = req.query.tag.trim().slice(0, 50);
 		}
 
-		const rawSearch = (req.query.search || req.query.q || "").trim();
+		const rawSearch = (req.query.search || req.query.q || "").trim().slice(0, 100);
 		if (rawSearch) {
-			const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
+			const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 			const searchRegex = new RegExp(escaped, 'i');
 			query.$or = [
 				{ title: { $regex: searchRegex } },
@@ -387,6 +387,8 @@ router.get("/", async (req, res) => {
 				{ authorName: { $regex: searchRegex } },
 				{ tags: searchRegex },
 				{ "matchDetails.court": { $regex: searchRegex } },
+				{ "matchDetails.partner": { $regex: searchRegex } },
+				{ "matchDetails.opponents": searchRegex },
 				{ "playerMatchmaking.preferredCourt": { $regex: searchRegex } }
 			];
 		}

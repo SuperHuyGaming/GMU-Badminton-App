@@ -64,9 +64,9 @@ router.get("/", authMiddleware, async (req, res, next) => {
             if (dateEnd) matchStage.createdAt.$lte = dateEnd;
         }
 
-        const rawSearch = (req.query.search || req.query.q || "").trim();
+        const rawSearch = (req.query.search || req.query.q || "").trim().slice(0, 100);
         if (rawSearch) {
-            const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100);
+            const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const searchRegex = new RegExp(escaped, 'i');
             const searchOr = [
                 { title: { $regex: searchRegex } },
@@ -74,6 +74,8 @@ router.get("/", authMiddleware, async (req, res, next) => {
                 { authorName: { $regex: searchRegex } },
                 { tags: searchRegex },
                 { "matchDetails.court": { $regex: searchRegex } },
+                { "matchDetails.partner": { $regex: searchRegex } },
+                { "matchDetails.opponents": searchRegex },
                 { "playerMatchmaking.preferredCourt": { $regex: searchRegex } },
                 { team1: searchRegex },
                 { team2: searchRegex }

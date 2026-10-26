@@ -70,10 +70,10 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 	// 1. DATE RANGE ENGINE UNIT TESTS
 	// ==========================================
 	describe('1. Date Range Engine (parseDateRange)', () => {
-		it('returns null bounds when no query is passed or empty object', () => {
-			const res = parseDateRange({});
-			expect(res.start).toBeNull();
-			expect(res.end).toBeNull();
+		it('returns null bounds when no query is passed, empty object, null, or undefined', () => {
+			expect(parseDateRange({})).toEqual({ start: null, end: null });
+			expect(parseDateRange(null)).toEqual({ start: null, end: null });
+			expect(parseDateRange(undefined)).toEqual({ start: null, end: null });
 		});
 
 		it('parses "today" as start of day (00:00:00) to end of day (23:59:59.999)', () => {
@@ -418,7 +418,7 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			expect(matchStage.type).toEqual({ $ne: 'match' });
 		});
 
-		it('includes team1 and team2 in feed search regex', async () => {
+		it('includes team1, team2, partner, and opponents in feed search regex', async () => {
 			ActivityFeed.find.mockReturnValue({
 				sort: jest.fn().mockReturnThis(),
 				limit: jest.fn().mockReturnThis(),
@@ -433,6 +433,24 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			const matchStage = ActivityFeed.find.mock.calls[0][0];
 			const searchClause = matchStage.$and.find(c => c.$or && c.$or.some(o => o.team1));
 			expect(searchClause).toBeDefined();
+			expect(searchClause.$or.some(o => o['matchDetails.partner'])).toBe(true);
+			expect(searchClause.$or.some(o => o['matchDetails.opponents'])).toBe(true);
+		});
+
+		it('safely handles search query with special characters and trailing backslash', async () => {
+			ActivityFeed.find.mockReturnValue({
+				sort: jest.fn().mockReturnThis(),
+				limit: jest.fn().mockReturnThis(),
+				lean: jest.fn().mockResolvedValue([])
+			});
+
+			// 99 chars + trailing backslash: previously would break regex when sliced after escaping
+			const dangerousSearch = 'a'.repeat(99) + '\\';
+			const res = await request(app)
+				.get(`/api/feed?tab=latest&search=${encodeURIComponent(dangerousSearch)}`)
+				.set('Authorization', `Bearer ${userToken}`);
+
+			expect(res.status).toBe(200);
 		});
 	});
 });

@@ -242,15 +242,21 @@ export default function Forum() {
 			const author = (item.authorName || "").toLowerCase();
 			const court1 = (item.matchDetails?.court || "").toLowerCase();
 			const court2 = (item.playerMatchmaking?.preferredCourt || "").toLowerCase();
-			const team1 = Array.isArray(item.team1) ? item.team1.join(" ").toLowerCase() : "";
-			const team2 = Array.isArray(item.team2) ? item.team2.join(" ").toLowerCase() : "";
-			const tags = Array.isArray(item.tags) ? item.tags.join(" ").toLowerCase() : "";
+			const partner = (item.matchDetails?.partner || "").toLowerCase();
+			const opponents = Array.isArray(item.matchDetails?.opponents)
+				? item.matchDetails.opponents.join(" ").toLowerCase()
+				: (item.matchDetails?.opponents || "").toLowerCase();
+			const team1 = Array.isArray(item.team1) ? item.team1.join(" ").toLowerCase() : (typeof item.team1 === 'string' ? item.team1.toLowerCase() : "");
+			const team2 = Array.isArray(item.team2) ? item.team2.join(" ").toLowerCase() : (typeof item.team2 === 'string' ? item.team2.toLowerCase() : "");
+			const tags = Array.isArray(item.tags) ? item.tags.join(" ").toLowerCase() : (typeof item.tags === 'string' ? item.tags.toLowerCase() : "");
 			return (
 				title.includes(q) ||
 				content.includes(q) ||
 				author.includes(q) ||
 				court1.includes(q) ||
 				court2.includes(q) ||
+				partner.includes(q) ||
+				opponents.includes(q) ||
 				team1.includes(q) ||
 				team2.includes(q) ||
 				tags.includes(q)
@@ -267,7 +273,7 @@ export default function Forum() {
 				if (prev.find(p => p._id === post._id || p.referenceId === post._id)) return prev;
 				setNewPostsQueue(q => {
 					if (q.find(p => p._id === post._id || p.referenceId === post._id)) return q;
-					return [post, ...q];
+					return [{ ...post, type: post.type || 'post' }, ...q];
 				});
 				return prev;
 			});
@@ -840,45 +846,12 @@ export default function Forum() {
 					</Box>
 				) : (
 					displayedFeed.map((item, idx) => {
-						if (item.type === 'post') {
-							// Transform ActivityFeed back to Post format for PostCard component
-							const mockPost = {
-								_id: item.referenceId || item._id,
-								title: item.title,
-								content: item.content,
-								category: item.category || 'general',
-								matchDetails: item.matchDetails || null,
-								playerMatchmaking: item.playerMatchmaking || null,
-								challengeMatch: item.challengeMatch || null,
-								qaDetails: item.qaDetails || null,
-								gearDetails: item.gearDetails || null,
-								imageUrl: item.image,
-								imageUrls: item.images || [],
-								authorId: item.authorId,
-								authorName: item.authorName,
-								authorBadges: item.authorBadges,
-								authorPic: item.authorProfilePic,
-								timestamp: item.createdAt,
-								tags: item.tags || [],
-								isPinned: Boolean(item.isPinned),
-								reactions: item.reactions || [],
-								likedBy: new Array(Math.max(0, item.likes || 0)).fill('mock_id'), // PostCard only cares about length
-								recentLikerAvatars: item.recentLikerAvatars || [],
-								comments: new Array(Math.max(0, item.comments || 0)).fill({}), 
-							};
-							return (
-								<Box key={item._id} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
-									<PostCard post={mockPost} currentUser={currentUser} isBookmarked={bookmarkedPosts.has(item.referenceId)} onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { const n = new Set(prev); if(isBookmarked) n.add(item.referenceId); else n.delete(item.referenceId); return n; })} onDelete={() => {}} />
-								</Box>
-							);
-						}
-						
 						if (item.type === 'match') {
 							const team1Wins = item.team1Score > item.team2Score;
 							const team2Wins = item.team2Score > item.team1Score;
 
 							return (
-								<Box key={item._id} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
+								<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
 									<Paper 
 										elevation={0} 
 										sx={{ 
@@ -903,13 +876,13 @@ export default function Forum() {
 										<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 3, position: 'relative' }}>
 											{/* TEAM 1 */}
 											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
-												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
+												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem' }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team1Avatars?.map((avatar, i) => (
 														<Avatar key={i} src={avatar} alt={item.team1?.[i] || `Team 1 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
-												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
+												<Typography variant="body2" fontWeight="900" align="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
 													{item.team1?.map(name => name.split(' ')[0]).join(' & ')}
 												</Typography>
 											</Box>
@@ -926,13 +899,13 @@ export default function Forum() {
 
 											{/* TEAM 2 */}
 											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
-												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem',  }}>👑</Box>}
+												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem' }}>👑</Box>}
 												<Box sx={{ display: 'flex' }}>
 													{item.team2Avatars?.map((avatar, i) => (
 														<Avatar key={i} src={avatar} alt={item.team2?.[i] || `Team 2 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
 													))}
 												</Box>
-												<Typography variant="body2" fontWeight="900" textAlign="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
+												<Typography variant="body2" fontWeight="900" align="center" sx={{ width: '100%', wordWrap: 'break-word', lineHeight: 1.2 }}>
 													{item.team2?.map(name => name.split(' ')[0]).join(' & ')}
 												</Typography>
 											</Box>
@@ -941,8 +914,52 @@ export default function Forum() {
 								</Box>
 							);
 						}
-						
-						return null;
+
+						// Post items (either type === 'post' or standard Post objects from real-time events)
+						const mockPost = {
+							_id: item.referenceId || item._id,
+							title: item.title,
+							content: item.content,
+							category: item.category || 'general',
+							matchDetails: item.matchDetails || null,
+							playerMatchmaking: item.playerMatchmaking || null,
+							challengeMatch: item.challengeMatch || null,
+							qaDetails: item.qaDetails || null,
+							gearDetails: item.gearDetails || null,
+							imageUrl: item.image || item.imageUrl,
+							imageUrls: item.images || item.imageUrls || [],
+							authorId: item.authorId,
+							authorName: item.authorName,
+							authorBadges: item.authorBadges || [],
+							authorPic: item.authorProfilePic || item.authorPic,
+							authorSkillLevel: item.authorSkillLevel,
+							timestamp: item.createdAt || item.timestamp,
+							createdAt: item.createdAt || item.timestamp,
+							tags: item.tags || [],
+							isPinned: Boolean(item.isPinned),
+							reactions: item.reactions || [],
+							likes: item.likes ?? item.likedBy?.length ?? 0,
+							likedBy: Array.isArray(item.likedBy) ? item.likedBy : new Array(Math.max(0, item.likes || 0)).fill('mock_id'),
+							recentLikerAvatars: item.recentLikerAvatars || [],
+							comments: Array.isArray(item.comments) ? item.comments : new Array(Math.max(0, typeof item.comments === 'number' ? item.comments : 0)).fill({}), 
+						};
+						return (
+							<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
+								<PostCard 
+									post={mockPost} 
+									currentUser={currentUser} 
+									isBookmarked={bookmarkedPosts.has(item.referenceId || item._id)} 
+									onBookmarkToggle={(isBookmarked) => setBookmarkedPosts(prev => { 
+										const n = new Set(prev); 
+										const targetId = item.referenceId || item._id; 
+										if (isBookmarked) n.add(targetId); 
+										else n.delete(targetId); 
+										return n; 
+									})} 
+									onDelete={() => {}} 
+								/>
+							</Box>
+						);
 					})
 				)}
 			</Box>
