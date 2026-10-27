@@ -26,6 +26,7 @@ import { useNavigate } from "react-router-dom";
 import CommentThread from "./CommentThread";
 
 import socket from "../utils/socket";
+import apiFetch from "../utils/api";
 
 export default function PostCommentsInline({
 	localPost,
@@ -257,20 +258,17 @@ export default function PostCommentsInline({
 		skipStateUpdate = false,
 	) => {
 		try {
-			const res = await fetch(
-				`${import.meta.env.VITE_API_URL}${endpoint}`,
-				{
-					method,
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem("token")}`,
-					},
-					body: JSON.stringify(bodyData),
-				},
-			);
-			if (res.ok && !skipStateUpdate) setLocalPost(await res.json());
+			const res = await apiFetch(endpoint, {
+				method,
+				body: JSON.stringify(bodyData),
+			});
+			if (res.ok && !skipStateUpdate) {
+				const data = await res.json();
+				setLocalPost(data);
+			}
+			return res;
 		} catch (err) {
-			console.error(err);
+			console.error("API error in comments:", err);
 		}
 	};
 
@@ -386,13 +384,27 @@ export default function PostCommentsInline({
 
 			<Box sx={{ p: { xs: 1, sm: 2 } }}>
 				{!localPost.comments?.length ? (
-					<Typography
-						variant="body2"
-						color="text.primary"
-						sx={{ textAlign: "center", mt: 2 }}
-					>
-						No comments yet. Be the first to reply!
-					</Typography>
+					<Box sx={{ textAlign: "center", py: 3, px: 2 }}>
+						<Box sx={{ 
+							width: 44, 
+							height: 44, 
+							borderRadius: "50%", 
+							bgcolor: "action.hover", 
+							display: "inline-flex", 
+							alignItems: "center", 
+							justifyContent: "center", 
+							mb: 1,
+							color: "text.secondary" 
+						}}>
+							<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+						</Box>
+						<Typography variant="body2" fontWeight="600" color="text.secondary">
+							No comments yet
+						</Typography>
+						<Typography variant="caption" color="text.secondary">
+							Be the first to share your thoughts or rally!
+						</Typography>
+					</Box>
 				) : (
 					<Box
 						sx={{
@@ -536,11 +548,20 @@ export default function PostCommentsInline({
 					disabled={!currentUser}
 					sx={{
 						"& .MuiOutlinedInput-root": {
-							borderRadius: "20px",
+							borderRadius: 5,
 							backgroundColor: "action.hover",
-							py: 1,
-							px: 2,
+							py: 0.8,
+							px: 1.5,
+							"& fieldset": { borderColor: "divider" },
+							"&:hover fieldset": { borderColor: "primary.main" },
+							"&.Mui-focused fieldset": { borderColor: "primary.main", borderWidth: 1.5 }
 						},
+						"& textarea": {
+							border: "none !important",
+							outline: "none !important",
+							boxShadow: "none !important",
+							resize: "none"
+						}
 					}}
 				/>
 				<Button
@@ -551,8 +572,11 @@ export default function PostCommentsInline({
 						borderRadius: 5,
 						fontWeight: "bold",
 						textTransform: "none",
+						height: 36,
+						minWidth: "64px",
 						mb: 0.5,
-						transition: "all 0.1s",
+						boxShadow: "none",
+						transition: "all 0.15s ease",
 						"&:active": { transform: "scale(0.95)" },
 					}}
 				>

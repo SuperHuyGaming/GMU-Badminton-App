@@ -42,27 +42,25 @@ export default function ReplyBubble({
 
 	const handleSaveEdit = async () => {
 		if (!editContent.trim()) return;
-		const res = await fetch(
-			`${import.meta.env.VITE_API_URL}/api/forum/${localPostId}/comments/${commentId}/replies/${reply._id}`,
-			{
-				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${localStorage.getItem("token")}`,
+		try {
+			const res = await apiFetch(
+				`/api/forum/${localPostId}/comments/${commentId}/replies/${reply._id}`,
+				{
+					method: "PUT",
+					body: JSON.stringify({
+						userId: currentUser.id,
+						content: editContent,
+					}),
 				},
-				body: JSON.stringify({
-					userId: currentUser.id,
-					content: editContent,
-				}),
-			},
-		);
+			);
 
-		if (res.ok) {
-			const data = await res.json();
-			if (!data.title && !data._id)
-				alert(
-					"Your edit has been sent for admin review due to our spam filters.",
-				);
+			if (res.ok) {
+				const data = await res.json();
+				if (!data.title && !data._id)
+					toast("Your edit has been sent for review.", { icon: "ℹ️" });
+			}
+		} catch (err) {
+			console.error("Error saving reply edit:", err);
 		}
 		setIsEditing(false);
 	};
@@ -110,10 +108,12 @@ export default function ReplyBubble({
 					sx={{
 						position: "relative",
 						backgroundColor: "action.hover",
-						p: 1,
-						borderRadius: 3,
+						py: 0.8,
+						px: 1.5,
+						borderRadius: "16px",
 						display: "inline-block",
 						maxWidth: "100%",
+						boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
 					}}
 				>
 					<Box

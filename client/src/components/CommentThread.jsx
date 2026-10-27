@@ -186,11 +186,20 @@ export default function CommentThread({
 						}}
 						sx={{
 							"& .MuiOutlinedInput-root": {
-								borderRadius: "20px",
-								bgcolor: "background.paper",
-								py: 1,
-								px: 2,
+								borderRadius: 5,
+								bgcolor: "action.hover",
+								py: 0.6,
+								px: 1.5,
+								"& fieldset": { borderColor: "divider" },
+								"&:hover fieldset": { borderColor: "primary.main" },
+								"&.Mui-focused fieldset": { borderColor: "primary.main", borderWidth: 1.5 }
 							},
+							"& textarea": {
+								border: "none !important",
+								outline: "none !important",
+								boxShadow: "none !important",
+								resize: "none"
+							}
 						}}
 					/>
 					<Button
@@ -200,12 +209,15 @@ export default function CommentThread({
 						disabled={!nestedReplyText.trim()}
 						sx={{
 							borderRadius: 5,
-							minWidth: "50px",
+							minWidth: "60px",
+							height: 34,
+							fontWeight: "bold",
+							textTransform: "none",
 							mb: 0.5,
 							"&:active": { transform: "scale(0.95)" },
 						}}
 					>
-						Post
+						Reply
 					</Button>
 				</Box>
 			)}
