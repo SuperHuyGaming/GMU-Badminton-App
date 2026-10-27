@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.4.0](https://github.com/SuperHuyGaming/GMU-Badminton-App/compare/v1.3.0...v1.4.0) (2026-10-27)
+
+
+### Features
+
+* **community:** Facebook-style reaction emoji cluster & total count ([d4d64e2](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/d4d64e295979020db16e4c9d67e552a7fe79c570))
+* **community:** Facebook-style reaction icon badges, eliminate phantom likes, and prevent author self-RSVP ([#150](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/150)) ([#151](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/151)) ([9afc763](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/9afc7636dd6ed64c68489a06601a4ed73bce8be5))
+* **community:** implement Facebook-style reaction emoji cluster with total count and who reacted modal ([982c143](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/982c143fc0bde5ac844d1ce9e41ca7cb75962a62))
+* **community:** implement Phase 1 Badminton Reaction Trio, Post Categorization & Match Scorecards ([fb0263e](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/fb0263e36825cf57334244e32e0b6ddb3cf2ff0f))
+* **community:** implement Phase 2 specialized workflows for matchmaking, challenges, Q&A, and gear exchange ([1e38332](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/1e383329f99b237c7850c3e033450d36fe29944b))
+* **community:** Phase 10 master end-to-end regression suite, WCAG 2.1 AA accessibility, and QA release gates ([#139](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/139)) ([75e3c08](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/75e3c08294607c3da4c4e6f6ef0d127cd6c7ce9c))
+* **community:** Phase 3 post search, date range, and category filters ([#131](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/131)) ([7033c60](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/7033c60135111c2fd7c8b8fc5234296ac2d462f8))
+* **community:** Phase 4 social sharing, deep linking, nested thread badges, and safety reporting ([#132](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/132)) ([e372025](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/e37202503eb18c568462b765d1dea03b0063126b))
+* **community:** Phase 5 algorithmic feed tuning, in-memory caching tier, compact mode, and draft persistence ([#133](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/133)) ([3c4292e](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/3c4292e8eb2aa4b586fd20bab98b0a8e3120d996))
+* **community:** Phase 6 real-time presence, collage media grid, typing indicators, and download action ([#134](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/134)) ([09d45af](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/09d45af5e50030bf1cb6b6816ce2771487e91461))
+* **community:** Phase 7 interactive reaction trio, tabbed who-reacted modal, and badminton gamification badges ([#135](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/135)) ([c954088](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/c95408893360861ae01a7dcd115425f06ec9bf1c))
+* **community:** Phase 8 threaded discussions, comment sorting, and mention autocomplete engine ([#136](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/136)) ([15a4256](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/15a4256430cb52fbd4b7cc6b1cb2dff9f9e63c04))
+* **community:** Phase 9 admin moderation queue, safety dashboard, and reaction/posting bug fixes ([#137](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/137)) ([6432f02](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/6432f022f3dc77d93f29542a70860bcf19f6cf7b))
+* **community:** simplify to 3 categories and overhaul modal composer UX ([#146](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/146)) ([1c4cb2b](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/1c4cb2b1dc0e17bd868ed385b9e62dfd2dba61c3))
+* **ui:** overhaul feed with Facebook-style mobile cards, composer card, single-step posting, and backend CastError defenses ([#140](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/140)) ([8f127b7](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/8f127b73105e0b76b7eff7c1c4cda2855a28c841))
+
+
+### Bug Fixes
+
+* **backend:** guard next() in Post and CoachChat pre-save hooks for Mongoose 9 compatibility ([#142](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/142)) ([ec670e6](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/ec670e602e90df8e5792057b50415b269979448f))
+* **backend:** resolve Mongoose 9 'next is not a function' pre-save hook crash ([ae7b8ca](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/ae7b8ca09870c24bde9b43c6e3eefd5a8ef79746))
+* **community:** strengthen real-time reaction sync, optimistic UI, mobile touch interactions, and input sanitization ([3d5b471](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/3d5b471f64b77ddaa4a0a5862aaaa018165975f3))
+* **ui:** remove clutter by strictly tying specialized workflow banners to post category ([dade849](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/dade849d376d71ecae6c0387f93006846c3a3595))
+* **ui:** simplify community hub interface, eliminate duplicate post creator and redundant trending bar ([#138](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/138)) ([0a6b25e](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/0a6b25e233312c23abd199d464656a6fcc0be3dc))
+* **ui:** strictly tie workflow banners to post category, removing clutter from general and unselected posts ([#144](https://github.com/SuperHuyGaming/GMU-Badminton-App/issues/144)) ([65a220f](https://github.com/SuperHuyGaming/GMU-Badminton-App/commit/65a220f9fdbb3dd1452d76c805b1f70a27cd6fda))
+
 ## [1.2.0](https://github.com/SuperHuyGaming/GMU-Badminton-App/compare/v1.1.0...v1.2.0) (2026-09-24)
 
 
