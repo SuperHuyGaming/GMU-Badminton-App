@@ -648,12 +648,12 @@ const Messages = () => {
 								}
 							}}
 							sx={{ 
-								p: 2, 
+								p: { xs: 1.5, sm: 2 }, 
 								borderBottom: "1px solid",
 								borderColor: "divider", 
 								display: "flex", 
 								alignItems: "center", 
-								gap: 2,
+								gap: { xs: 1, sm: 2 },
 								cursor: "pointer",
 								transition: "background-color 0.2s",
 								"&:hover": { bgcolor: "rgba(0, 0, 0, 0.02)" },
@@ -661,7 +661,13 @@ const Messages = () => {
 							}}
 						>
 							<IconButton 
-								sx={{ display: { md: "none" } }} 
+								sx={{ 
+									display: { md: "none" },
+									width: 40,
+									height: 40,
+									minWidth: 40,
+									mr: { xs: 0, sm: 0.5 }
+								}} 
 								onClick={(e) => { e.stopPropagation(); setActiveChat(null); }}
 								aria-label="Back to conversations"
 							>
@@ -861,14 +867,14 @@ const Messages = () => {
 							component="form" 
 							onSubmit={handleSendMessage} 
 							sx={{ 
-								p: 2, 
+								p: { xs: 1, sm: 2 }, 
 								borderTop: "1px solid",
 								borderColor: "divider",
 								display: "flex", 
 								gap: 1, 
 								bgcolor: "background.paper", 
-								borderRadius: "0 0 12px 12px",
-								alignItems: "flex-end",
+								borderRadius: { xs: 0, md: "0 0 12px 12px" },
+								alignItems: "center",
 								flexShrink: 0
 							}}
 						>
@@ -891,20 +897,42 @@ const Messages = () => {
 								}}
 								sx={{ 
 									"& .MuiOutlinedInput-root": { 
-										borderRadius: 5,
+										borderRadius: 6,
 										bgcolor: "background.default",
-									} 
+										px: 1,
+										py: 0.5,
+										"& fieldset": { borderColor: "divider" },
+										"&:hover fieldset": { borderColor: "primary.main" },
+										"&.Mui-focused fieldset": { borderColor: "primary.main", borderWidth: 1.5 }
+									},
+									"& textarea": {
+										border: "none !important",
+										outline: "none !important",
+										boxShadow: "none !important",
+										padding: "8px 12px !important",
+										resize: "none"
+									},
+									"& .MuiInputBase-input": {
+										border: "none !important",
+										outline: "none !important",
+										boxShadow: "none !important"
+									}
 								}}
 							/>
 							<IconButton 
 								type="submit" 
 								color="primary" 
 								aria-label="Send message" 
+								disabled={!newMessage.trim()}
 								sx={{ 
-									bgcolor: "primary.main", 
-									color: "white", 
-									"&:hover": { bgcolor: "primary.dark" },
-									mb: 0.5 
+									bgcolor: newMessage.trim() ? "primary.main" : "action.disabledBackground", 
+									color: newMessage.trim() ? "white" : "action.disabled", 
+									"&:hover": { bgcolor: newMessage.trim() ? "primary.dark" : "action.disabledBackground" },
+									width: 40,
+									height: 40,
+									minWidth: 40,
+									flexShrink: 0,
+									transition: "all 0.2s ease"
 								}}
 							>
 								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>

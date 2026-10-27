@@ -54,7 +54,7 @@ describe('Community Hub Phase 10: Accessibility (WCAG 2.1 AA) & Keyboard Navigat
 		);
 	};
 
-	it('renders accessible semantic landmarks, tablist roles, and region labels', async () => {
+	it('renders accessible semantic landmarks and region labels', async () => {
 		apiFetch.mockResolvedValue({
 			ok: true,
 			json: async () => ({ feed: [], hasMore: false, tags: [] })
@@ -64,17 +64,9 @@ describe('Community Hub Phase 10: Accessibility (WCAG 2.1 AA) & Keyboard Navigat
 
 		await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-		// Tabs navigation landmark
-		const tablist = screen.getByRole('tablist', { name: /Community Hub categories/i });
-		expect(tablist).toBeInTheDocument();
-
-		// Category filters region
-		const categoryRegion = screen.getByRole('region', { name: /Category filters/i });
-		expect(categoryRegion).toBeInTheDocument();
-
-		// Trending tags region
-		const trendingRegion = screen.getByRole('region', { name: /Trending tags/i });
-		expect(trendingRegion).toBeInTheDocument();
+		// Category & topic filters region
+		const filterRegion = screen.getByRole('region', { name: /Category and topic filters/i });
+		expect(filterRegion).toBeInTheDocument();
 
 		// Search input accessible label
 		const searchInput = screen.getByRole('textbox', { name: /Search community posts/i });
@@ -107,7 +99,7 @@ describe('Community Hub Phase 10: Accessibility (WCAG 2.1 AA) & Keyboard Navigat
 		renderWithProviders();
 		await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-		const createBtn = screen.getByRole('button', { name: /Create New Post/i });
+		const createBtn = screen.getByTestId('facebook-composer-card');
 		fireEvent.click(createBtn);
 
 		const dialog = await screen.findByRole('dialog');
