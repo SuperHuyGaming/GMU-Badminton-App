@@ -55,6 +55,11 @@ import LikesModal from "./LikesModal";
 import PostCommentsInline from "./PostCommentsInline";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import MediaLightbox from "./MediaLightbox";
+
+// In-memory cache for fetched comments to ensure instant re-rendering and prevent vanishing on re-renders
+const postCommentsMemoryCache = new Map();
+const hasPopulatedComments = (arr) =>
+	Array.isArray(arr) && arr.length > 0 && arr.some((c) => c && (c._id || c.text || c.content));
 import {
 	ThumbUpFilled,
 	MessageCircleIcon,
@@ -374,7 +379,27 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
-		setLocalPost(post);
+		setLocalPost((prev) => {
+			const prevReal = hasPopulatedComments(prev?.comments);
+			const incomingReal = hasPopulatedComments(post?.comments);
+			const cached = postCommentsMemoryCache.get(post?._id);
+			const cachedReal = hasPopulatedComments(cached);
+
+			let comments = post.comments;
+			if (incomingReal) {
+				comments = post.comments;
+				postCommentsMemoryCache.set(post._id, post.comments);
+			} else if (prevReal && prev?._id === post?._id) {
+				comments = prev.comments;
+			} else if (cachedReal) {
+				comments = cached;
+			}
+
+			return {
+				...post,
+				comments,
+			};
+		});
 		setEditTitle(post.title);
 		setEditContent(post.content);
 	}, [post]);
@@ -423,10 +448,18 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 	useEffect(() => {
 		if (isCommentModalOpen && import.meta.env.MODE !== 'test') {
+			// Instant 0ms cache seed for rapid rendering without disappearance
+			const cached = postCommentsMemoryCache.get(localPost._id);
+			if (hasPopulatedComments(cached)) {
+				// eslint-disable-next-line react-hooks/set-state-in-effect
+				setLocalPost(prev => (hasPopulatedComments(prev?.comments) ? prev : { ...prev, comments: cached }));
+			}
+
 			apiFetch("/api/forum/" + localPost._id + "/comments")
 			.then(res => res.json())
 			.then(data => {
 				if (data.comments) {
+					postCommentsMemoryCache.set(localPost._id, data.comments);
 					setLocalPost(prev => ({ ...prev, comments: data.comments }));
 				}
 			})
@@ -434,10 +467,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		}
 	}, [isCommentModalOpen, localPost._id]);
 	const totalCommentsCount =
-		localPost.comments?.reduce(
-			(acc, c) => acc + 1 + (c.replies?.length || 0),
-			0,
-		) || 0;
+		hasPopulatedComments(localPost.comments)
+			? localPost.comments.reduce(
+					(acc, c) => acc + (c && (c._id || c.text || c.content) ? 1 + (c.replies?.length || 0) : 0),
+					0,
+				)
+			: (typeof localPost.commentCount === 'number'
+				? localPost.commentCount
+				: (Array.isArray(localPost.comments) ? localPost.comments.length : 0));
 	const hasLiked = localPost.likedBy?.includes(currentUserId);
 	const currentUserReaction = (localPost.reactions || []).find(
 		(r) => r && String(r.userId) === String(currentUserId)
@@ -960,7 +997,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										}} 
 									/>
 								)}
-								{localPost.authorBadges?.includes("top_contributor") && (
+								{/* Top Contributor Badge - disabled/commented out per UI content standards
+								localPost.authorBadges?.includes("top_contributor") && (
 									<Chip 
 										label="Top Contributor" 
 										size="small" 
@@ -971,7 +1009,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 											color: '#000', ml: 0.5 
 										}} 
 									/>
-								)}
+								)
+								*/}
 							</span>{" "}
 							• {formatTime(localPost.timestamp)}
 							{localPost.isEdited && (

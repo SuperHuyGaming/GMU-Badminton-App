@@ -343,19 +343,6 @@ export default function CommentBubble({
 							🗑 Delete
 						</MenuItem>
 					)}
-					<MenuItem
-						onClick={() => {
-							const link = `${window.location.origin}/community?postId=${localPostId}&highlight=${comment._id}#comment-${comment._id}`;
-							if (navigator.clipboard) {
-								navigator.clipboard.writeText(link);
-								toast.success("Comment link copied! 📋");
-							}
-							closeMenu();
-						}}
-						sx={{ fontSize: "0.875rem", fontWeight: "bold" }}
-					>
-						📋 Copy Link
-					</MenuItem>
 					{currentUser && currentUser.id !== comment.authorId && (
 						<MenuItem
 							onClick={async () => {

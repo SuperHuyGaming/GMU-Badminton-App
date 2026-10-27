@@ -357,19 +357,6 @@ export default function ReplyBubble({
 							🗑 Delete
 						</MenuItem>
 					)}
-					<MenuItem
-						onClick={() => {
-							const link = `${window.location.origin}/community?postId=${localPostId}&highlight=${reply._id}#comment-${reply._id}`;
-							if (navigator.clipboard) {
-								navigator.clipboard.writeText(link);
-								toast.success("Reply link copied! 📋");
-							}
-							closeMenu();
-						}}
-						sx={{ fontSize: "0.875rem", fontWeight: "bold" }}
-					>
-						📋 Copy Link
-					</MenuItem>
 					{currentUser && currentUser.id !== reply.authorId && (
 						<MenuItem
 							onClick={async () => {

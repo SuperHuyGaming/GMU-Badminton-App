@@ -1167,7 +1167,8 @@ export default function Forum() {
 							likes: item.likes ?? item.likedBy?.length ?? 0,
 							likedBy: Array.isArray(item.likedBy) ? item.likedBy : new Array(Math.max(0, item.likes || 0)).fill('mock_id'),
 							recentLikerAvatars: item.recentLikerAvatars || [],
-							comments: Array.isArray(item.comments) ? item.comments : new Array(Math.max(0, typeof item.comments === 'number' ? item.comments : 0)).fill({}), 
+							comments: Array.isArray(item.comments) ? item.comments : [],
+							commentCount: typeof item.comments === 'number' ? item.comments : (Array.isArray(item.comments) ? item.comments.length : 0), 
 						};
 						return (
 							<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>

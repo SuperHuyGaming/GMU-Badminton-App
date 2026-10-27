@@ -136,7 +136,7 @@ export default function PostCommentsInline({
 
 	// Sorted comments
 	const sortedComments = useMemo(() => {
-		const list = [...(localPost.comments || [])];
+		const list = [...(localPost.comments || [])].filter((c) => c && (c._id || c.text || c.content));
 		if (sortBy === "top") {
 			list.sort((a, b) => {
 				const scoreA = (a.likedBy?.length || 0) + (a.replies?.length || 0);
@@ -355,10 +355,10 @@ export default function PostCommentsInline({
 				}}
 			>
 				<Typography variant="subtitle2" fontWeight="bold" color="text.secondary">
-					{localPost.comments?.length || 0}{" "}
-					{localPost.comments?.length === 1 ? "Comment" : "Comments"}
+					{sortedComments.length}{" "}
+					{sortedComments.length === 1 ? "Comment" : "Comments"}
 				</Typography>
-				{localPost.comments?.length > 1 && (
+				{sortedComments.length > 1 && (
 					<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
 						<Typography variant="caption" color="text.secondary">
 							Sort by:
@@ -383,7 +383,7 @@ export default function PostCommentsInline({
 			</Box>
 
 			<Box sx={{ p: { xs: 1, sm: 2 } }}>
-				{!localPost.comments?.length ? (
+				{!sortedComments.length ? (
 					<Box sx={{ textAlign: "center", py: 3, px: 2 }}>
 						<Box sx={{ 
 							width: 44, 

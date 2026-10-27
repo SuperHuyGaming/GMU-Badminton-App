@@ -57,3 +57,10 @@ trigger: always_on
 - **Contextual Error Reporting**:
   - Present a "Report this issue" shortcut directly inside error alerts and API error toasts that pre-populates error messages, endpoint URLs, and system context automatically.
 
+## 7. Comment & Discussion Interaction Cleanliness
+- **Streamlined Action Menus**: In comment and reply 3-dot menus, only display essential actions (`Delete`, `Report`). Do NOT include "Copy Link" or deep-link sharing on individual comments unless specifically requested.
+- **Gamification Badge Restraint**: Keep automated gamification badges (such as `🏅 Top Contributor`) disabled/commented out until explicitly requested. Prioritize clean user identity over synthetic award chips.
+- **Comment State Preservation Invariant**:
+  - Feed summary queries only return comment counts or stubs. When a component fetches full comment documents, preserve those populated documents in memory.
+  - Never allow parent feed re-renders to overwrite populated comment arrays with empty stub objects (`fill({})`).
+  - Cache loaded comments in a fast client-side Map/cache to guarantee instant (0ms) re-render without memory bloat.
