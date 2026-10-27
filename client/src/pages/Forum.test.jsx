@@ -116,7 +116,7 @@ describe('Forum Page Component (Community Hub)', () => {
         });
     });
 
-    it('renders the 3-tab navigation system and trending topic chips', async () => {
+    it('renders streamlined UI with inline composer and trending topic chips without tab bar', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
@@ -125,9 +125,9 @@ describe('Forum Page Component (Community Hub)', () => {
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        expect(screen.getByRole('tab', { name: /For You/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Top/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Latest/i })).toBeInTheDocument();
+        expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Create New Post/i })).not.toBeInTheDocument();
+        expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument();
         expect(screen.getByText('#Tournament')).toBeInTheDocument();
         expect(screen.getByText('#RAC')).toBeInTheDocument();
     });
@@ -140,8 +140,8 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
-        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
-        fireEvent.click(createBtn);
+        const composerCard = screen.getByTestId('facebook-composer-card');
+        fireEvent.click(composerCard);
 
         await waitFor(() => {
             expect(screen.getByText('Create a Post')).toBeInTheDocument();
@@ -624,8 +624,8 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
         const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
-        fireEvent.click(createBtn);
+        const composerCard = screen.getByTestId('facebook-composer-card');
+        fireEvent.click(composerCard);
 
         await waitFor(() => {
             expect(screen.getByText('Create a Post')).toBeInTheDocument();
@@ -670,8 +670,8 @@ describe('Forum Page Component (Community Hub)', () => {
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
-        fireEvent.click(createBtn);
+        const composerCard = screen.getByTestId('facebook-composer-card');
+        fireEvent.click(composerCard);
 
         await waitFor(() => {
             expect(screen.getByDisplayValue('Draft Saved Title')).toBeInTheDocument();

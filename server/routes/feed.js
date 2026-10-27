@@ -120,7 +120,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
 		const { start: dateStart, end: dateEnd } = parseDateRange(req.query);
 
 		// Cache check
-		const cacheKey = `feed:${req.user?.id || 'anon'}:${tab}:${req.query.tag || ''}:${req.query.category || ''}:${rawSearch}:${req.query.dateRange || ''}:${dateStart ? dateStart.getTime() : ''}:${dateEnd ? dateEnd.getTime() : ''}:${cursor || 'root'}:${limit}:${currentUser.skillLevel}`;
+		const cacheKey = `feed:${req.user?.id || 'anon'}:${tab}:${req.query.tag ? req.query.tag.trim().toLowerCase().replace(/^#/, '') : ''}:${req.query.category || ''}:${rawSearch}:${req.query.dateRange || ''}:${req.query.tzOffset || ''}:${dateStart ? dateStart.getTime() : ''}:${dateEnd ? dateEnd.getTime() : ''}:${cursor || 'root'}:${limit}:${currentUser.skillLevel}`;
 		const cached = feedCache.get(cacheKey);
 		if (cached) {
 			if (req.headers["if-none-match"] === cached.etag) {
@@ -142,7 +142,11 @@ router.get("/", authMiddleware, async (req, res, next) => {
 		};
 
 		if (req.query.tag && typeof req.query.tag === "string") {
-			matchStage.tags = req.query.tag.trim().slice(0, 50);
+			const cleanTag = req.query.tag.trim().replace(/^#/, "").slice(0, 50);
+			if (cleanTag) {
+				const escaped = cleanTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+				matchStage.tags = { $regex: new RegExp(`^#?${escaped}$`, "i") };
+			}
 		}
 
 		if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {

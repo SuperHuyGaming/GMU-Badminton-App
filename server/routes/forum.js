@@ -555,7 +555,11 @@ router.get("/", async (req, res) => {
 		}
 
 		if (req.query.tag && typeof req.query.tag === "string") {
-			query.tags = req.query.tag.trim().slice(0, 50);
+			const cleanTag = req.query.tag.trim().replace(/^#/, "").slice(0, 50);
+			if (cleanTag) {
+				const escaped = cleanTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+				query.tags = { $regex: new RegExp(`^#?${escaped}$`, "i") };
+			}
 		}
 
 		const rawQuerySearch = typeof req.query.search === "string"
