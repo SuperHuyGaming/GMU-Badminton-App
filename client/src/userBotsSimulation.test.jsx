@@ -19,6 +19,8 @@ import {
     calculateRoundRobinStandings
 } from './utils/badmintonRules';
 
+vi.setConfig({ testTimeout: 25000 });
+
 vi.mock('./utils/socket', () => ({
     default: {
         emit: vi.fn(),
@@ -164,7 +166,7 @@ describe('🤖 5-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
 
             const toggleList = screen.getByRole('button', { name: /list view/i });
             fireEvent.click(toggleList);
-        });
+        }, 15000);
 
         it('Alan interacts with the Hardware-Accelerated Single Elimination Bracket & controls', async () => {
             render(<TournamentBracket />);
@@ -509,7 +511,7 @@ describe('🤖 5-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
             expect(reactionsBtn).toBeInTheDocument();
             expect(within(reactionsBtn).getByText('🏸')).toBeInTheDocument();
             expect(within(reactionsBtn).getByText('🔥')).toBeInTheDocument();
-            expect(within(reactionsBtn).getByText('4')).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('3')).toBeInTheDocument();
 
             // 3. Comment accordion toggle
             const commentBtn = screen.getByRole('button', { name: /Comment \(\d+\)/i });

@@ -214,7 +214,8 @@ describe('PostCard Component QA Tests', () => {
         });
     });
 
-    it('renders Player Matchmaking banner and allows toggling RSVP', async () => {
+    it('renders Player Matchmaking banner and allows toggling RSVP for non-author', async () => {
+        const otherPlayer = { id: 'other-user-999', name: 'Other Player' };
         const matchmakingPost = {
             ...mockPost,
             category: 'find_partner',
@@ -235,12 +236,12 @@ describe('PostCard Component QA Tests', () => {
                 ...matchmakingPost,
                 playerMatchmaking: {
                     ...matchmakingPost.playerMatchmaking,
-                    rsvpList: [{ userId: mockUser.id, userName: mockUser.name, status: 'confirmed' }]
+                    rsvpList: [{ userId: otherPlayer.id, userName: otherPlayer.name, status: 'confirmed' }]
                 }
             })
         });
 
-        renderWithContext(matchmakingPost, mockUser);
+        renderWithContext(matchmakingPost, otherPlayer);
         expect(screen.getByText('🤝 Player Matchmaking')).toBeInTheDocument();
         expect(screen.getByText('RAC Courts 1-3')).toBeInTheDocument();
         expect(screen.getByText('🟢 Need 2 more')).toBeInTheDocument();
@@ -251,6 +252,25 @@ describe('PostCard Component QA Tests', () => {
         await waitFor(() => {
             expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/rsvp'), expect.any(Object));
         });
+    });
+
+    it('displays Host badge instead of Join Rally button when viewing own matchmaking rally', () => {
+        const matchmakingPost = {
+            ...mockPost,
+            category: 'find_partner',
+            playerMatchmaking: {
+                format: 'Doubles',
+                preferredCourt: 'RAC Courts 1-3',
+                skillLevelRequired: 'Intermediate',
+                slotsNeeded: 2,
+                timeWindow: 'Tonight 7:00 PM',
+                rsvpList: [],
+                isFilled: false
+            }
+        };
+        renderWithContext(matchmakingPost, mockUser);
+        expect(screen.getByText('👑 Host')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /\+ Join Rally/i })).not.toBeInTheDocument();
     });
 
     it('renders Match Challenge banner and allows non-author to accept challenge', async () => {
