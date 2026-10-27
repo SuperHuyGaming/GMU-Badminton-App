@@ -17,6 +17,10 @@ export default function PendingMatchesPrompt() {
         }
         try {
             const res = await apiFetch('/api/matches/pending');
+            if (res?.status === 401) {
+                setPendingMatches([]);
+                return;
+            }
             if (!res || !res.ok) return;
             const matches = await res.json();
             if (!Array.isArray(matches)) return;

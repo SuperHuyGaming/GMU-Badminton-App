@@ -6,7 +6,7 @@ import { toast } from "react-hot-toast";
 import {
 	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
-	Skeleton, CircularProgress, Avatar, Tabs, Tab, Button, Select, MenuItem,
+	Skeleton, CircularProgress, Avatar, Button, Select, MenuItem,
 	Checkbox, FormControl, InputAdornment, IconButton, Tooltip
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
@@ -61,7 +61,7 @@ export default function Forum() {
 	const { postId: routePostId } = useParams();
 	const location = useLocation();
 
-	const [tab, setTab] = useState("foryou");
+	const [tab] = useState("latest");
 	const tabsCacheRef = useRef({});
 	const [feedDensity, setFeedDensity] = useState(() => {
 		return typeof window !== 'undefined' ? (localStorage.getItem("mbc_feed_density") || "comfortable") : "comfortable";
@@ -358,7 +358,7 @@ export default function Forum() {
 				const searchQuery = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : "";
 				let dateQuery = "";
 				if (dateRange && dateRange !== "all") {
-					dateQuery = `&dateRange=${encodeURIComponent(dateRange)}`;
+					dateQuery = `&dateRange=${encodeURIComponent(dateRange)}&tzOffset=${new Date().getTimezoneOffset()}`;
 					if (dateRange === "custom") {
 						if (customStartDate) dateQuery += `&startDate=${encodeURIComponent(customStartDate)}`;
 						if (customEndDate) dateQuery += `&endDate=${encodeURIComponent(customEndDate)}`;
@@ -504,21 +504,7 @@ export default function Forum() {
 		};
 	}, []);
 
-	const handleTabChange = (event, newValue) => {
-		setTab(newValue);
-		setPage(1);
-		setNewPostsQueue([]);
-		const cached = tabsCacheRef.current[newValue];
-		if (cached && Array.isArray(cached.feed) && cached.feed.length > 0) {
-			setFeed(cached.feed);
-			cursorRef.current = cached.nextCursor;
-			setHasMore(cached.hasMore);
-			setIsLoading(false);
-		} else {
-			setFeed([]);
-			setIsLoading(true);
-		}
-	};
+
 
 	const handleSubmit = async () => {
 		if (!currentUser) return alert("You must be logged in to post!");
@@ -629,8 +615,8 @@ export default function Forum() {
 						Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
 					</Typography>
 				</Box>
-				<Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-					{currentUser?.role === 'admin' && (
+				{currentUser?.role === 'admin' && (
+					<Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
 						<Button
 							variant="outlined"
 							color="error"
@@ -647,52 +633,12 @@ export default function Forum() {
 						>
 							🛡️ Moderation Queue
 						</Button>
-					)}
-					<Button
-						variant="contained"
-						color="primary"
-						onClick={handleOpenCreatePost}
-						sx={{
-							borderRadius: 2.5,
-							fontWeight: 'bold',
-							textTransform: 'none',
-							px: { xs: 1.8, sm: 2.5 },
-							py: { xs: 0.6, sm: 1 },
-							fontSize: { xs: '0.82rem', sm: '0.9rem' },
-							boxShadow: '0 4px 14px rgba(0, 102, 51, 0.25)',
-							'&:hover': { transform: 'translateY(-1px)' }
-						}}
-					>
-						✍️ Create New Post
-					</Button>
-				</Box>
+					</Box>
+				)}
 			</Box>
 
-			{/* TABS NAVIGATION */}
+			{/* INLINE COMPOSER & FEED FILTERS */}
 			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2, gap: 1.5 }}>
-				<Tabs 
-					value={tab} 
-					onChange={handleTabChange} 
-					textColor="primary" 
-					indicatorColor="primary" 
-					variant="scrollable"
-					scrollButtons="auto"
-					allowScrollButtonsMobile
-					aria-label="Community Hub categories"
-					sx={{ 
-						width: '100%',
-						maxWidth: '680px',
-						'& .MuiTab-root': { fontWeight: '900', fontSize: { xs: '0.82rem', sm: '0.95rem' }, textTransform: 'none', px: { xs: 2, sm: 3 }, minHeight: 42 },
-						background: 'background.paper', borderRadius: { xs: 2.5, sm: 10 }, boxShadow: 1, p: 0.5,
-						border: '1px solid', borderColor: 'divider'
-					}}
-				>
-					<Tab label="✨ For You" value="foryou" />
-					<Tab label="🔥 Top" value="top" />
-					<Tab label="⏱ Latest" value="latest" />
-					<Tab label="🔖 Saved" value="saved" />
-				</Tabs>
-
 				{/* FACEBOOK-STYLE COMPOSER CARD */}
 				{Boolean(currentUser) && (
 					<Paper 
@@ -948,17 +894,18 @@ export default function Forum() {
 				</Paper>
 
 				
-				{/* CATEGORY GROUP FILTER BAR */}
+				{/* UNIFIED FILTER STRIP (Categories + Trending) */}
 				<Box 
 					sx={{ 
-						width: '100%', maxWidth: '680px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
+						width: '100%', maxWidth: '680px', display: 'flex', gap: 1, overflowX: 'auto', px: 0.5, py: 0.5, alignItems: 'center',
 						scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
 					}}
+					data-testid="trending-tags-strip"
 					role="region"
-					aria-label="Category filters"
+					aria-label="Category and topic filters"
 				>
 					<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', whiteSpace: 'nowrap', mr: 0.5 }}>
-						Categories:
+						Filter:
 					</Typography>
 					{CATEGORY_FILTERS.map((cat) => (
 						<Chip 
@@ -978,51 +925,35 @@ export default function Forum() {
 								fontWeight: 'bold', 
 								borderRadius: 2,
 								cursor: 'pointer',
+								fontSize: '0.8rem',
+								transition: 'all 0.2s ease-in-out'
+							}} 
+						/>
+					))}
+					{((trendingTags && trendingTags.length > 0) ? trendingTags : DEFAULT_TRENDING_TAGS).map((item) => (
+						<Chip 
+							key={item.tag} 
+							label={item.count ? `#${item.tag} (${item.count})` : `#${item.tag}`} 
+							size="small" 
+							variant={selectedTag === item.tag ? "filled" : "outlined"}
+							color={selectedTag === item.tag ? "primary" : "default"}
+							onClick={() => {
+								setSelectedTag(prev => prev === item.tag ? "" : item.tag);
+								setPage(1);
+								setFeed([]);
+								setNewPostsQueue([]);
+							}}
+							clickable
+							sx={{ 
+								fontWeight: 'bold', 
+								borderRadius: 2,
+								cursor: 'pointer',
+								fontSize: '0.75rem',
 								transition: 'all 0.2s ease-in-out'
 							}} 
 						/>
 					))}
 				</Box>
-
-				{/* TRENDING HASHTAG STRIP */}
-				{((trendingTags && trendingTags.length > 0) ? trendingTags : DEFAULT_TRENDING_TAGS).length > 0 && (
-					<Box 
-						sx={{ 
-							width: '100%', maxWidth: '680px', display: 'flex', gap: 1, overflowX: 'auto', px: 1, py: 0.5, alignItems: 'center',
-							scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
-						}}
-						data-testid="trending-tags-strip"
-						role="region"
-						aria-label="Trending tags"
-					>
-						<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap', mr: 0.5 }}>
-							🔥 Trending:
-						</Typography>
-						{((trendingTags && trendingTags.length > 0) ? trendingTags : DEFAULT_TRENDING_TAGS).map((item) => (
-							<Chip 
-								key={item.tag} 
-								label={item.count ? `#${item.tag} (${item.count})` : `#${item.tag}`} 
-								size="small" 
-								variant={selectedTag === item.tag ? "filled" : "outlined"}
-								color={selectedTag === item.tag ? "primary" : "default"}
-								onClick={() => {
-									setSelectedTag(prev => prev === item.tag ? "" : item.tag);
-									setPage(1);
-									setFeed([]);
-									setNewPostsQueue([]);
-								}}
-								clickable
-								sx={{ 
-									fontWeight: 'bold', 
-									borderRadius: 2,
-									cursor: 'pointer',
-									fontSize: '0.75rem',
-									transition: 'all 0.2s ease-in-out'
-								}}
-							/>
-						))}
-					</Box>
-				)}
 			</Box>
 
 			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2.5, width: '100%', maxWidth: '680px', mx: 'auto' }}>
