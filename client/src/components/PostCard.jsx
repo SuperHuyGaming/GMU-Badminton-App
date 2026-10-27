@@ -62,168 +62,6 @@ import {
 	MoreVertIcon,
 } from "./Icons";
 
-// Facebook-style vibrant circular reaction icon badges
-const renderFacebookReactionIcon = (emoji) => {
-	switch (emoji) {
-		case "💥":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #FF4B72 0%, #FA383E 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M10 2L11.8 6.5L16.5 5.5L13.5 9.5L17.5 13L12.5 13L12 17.5L9.5 13.5L4.5 15L7.5 11L3 8L8.2 8L10 2Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>💥</span>
-				</Box>
-			);
-		case "🧊":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #1877F2 0%, #0084FF 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M10 3.5L15 6.4V11.6L10 14.5L5 11.6V6.4L10 3.5ZM10 5L6.5 7.1L10 9.1L13.5 7.1L10 5ZM6 8.1V11L9.5 13V10.1L6 8.1ZM14 8.1L10.5 10.1V13L14 11V8.1Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🧊</span>
-				</Box>
-			);
-		case "⚡":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #FFD93B 0%, #F7B125 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M11 2.5L5.5 10.5H10.5L9.5 16.5L15 8.5H10L11 2.5Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>⚡</span>
-				</Box>
-			);
-		case "🏸":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #00C853 0%, #00A854 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M13.5 3.5C12 2 9.8 2 8.3 3.5C7.2 4.6 6.9 6.2 7.4 7.5L3.5 11.4C3.2 11.7 3.2 12.3 3.5 12.6L4.4 13.5C4.7 13.8 5.3 13.8 5.6 13.5L9.5 9.6C10.8 10.1 12.4 9.8 13.5 8.7C15 7.2 15 5 13.5 3.5ZM12.4 7.6C11.5 8.5 10.1 8.5 9.2 7.6C8.3 6.7 8.3 5.3 9.2 4.4C10.1 3.5 11.5 3.5 12.4 4.4C13.3 5.3 13.3 6.7 12.4 7.6Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🏸</span>
-				</Box>
-			);
-		case "🔥":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #FF6F00 0%, #FF3D00 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M10 2.5C9.8 4 8.5 5.5 7.5 6.8C6.3 8.3 5.5 9.8 5.5 11.5C5.5 14 7.5 16 10 16C12.5 16 14.5 14 14.5 11.5C14.5 9 13 7 11.8 5.5C11 4.5 10.3 3.3 10 2.5ZM10 14C8.9 14 8 13.1 8 12C8 10.8 8.8 10.8 9.5 9.8C9.8 8.4 10.2 8 10.5 7.5C10.8 8.5 11.5 9.5 11.8 10.2C12 10.8 12 11.4 12 12C12 13.1 11.1 14 10 14Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🔥</span>
-				</Box>
-			);
-		case "👍":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #2D88FF 0%, #0E56D8 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M6.5 13.5H4.5V8.5H6.5V13.5ZM14.5 8.8C14.5 8.1 13.9 7.5 13.2 7.5H10.2L10.7 5.2C10.8 4.6 10.2 3.9 9.5 3.9C9.1 3.9 8.8 4.1 8.6 4.3L6.5 7.5V13.5H12.4C13 13.5 13.5 13.1 13.6 12.5L14.5 8.8Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>👍</span>
-				</Box>
-			);
-		default:
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #00A3FF 0%, #0066FF 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: "0.75rem",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					{emoji}
-				</Box>
-			);
-	}
-};
-
 // eslint-disable-next-line no-unused-vars
 export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false, isAuthorOnline = false }) {
 	const navigate = useNavigate();
@@ -235,7 +73,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
-	const isAuthor = Boolean(localPost?.authorId && currentUserId && String(localPost.authorId) === String(currentUserId));
 
 	const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
 	const [reportReason, setReportReason] = useState("spam_advertising");
@@ -443,7 +280,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		(r) => r && String(r.userId) === String(currentUserId)
 	)?.emoji;
 
-	const totalReactionsCount = localPost.reactions?.length || 0;
+	const totalReactionsCount = (localPost.reactions?.length || 0) + (localPost.likedBy?.length || 0);
 	const distinctReactionEmojis = useMemo(() => {
 		const emojis = [];
 		const seen = new Set();
@@ -454,8 +291,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				emojis.push(emoji);
 			}
 		});
+		if (localPost.likedBy?.length > 0 && !seen.has('👍')) {
+			emojis.push('👍');
+		}
 		return emojis;
-	}, [localPost.reactions]);
+	}, [localPost.reactions, localPost.likedBy]);
 
 	const [showHeart, setShowHeart] = useState(false);
 	const [showReactions, setShowReactions] = useState(false);
@@ -1223,7 +1063,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										)}
 									</Box>
 
-									{currentUser && !isAuthor && (
+									{currentUser && (
 										<Button
 											size="small"
 											variant={localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) ? "outlined" : "contained"}
@@ -1236,27 +1076,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												? "✓ You're In (Leave)"
 												: "+ Join Rally (RSVP)"}
 										</Button>
-									)}
-									{isAuthor && localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) && (
-										<Button
-											size="small"
-											variant="outlined"
-											color="warning"
-											onClick={handleToggleRsvp}
-											disabled={isRsvping}
-											sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
-										>
-											Leave Rally (Host)
-										</Button>
-									)}
-									{isAuthor && !localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) && (
-										<Chip
-											label="👑 Host"
-											size="small"
-											color="primary"
-											variant="outlined"
-											sx={{ fontWeight: "bold", fontSize: "0.75rem", height: 24 }}
-										/>
 									)}
 								</Box>
 							</Paper>
@@ -1711,7 +1530,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									openLikes(
 										e,
 										"Post Reactions",
-										[],
+										localPost.likedByDetails,
 										localPost.reactions,
 										"all"
 									)
@@ -1722,7 +1541,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										openLikes(
 											e,
 											"Post Reactions",
-											[],
+											localPost.likedByDetails,
 											localPost.reactions,
 											"all"
 										);
@@ -1744,7 +1563,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									},
 								}}
 							>
-								{/* Overlapping distinct Facebook-style reaction badges */}
+								{/* Overlapping distinct reaction emojis */}
 								<Box sx={{ display: "inline-flex", alignItems: "center" }}>
 									{distinctReactionEmojis.slice(0, 3).map((emoji, index) => (
 										<Box
@@ -1759,7 +1578,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												openLikes(
 													e,
 													"Post Reactions",
-													[],
+													localPost.likedByDetails,
 													localPost.reactions,
 													tab
 												);
@@ -1768,12 +1587,16 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												display: "inline-flex",
 												alignItems: "center",
 												justifyContent: "center",
-												position: "relative",
+												width: 20,
+												height: 20,
+												fontSize: "0.85rem",
 												borderRadius: "50%",
-												border: (theme) => `2px solid ${theme.palette.mode === "dark" ? "#061a14" : "#ffffff"}`,
-												ml: index > 0 ? "-6px" : 0,
+												bgcolor: "background.paper",
+												border: "1.5px solid",
+												borderColor: "background.paper",
+												ml: index > 0 ? -0.7 : 0,
 												zIndex: 3 - index,
-												boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+												boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
 												transition: "transform 0.15s ease",
 												"&:hover": {
 													transform: "scale(1.25)",
@@ -1781,7 +1604,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												},
 											}}
 										>
-											{renderFacebookReactionIcon(emoji)}
+											{emoji}
 										</Box>
 									))}
 								</Box>

@@ -1921,10 +1921,6 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 				if (waitlisted) waitlisted.status = "confirmed";
 			}
 		} else {
-			// Prevent host / author from RSVPing to their own rally
-			if (String(post.authorId) === currentUserId) {
-				return res.status(400).json({ message: "You are the host of this rally and cannot RSVP to your own post." });
-			}
 			// Toggle on (join)
 			const confirmedCount = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
 			const status = confirmedCount < post.playerMatchmaking.slotsNeeded ? "confirmed" : "waitlist";
