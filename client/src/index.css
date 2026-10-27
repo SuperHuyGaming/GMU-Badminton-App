@@ -170,3 +170,12 @@ textarea:focus-visible,
 }
 
 
+
+/* Prevent inner textarea double border inside MUI multiline inputs */
+.MuiInputBase-inputMultiline,
+.MuiInputBase-root textarea {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+}

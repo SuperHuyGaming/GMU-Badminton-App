@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import Forum from './Forum';
@@ -116,7 +116,7 @@ describe('Forum Page Component (Community Hub)', () => {
         });
     });
 
-    it('renders the 3-tab navigation system and trending topic chips', async () => {
+    it('renders streamlined UI with inline composer and trending topic chips without tab bar', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
@@ -125,9 +125,9 @@ describe('Forum Page Component (Community Hub)', () => {
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        expect(screen.getByRole('tab', { name: /For You/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Top/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Latest/i })).toBeInTheDocument();
+        expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Create New Post/i })).not.toBeInTheDocument();
+        expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument();
         expect(screen.getByText('#Tournament')).toBeInTheDocument();
         expect(screen.getByText('#RAC')).toBeInTheDocument();
     });
@@ -140,8 +140,8 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
-        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
-        fireEvent.click(createBtn);
+        const composerCard = screen.getByTestId('facebook-composer-card');
+        fireEvent.click(composerCard);
 
         await waitFor(() => {
             expect(screen.getByText('Create a Post')).toBeInTheDocument();
@@ -161,12 +161,9 @@ describe('Forum Page Component (Community Hub)', () => {
 
         expect(screen.getByPlaceholderText(/Search posts by title, author, court, tags/i)).toBeInTheDocument();
         expect(screen.getByRole('combobox', { name: /Filter by date range/i })).toBeInTheDocument();
-        expect(screen.getByText('Finding Players')).toBeInTheDocument();
-        expect(screen.getByText('Finding Matches')).toBeInTheDocument();
-        expect(screen.getByText('Q&A Forums')).toBeInTheDocument();
-        expect(screen.getByText('Gear Exchange')).toBeInTheDocument();
-        expect(screen.getByText('Match Scorecards')).toBeInTheDocument();
-        expect(screen.getByText('Training & Tips')).toBeInTheDocument();
+        expect(screen.getByText('💬 General')).toBeInTheDocument();
+        expect(screen.getByText('🤝 Find Players')).toBeInTheDocument();
+        expect(screen.getByText('🎒 Gear & Equipment')).toBeInTheDocument();
     });
 
     it('focuses search input on pressing "/" keyboard shortcut', async () => {
@@ -192,7 +189,7 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
 
-        const findPlayersChip = screen.getByText('Finding Players');
+        const findPlayersChip = screen.getByText('🤝 Find Players');
         fireEvent.click(findPlayersChip);
 
         await waitFor(() => {
@@ -304,7 +301,7 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
 
-        const findPlayersChip = screen.getByText('Finding Players');
+        const findPlayersChip = screen.getByText('🤝 Find Players');
         fireEvent.click(findPlayersChip);
 
         await waitFor(() => {
@@ -476,7 +473,7 @@ describe('Forum Page Component (Community Hub)', () => {
         });
 
         // Click Finding Players chip
-        const findPlayersChip = screen.getByText('Finding Players');
+        const findPlayersChip = screen.getByText('🤝 Find Players');
         fireEvent.click(findPlayersChip);
 
         await waitFor(() => {
@@ -510,7 +507,7 @@ describe('Forum Page Component (Community Hub)', () => {
         await waitFor(() => {
             expect(screen.getByText('Community Hub')).toBeInTheDocument();
         });
-        const qaChip = screen.getByText('Q&A Forums');
+        const qaChip = screen.getByText('🎒 Gear & Equipment');
         fireEvent.click(qaChip);
 
         await waitFor(() => {
@@ -627,8 +624,8 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
         const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
-        fireEvent.click(createBtn);
+        const composerCard = screen.getByTestId('facebook-composer-card');
+        fireEvent.click(composerCard);
 
         await waitFor(() => {
             expect(screen.getByText('Create a Post')).toBeInTheDocument();
@@ -673,8 +670,8 @@ describe('Forum Page Component (Community Hub)', () => {
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        const createBtn = screen.getByRole('button', { name: /Create New Post/i });
-        fireEvent.click(createBtn);
+        const composerCard = screen.getByTestId('facebook-composer-card');
+        fireEvent.click(composerCard);
 
         await waitFor(() => {
             expect(screen.getByDisplayValue('Draft Saved Title')).toBeInTheDocument();
@@ -764,5 +761,73 @@ describe('Forum Page Component (Community Hub)', () => {
 
         // Component should handle the event without crashing
         expect(screen.getByText('Community Hub')).toBeInTheDocument();
+    });
+
+    // ── Facebook UI & Single-Step Post Creation Overhaul ──────────────────────
+
+    it('renders Facebook-style composer card ("What\'s on your mind?") and opens dialog when clicked', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [], onlineUserIds: [] })
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+        expect(screen.getByText(/What's on your mind/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        await waitFor(() => {
+            expect(screen.getByRole('dialog')).toBeInTheDocument();
+            expect(screen.getByText('Create a Post')).toBeInTheDocument();
+        });
+    });
+
+    it('allows posting with only content (auto-deriving title from content, eliminating "two make a posts" confusion)', async () => {
+        apiFetch.mockImplementation((url, opts) => {
+            if (opts && opts.method === 'POST') {
+                const body = JSON.parse(opts.body);
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({
+                        _id: 'new-post-1',
+                        title: body.title,
+                        content: body.content,
+                        category: 'general',
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            }
+            return Promise.resolve({
+                ok: true,
+                json: async () => ({ feed: [], hasMore: false, tags: [], onlineUserIds: [] })
+            });
+        });
+
+        renderWithProviders();
+
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        const dialog = await screen.findByRole('dialog');
+        expect(dialog).toBeInTheDocument();
+
+        // Type ONLY into "What's on your mind?" field (leaving Title optional/blank)
+        const contentInput = within(dialog).getByLabelText(/What's on your mind\?/i);
+        fireEvent.change(contentInput, { target: { value: 'Playing badminton at the RAC court 3 today at 5pm!' } });
+
+        // Submit button should be ENABLED even without filling Title!
+        const submitBtn = within(dialog).getByRole('button', { name: /^Post$/i });
+        expect(submitBtn).not.toBeDisabled();
+
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith('/api/forum', expect.objectContaining({
+                method: 'POST',
+                body: expect.stringContaining('Playing badminton at the RAC court 3 today at 5pm!')
+            }));
+        });
     });
 });

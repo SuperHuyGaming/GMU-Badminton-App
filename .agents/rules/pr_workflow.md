@@ -8,7 +8,9 @@ trigger: always_on
 # MANDATORY Pull Request & QA Workflow
 
 > [!CAUTION]
-> **NEVER COMMIT OR PUSH DIRECTLY TO `develop` OR `main`.** This is a strict repository invariant. All changes must be pushed to a feature branch.
+> **NEVER COMMIT OR PUSH DIRECTLY TO `develop` OR `main`.**
+> **NEVER CREATE PULL REQUESTS TARGETING `main` OR MERGE INTO `main` UNLESS EXPLICITLY DIRECTED BY THE USER.**
+> All agent PRs and automated workflows MUST target `develop` only. `main` is strictly protected for user-authorized production deployments.
 
 After EVERY coding task (no exceptions), you MUST follow this exact workflow:
 

@@ -125,5 +125,33 @@ describe('Community Hub Phase 8: Threaded Discussions & @Mention Autocomplete En
 			expect(mockPostInstance.save).toHaveBeenCalled();
 			expect(mockIo.emit).toHaveBeenCalledWith('postUpdated', expect.any(Object));
 		});
+
+		test('GET /api/forum/:postId/comments fetches comments successfully without throwing .lean error', async () => {
+			Post.findById.mockReturnValueOnce({
+				lean: jest.fn().mockResolvedValue({
+					_id: validPostId,
+					authorId: '660000000000000000000002',
+					comments: [
+						{ _id: '660000000000000000000888', authorId: userId, authorName: 'Commenter', content: 'Clean test comment' }
+					]
+				})
+			});
+			User.find.mockReturnValueOnce({
+				select: jest.fn().mockReturnValue({
+					lean: jest.fn().mockResolvedValue([
+						{ _id: userId, name: 'Commenter', profilePic: 'pic.jpg', role: 'user', badges: [], stats: {} }
+					])
+				})
+			});
+
+			const response = await request(app)
+				.get(`/api/forum/${validPostId}/comments`);
+
+			expect(response.status).toBe(200);
+			expect(response.body.comments).toBeDefined();
+			expect(response.body.comments.length).toBe(1);
+			expect(response.body.comments[0].content).toBe('Clean test comment');
+			expect(response.body.comments[0].authorPic).toBe('pic.jpg');
+		});
 	});
 });

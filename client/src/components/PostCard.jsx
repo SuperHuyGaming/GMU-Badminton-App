@@ -1,6 +1,6 @@
 // client/src/components/PostCard.jsx
 // eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
 import apiFetch from "../utils/api";
@@ -44,10 +44,10 @@ const CATEGORY_CONFIG = {
 	gear_review: { label: "Gear Review", bg: "rgba(156, 39, 176, 0.12)", color: "#7b1fa2", border: "rgba(156, 39, 176, 0.3)" },
 	meetup_rally: { label: "Meetup Rally", bg: "rgba(76, 175, 80, 0.12)", color: "#2e7d32", border: "rgba(76, 175, 80, 0.3)" },
 	training: { label: "Training", bg: "rgba(255, 152, 0, 0.12)", color: "#e65100", border: "rgba(255, 152, 0, 0.3)" },
-	find_partner: { label: "Find Partner", bg: "rgba(0, 150, 136, 0.12)", color: "#00796b", border: "rgba(0, 150, 136, 0.3)" },
+	find_partner: { label: "Find Players", bg: "rgba(0, 150, 136, 0.12)", color: "#00796b", border: "rgba(0, 150, 136, 0.3)" },
 	challenge_match: { label: "Match Challenge", bg: "rgba(233, 30, 99, 0.12)", color: "#c2185b", border: "rgba(233, 30, 99, 0.3)" },
 	qa_forum: { label: "Badminton Q&A", bg: "rgba(103, 58, 183, 0.12)", color: "#512da8", border: "rgba(103, 58, 183, 0.3)" },
-	gear_exchange: { label: "Gear Exchange", bg: "rgba(255, 87, 34, 0.12)", color: "#d84315", border: "rgba(255, 87, 34, 0.3)" },
+	gear_exchange: { label: "Gear & Equipment", bg: "rgba(255, 87, 34, 0.12)", color: "#d84315", border: "rgba(255, 87, 34, 0.3)" },
 };
 
 // Separated Sub-Components
@@ -62,6 +62,168 @@ import {
 	MoreVertIcon,
 } from "./Icons";
 
+// Facebook-style vibrant circular reaction icon badges
+const renderFacebookReactionIcon = (emoji) => {
+	switch (emoji) {
+		case "💥":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #FF4B72 0%, #FA383E 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
+						<path
+							d="M10 2L11.8 6.5L16.5 5.5L13.5 9.5L17.5 13L12.5 13L12 17.5L9.5 13.5L4.5 15L7.5 11L3 8L8.2 8L10 2Z"
+							fill="#FFFFFF"
+						/>
+					</svg>
+					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>💥</span>
+				</Box>
+			);
+		case "🧊":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #1877F2 0%, #0084FF 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
+						<path
+							d="M10 3.5L15 6.4V11.6L10 14.5L5 11.6V6.4L10 3.5ZM10 5L6.5 7.1L10 9.1L13.5 7.1L10 5ZM6 8.1V11L9.5 13V10.1L6 8.1ZM14 8.1L10.5 10.1V13L14 11V8.1Z"
+							fill="#FFFFFF"
+						/>
+					</svg>
+					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🧊</span>
+				</Box>
+			);
+		case "⚡":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #FFD93B 0%, #F7B125 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
+						<path
+							d="M11 2.5L5.5 10.5H10.5L9.5 16.5L15 8.5H10L11 2.5Z"
+							fill="#FFFFFF"
+						/>
+					</svg>
+					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>⚡</span>
+				</Box>
+			);
+		case "🏸":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #00C853 0%, #00A854 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
+						<path
+							d="M13.5 3.5C12 2 9.8 2 8.3 3.5C7.2 4.6 6.9 6.2 7.4 7.5L3.5 11.4C3.2 11.7 3.2 12.3 3.5 12.6L4.4 13.5C4.7 13.8 5.3 13.8 5.6 13.5L9.5 9.6C10.8 10.1 12.4 9.8 13.5 8.7C15 7.2 15 5 13.5 3.5ZM12.4 7.6C11.5 8.5 10.1 8.5 9.2 7.6C8.3 6.7 8.3 5.3 9.2 4.4C10.1 3.5 11.5 3.5 12.4 4.4C13.3 5.3 13.3 6.7 12.4 7.6Z"
+							fill="#FFFFFF"
+						/>
+					</svg>
+					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🏸</span>
+				</Box>
+			);
+		case "🔥":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #FF6F00 0%, #FF3D00 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
+						<path
+							d="M10 2.5C9.8 4 8.5 5.5 7.5 6.8C6.3 8.3 5.5 9.8 5.5 11.5C5.5 14 7.5 16 10 16C12.5 16 14.5 14 14.5 11.5C14.5 9 13 7 11.8 5.5C11 4.5 10.3 3.3 10 2.5ZM10 14C8.9 14 8 13.1 8 12C8 10.8 8.8 10.8 9.5 9.8C9.8 8.4 10.2 8 10.5 7.5C10.8 8.5 11.5 9.5 11.8 10.2C12 10.8 12 11.4 12 12C12 13.1 11.1 14 10 14Z"
+							fill="#FFFFFF"
+						/>
+					</svg>
+					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🔥</span>
+				</Box>
+			);
+		case "👍":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #2D88FF 0%, #0E56D8 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
+						<path
+							d="M6.5 13.5H4.5V8.5H6.5V13.5ZM14.5 8.8C14.5 8.1 13.9 7.5 13.2 7.5H10.2L10.7 5.2C10.8 4.6 10.2 3.9 9.5 3.9C9.1 3.9 8.8 4.1 8.6 4.3L6.5 7.5V13.5H12.4C13 13.5 13.5 13.1 13.6 12.5L14.5 8.8Z"
+							fill="#FFFFFF"
+						/>
+					</svg>
+					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>👍</span>
+				</Box>
+			);
+		default:
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #00A3FF 0%, #0066FF 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						fontSize: "0.75rem",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					{emoji}
+				</Box>
+			);
+	}
+};
+
 // eslint-disable-next-line no-unused-vars
 export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false, isAuthorOnline = false }) {
 	const navigate = useNavigate();
@@ -73,6 +235,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
+	const isAuthor = Boolean(localPost?.authorId && currentUserId && String(localPost.authorId) === String(currentUserId));
 
 	const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
 	const [reportReason, setReportReason] = useState("spam_advertising");
@@ -280,6 +443,20 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		(r) => r && String(r.userId) === String(currentUserId)
 	)?.emoji;
 
+	const totalReactionsCount = localPost.reactions?.length || 0;
+	const distinctReactionEmojis = useMemo(() => {
+		const emojis = [];
+		const seen = new Set();
+		(localPost.reactions || []).forEach((r) => {
+			const emoji = typeof r === 'string' ? r : r?.emoji;
+			if (emoji && !seen.has(emoji)) {
+				seen.add(emoji);
+				emojis.push(emoji);
+			}
+		});
+		return emojis;
+	}, [localPost.reactions]);
+
 	const [showHeart, setShowHeart] = useState(false);
 	const [showReactions, setShowReactions] = useState(false);
 
@@ -300,19 +477,23 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	};
 
 	const handleLike = async () => {
+		const targetPostId = localPost._id || localPost.referenceId;
 		if (!currentUser) return alert("You must be logged in to like posts!");
 		if (isLiking) return;
 
 		setIsLiking(true);
 		try {
-			const res = await apiFetch(`/api/forum/${localPost._id}/like`, {
+			const res = await apiFetch(`/api/forum/${targetPostId}/like`, {
 				method: "PUT",
 				body: JSON.stringify({
 					userId: currentUserId,
 					userName: currentUser.name,
 				}),
 			});
-			if (res && res.ok) setLocalPost(await res.json());
+			if (res && res.ok) {
+				const updated = await res.json();
+				setLocalPost(prev => ({ ...prev, ...updated, _id: prev._id }));
+			}
 		} catch (err) {
 			console.error(err);
 		} finally {
@@ -321,6 +502,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	};
 
 	const handleReaction = async (emoji) => {
+		const targetPostId = localPost._id || localPost.referenceId;
 		if (!currentUser) return alert("You must be logged in to react to posts!");
 		setShowReactions(false);
 
@@ -355,14 +537,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		setLocalPost((prev) => ({ ...prev, reactions: updatedReactions }));
 
 		try {
-			const res = await apiFetch(`/api/forum/${localPost._id}/react`, {
+			const res = await apiFetch(`/api/forum/${targetPostId}/react`, {
 				method: "PUT",
 				body: JSON.stringify({ emoji }),
 			});
 			if (res && res.ok) {
 				const updated = await res.json();
-				if (updated && updated._id) {
-					setLocalPost(updated);
+				if (updated && (updated._id || updated.referenceId)) {
+					setLocalPost(prev => ({ ...prev, ...updated, _id: prev._id, reactions: updated.reactions || prev.reactions }));
 				}
 			} else {
 				setLocalPost((prev) => ({ ...prev, reactions: prevReactions }));
@@ -484,6 +666,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const actionBtnStyle = {
 		textTransform: "none",
 		fontWeight: 600,
+		fontSize: { xs: "0.8rem", sm: "0.875rem" },
+		py: { xs: 0.8, sm: 1 },
+		minHeight: 44,
 		flex: 1,
 		minWidth: 0,
 		borderRadius: 2,
@@ -546,22 +731,22 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					width: "100%",
 					display: "block",
 					boxSizing: "border-box",
-					p: compact ? { xs: 1.5, sm: 2 } : { xs: 2, sm: 3 },
+					p: compact ? { xs: 1.5, sm: 2 } : { xs: 2, sm: 2.75 },
 					border: localPost.isPinned ? "2px solid" : "1px solid",
 					borderColor: localPost.isPinned ? "warning.main" : "divider",
-					borderRadius: compact ? 3 : 4,
+					borderRadius: compact ? { xs: 2, sm: 3 } : { xs: 2.5, sm: 3.5 },
 					userSelect: "none",
 					bgcolor: 'background.paper',
 					backgroundImage: localPost.isPinned 
 						? 'linear-gradient(to bottom right, rgba(255, 179, 0, 0.08), rgba(0, 102, 51, 0.04))' 
 						: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
 					backdropFilter: 'blur(10px)',
-					boxShadow: localPost.isPinned ? '0 8px 24px rgba(255, 165, 0, 0.12)' : 'none',
+					boxShadow: localPost.isPinned ? '0 8px 24px rgba(255, 165, 0, 0.12)' : '0 2px 8px rgba(0,0,0,0.03)',
 					transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
 					"&:hover": {
 						borderColor: localPost.isPinned ? "warning.dark" : "primary.light",
-						boxShadow: localPost.isPinned ? "0 14px 32px rgba(255, 165, 0, 0.22)" : "0 12px 30px rgba(0, 102, 51, 0.12)",
-						transform: "translateY(-4px)",
+						boxShadow: localPost.isPinned ? "0 14px 32px rgba(255, 165, 0, 0.22)" : "0 10px 24px rgba(0, 102, 51, 0.1)",
+						transform: "translateY(-3px)",
 					},
 				}}
 			>
@@ -673,7 +858,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								variant={compact ? "subtitle1" : "h6"}
 								fontWeight="bold"
 								color="text.primary"
-								sx={{ lineHeight: 1.2 }}
+								sx={{ 
+									lineHeight: 1.25,
+									display: (localPost.title && localPost.content && localPost.title.trim().toLowerCase() === localPost.content.trim().toLowerCase()) ? 'none' : 'block'
+								}}
 							>
 								{localPost.title}
 							</Typography>
@@ -966,8 +1154,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						}}
 					>
 						
-						{/* PLAYER MATCHMAKING BANNER */}
-						{Boolean(localPost.playerMatchmaking || localPost.category === 'find_partner') && (
+						{/* PLAYER MATCHMAKING BANNER - ONLY on Find Partner / Rally posts */}
+						{Boolean((localPost.category === 'find_partner' || localPost.category === 'meetup_rally') && localPost.playerMatchmaking && (localPost.playerMatchmaking.isEnabled || localPost.playerMatchmaking.timeWindow || (localPost.playerMatchmaking.rsvpList && localPost.playerMatchmaking.rsvpList.length > 0) || localPost.playerMatchmaking.isFilled || localPost.playerMatchmaking.preferredCourt)) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1035,7 +1223,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										)}
 									</Box>
 
-									{currentUser && (
+									{currentUser && !isAuthor && (
 										<Button
 											size="small"
 											variant={localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) ? "outlined" : "contained"}
@@ -1049,12 +1237,33 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												: "+ Join Rally (RSVP)"}
 										</Button>
 									)}
+									{isAuthor && localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) && (
+										<Button
+											size="small"
+											variant="outlined"
+											color="warning"
+											onClick={handleToggleRsvp}
+											disabled={isRsvping}
+											sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
+										>
+											Leave Rally (Host)
+										</Button>
+									)}
+									{isAuthor && !localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) && (
+										<Chip
+											label="👑 Host"
+											size="small"
+											color="primary"
+											variant="outlined"
+											sx={{ fontWeight: "bold", fontSize: "0.75rem", height: 24 }}
+										/>
+									)}
 								</Box>
 							</Paper>
 						)}
 
-						{/* MATCH CHALLENGE BANNER */}
-						{Boolean(localPost.challengeMatch || localPost.category === 'challenge_match') && (
+						{/* MATCH CHALLENGE BANNER - ONLY on Challenge Match posts */}
+						{Boolean(localPost.category === 'challenge_match' && localPost.challengeMatch) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1117,8 +1326,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							</Paper>
 						)}
 
-						{/* Q&A FORUM BANNER */}
-						{Boolean(localPost.qaDetails || localPost.category === 'qa_forum') && (
+						{/* Q&A FORUM BANNER - ONLY on Q&A posts */}
+						{Boolean(localPost.category === 'qa_forum' && localPost.qaDetails) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1159,8 +1368,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							</Paper>
 						)}
 
-						{/* GEAR EXCHANGE BANNER */}
-						{Boolean(localPost.gearDetails || localPost.category === 'gear_exchange' || localPost.category === 'gear_review') && localPost.gearDetails?.gearType && (
+						{/* GEAR EXCHANGE BANNER - ONLY on Gear posts */}
+						{Boolean((localPost.category === 'gear_exchange' || localPost.category === 'gear_review') && localPost.gearDetails && (localPost.gearDetails.isEnabled || localPost.gearDetails.brand || localPost.gearDetails.price > 0 || localPost.gearDetails.specs?.currentString || localPost.gearDetails.specs?.weightCode)) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1204,8 +1413,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							</Paper>
 						)}
 
-						{/* MATCH SCORECARD BANNER */}
-						{localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court || localPost.matchDetails.winner) && (
+						{/* MATCH SCORECARD BANNER - ONLY on Match Result posts */}
+						{Boolean(localPost.category === 'match_result' && localPost.matchDetails && (localPost.matchDetails.score || localPost.matchDetails.partner || (localPost.matchDetails.opponents && (Array.isArray(localPost.matchDetails.opponents) ? localPost.matchDetails.opponents.length > 0 : Boolean(localPost.matchDetails.opponents))) || localPost.matchDetails.court || localPost.matchDetails.winner)) && (
 							<Paper
 								variant="outlined"
 								sx={{
@@ -1265,7 +1474,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<Typography
 							variant="body1"
 							color="text.primary"
-							sx={{ whiteSpace: "pre-wrap", pointerEvents: 'none', mb: localPost.tags?.length ? 2 : 0, ...(compact ? { display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}) }}
+							sx={{ 
+								whiteSpace: "pre-wrap", 
+								pointerEvents: 'none', 
+								lineHeight: 1.6,
+								fontSize: { xs: '0.92rem', sm: '1rem' },
+								mb: localPost.tags?.length ? 2 : 0, 
+								...(compact ? { display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}) 
+							}}
 						>
 							{localPost.content}
 						</Typography>
@@ -1473,8 +1689,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					</Box>
 				)}
 
-				{/* STATS (Reactions, Likes & Comments counts) */}
-				{(localPost.likedBy?.length > 0 || (localPost.reactions && localPost.reactions.length > 0) || totalCommentsCount > 0) && (
+				{/* STATS (Facebook-style Reactions & Comments Summary) */}
+				{(totalReactionsCount > 0 || totalCommentsCount > 0) && (
 					<Box
 						sx={{
 							display: "flex",
@@ -1484,143 +1700,135 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							mb: 1,
 						}}
 					>
-						{/* REACTION CHIPS */}
-						<Box sx={{ display: "flex", gap: 0.8, flexWrap: "wrap", alignItems: "center" }}>
-							{Object.entries(
-								(localPost.reactions || []).reduce((acc, r) => {
-									const emoji = typeof r === 'string' ? r : (r?.emoji || '');
-									if (emoji) acc[emoji] = (acc[emoji] || 0) + 1;
-									return acc;
-								}, {})
-							).map(([emoji, count]) => {
-								const hasReactedWithThis = (localPost.reactions || []).some(
-									(r) => r && String(r.userId) === String(currentUserId) && ((typeof r === 'string' ? r : r.emoji) === emoji)
-								);
-								const reactionMeta = BADMINTON_REACTIONS.find((b) => b.emoji === emoji);
-								return (
-									<Tooltip key={emoji} title={reactionMeta ? reactionMeta.tooltip : emoji} arrow>
-										<Chip
-											label={`${emoji} ${count}`}
-											size="small"
-											variant={hasReactedWithThis ? "filled" : "outlined"}
-											color={hasReactedWithThis ? "primary" : "default"}
-											onClick={() => handleReaction(emoji)}
-											sx={{
-												cursor: "pointer",
-												fontWeight: "bold",
-												fontSize: "0.75rem",
-												height: 24,
-												transition: "transform 0.15s ease",
-												"&:hover": { transform: "scale(1.1)" },
-											}}
-										/>
-									</Tooltip>
-								);
-							})}
-							{localPost.reactions?.length > 0 && (
-								<Chip
-									data-testid="view-reactions-btn"
-									aria-label="View who reacted to this post"
-									label={`${localPost.reactions.length} ${localPost.reactions.length === 1 ? 'reaction' : 'reactions'}`}
-									size="small"
-									variant="outlined"
-									onClick={(e) => openLikes(e, "Post Reactions", localPost.likedByDetails, localPost.reactions, "all")}
-									sx={{
-										cursor: "pointer",
-										fontWeight: "bold",
-										fontSize: "0.75rem",
-										height: 24,
-										bgcolor: "background.paper",
-										"&:hover": { bgcolor: "action.hover" },
-									}}
-								/>
-							)}
-						</Box>
-
-						{/* LIKES & COMMENTS COUNTERS */}
-						<Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-							{totalCommentsCount > 0 && (
-								<Typography
-									role="button"
-									tabIndex={0}
-									variant="body2"
-									color="text.primary"
-									sx={{
-										cursor: "pointer",
-										"&:hover": { textDecoration: "underline" },
-									}}
-									onClick={() => setIsCommentModalOpen((prev) => !prev)}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											setIsCommentModalOpen((prev) => !prev);
-										}
-									}}
-								>
-									{totalCommentsCount}{" "}
-									{totalCommentsCount === 1 ? "comment" : "comments"}
-								</Typography>
-							)}
-							{localPost.likedBy?.length > 0 && (
-								<Box
-									role="button"
-									tabIndex={0}
-									aria-label="View users who liked this post"
-									onClick={(e) =>
+						{/* Facebook-style Reactions Cluster & Single Total Number */}
+						{totalReactionsCount > 0 ? (
+							<Box
+								role="button"
+								tabIndex={0}
+								data-testid="view-reactions-btn"
+								aria-label={`View ${totalReactionsCount} reactions`}
+								onClick={(e) =>
+									openLikes(
+										e,
+										"Post Reactions",
+										[],
+										localPost.reactions,
+										"all"
+									)
+								}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
 										openLikes(
 											e,
-											"Post Likes",
-											localPost.likedByDetails,
-										)
+											"Post Reactions",
+											[],
+											localPost.reactions,
+											"all"
+										);
 									}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											openLikes(
-												e,
-												"Post Likes",
-												localPost.likedByDetails,
-											);
-										}
-									}}
+								}}
+								sx={{
+									display: "inline-flex",
+									alignItems: "center",
+									gap: 0.75,
+									cursor: "pointer",
+									py: 0.3,
+									px: 0.5,
+									borderRadius: 4,
+									userSelect: "none",
+									"&:hover": {
+										"& .reaction-count-total": {
+											textDecoration: "underline",
+										},
+									},
+								}}
+							>
+								{/* Overlapping distinct Facebook-style reaction badges */}
+								<Box sx={{ display: "inline-flex", alignItems: "center" }}>
+									{distinctReactionEmojis.slice(0, 3).map((emoji, index) => (
+										<Box
+											key={emoji}
+											component="span"
+											onClick={(e) => {
+												e.stopPropagation();
+												let tab = "all";
+												if (emoji === "💥") tab = "smash";
+												else if (emoji === "🧊") tab = "ice_drop";
+												else if (emoji === "⚡") tab = "clutch";
+												openLikes(
+													e,
+													"Post Reactions",
+													[],
+													localPost.reactions,
+													tab
+												);
+											}}
+											sx={{
+												display: "inline-flex",
+												alignItems: "center",
+												justifyContent: "center",
+												position: "relative",
+												borderRadius: "50%",
+												border: (theme) => `2px solid ${theme.palette.mode === "dark" ? "#061a14" : "#ffffff"}`,
+												ml: index > 0 ? "-6px" : 0,
+												zIndex: 3 - index,
+												boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+												transition: "transform 0.15s ease",
+												"&:hover": {
+													transform: "scale(1.25)",
+													zIndex: 10,
+												},
+											}}
+										>
+											{renderFacebookReactionIcon(emoji)}
+										</Box>
+									))}
+								</Box>
+
+								{/* Only a single number total for those reactions */}
+								<Typography
+									className="reaction-count-total"
+									variant="body2"
+									color="text.secondary"
 									sx={{
-										display: "flex",
-										alignItems: "center",
-										gap: 0.5,
-										cursor: "pointer",
-										"&:hover": { textDecoration: "underline" },
+										fontSize: "0.85rem",
+										fontWeight: 600,
+										lineHeight: 1,
 									}}
 								>
-									{(localPost.recentLikerAvatars?.length > 0 || localPost.likedByDetails?.length > 0) && (
-										<AvatarGroup max={3} sx={{ mr: 0.5, '& .MuiAvatar-root': { width: 22, height: 22, fontSize: 10, border: '1px solid', borderColor: 'background.paper' } }}>
-											{(localPost.likedByDetails || localPost.recentLikerAvatars || []).slice(0, 3).map((liker, i) => {
-												const url = typeof liker === 'string' ? liker : liker.profilePic;
-												if (!url) return null;
-												return <Avatar key={i} src={url} alt="User Avatar" />;
-											})}
-										</AvatarGroup>
-									)}
-									<Typography
-										variant="body2"
-										color="text.primary"
-									>
-										{localPost.likedBy.length}
-									</Typography>
-									<Avatar
-										sx={{
-											width: 20,
-											height: 20,
-											bgcolor: "primary.main",
-											color: "white",
-										}}
-									>
-										<ThumbUpFilled
-											style={{ width: 12, height: 12 }}
-										/>
-									</Avatar>
-								</Box>
-							)}
-						</Box>
+									{totalReactionsCount}
+								</Typography>
+							</Box>
+						) : (
+							<Box />
+						)}
+
+						{/* COMMENTS COUNT */}
+						{totalCommentsCount > 0 && (
+							<Typography
+								role="button"
+								tabIndex={0}
+								variant="body2"
+								color="text.secondary"
+								sx={{
+									cursor: "pointer",
+									fontSize: "0.85rem",
+									fontWeight: 500,
+									"&:hover": { textDecoration: "underline" },
+								}}
+								onClick={() => setIsCommentModalOpen((prev) => !prev)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										setIsCommentModalOpen((prev) => !prev);
+									}
+								}}
+							>
+								{totalCommentsCount}{" "}
+								{totalCommentsCount === 1 ? "comment" : "comments"}
+							</Typography>
+						)}
 					</Box>
 				)}
 
@@ -1683,7 +1891,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									{currentUserReaction || '💥'}
 								</Typography>
 							</Box>
-							<Box sx={{ display: { xs: "none", sm: "inline-block" } }}>
+							<Box sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
 								{(() => {
 									if (currentUserReaction) {
 										const match = BADMINTON_REACTIONS.find((b) => b.emoji === currentUserReaction);
@@ -1711,7 +1919,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							<MessageCircleIcon />
 						</Box>
 						<Box
-							sx={{ display: { xs: "none", sm: "inline-block" } }}
+							sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
 						>
 							Comment{totalCommentsCount > 0 ? ` (${totalCommentsCount})` : ""}
 						</Box>
@@ -1733,7 +1941,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							<ShareIcon />
 						</Box>
 						<Box
-							sx={{ display: { xs: "none", sm: "inline-block" } }}
+							sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
 						>
 							Share
 						</Box>

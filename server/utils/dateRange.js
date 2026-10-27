@@ -7,6 +7,7 @@ const parseDateRange = (query = {}) => {
 	const dateRangeVal = Array.isArray(q.dateRange) ? q.dateRange[0] : q.dateRange;
 	const customStart = Array.isArray(q.startDate || q.from) ? (q.startDate || q.from)[0] : (q.startDate || q.from);
 	const customEnd = Array.isArray(q.endDate || q.to) ? (q.endDate || q.to)[0] : (q.endDate || q.to);
+	const tzOffsetRaw = Array.isArray(q.tzOffset || q.timezoneOffset) ? (q.tzOffset || q.timezoneOffset)[0] : (q.tzOffset || q.timezoneOffset);
 
 	let start = null;
 	let end = null;
@@ -14,16 +15,44 @@ const parseDateRange = (query = {}) => {
 
 	if (dateRangeVal && typeof dateRangeVal === "string") {
 		const range = dateRangeVal.toLowerCase().trim();
-		if (range === "today") {
-			start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-			end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-		} else if (range === "week" || range === "this_week" || range === "thisweek") {
-			const day = now.getDay(); // 0 is Sunday
-			start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day, 0, 0, 0, 0);
-			end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - day), 23, 59, 59, 999);
-		} else if (range === "month" || range === "this_month" || range === "thismonth") {
-			start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-			end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+		const tzOffset = tzOffsetRaw !== undefined && tzOffsetRaw !== null && tzOffsetRaw !== "" ? Number(tzOffsetRaw) : null;
+		const hasValidTz = tzOffset !== null && !isNaN(tzOffset);
+
+		if (hasValidTz) {
+			// Client's timezone offset in minutes (e.g. +240 for EDT, -540 for JST)
+			// Local time in ms: UTC time - (tzOffset * 60 * 1000)
+			const localNowMs = now.getTime() - (tzOffset * 60 * 1000);
+			const localNow = new Date(localNowMs);
+
+			if (range === "today") {
+				const localStart = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0));
+				const localEnd = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999));
+				start = new Date(localStart.getTime() + (tzOffset * 60 * 1000));
+				end = new Date(localEnd.getTime() + (tzOffset * 60 * 1000));
+			} else if (range === "week" || range === "this_week" || range === "thisweek") {
+				const day = localNow.getUTCDay(); // 0 is Sunday
+				const localStart = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate() - day, 0, 0, 0, 0));
+				const localEnd = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate() + (6 - day), 23, 59, 59, 999));
+				start = new Date(localStart.getTime() + (tzOffset * 60 * 1000));
+				end = new Date(localEnd.getTime() + (tzOffset * 60 * 1000));
+			} else if (range === "month" || range === "this_month" || range === "thismonth") {
+				const localStart = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), 1, 0, 0, 0, 0));
+				const localEnd = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+				start = new Date(localStart.getTime() + (tzOffset * 60 * 1000));
+				end = new Date(localEnd.getTime() + (tzOffset * 60 * 1000));
+			}
+		} else {
+			if (range === "today") {
+				start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+				end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+			} else if (range === "week" || range === "this_week" || range === "thisweek") {
+				const day = now.getDay(); // 0 is Sunday
+				start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day, 0, 0, 0, 0);
+				end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - day), 23, 59, 59, 999);
+			} else if (range === "month" || range === "this_month" || range === "thismonth") {
+				start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+				end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+			}
 		}
 	}
 
