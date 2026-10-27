@@ -1053,7 +1053,7 @@ router.get("/:postId/comments", async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await findPostByIdOrActivityFeed(req.params.postId).lean();
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
 		if (!post) return res.status(404).json({ message: "Post not found" });
 
 		const hydratedPost = await hydrateWithPictures(post);
@@ -1093,7 +1093,7 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 		post.comments.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
 		await post.save();
 
-		const updatedPost = await Post.findById(req.params.postId).lean();
+		const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
 		const hydratedPost = await hydrateWithPictures(updatedPost);
 
 		if (req.io) {
@@ -1148,7 +1148,7 @@ router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 
 		const currentUserId = (req.user.id || req.user.userId).toString();
 		const cleanContent = xss(content.trim());
-		const post = await Post.findById(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found" });
 		const comment = post.comments.id(req.params.commentId);
 		if (!comment) return res.status(404).json({ message: "Comment not found" });
@@ -1179,7 +1179,7 @@ router.delete("/:postId/comments/:commentId", authMiddleware, async (req, res) =
 		}
 
 		const currentUserId = (req.user.id || req.user.userId).toString();
-		const post = await Post.findById(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found" });
 		const comment = post.comments.id(req.params.commentId);
 		if (!comment) return res.status(404).json({ message: "Comment not found" });
@@ -1218,7 +1218,7 @@ router.post(
 			const authorName = req.user.name || req.body.authorName || "Member";
 			const cleanContent = xss(content.trim());
 			const cleanAuthorName = xss(authorName);
-			const post = await Post.findById(req.params.postId);
+			const post = await findPostByIdOrActivityFeed(req.params.postId);
 			if (!post) return res.status(404).json({ message: "Post not found" });
 			const comment = post.comments.id(req.params.commentId);
 			if (!comment) return res.status(404).json({ message: "Comment not found" });
@@ -1234,7 +1234,7 @@ router.post(
 			comment.replies.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
 			await post.save();
 
-			const updatedPost = await Post.findById(req.params.postId).lean();
+			const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
 			const hydratedPost = await hydrateWithPictures(updatedPost);
 
 			if (req.io) {
@@ -1281,7 +1281,7 @@ router.put(
 
 			const currentUserId = (req.user.id || req.user.userId).toString();
 			const cleanContent = xss(content.trim());
-			const post = await Post.findById(req.params.postId);
+			const post = await findPostByIdOrActivityFeed(req.params.postId);
 			if (!post) return res.status(404).json({ message: "Post not found" });
 			const comment = post.comments.id(req.params.commentId);
 			if (!comment) return res.status(404).json({ message: "Comment not found" });
@@ -1318,7 +1318,7 @@ router.delete(
 			}
 
 			const currentUserId = (req.user.id || req.user.userId).toString();
-			const post = await Post.findById(req.params.postId);
+			const post = await findPostByIdOrActivityFeed(req.params.postId);
 			if (!post) return res.status(404).json({ message: "Post not found" });
 			const comment = post.comments.id(req.params.commentId);
 			if (!comment) return res.status(404).json({ message: "Comment not found" });
