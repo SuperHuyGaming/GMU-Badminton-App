@@ -88,9 +88,24 @@ export default function LikesModal({
 
 	// Tally counts
 	const counts = useMemo(() => {
-		const res = { all: allItems.length, smash: 0, ice_drop: 0, clutch: 0 };
+		const res = {
+			all: allItems.length,
+			like: 0,
+			love: 0,
+			smash: 0,
+			wow: 0,
+			haha: 0,
+			sad: 0,
+			ice_drop: 0,
+			clutch: 0,
+		};
 		allItems.forEach((item) => {
-			if (item.type === "smash" || item.emoji === "💥") res.smash += 1;
+			if (item.type === "like" || item.emoji === "👍") res.like += 1;
+			else if (item.type === "love" || item.emoji === "❤️") res.love += 1;
+			else if (item.type === "smash" || item.emoji === "🏸" || item.emoji === "💥") res.smash += 1;
+			else if (item.type === "wow" || item.emoji === "😮") res.wow += 1;
+			else if (item.type === "haha" || item.emoji === "😂") res.haha += 1;
+			else if (item.type === "sad" || item.emoji === "😢") res.sad += 1;
 			else if (item.type === "ice_drop" || item.emoji === "🧊") res.ice_drop += 1;
 			else if (item.type === "clutch" || item.emoji === "⚡") res.clutch += 1;
 		});
@@ -101,14 +116,32 @@ export default function LikesModal({
 	const filteredList = useMemo(() => {
 		if (activeTab === "all") return allItems;
 		return allItems.filter((item) => {
-			if (activeTab === "smash") return item.type === "smash" || item.emoji === "💥";
+			if (activeTab === "like") return item.type === "like" || item.emoji === "👍";
+			if (activeTab === "love") return item.type === "love" || item.emoji === "❤️";
+			if (activeTab === "smash") return item.type === "smash" || item.emoji === "🏸" || item.emoji === "💥";
+			if (activeTab === "wow") return item.type === "wow" || item.emoji === "😮";
+			if (activeTab === "haha") return item.type === "haha" || item.emoji === "😂";
+			if (activeTab === "sad") return item.type === "sad" || item.emoji === "😢";
 			if (activeTab === "ice_drop") return item.type === "ice_drop" || item.emoji === "🧊";
 			if (activeTab === "clutch") return item.type === "clutch" || item.emoji === "⚡";
 			return true;
 		});
 	}, [allItems, activeTab]);
 
-	const hasSpecificReactions = counts.smash > 0 || counts.ice_drop > 0 || counts.clutch > 0;
+	const smashEmoji = useMemo(() => {
+		const match = allItems.find((i) => i.type === "smash" || i.emoji === "💥" || i.emoji === "🏸");
+		return match?.emoji || "🏸";
+	}, [allItems]);
+
+	const hasSpecificReactions =
+		counts.like > 0 ||
+		counts.love > 0 ||
+		counts.smash > 0 ||
+		counts.wow > 0 ||
+		counts.haha > 0 ||
+		counts.sad > 0 ||
+		counts.ice_drop > 0 ||
+		counts.clutch > 0;
 
 	return (
 		<Dialog
@@ -172,11 +205,46 @@ export default function LikesModal({
 							value="all"
 							data-testid="likes-modal-tab-all"
 						/>
+						{counts.like > 0 && (
+							<Tab
+								label={`👍 ${counts.like}`}
+								value="like"
+								data-testid="likes-modal-tab-like"
+							/>
+						)}
+						{counts.love > 0 && (
+							<Tab
+								label={`❤️ ${counts.love}`}
+								value="love"
+								data-testid="likes-modal-tab-love"
+							/>
+						)}
 						{counts.smash > 0 && (
 							<Tab
-								label={`💥 ${counts.smash}`}
+								label={`${smashEmoji} ${counts.smash}`}
 								value="smash"
 								data-testid="likes-modal-tab-smash"
+							/>
+						)}
+						{counts.wow > 0 && (
+							<Tab
+								label={`😮 ${counts.wow}`}
+								value="wow"
+								data-testid="likes-modal-tab-wow"
+							/>
+						)}
+						{counts.haha > 0 && (
+							<Tab
+								label={`😂 ${counts.haha}`}
+								value="haha"
+								data-testid="likes-modal-tab-haha"
+							/>
+						)}
+						{counts.sad > 0 && (
+							<Tab
+								label={`😢 ${counts.sad}`}
+								value="sad"
+								data-testid="likes-modal-tab-sad"
 							/>
 						)}
 						{counts.ice_drop > 0 && (

@@ -111,6 +111,11 @@ likedBy: { type: [String], default: [] },
 	],
 	toxicityScore: { type: Number, default: 0 }, // NEW: Sentiment toxicity tracking
 	isEdited: { type: Boolean, default: false }, // NEW: Track post edits
+	editedAt: { type: Date }, // NEW: Edit timestamp
+	lastActivityAt: { type: Date, default: Date.now, index: true }, // NEW: Activity timestamp
+	originalPostId: { type: mongoose.Schema.Types.ObjectId, ref: "Post", default: null, index: true }, // NEW: Repost parent reference
+	sharedThought: { type: String, default: "" }, // NEW: Thoughts shared with repost
+	shareCount: { type: Number, default: 0 }, // NEW: Repost count tracking
 	imageUrl: { type: String, default: "" }, // Legacy
 	imageUrls: { type: [String], default: [] }, // NEW: Multiple images
 	tags: { type: [String], default: [] }, // NEW: Post categorization tags
@@ -132,6 +137,7 @@ likedBy: { type: [String], default: [] },
 			timestamp: { type: Date, default: Date.now },
 			likedBy: { type: [String], default: [] },
 			isEdited: { type: Boolean, default: false }, // NEW: Track comment edits
+			editedAt: { type: Date }, // NEW: Comment edit timestamp
 			isFlagged: { type: Boolean, default: false },
 			reportCount: { type: Number, default: 0 },
 			reports: [
@@ -150,6 +156,7 @@ likedBy: { type: [String], default: [] },
 					timestamp: { type: Date, default: Date.now },
 					likedBy: { type: [String], default: [] },
 					isEdited: { type: Boolean, default: false }, // NEW: Track reply edits
+					editedAt: { type: Date }, // NEW: Reply edit timestamp
 					isFlagged: { type: Boolean, default: false },
 					reportCount: { type: Number, default: 0 },
 					reports: [
@@ -168,6 +175,8 @@ likedBy: { type: [String], default: [] },
 
 // Compound indexes
 PostSchema.index({ status: 1, isPinned: -1, createdAt: -1 });
+PostSchema.index({ status: 1, isPinned: -1, lastActivityAt: -1 });
+PostSchema.index({ isPinned: -1, lastActivityAt: -1 });
 PostSchema.index({ category: 1, createdAt: -1 });
 PostSchema.index({ tags: 1, createdAt: -1 });
 PostSchema.index({ createdAt: -1 });
@@ -179,11 +188,23 @@ PostSchema.pre('save', function (next) {
 	} else if (!this.timestamp && this.createdAt) {
 		this.timestamp = this.createdAt;
 	}
+	if (!this.lastActivityAt) {
+		this.lastActivityAt = this.createdAt || this.timestamp || new Date();
+	}
 	if (Array.isArray(this.reactions)) {
 		const EMOJI_TO_TYPE = {
 			"💥": "smash",
 			"🧊": "ice_drop",
-			"⚡": "clutch"
+			"⚡": "clutch",
+			"👍": "like",
+			"❤️": "love",
+			"🏸": "smash",
+			"😮": "wow",
+			"😂": "haha",
+			"😢": "sad",
+			"🔥": "smash",
+			"💯": "clutch",
+			"👏": "like"
 		};
 		this.reactions.forEach(r => {
 			if (!r.reactionType) {
@@ -249,7 +270,7 @@ PostSchema.post('save', async function(doc) {
 				images: doc.imageUrls || [],
 				tags: doc.tags || [],
 				isPinned: doc.isPinned || false,
-								category: doc.category || 'general',
+				category: doc.category || 'general',
 				matchDetails: doc.matchDetails || null,
 				playerMatchmaking: doc.playerMatchmaking || null,
 				challengeMatch: doc.challengeMatch || null,
@@ -261,7 +282,13 @@ PostSchema.post('save', async function(doc) {
 				comments: doc.comments?.length || 0,
 				createdAt: doc.createdAt || doc.timestamp,
 				visibility: doc.visibility,
-				score: (doc.likedBy?.length || 0) * 2 + (doc.comments?.length || 0) * 3 + (doc.reactions?.length || 0) * 2 + (doc.isPinned ? 1000 : 0)
+				score: (doc.reactions?.length || 0) + (doc.comments?.length || 0) * 2 + (doc.likedBy?.length || 0) * 2 + (doc.isPinned ? 1000 : 0),
+				lastActivityAt: doc.lastActivityAt || doc.createdAt || doc.timestamp,
+				originalPostId: doc.originalPostId || null,
+				sharedThought: doc.sharedThought || "",
+				shareCount: doc.shareCount || 0,
+				isEdited: doc.isEdited || false,
+				editedAt: doc.editedAt || null
 			},
 			{ upsert: true, returnDocument: 'after' }
 		);

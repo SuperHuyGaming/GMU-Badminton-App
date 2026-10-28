@@ -12,6 +12,7 @@ import {
 	Menu,
 	MenuItem,
 	Chip,
+	Tooltip,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { MoreVertIcon } from "../Icons";
@@ -174,18 +175,26 @@ export default function CommentBubble({
 								/>
 							)}
 							{comment.isEdited && (
-								<Typography
-									component="span"
-									sx={{
-										fontWeight: "normal",
-										fontStyle: "italic",
-										fontSize: "0.75rem",
-										color: "text.secondary",
-										ml: 0.75,
-									}}
+								<Tooltip
+									title={`Edited on ${formatTime ? formatTime(comment.editedAt || comment.updatedAt || comment.timestamp) : "recently"}`}
+									arrow
+									placement="top"
 								>
-									(edited)
-								</Typography>
+									<Typography
+										component="span"
+										data-testid="comment-edited-badge"
+										sx={{
+											fontWeight: "normal",
+											fontStyle: "italic",
+											fontSize: "0.75rem",
+											color: "text.secondary",
+											ml: 0.75,
+											cursor: "pointer",
+										}}
+									>
+										(Edited)
+									</Typography>
+								</Tooltip>
 							)}
 						</Typography>
 

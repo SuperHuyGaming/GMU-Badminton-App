@@ -51,10 +51,17 @@ const activityFeedSchema = new mongoose.Schema({
     ],
 
     createdAt: { type: Date, default: Date.now },
+    lastActivityAt: { type: Date, default: Date.now, index: true },
+    originalPostId: { type: mongoose.Schema.Types.ObjectId, ref: "Post", default: null },
+    sharedThought: { type: String, default: "" },
+    shareCount: { type: Number, default: 0 },
+    isEdited: { type: Boolean, default: false },
+    editedAt: { type: Date },
     visibility: { type: String, enum: ['PUBLIC', 'FRIENDS_ONLY', 'ONLY_ME'], default: 'PUBLIC' },
 });
 
 // Index for fast chronological fetching (pinned posts first)
+activityFeedSchema.index({ isPinned: -1, lastActivityAt: -1 });
 activityFeedSchema.index({ isPinned: -1, createdAt: -1 });
 activityFeedSchema.index({ createdAt: -1 });
 // Index for algorithmic sorting

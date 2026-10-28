@@ -19,8 +19,15 @@ import PostCard from "../components/PostCard";
 import AdminModerationModal from "../components/AdminModerationModal";
 import socket from "../utils/socket";
 import { compressImage } from "../utils/imageUtils";
-// eslint-disable-next-line no-unused-vars
 import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useMentionAutocomplete, renderContentWithMentions } from "../hooks/useMentionAutocomplete";
+
+const FEED_SORT_TABS = [
+	{ id: "top", label: "🔥 Top Discussions" },
+	{ id: "recent_activity", label: "⚡ Recent Activity" },
+	{ id: "latest", label: "🕒 Latest Posts" },
+	{ id: "saved", label: "🔖 Saved Posts" }
+];
 
 const CATEGORY_FILTERS = [
 	{ id: "all", label: "All" },
@@ -61,8 +68,9 @@ export default function Forum() {
 	const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 	const { postId: routePostId } = useParams();
 	const location = useLocation();
+	const navigate = useNavigate();
 
-	const [tab] = useState("latest");
+	const [tab, setTab] = useState("latest");
 	const tabsCacheRef = useRef({});
 	const [feedDensity, setFeedDensity] = useState(() => {
 		return typeof window !== 'undefined' ? (localStorage.getItem("mbc_feed_density") || "comfortable") : "comfortable";
@@ -235,6 +243,25 @@ export default function Forum() {
 		isPinned: false
 	};
 	const [newPost, setNewPost] = useState(defaultNewPost);
+	const contentTextareaRef = useRef(null);
+
+	const {
+		isOpen: isMentionOpen,
+		suggestions: mentionSuggestions,
+		selectedIndex: mentionSelectedIndex,
+		isLoading: isMentionLoading,
+		handleKeyDown: handleMentionKeyDown,
+		selectSuggestion: handleSelectMention,
+		closeSuggestions: handleCloseMentions,
+	} = useMentionAutocomplete({
+		text: newPost.content,
+		setText: (content) => setNewPost((prev) => ({ ...prev, content })),
+		inputRef: contentTextareaRef,
+		apiEndpoint: "/api/forum/members",
+		debounceMs: 150,
+		limit: 8,
+	});
+
 	const [postImages, setPostImages] = useState([]);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const [uploadStage, setUploadStage] = useState('idle'); // 'idle' | 'compressing' | 'uploading' | 'submitting'
@@ -249,6 +276,7 @@ export default function Forum() {
 	const handleClearDraft = () => {
 		setNewPost(defaultNewPost);
 		setPostImages([]);
+		handleCloseMentions();
 		if (fileInputRef.current) {
 			fileInputRef.current.value = "";
 		}
@@ -314,6 +342,29 @@ export default function Forum() {
 		if (node) observer.current.observe(node);
 	}, [isLoading, isFetchingMore, hasMore]);
 
+	// J11: 80% Viewport Infinite Scroll Pre-fetcher (Seamless append without skeleton flashing)
+	useEffect(() => {
+		let isThrottled = false;
+		const handleWindowScroll = () => {
+			if (isThrottled) return;
+			isThrottled = true;
+			setTimeout(() => {
+				isThrottled = false;
+			}, 100);
+
+			const scrollPos = window.scrollY + window.innerHeight;
+			const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+			const threshold = scrollHeight * 0.8;
+
+			if (scrollPos >= threshold && hasMore && !isFetchingMore && !isLoading) {
+				setPage(prevPage => prevPage + 1);
+			}
+		};
+
+		window.addEventListener("scroll", handleWindowScroll, { passive: true });
+		return () => window.removeEventListener("scroll", handleWindowScroll);
+	}, [hasMore, isFetchingMore, isLoading]);
+
 	// Debounce search input by 250ms
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -354,6 +405,19 @@ export default function Forum() {
 		setIsLoading(true);
 		setFeedRefreshKey(k => k + 1);
 	}, []);
+
+	// J4: Smart Feed Sorting Tab Switching Handler
+	const handleTabChange = useCallback((newTab) => {
+		if (newTab === tab) return;
+		setTab(newTab);
+		cursorRef.current = null;
+		tabsCacheRef.current = {};
+		setPage(1);
+		setFeed([]);
+		setNewPostsQueue([]);
+		setIsLoading(true);
+		setFeedRefreshKey(k => k + 1);
+	}, [tab]);
 
 	const handleSearchKeyDown = (e) => {
 		if (e.key === 'Enter') {
@@ -448,6 +512,10 @@ export default function Forum() {
 
 	const displayedFeed = useMemo(() => {
 		return feed.filter(item => {
+			if (tab === "saved") {
+				const targetId = item.referenceId || item._id;
+				if (!bookmarkedPosts.has(targetId)) return false;
+			}
 			if (!matchesCategory(item, selectedCategory)) return false;
 
 			if (!searchInput.trim()) return true;
@@ -481,7 +549,7 @@ export default function Forum() {
 				tags.includes(q)
 			);
 		});
-	}, [feed, searchInput, selectedCategory]);
+	}, [feed, searchInput, selectedCategory, tab, bookmarkedPosts]);
 
 	// Listen for real-time updates
 	useEffect(() => {
@@ -991,7 +1059,62 @@ export default function Forum() {
 				</Box>
 			</Box>
 
-			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2.5, width: '100%', maxWidth: '680px', mx: 'auto' }}>
+			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%', maxWidth: '680px', mx: 'auto' }}>
+				{/* J4 SMART FEED SORTING BAR */}
+				<Paper
+					elevation={0}
+					data-testid="feed-sorting-bar"
+					role="tablist"
+					aria-label="Feed sorting options"
+					sx={{
+						width: '100%',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'space-between',
+						p: 0.5,
+						borderRadius: 3,
+						bgcolor: 'background.paper',
+						border: '1px solid',
+						borderColor: 'divider',
+						gap: 0.5,
+						overflowX: 'auto',
+						scrollbarWidth: 'none',
+						'&::-webkit-scrollbar': { display: 'none' }
+					}}
+				>
+					{FEED_SORT_TABS.map((t) => {
+						const isActive = tab === t.id;
+						return (
+							<Button
+								key={t.id}
+								role="tab"
+								aria-selected={isActive}
+								data-testid={`sort-tab-${t.id}`}
+								onClick={() => handleTabChange(t.id)}
+								sx={{
+									flex: { xs: '1 0 auto', sm: 1 },
+									py: 0.8,
+									px: { xs: 1.5, sm: 2 },
+									borderRadius: 2.5,
+									textTransform: 'none',
+									fontWeight: isActive ? 800 : 600,
+									fontSize: { xs: '0.8rem', sm: '0.875rem' },
+									whiteSpace: 'nowrap',
+									color: isActive ? 'primary.contrastText' : 'text.primary',
+									bgcolor: isActive ? 'primary.main' : 'transparent',
+									boxShadow: isActive ? '0 2px 8px rgba(0, 102, 51, 0.25)' : 'none',
+									transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+									'&:hover': {
+										bgcolor: isActive ? 'primary.dark' : 'action.selected',
+									}
+								}}
+							>
+								{t.label}
+							</Button>
+						);
+					})}
+				</Paper>
+
 				{/* NEW POSTS PILL */}
 				{newPostsQueue.length > 0 && (
 					<Box 
@@ -1052,7 +1175,38 @@ export default function Forum() {
 					))
 				) : displayedFeed.length === 0 ? (
 					<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 1 }}>
-						{searchInput ? (
+						{tab === 'saved' ? (
+							<Box
+								data-testid="saved-posts-empty-state"
+								sx={{
+									width: '100%',
+									display: 'flex',
+									flexDirection: 'column',
+									alignItems: 'center',
+									justifyContent: 'center',
+									py: 6,
+									px: 3,
+									textAlign: 'center',
+									gap: 1
+								}}
+							>
+								<Typography sx={{ fontSize: '3.5rem', mb: 0.5 }}>🔖</Typography>
+								<Typography variant="h6" fontWeight="bold" color="text.primary">
+									No Saved Posts
+								</Typography>
+								<Typography variant="body2" color="text.secondary" sx={{ maxWidth: 360, mb: 2 }}>
+									Save interesting discussions to read or revisit them later.
+								</Typography>
+								<Button 
+									variant="outlined" 
+									size="small" 
+									onClick={() => handleTabChange('latest')}
+									sx={{ borderRadius: 2.5, fontWeight: 'bold', textTransform: 'none' }}
+								>
+									Explore Latest Posts
+								</Button>
+							</Box>
+						) : searchInput ? (
 							<>
 								<Typography color="text.primary">No posts match &quot;{searchInput}&quot;.</Typography>
 								<Button 
@@ -1404,57 +1558,177 @@ export default function Forum() {
 						/>
 					)}
 
-					{/* Main Multiline Post Content Input */}
-					<TextField 
-						label="What's on your mind?" 
-						placeholder={`What's on your mind, ${currentUser?.name ? currentUser.name.split(' ')[0] : 'there'}?`}
-						multiline 
-						rows={4} 
-						variant="outlined" 
-						fullWidth 
-						value={newPost.content} 
-						onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} 
-						slotProps={{
-							inputLabel: {
-								shrink: true,
-								sx: {
-									bgcolor: 'background.paper',
-									px: 0.75,
-									borderRadius: 0.5,
-									fontWeight: 600,
-									color: 'text.secondary',
-									'&.Mui-focused': { color: 'primary.main' }
+					{/* Main Multiline Post Content Input with J10 Mention Autocomplete */}
+					<Box sx={{ position: 'relative', width: '100%' }}>
+						<TextField 
+							inputRef={contentTextareaRef}
+							label="What's on your mind?" 
+							placeholder={`What's on your mind, ${currentUser?.name ? currentUser.name.split(' ')[0] : 'there'}? Use @ to mention members.`}
+							multiline 
+							rows={4} 
+							variant="outlined" 
+							fullWidth 
+							value={newPost.content} 
+							onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} 
+							onKeyDown={handleMentionKeyDown}
+							slotProps={{
+								inputLabel: {
+									shrink: true,
+									sx: {
+										bgcolor: 'background.paper',
+										px: 0.75,
+										borderRadius: 0.5,
+										fontWeight: 600,
+										color: 'text.secondary',
+										'&.Mui-focused': { color: 'primary.main' }
+									}
 								}
-							}
-						}}
-						sx={{
-							'& .MuiOutlinedInput-root': {
-								borderRadius: 2,
-								p: 1.5,
-								'& fieldset': {
+							}}
+							sx={{
+								'& .MuiOutlinedInput-root': {
+									borderRadius: 2,
+									p: 1.5,
+									'& fieldset': {
+										borderColor: 'divider',
+										transition: 'border-color 0.2s ease-in-out',
+									},
+									'&:hover fieldset': {
+										borderColor: 'primary.main',
+									},
+									'&.Mui-focused fieldset': {
+										borderColor: 'primary.main',
+										borderWidth: 1.5,
+									},
+									'& textarea': {
+										fontSize: '1rem',
+										lineHeight: 1.5,
+										outline: 'none !important',
+										boxShadow: 'none !important',
+									},
+									'& textarea:focus, & textarea:focus-visible': {
+										outline: 'none !important',
+										boxShadow: 'none !important',
+									}
+								}
+							}}
+						/>
+
+						{/* FLOATING MENTION AUTOCOMPLETE DROPDOWN (J10) */}
+						{isMentionOpen && (
+							<Paper
+								elevation={6}
+								data-testid="mention-suggestions-dropdown"
+								role="listbox"
+								aria-label="Member suggestions"
+								sx={{
+									position: 'absolute',
+									top: '100%',
+									left: 0,
+									right: 0,
+									zIndex: 1400,
+									mt: 0.5,
+									maxHeight: 220,
+									overflowY: 'auto',
+									borderRadius: 2.5,
+									border: '1px solid',
 									borderColor: 'divider',
-									transition: 'border-color 0.2s ease-in-out',
-								},
-								'&:hover fieldset': {
-									borderColor: 'primary.main',
-								},
-								'&.Mui-focused fieldset': {
-									borderColor: 'primary.main',
-									borderWidth: 1.5,
-								},
-								'& textarea': {
-									fontSize: '1rem',
-									lineHeight: 1.5,
-									outline: 'none !important',
-									boxShadow: 'none !important',
-								},
-								'& textarea:focus, & textarea:focus-visible': {
-									outline: 'none !important',
-									boxShadow: 'none !important',
-								}
-							}
-						}}
-					/>
+									boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+									bgcolor: 'background.paper'
+								}}
+							>
+								{isMentionLoading ? (
+									<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+										<CircularProgress size={20} color="primary" />
+									</Box>
+								) : mentionSuggestions.length === 0 ? (
+									<Box sx={{ p: 1.5, textAlign: 'center' }}>
+										<Typography variant="caption" color="text.secondary">
+											No matching members found
+										</Typography>
+									</Box>
+								) : (
+									mentionSuggestions.map((user, idx) => {
+										const isSelected = idx === mentionSelectedIndex;
+										return (
+											<Box
+												key={user._id || user.id || idx}
+												role="option"
+												aria-selected={isSelected}
+												data-testid={`mention-item-${user._id || user.id}`}
+												onClick={() => handleSelectMention(user)}
+												sx={{
+													display: 'flex',
+													alignItems: 'center',
+													gap: 1.5,
+													px: 2,
+													py: 1,
+													cursor: 'pointer',
+													bgcolor: isSelected ? 'action.selected' : 'transparent',
+													borderBottom: idx < mentionSuggestions.length - 1 ? '1px solid' : 'none',
+													borderColor: 'divider',
+													transition: 'background-color 0.15s ease',
+													'&:hover': {
+														bgcolor: 'action.hover'
+													}
+												}}
+											>
+												<Avatar
+													src={user.profilePic}
+													alt={user.name}
+													sx={{ width: 32, height: 32, fontSize: '0.85rem', bgcolor: 'primary.main' }}
+												>
+													{user.name ? user.name.charAt(0).toUpperCase() : "U"}
+												</Avatar>
+												<Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+													<Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
+														{user.name}
+													</Typography>
+													<Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+														{user.role || 'Member'}
+													</Typography>
+												</Box>
+												{user.skillLevel && (
+													<Chip
+														label={user.skillLevel}
+														size="small"
+														sx={{
+															height: 20,
+															fontSize: '0.68rem',
+															fontWeight: 'bold',
+															bgcolor: 'action.hover'
+														}}
+													/>
+												)}
+											</Box>
+										);
+									})
+								)}
+							</Paper>
+						)}
+					</Box>
+
+					{/* Mentioned Users Chips Preview */}
+					{newPost.content && newPost.content.includes("@") && (
+						<Box
+							data-testid="composer-mentions-preview"
+							sx={{
+								display: 'flex',
+								alignItems: 'center',
+								gap: 0.8,
+								flexWrap: 'wrap',
+								p: 1,
+								borderRadius: 2,
+								bgcolor: 'action.hover',
+								border: '1px dashed',
+								borderColor: 'divider'
+							}}
+						>
+							<Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+								Mentions:
+							</Typography>
+							{renderContentWithMentions(newPost.content, { navigate })}
+						</Box>
+					)}
 
 					{/* Player-Decided Matchmaking Options (Clean, Collapsible) */}
 					{(newPost.category === 'find_partner' || newPost.category === 'meetup_rally') && (

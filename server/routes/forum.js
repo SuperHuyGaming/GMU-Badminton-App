@@ -12,6 +12,28 @@ const { evaluateSpamHeuristics } = require("../utils/spamDetector");
 const { parseDateRange } = require("../utils/dateRange");
 const feedCache = require("../utils/feedCache");
 const router = express.Router();
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+
+const getOptionalUser = (req) => {
+	if (req.user) return req.user;
+	const authHeader = req.header("Authorization");
+	if (!authHeader) return null;
+	try {
+		const token = authHeader.split(" ")[1];
+		if (!token) return null;
+		const decoded = jwt.verify(token, JWT_SECRET);
+		if (decoded) {
+			const normalizedId = (decoded.userId || decoded.id || "").toString();
+			decoded.id = normalizedId;
+			decoded.userId = normalizedId;
+			return decoded;
+		}
+	} catch (err) {
+		return null;
+	}
+	return null;
+};
 
 
 // Helper to look up post by either Post._id or ActivityFeed._id
@@ -71,10 +93,11 @@ const checkSpam = async (text) => {
 };
 
 const hydrateWithPictures = async (data) => {
-	const posts = Array.isArray(data) ? data : [data];
+	const posts = Array.isArray(data) ? data : (data ? [data] : []);
 	const userIds = new Set();
 	
 	posts.forEach(post => {
+		if (!post) return;
 		if (post.authorId) userIds.add(post.authorId.toString());
 		if (Array.isArray(post.likedBy)) post.likedBy.forEach(id => userIds.add(id.toString()));
 		if (Array.isArray(post.reactions)) {
@@ -83,15 +106,21 @@ const hydrateWithPictures = async (data) => {
 			});
 		}
 		
-		post.comments?.forEach(comment => {
-			if (comment.authorId) userIds.add(comment.authorId.toString());
-			if (Array.isArray(comment.likedBy)) comment.likedBy.forEach(id => userIds.add(id.toString()));
-			
-			comment.replies?.forEach(reply => {
-				if (reply.authorId) userIds.add(reply.authorId.toString());
-				if (Array.isArray(reply.likedBy)) reply.likedBy.forEach(id => userIds.add(id.toString()));
+		if (Array.isArray(post.comments)) {
+			post.comments.forEach(comment => {
+				if (!comment) return;
+				if (comment.authorId) userIds.add(comment.authorId.toString());
+				if (Array.isArray(comment.likedBy)) comment.likedBy.forEach(id => userIds.add(id.toString()));
+				
+				if (Array.isArray(comment.replies)) {
+					comment.replies.forEach(reply => {
+						if (!reply) return;
+						if (reply.authorId) userIds.add(reply.authorId.toString());
+						if (Array.isArray(reply.likedBy)) reply.likedBy.forEach(id => userIds.add(id.toString()));
+					});
+				}
 			});
-		});
+		}
 	});
 
 	const validUserIds = Array.from(userIds).filter((id) => id && mongoose.isValidObjectId(id));
@@ -110,12 +139,38 @@ const hydrateWithPictures = async (data) => {
 			}),
 	);
 
+	const originalPostIds = posts
+		.map((p) => p && p.originalPostId)
+		.filter((id) => id && mongoose.isValidObjectId(id));
+	const originalPostMap = {};
+	if (originalPostIds.length > 0) {
+		try {
+			let origQuery = Post.find({ _id: { $in: originalPostIds } });
+			if (origQuery && typeof origQuery.select === "function") {
+				origQuery = origQuery.select("_id title content authorName authorId imageUrl imageUrls category createdAt tags");
+			}
+			if (origQuery && typeof origQuery.lean === "function") {
+				origQuery = origQuery.lean();
+			}
+			const originalPosts = (await origQuery) || [];
+			if (Array.isArray(originalPosts)) {
+				originalPosts.forEach((op) => {
+					if (op && op._id) originalPostMap[op._id.toString()] = op;
+				});
+			}
+		} catch (_) {}
+	}
+
 	const attach = (post) => {
+		if (!post) return post;
 		const authorInfo = userMap[post.authorId?.toString()];
 		post.authorPic = authorInfo?.profilePic || "";
 		post.authorRole = authorInfo?.role || "user";
 		post.authorBadges = authorInfo?.badges || [];
 		post.authorStreak = authorInfo?.streak || 0;
+		if (post.originalPostId && originalPostMap[post.originalPostId.toString()]) {
+			post.originalPost = originalPostMap[post.originalPostId.toString()];
+		}
 		post.likedByDetails = Array.isArray(post.likedBy)
 			? post.likedBy.map((id) => ({
 					id,
@@ -124,36 +179,42 @@ const hydrateWithPictures = async (data) => {
 				}))
 			: [];
 
-		post.comments?.forEach((comment) => {
-			comment.authorPic =
-				userMap[comment.authorId?.toString()]?.profilePic || "";
-			comment.authorRole = userMap[comment.authorId?.toString()]?.role || "user";
-			comment.authorBadges = userMap[comment.authorId?.toString()]?.badges || [];
-			comment.authorStreak = userMap[comment.authorId?.toString()]?.streak || 0;
-			comment.likedByDetails = Array.isArray(comment.likedBy)
-				? comment.likedBy.map((id) => ({
-						id,
-						name: userMap[id.toString()]?.name || "Unknown",
-						profilePic: userMap[id.toString()]?.profilePic || "",
-					}))
-				: [];
-
-			comment.replies?.forEach((reply) => {
-				reply.authorPic =
-					userMap[reply.authorId?.toString()]?.profilePic || "";
-				reply.authorRole = userMap[reply.authorId?.toString()]?.role || "user";
-				reply.authorBadges = userMap[reply.authorId?.toString()]?.badges || [];
-				reply.authorStreak = userMap[reply.authorId?.toString()]?.streak || 0;
-				reply.likedByDetails = Array.isArray(reply.likedBy)
-					? reply.likedBy.map((id) => ({
+		if (Array.isArray(post.comments)) {
+			post.comments.forEach((comment) => {
+				if (!comment) return;
+				comment.authorPic =
+					userMap[comment.authorId?.toString()]?.profilePic || "";
+				comment.authorRole = userMap[comment.authorId?.toString()]?.role || "user";
+				comment.authorBadges = userMap[comment.authorId?.toString()]?.badges || [];
+				comment.authorStreak = userMap[comment.authorId?.toString()]?.streak || 0;
+				comment.likedByDetails = Array.isArray(comment.likedBy)
+					? comment.likedBy.map((id) => ({
 							id,
 							name: userMap[id.toString()]?.name || "Unknown",
-							profilePic:
-								userMap[id.toString()]?.profilePic || "",
+							profilePic: userMap[id.toString()]?.profilePic || "",
 						}))
 					: [];
+
+				if (Array.isArray(comment.replies)) {
+					comment.replies.forEach((reply) => {
+						if (!reply) return;
+						reply.authorPic =
+							userMap[reply.authorId?.toString()]?.profilePic || "";
+						reply.authorRole = userMap[reply.authorId?.toString()]?.role || "user";
+						reply.authorBadges = userMap[reply.authorId?.toString()]?.badges || [];
+						reply.authorStreak = userMap[reply.authorId?.toString()]?.streak || 0;
+						reply.likedByDetails = Array.isArray(reply.likedBy)
+							? reply.likedBy.map((id) => ({
+									id,
+									name: userMap[id.toString()]?.name || "Unknown",
+									profilePic:
+										userMap[id.toString()]?.profilePic || "",
+								}))
+							: [];
+					});
+				}
 			});
-		});
+		}
 		return post;
 	};
 
@@ -596,10 +657,11 @@ router.get("/", async (req, res) => {
 			? req.query.search
 			: (typeof req.query.q === "string" ? req.query.q : (Array.isArray(req.query.search) && typeof req.query.search[0] === "string" ? req.query.search[0] : ""));
 		const rawSearch = rawQuerySearch.trim().slice(0, 100);
+		let searchOr = null;
 		if (rawSearch) {
 			const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 			const searchRegex = new RegExp(escaped, 'i');
-			query.$or = [
+			searchOr = [
 				{ title: { $regex: searchRegex } },
 				{ content: { $regex: searchRegex } },
 				{ authorName: { $regex: searchRegex } },
@@ -613,11 +675,107 @@ router.get("/", async (req, res) => {
 			];
 		}
 
-		const rawPosts = await Post.find(query)
-			.sort({ timestamp: -1 })
+		// Privacy Visibility Filtering
+		const currentUser = getOptionalUser(req);
+		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : "";
+		const userObjId = mongoose.isValidObjectId(currentUserId) ? new mongoose.Types.ObjectId(currentUserId) : null;
+
+		let friendIds = [];
+		if (currentUserId) {
+			const userDoc = await User.findById(currentUserId).select("friends").lean();
+			friendIds = Array.isArray(userDoc?.friends)
+				? userDoc.friends.map(f => (f._id ? f._id.toString() : f.toString()))
+				: [];
+		}
+		const friendObjIds = friendIds
+			.filter(id => mongoose.isValidObjectId(id))
+			.map(id => new mongoose.Types.ObjectId(id));
+
+		const visibilityOr = [
+			{ visibility: 'PUBLIC' },
+			{ visibility: { $exists: false } }
+		];
+		if (userObjId) {
+			visibilityOr.push({ authorId: userObjId });
+			visibilityOr.push({ authorId: currentUserId });
+		} else if (currentUserId) {
+			visibilityOr.push({ authorId: currentUserId });
+		}
+		if (friendIds.length > 0) {
+			visibilityOr.push({
+				visibility: 'FRIENDS_ONLY',
+				authorId: { $in: [...friendIds, ...friendObjIds] }
+			});
+		}
+
+		if (searchOr) {
+			query.$or = searchOr;
+		} else {
+			query.$or = visibilityOr;
+		}
+
+		// Smart Feed Sorting & Tab Handling
+		const tab = (req.query.tab || req.query.sort || "latest").toString().toLowerCase();
+		let sortOption = { isPinned: -1, timestamp: -1, createdAt: -1 };
+
+		if (tab === "top") {
+			sortOption = { isPinned: -1, score: -1, createdAt: -1 };
+		} else if (tab === "recent_activity" || tab === "activity" || tab === "recent") {
+			sortOption = { isPinned: -1, lastActivityAt: -1, createdAt: -1 };
+		} else if (tab === "saved") {
+			if (!currentUser) {
+				return res.status(401).json({ message: "Authentication required to view saved posts" });
+			}
+			const userDoc = await User.findById(currentUser.id).select("savedPosts bookmarkedPosts").lean();
+			const savedIds = [
+				...(userDoc?.savedPosts || []),
+				...(userDoc?.bookmarkedPosts || [])
+			].map(id => id ? id.toString() : "").filter(Boolean);
+			const uniqueSavedIds = Array.from(new Set(savedIds)).filter(id => mongoose.isValidObjectId(id));
+			query._id = { $in: uniqueSavedIds };
+			sortOption = { createdAt: -1, timestamp: -1 };
+		} else if (tab === "latest") {
+			sortOption = { isPinned: -1, createdAt: -1, timestamp: -1 };
+		}
+
+		let rawPosts = await Post.find(query)
+			.sort(sortOption)
 			.skip(skip)
 			.limit(limit)
 			.lean();
+
+		if (Array.isArray(rawPosts)) {
+			rawPosts = rawPosts.filter((post) => {
+				const vis = post.visibility || "PUBLIC";
+				if (vis === "PUBLIC") return true;
+				if (!currentUserId) return false;
+				const postAuthor = (post.authorId || "").toString();
+				if (postAuthor === currentUserId) return true;
+				if (currentUser && currentUser.role === "admin") return true;
+				if (vis === "ONLY_ME") return false;
+				if (vis === "FRIENDS_ONLY") {
+					return friendIds.includes(postAuthor);
+				}
+				return true;
+			});
+		}
+
+		if (tab === "top" && Array.isArray(rawPosts)) {
+			rawPosts.sort((a, b) => {
+				const aPinned = a.isPinned ? 1 : 0;
+				const bPinned = b.isPinned ? 1 : 0;
+				if (aPinned !== bPinned) return bPinned - aPinned;
+				const aScore = (a.score !== undefined && a.score !== null)
+					? a.score
+					: ((a.reactions?.length || 0) + (a.comments?.length || 0) * 2);
+				const bScore = (b.score !== undefined && b.score !== null)
+					? b.score
+					: ((b.reactions?.length || 0) + (b.comments?.length || 0) * 2);
+				if (aScore !== bScore) return bScore - aScore;
+				return new Date(b.createdAt || b.timestamp || 0) - new Date(a.createdAt || a.timestamp || 0);
+			});
+		}
+
 		res.json(await hydrateWithPictures(rawPosts));
 	} catch (error) {
 		res.status(500).json({ message: "Error fetching posts" });
@@ -686,6 +844,34 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		const cleanQaDetails = cleanCategory === 'qa_forum' ? parseQaDetails(qaDetails) : undefined;
 		const cleanGearDetails = (cleanCategory === 'gear_exchange' || cleanCategory === 'gear_review') ? parseGearDetails(gearDetails) : undefined;
 
+		let cleanOriginalPostId = null;
+		let cleanSharedThought = "";
+		if (req.body.originalPostId && mongoose.isValidObjectId(req.body.originalPostId)) {
+			const originalPost = await Post.findById(req.body.originalPostId);
+			if (originalPost) {
+				const origAuthorId = (originalPost.authorId || "").toString();
+				const currentUserId = (req.user.id || req.user.userId || req.user._id || "").toString();
+				const isAuthor = Boolean(currentUserId && origAuthorId && origAuthorId === currentUserId);
+				const isAdmin = req.user.role === "admin";
+
+				if (originalPost.visibility === "ONLY_ME" && !isAuthor && !isAdmin) {
+					return res.status(403).json({ message: "Cannot repost a private post." });
+				}
+				if (originalPost.visibility === "FRIENDS_ONLY" && !isAuthor && !isAdmin) {
+					const authorUser = originalPost.authorId ? await User.findById(originalPost.authorId).select("friends").lean() : null;
+					const isFriend = authorUser && Array.isArray(authorUser.friends) &&
+						authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
+					if (!isFriend) {
+						return res.status(403).json({ message: "Cannot repost a friends-only post." });
+					}
+				}
+
+				cleanOriginalPostId = originalPost._id;
+				cleanSharedThought = req.body.sharedThought ? xss(String(req.body.sharedThought).trim()) : "";
+				await Post.updateOne({ _id: originalPost._id }, { $inc: { shareCount: 1 } });
+			}
+		}
+
 		const newPost = new Post({
 			title: cleanTitle,
 			content: cleanContent,
@@ -705,7 +891,11 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 			authorId,
 			status,
 			isFlagged,
-			toxicityScore
+			toxicityScore,
+			originalPostId: cleanOriginalPostId,
+			sharedThought: cleanSharedThought,
+			shareCount: 0,
+			lastActivityAt: new Date()
 		});
 
 		await newPost.save();
@@ -740,7 +930,11 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 					comments: 0,
 					createdAt: newPost.createdAt,
 					visibility: newPost.visibility,
-					score: (newPost.isPinned ? 1000 : 0)
+					score: (newPost.isPinned ? 1000 : 0),
+					originalPostId: cleanOriginalPostId,
+					sharedThought: cleanSharedThought,
+					shareCount: 0,
+					lastActivityAt: newPost.lastActivityAt || new Date()
 				},
 				{ upsert: true, returnDocument: "after" }
 			);
@@ -936,7 +1130,9 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 
 		post.title = cleanTitle;
 		post.content = cleanContent;
-		post.isEdited = true; // NEW: Set edited flag
+		post.isEdited = true;
+		post.editedAt = new Date();
+		post.lastActivityAt = new Date();
 		await post.save();
 
 			try {
@@ -1053,6 +1249,67 @@ router.put("/reports/:postId/resolve", authMiddleware, adminMiddleware, async (r
 	}
 });
 
+// ==========================================
+// SAVED POSTS (M1 - J8)
+// ==========================================
+router.get("/saved", authMiddleware, async (req, res) => {
+	try {
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const user = await User.findById(currentUserId).select("savedPosts bookmarkedPosts").lean();
+		const savedIds = [
+			...(user?.savedPosts || []),
+			...(user?.bookmarkedPosts || [])
+		].map(id => id ? id.toString() : "").filter(Boolean);
+		const uniqueSavedIds = Array.from(new Set(savedIds)).filter(id => mongoose.isValidObjectId(id));
+
+		const posts = await Post.find({
+			_id: { $in: uniqueSavedIds },
+			status: { $nin: ['quarantined', 'deleted'] },
+			isFlagged: { $ne: true }
+		}).sort({ createdAt: -1, timestamp: -1 }).lean();
+
+		const hydrated = await hydrateWithPictures(posts);
+		res.json(hydrated);
+	} catch (error) {
+		console.error("Error fetching saved posts:", error);
+		res.status(500).json({ message: "Error fetching saved posts" });
+	}
+});
+
+// ==========================================
+// MEMBER SEARCH / AUTOCOMPLETE (M1 - J10)
+// ==========================================
+router.get("/members", async (req, res) => {
+	try {
+		const query = (req.query.q || req.query.query || req.query.search || "").trim();
+		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+		const filter = { hideFromSearch: { $ne: true } };
+		if (query) {
+			const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			filter.name = { $regex: escaped, $options: "i" };
+		}
+		const users = await User.find(filter)
+			.select("_id name profilePic role badges skillLevel")
+			.limit(limit)
+			.lean();
+
+		const formatted = users.map((u) => ({
+			_id: u._id.toString(),
+			id: u._id.toString(),
+			name: u.name,
+			profilePic: u.profilePic || "",
+			role: u.role || "user",
+			skillLevel: u.skillLevel || "Intermediate",
+			badges: Array.isArray(u.badges) ? u.badges : [],
+		}));
+
+		res.json({ users: formatted });
+	} catch (err) {
+		console.error("Error fetching members:", err);
+		res.status(500).json({ message: "Failed to fetch members" });
+	}
+});
+
 router.get("/:postId", async (req, res) => {
 	try {
 		if (!mongoose.isValidObjectId(req.params.postId)) {
@@ -1063,6 +1320,31 @@ router.get("/:postId", async (req, res) => {
 		if (!post) return res.status(404).json({ message: "Post not found" });
 		if (post.status === "quarantined" || post.status === "deleted") {
 			return res.status(404).json({ message: "Post not available" });
+		}
+
+		// Privacy Check
+		const currentUser = getOptionalUser(req);
+		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : null;
+		const postAuthorId = post.authorId ? post.authorId.toString() : null;
+		const isAuthor = Boolean(currentUserId && postAuthorId && currentUserId === postAuthorId);
+		const isAdmin = Boolean(currentUser && currentUser.role === "admin");
+
+		if (post.visibility === "ONLY_ME") {
+			if (!isAuthor && !isAdmin) {
+				return res.status(403).json({ message: "This post is private." });
+			}
+		} else if (post.visibility === "FRIENDS_ONLY") {
+			if (!isAuthor && !isAdmin) {
+				if (!currentUserId) {
+					return res.status(403).json({ message: "This post is only visible to friends of the author." });
+				}
+				const authorUser = await User.findById(post.authorId).select("friends").lean();
+				const isFriend = authorUser && Array.isArray(authorUser.friends) &&
+					authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
+				if (!isFriend) {
+					return res.status(403).json({ message: "This post is only visible to friends of the author." });
+				}
+			}
 		}
 
 		const hydratedPost = await hydrateWithPictures(post);
@@ -1121,6 +1403,7 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 				.json({ message: "Comment rejected: Spam or toxicity detected." });
 
 		post.comments.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
+		post.lastActivityAt = new Date();
 		await post.save();
 
 		const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
@@ -1192,7 +1475,8 @@ router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 			return res.json(await hydrateWithPictures(post.toObject()));
 
 		comment.content = cleanContent;
-		comment.isEdited = true; // NEW: Set edited flag
+		comment.isEdited = true;
+		comment.editedAt = new Date();
 		await post.save();
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) req.io.emit("postUpdated", hydratedPost);
@@ -1262,6 +1546,7 @@ router.post(
 					.json({ message: "Reply rejected: Spam or toxicity detected." });
 
 			comment.replies.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
+			post.lastActivityAt = new Date();
 			await post.save();
 
 			const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
@@ -1269,12 +1554,16 @@ router.post(
 
 			if (req.io) {
 				req.io.emit("postUpdated", hydratedPost);
-				const commentToReply = updatedPost.comments.find(
-					(c) => c._id.toString() === req.params.commentId,
-				);
+				const commentToReply = Array.isArray(updatedPost?.comments)
+					? updatedPost.comments.find(
+							(c) => c && c._id && c._id.toString() === req.params.commentId,
+						)
+					: null;
 				if (
 					commentToReply &&
-					commentToReply.authorId?.toString() !== authorId.toString()
+					commentToReply.authorId?.toString() !== authorId.toString() &&
+					Array.isArray(commentToReply.replies) &&
+					commentToReply.replies.length > 0
 				) {
 					const newReply =
 						commentToReply.replies[
@@ -1284,7 +1573,7 @@ router.post(
 						req.io,
 						commentToReply.authorId.toString(),
 						`${authorName} replied: "${truncateText(content)}"`,
-						`/community?postId=${post._id}&highlight=${newReply._id}`,
+						`/community?postId=${post._id}&highlight=${newReply?._id || ""}`,
 					);
 				}
 			}
@@ -1327,7 +1616,8 @@ router.put(
 				return res.json(await hydrateWithPictures(post.toObject()));
 
 			reply.content = cleanContent;
-			reply.isEdited = true; // NEW: Set edited flag
+			reply.isEdited = true;
+			reply.editedAt = new Date();
 			await post.save();
 			const hydratedPost = await hydrateWithPictures(post.toObject());
 			if (req.io) req.io.emit("postUpdated", hydratedPost);
@@ -1505,9 +1795,10 @@ router.post("/:postId/comments/:commentId/replies/:replyId/report", authMiddlewa
 // BOOKMARKS
 // ==========================================
 
-router.put("/:postId/bookmark", authMiddleware, async (req, res) => {
+const handleBookmarkToggle = async (req, res) => {
 	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
+		const targetPostId = req.params.postId || req.params.id;
+		if (!mongoose.isValidObjectId(targetPostId)) {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
@@ -1516,23 +1807,39 @@ router.put("/:postId/bookmark", authMiddleware, async (req, res) => {
 		if (!user) return res.status(404).json({ message: "User not found" });
 
 		if (!user.bookmarkedPosts) user.bookmarkedPosts = [];
-		const postIndex = user.bookmarkedPosts.indexOf(req.params.postId);
+		if (!user.savedPosts) user.savedPosts = [];
+		const postIndex = user.bookmarkedPosts.indexOf(targetPostId);
 		let isBookmarked = false;
 
 		if (postIndex === -1) {
-			user.bookmarkedPosts.push(req.params.postId);
+			user.bookmarkedPosts.push(targetPostId);
+			if (!user.savedPosts.includes(targetPostId)) {
+				user.savedPosts.push(targetPostId);
+			}
 			isBookmarked = true;
 		} else {
 			user.bookmarkedPosts.splice(postIndex, 1);
+			const savedIdx = user.savedPosts.indexOf(targetPostId);
+			if (savedIdx !== -1) user.savedPosts.splice(savedIdx, 1);
 		}
 
 		await user.save();
-		res.json({ bookmarkedPosts: user.bookmarkedPosts, isBookmarked });
+		res.json({
+			bookmarkedPosts: user.bookmarkedPosts,
+			savedPosts: user.savedPosts,
+			isBookmarked,
+			isSaved: isBookmarked
+		});
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: "Server error toggling bookmark" });
 	}
-});
+};
+
+router.put("/:postId/bookmark", authMiddleware, handleBookmarkToggle);
+router.post("/:postId/bookmark", authMiddleware, handleBookmarkToggle);
+router.put("/:postId/save", authMiddleware, handleBookmarkToggle);
+router.post("/:postId/save", authMiddleware, handleBookmarkToggle);
 
 router.get("/bookmarks/:userId", authMiddleware, async (req, res) => {
 	try {
@@ -1717,15 +2024,20 @@ router.put(
 // ==========================================
 router.put("/:postId/pin", authMiddleware, async (req, res) => {
 	try {
-		if (req.user.role !== "admin") {
-			return res.status(403).json({ message: "Only administrators can pin posts." });
-		}
 		if (!mongoose.isValidObjectId(req.params.postId)) {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
 		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const isAdmin = req.user.role === "admin";
+		const isAuthor = post.authorId && post.authorId.toString() === currentUserId;
+
+		if (!isAdmin && !isAuthor) {
+			return res.status(403).json({ message: "Only administrators and post authors can pin posts." });
+		}
 
 		post.isPinned = !post.isPinned;
 		await post.save();
@@ -1746,28 +2058,43 @@ router.put("/:postId/pin", authMiddleware, async (req, res) => {
 });
 
 // ==========================================
-// BADMINTON REACTION TRIO (💥, 🧊, ⚡) & EMOJIS
+// BADMINTON & FACEBOOK REACTION DOCK (M1 - J1)
 // ==========================================
 const BADMINTON_REACTIONS_MAP = {
 	"💥": { reactionType: "smash", notificationText: "smashed your post." },
 	"🧊": { reactionType: "ice_drop", notificationText: "dropped on your post." },
 	"⚡": { reactionType: "clutch", notificationText: "marked your post as clutch." },
+	"👍": { reactionType: "like", notificationText: "liked your post." },
+	"❤️": { reactionType: "love", notificationText: "loved your post." },
+	"🏸": { reactionType: "smash", notificationText: "smashed your post." },
+	"😮": { reactionType: "wow", notificationText: "was amazed by your post." },
+	"😂": { reactionType: "haha", notificationText: "laughed at your post." },
+	"😢": { reactionType: "sad", notificationText: "felt sad about your post." },
+	"🔥": { reactionType: "smash", notificationText: "smashed your post." },
+	"💯": { reactionType: "clutch", notificationText: "marked your post as clutch." },
+	"👏": { reactionType: "like", notificationText: "applauded your post." }
 };
 
 const REACTION_TYPE_TO_EMOJI = {
-	smash: "💥",
+	like: "👍",
+	love: "❤️",
+	smash: "🏸",
+	wow: "😮",
+	haha: "😂",
+	sad: "😢",
 	ice_drop: "🧊",
 	clutch: "⚡",
 };
 
 const ALLOWED_EMOJIS = [
-	"💥", "🧊", "⚡", // Authentic Badminton Trio
-	"🏸", "🔥", "💯", "❤️", "👏", "👍", // Legacy emojis for backward compatibility
+	"👍", "❤️", "🏸", "😮", "😂", "😢", "💥", "🧊", "⚡",
+	"🔥", "💯", "👏"
 ];
 
 const handleReactionRoute = async (req, res) => {
 	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
+		const targetPostId = req.params.postId || req.params.id;
+		if (!mongoose.isValidObjectId(targetPostId)) {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
@@ -1784,10 +2111,10 @@ const handleReactionRoute = async (req, res) => {
 
 		const userId = (req.user.id || req.user.userId || req.user._id).toString();
 		const userName = req.user.name || "Player";
-		let post = await findPostByIdOrActivityFeed(req.params.postId);
+		let post = await findPostByIdOrActivityFeed(targetPostId);
 
 		if (!post) {
-			const feedItem = await ActivityFeed.findById(req.params.postId);
+			const feedItem = await ActivityFeed.findById(targetPostId);
 			if (feedItem) {
 				if (!Array.isArray(feedItem.reactions)) feedItem.reactions = [];
 				const existingIndex = feedItem.reactions.findIndex(
@@ -1894,7 +2221,33 @@ const handleReactionRoute = async (req, res) => {
 			}
 		}
 
-		res.json(hydratedPost);
+		const reactionCounts = {};
+		ALLOWED_EMOJIS.forEach((e) => { reactionCounts[e] = 0; });
+		(hydratedPost.reactions || post.reactions || []).forEach((r) => {
+			if (r && r.emoji) {
+				reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1;
+			}
+		});
+
+		const userReaction = action !== "removed" ? emoji : null;
+
+		const reactionObj = action !== "removed"
+			? (post.reactions[existingReactionIndex !== -1 ? existingReactionIndex : post.reactions.length - 1] || null)
+			: null;
+
+		const responseData = {
+			success: true,
+			message: "Reaction updated successfully",
+			action,
+			userReaction,
+			reactionCounts,
+			reaction: reactionObj,
+			reactions: hydratedPost.reactions || post.reactions || [],
+			post: hydratedPost,
+			...hydratedPost,
+		};
+
+		res.json(responseData);
 	} catch (error) {
 		console.error("Error handling reaction:", error);
 		res.status(500).json({ message: "Error updating reaction.", error: error.message });
@@ -1903,6 +2256,10 @@ const handleReactionRoute = async (req, res) => {
 
 router.put("/:postId/react", authMiddleware, handleReactionRoute);
 router.put("/:postId/reaction", authMiddleware, handleReactionRoute);
+router.post("/:postId/react", authMiddleware, handleReactionRoute);
+router.post("/:postId/reaction", authMiddleware, handleReactionRoute);
+router.put("/:id/react", authMiddleware, handleReactionRoute);
+router.post("/:id/react", authMiddleware, handleReactionRoute);
 
 
 // ==========================================

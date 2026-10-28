@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-unused-vars
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Box, Typography, Button, TextField } from "@mui/material";
 
 // Sub-components
@@ -22,6 +22,14 @@ export default function CommentThread({
 	const [isReplying, setIsReplying] = useState(false);
 	const [nestedReplyText, setNestedReplyText] = useState("");
 	const [isExpanded, setIsExpanded] = useState(false);
+	const replyInputRef = useRef(null);
+
+	// Auto-focus reply input on open
+	useEffect(() => {
+		if (isReplying && replyInputRef.current) {
+			replyInputRef.current.focus();
+		}
+	}, [isReplying]);
 
 	// Single dialog state handles both comments and replies
 	const [deleteTarget, setDeleteTarget] = useState(null); // { isReply: boolean, replyId: string|null }
@@ -170,6 +178,7 @@ export default function CommentThread({
 				>
 					<TextField
 						fullWidth
+						inputRef={replyInputRef}
 						size="small"
 						multiline
 						maxRows={4}

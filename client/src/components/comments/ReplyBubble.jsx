@@ -12,6 +12,7 @@ import {
 	Menu,
 	MenuItem,
 	Chip,
+	Tooltip,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { MoreVertIcon } from "../Icons";
@@ -70,15 +71,31 @@ export default function ReplyBubble({
 			id={`comment-${reply._id}`}
 			className={highlightId === reply._id ? "highlight-active" : ""}
 			sx={{
+				position: "relative",
 				display: "flex",
 				mt: 1,
-				ml: { xs: 4, sm: 6 },
-				borderLeft: "2px solid",
-				borderColor: "divider",
-				pl: 1.5,
+				ml: { xs: 3.5, sm: 5 },
+				pl: 1,
 				p: 0.5,
 			}}
 		>
+			{/* Curved connector branch line */}
+			<Box
+				aria-hidden="true"
+				data-testid="curved-connector-line"
+				sx={{
+					position: "absolute",
+					left: { xs: -14, sm: -18 },
+					top: -4,
+					width: { xs: 14, sm: 18 },
+					height: 22,
+					borderLeft: "2px solid",
+					borderBottom: "2px solid",
+					borderColor: "divider",
+					borderBottomLeftRadius: "12px",
+					pointerEvents: "none",
+				}}
+			/>
 			<Avatar
 				src={reply.authorPic}
 				alt={reply.authorName || "Reply author"}
@@ -189,18 +206,26 @@ export default function ReplyBubble({
 								/>
 							)}
 							{reply.isEdited && (
-								<Typography
-									component="span"
-									sx={{
-										fontWeight: "normal",
-										fontStyle: "italic",
-										fontSize: "0.7rem",
-										color: "text.secondary",
-										ml: 0.75,
-									}}
+								<Tooltip
+									title={`Edited on ${formatTime ? formatTime(reply.editedAt || reply.updatedAt || reply.timestamp) : "recently"}`}
+									arrow
+									placement="top"
 								>
-									(edited)
-								</Typography>
+									<Typography
+										component="span"
+										data-testid="reply-edited-badge"
+										sx={{
+											fontWeight: "normal",
+											fontStyle: "italic",
+											fontSize: "0.7rem",
+											color: "text.secondary",
+											ml: 0.75,
+											cursor: "pointer",
+										}}
+									>
+										(Edited)
+									</Typography>
+								</Tooltip>
 							)}
 						</Typography>
 
