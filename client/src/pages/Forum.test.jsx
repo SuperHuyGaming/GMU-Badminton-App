@@ -4,11 +4,33 @@ import { BrowserRouter } from 'react-router-dom';
 import Forum from './Forum';
 import apiFetch from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
+import { compressImage } from '../utils/imageUtils';
 
 // Mock the API fetch utility
 vi.mock('../utils/api', () => ({
     default: vi.fn()
 }));
+
+// Mock image compression utility
+vi.mock('../utils/imageUtils', () => ({
+    compressImage: vi.fn(async (file) => {
+        return new File(['mock-compressed-data'], (file.name || 'compressed').replace(/\.[^/.]+$/, '') + '.jpg', {
+            type: 'image/jpeg'
+        });
+    })
+}));
+
+// Mock toast utility
+vi.mock('react-hot-toast', () => {
+    const fn = vi.fn();
+    fn.success = vi.fn();
+    fn.error = vi.fn();
+    return {
+        default: fn,
+        toast: fn
+    };
+});
 
 // Mock socket utility
 let socketHandlers = {};
@@ -829,5 +851,307 @@ describe('Forum Page Component (Community Hub)', () => {
                 body: expect.stringContaining('Playing badminton at the RAC court 3 today at 5pm!')
             }));
         });
+    });
+
+    // ── Sprint R1-R4: Mobile Performance, Image Compression & Feed Invariants ──
+
+    it('R1: applies shrink labels, shielding background, and outline suppression on composer inputs', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [] })
+        });
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+        const dialog = await screen.findByRole('dialog');
+
+        // Check What's on your mind? label
+        const contentLabels = within(dialog).getAllByText(/What's on your mind/i);
+        expect(contentLabels.length).toBeGreaterThan(0);
+
+        // Reveal title input
+        const addTitleBtn = within(dialog).getByRole('button', { name: /\+ Title/i });
+        fireEvent.click(addTitleBtn);
+
+        const titleLabels = within(dialog).getAllByText(/Title \(Optional\)/i);
+        expect(titleLabels.length).toBeGreaterThan(0);
+
+        // Verify inputs are editable without errors
+        const titleInput = within(dialog).getByLabelText(/Title \(Optional\)/i);
+        const contentInput = within(dialog).getByLabelText(/What's on your mind\?/i);
+        fireEvent.change(titleInput, { target: { value: 'My Test Title' } });
+        fireEvent.change(contentInput, { target: { value: 'My Test Content' } });
+        expect(titleInput.value).toBe('My Test Title');
+        expect(contentInput.value).toBe('My Test Content');
+    });
+
+    it('R2: compresses uploaded images client-side before sending to upload endpoint', async () => {
+        apiFetch.mockImplementation((url, opts) => {
+            if (url.includes('/api/upload/images')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({ imageUrls: ['https://cdn.example.com/compressed_mobile.jpg'] })
+                });
+            }
+            if (url.includes('/api/forum') && opts?.method === 'POST') {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({ _id: 'post-new-img', title: 'Post with photo', content: 'Testing photo upload' })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({ feed: [], hasMore: false, tags: [] }) });
+        });
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        const dialog = await screen.findByRole('dialog');
+        const contentInput = within(dialog).getByLabelText(/What's on your mind\?/i);
+        fireEvent.change(contentInput, { target: { value: 'Photo post content' } });
+
+        const fileInput = dialog.querySelector('input[type="file"]');
+        const rawPhoto = new File(['raw-iphone-camera-bytes'], 'IMG_9999.png', { type: 'image/png' });
+        fireEvent.change(fileInput, { target: { files: [rawPhoto] } });
+
+        expect(await within(dialog).findByText('IMG_9999.png')).toBeInTheDocument();
+
+        const submitBtn = within(dialog).getByRole('button', { name: /^Post$/i });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+            expect(compressImage).toHaveBeenCalledWith(rawPhoto, expect.objectContaining({
+                maxSizeMB: 1.0,
+                maxWidthOrHeight: 1600,
+                initialQuality: 0.8
+            }));
+            expect(apiFetch).toHaveBeenCalledWith('/api/upload/images', expect.objectContaining({
+                method: 'POST',
+                body: expect.any(FormData)
+            }));
+            expect(apiFetch).toHaveBeenCalledWith('/api/forum', expect.objectContaining({
+                method: 'POST',
+                body: expect.stringContaining('https://cdn.example.com/compressed_mobile.jpg')
+            }));
+        });
+    });
+
+    it('R2: surfaces upload errors via toast.error and keeps modal open so draft is not lost', async () => {
+        apiFetch.mockImplementation((url) => {
+            if (url.includes('/api/upload/images')) {
+                return Promise.resolve({
+                    ok: false,
+                    json: async () => ({ message: 'Cloudinary storage capacity reached' })
+                });
+            }
+            return Promise.resolve({ ok: true, json: async () => ({ feed: [], hasMore: false, tags: [] }) });
+        });
+
+        renderWithProviders();
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        const dialog = await screen.findByRole('dialog');
+        const contentInput = within(dialog).getByLabelText(/What's on your mind\?/i);
+        fireEvent.change(contentInput, { target: { value: 'Important draft with failing upload' } });
+
+        const fileInput = dialog.querySelector('input[type="file"]');
+        const photo = new File(['dummy-bytes'], 'bad_upload.jpg', { type: 'image/jpeg' });
+        fireEvent.change(fileInput, { target: { files: [photo] } });
+
+        const submitBtn = within(dialog).getByRole('button', { name: /^Post$/i });
+        fireEvent.click(submitBtn);
+
+        await waitFor(() => {
+            expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Cloudinary storage capacity reached'));
+        });
+
+        // Modal should still be open and content preserved
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(contentInput.value).toBe('Important draft with failing upload');
+    });
+
+    it('R2: displays error toast when non-image files or more than 4 images are selected', async () => {
+        apiFetch.mockResolvedValue({ ok: true, json: async () => ({ feed: [], hasMore: false, tags: [] }) });
+
+        renderWithProviders();
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+        const dialog = await screen.findByRole('dialog');
+
+        const fileInput = dialog.querySelector('input[type="file"]');
+
+        // Select a non-image file
+        const textFile = new File(['text'], 'document.pdf', { type: 'application/pdf' });
+        fireEvent.change(fileInput, { target: { files: [textFile] } });
+        expect(toast.error).toHaveBeenCalledWith('Only image files are allowed.');
+
+        // Select more than 4 images
+        const fiveImages = [1, 2, 3, 4, 5].map(i => new File(['bytes'], `img${i}.jpg`, { type: 'image/jpeg' }));
+        fireEvent.change(fileInput, { target: { files: fiveImages } });
+        expect(toast.error).toHaveBeenCalledWith('Maximum 4 images allowed');
+    });
+
+    it('R3: completely purges attached image chips, text, file input value, and sessionStorage on Clear Draft click', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [] })
+        });
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        const dialog = await screen.findByRole('dialog');
+        const contentInput = within(dialog).getByLabelText(/What's on your mind\?/i);
+        fireEvent.change(contentInput, { target: { value: 'Post with draft photo' } });
+
+        // Attach mock image
+        const fileInput = dialog.querySelector('input[type="file"]');
+        const file = new File(['fake-image-bytes'], 'test_camera.jpg', { type: 'image/jpeg' });
+        fireEvent.change(fileInput, { target: { files: [file] } });
+
+        expect(await within(dialog).findByText('test_camera.jpg')).toBeInTheDocument();
+
+        // Clear Draft button should be visible
+        const clearDraftBtn = within(dialog).getByRole('button', { name: /Clear Draft/i });
+        expect(clearDraftBtn).toBeInTheDocument();
+        fireEvent.click(clearDraftBtn);
+
+        // Verify chips and inputs are purged
+        expect(within(dialog).queryByText('test_camera.jpg')).not.toBeInTheDocument();
+        expect(contentInput.value).toBe('');
+        expect(fileInput.value).toBe('');
+        expect(sessionStorage.getItem('mbc_community_post_draft')).toBeNull();
+        expect(toast.success).toHaveBeenCalledWith('Draft cleared');
+    });
+
+    it('R3: renders Clear Draft button when only images are attached without any text', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false, tags: [] })
+        });
+
+        renderWithProviders();
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+
+        const dialog = await screen.findByRole('dialog');
+        const fileInput = dialog.querySelector('input[type="file"]');
+        const file = new File(['photo-only-bytes'], 'racket_only.jpg', { type: 'image/jpeg' });
+        fireEvent.change(fileInput, { target: { files: [file] } });
+
+        expect(await within(dialog).findByText('racket_only.jpg')).toBeInTheDocument();
+
+        // Clear Draft button MUST be visible even though title and content are empty
+        const clearDraftBtn = within(dialog).getByRole('button', { name: /Clear Draft/i });
+        expect(clearDraftBtn).toBeInTheDocument();
+
+        fireEvent.click(clearDraftBtn);
+        expect(within(dialog).queryByText('racket_only.jpg')).not.toBeInTheDocument();
+        expect(fileInput.value).toBe('');
+    });
+
+    it('R4: resets pagination cursor and re-fetches page 1 when clicking "All" category chip while already on All', async () => {
+        const mockFeed = [
+            { _id: 'post-item-1', title: 'Feed Item 1', content: 'Testing feed content', createdAt: new Date().toISOString() }
+        ];
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: mockFeed, nextCursor: 'cur123', hasMore: true })
+        });
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByText('Feed Item 1')).toBeInTheDocument());
+
+        const initialCallCount = apiFetch.mock.calls.length;
+
+        // Click "All" category chip while already on "All"
+        const allChip = screen.getByText('All');
+        fireEvent.click(allChip);
+
+        // Assert apiFetch is called again to re-fetch page 1
+        await waitFor(() => {
+            expect(apiFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
+        });
+
+        // Should NOT show "No activity found."
+        expect(screen.queryByText(/No activity found/i)).not.toBeInTheDocument();
+        expect(screen.getByText('Feed Item 1')).toBeInTheDocument();
+    });
+
+    it('R4: re-fetches feed cleanly when clicking Refresh button on page 1', async () => {
+        const mockFeed = [
+            { _id: 'post-item-2', title: 'Feed Item 2', content: 'Testing refresh content', createdAt: new Date().toISOString() }
+        ];
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: mockFeed, nextCursor: null, hasMore: false })
+        });
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByText('Feed Item 2')).toBeInTheDocument());
+
+        const initialCallCount = apiFetch.mock.calls.length;
+
+        const refreshBtn = screen.getByLabelText('Refresh feed');
+        fireEvent.click(refreshBtn);
+
+        await waitFor(() => {
+            expect(apiFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
+        });
+
+        expect(screen.queryByText(/No activity found/i)).not.toBeInTheDocument();
+        expect(screen.getByText('Feed Item 2')).toBeInTheDocument();
+    });
+
+    it('R4: resets pagination and feed when pressing Enter on search input', async () => {
+        const mockFeed = [
+            { _id: 'post-item-3', title: 'Doubles match', content: 'Looking for a doubles partner', createdAt: new Date().toISOString() }
+        ];
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: mockFeed, nextCursor: null, hasMore: false })
+        });
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByText('Doubles match')).toBeInTheDocument());
+
+        const searchInput = screen.getByLabelText('Search community posts');
+        fireEvent.change(searchInput, { target: { value: 'Doubles' } });
+        fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('search=Doubles'));
+        });
+    });
+
+    it('R1: renders post composer inputs with slotProps label shrinking and shielding in MUI 9', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], nextCursor: null, hasMore: false })
+        });
+
+        renderWithProviders();
+        await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByTestId('facebook-composer-card'));
+        const dialog = await screen.findByRole('dialog');
+        expect(dialog).toBeInTheDocument();
+
+        // Toggle Title input
+        const addTitleBtn = within(dialog).getByRole('button', { name: /\+ Title/i });
+        fireEvent.click(addTitleBtn);
+
+        const titleInput = within(dialog).getByPlaceholderText(/Add a title or leave blank/i);
+        const titleLabel = dialog.querySelector(`label[for="${titleInput.id}"]`);
+        expect(titleLabel).toBeInTheDocument();
+        expect(titleLabel.getAttribute('data-shrink')).toBe('true');
+        expect(titleLabel.classList.contains('MuiInputLabel-shrink')).toBe(true);
+
+        const contentInput = within(dialog).getByPlaceholderText(/What's on your mind/i);
+        const contentLabel = dialog.querySelector(`label[for="${contentInput.id}"]`);
+        expect(contentLabel).toBeInTheDocument();
+        expect(contentLabel.getAttribute('data-shrink')).toBe('true');
+        expect(contentLabel.classList.contains('MuiInputLabel-shrink')).toBe(true);
     });
 });

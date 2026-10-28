@@ -18,6 +18,7 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import PostCard from "../components/PostCard";
 import AdminModerationModal from "../components/AdminModerationModal";
 import socket from "../utils/socket";
+import { compressImage } from "../utils/imageUtils";
 // eslint-disable-next-line no-unused-vars
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
@@ -236,6 +237,8 @@ export default function Forum() {
 	const [newPost, setNewPost] = useState(defaultNewPost);
 	const [postImages, setPostImages] = useState([]);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
+	const [uploadStage, setUploadStage] = useState('idle'); // 'idle' | 'compressing' | 'uploading' | 'submitting'
+	const fileInputRef = useRef(null);
 	const [showTitleInput, setShowTitleInput] = useState(false);
 	const [showMatchmakingDetails, setShowMatchmakingDetails] = useState(false);
 	const [showGearDetails, setShowGearDetails] = useState(false);
@@ -243,12 +246,32 @@ export default function Forum() {
 	// Validation: user can either provide content or title (or both) like Facebook
 	const isFormValid = Boolean((newPost.content && newPost.content.trim().length > 0) || (newPost.title && newPost.title.trim().length > 0));
 
+	const handleClearDraft = () => {
+		setNewPost(defaultNewPost);
+		setPostImages([]);
+		if (fileInputRef.current) {
+			fileInputRef.current.value = "";
+		}
+		setShowTitleInput(false);
+		setShowMatchmakingDetails(false);
+		setShowGearDetails(false);
+		setShowTagsSelector(false);
+		if (typeof window !== "undefined") {
+			sessionStorage.removeItem("mbc_community_post_draft");
+		}
+		toast.success("Draft cleared");
+	};
+
 	// Draft auto-save to sessionStorage
 	useEffect(() => {
-		if (typeof window !== 'undefined' && (newPost.title.trim() || newPost.content.trim())) {
-			sessionStorage.setItem("mbc_community_post_draft", JSON.stringify(newPost));
+		if (typeof window !== 'undefined' && isModalOpen) {
+			if (newPost.title.trim() || newPost.content.trim()) {
+				sessionStorage.setItem("mbc_community_post_draft", JSON.stringify(newPost));
+			} else {
+				sessionStorage.removeItem("mbc_community_post_draft");
+			}
 		}
-	}, [newPost]);
+	}, [newPost, isModalOpen]);
 
 	const handleOpenCreatePost = () => {
 		if (!currentUser) {
@@ -318,26 +341,35 @@ export default function Forum() {
 		return () => window.removeEventListener('keydown', handleGlobalKeyDown);
 	}, [isModalOpen]);
 
+	const cursorRef = useRef(null);
+	const sessionTimeRef = useRef(null);
+	const [feedRefreshKey, setFeedRefreshKey] = useState(0);
+
+	const resetFeedAndPagination = useCallback(() => {
+		cursorRef.current = null;
+		tabsCacheRef.current = {};
+		setPage(1);
+		setFeed([]);
+		setNewPostsQueue([]);
+		setIsLoading(true);
+		setFeedRefreshKey(k => k + 1);
+	}, []);
+
 	const handleSearchKeyDown = (e) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
 			setDebouncedSearch(searchInput.trim());
-			setPage(1);
-			setFeed([]);
-			setNewPostsQueue([]);
+			resetFeedAndPagination();
 		} else if (e.key === 'Escape') {
 			e.preventDefault();
 			if (searchInput) {
 				setSearchInput('');
 				setDebouncedSearch('');
-				setPage(1);
+				resetFeedAndPagination();
 			}
 			searchInputRef.current?.blur();
 		}
 	};
-
-	const cursorRef = useRef(null);
-	const sessionTimeRef = useRef(null);
 
 	useEffect(() => {
 		let isCancelled = false;
@@ -412,7 +444,7 @@ export default function Forum() {
 		return () => {
 			isCancelled = true;
 		};
-	}, [tab, page, selectedTag, selectedCategory, debouncedSearch, dateRange, customStartDate, customEndDate]);
+	}, [tab, page, selectedTag, selectedCategory, debouncedSearch, dateRange, customStartDate, customEndDate, feedRefreshKey]);
 
 	const displayedFeed = useMemo(() => {
 		return feed.filter(item => {
@@ -507,27 +539,36 @@ export default function Forum() {
 
 
 	const handleSubmit = async () => {
-		if (!currentUser) return alert("You must be logged in to post!");
+		if (!currentUser) return toast.error("You must be logged in to post!");
 		try {
 			setIsUploadingImage(true);
 			let finalImageUrls = [];
 
 			if (postImages.length > 0) {
+				setUploadStage("compressing");
+				const compressedFiles = await Promise.all(
+					postImages.map(file => compressImage(file, { maxSizeMB: 1.0, maxWidthOrHeight: 1600, initialQuality: 0.8 }))
+				);
+
+				setUploadStage("uploading");
 				const formData = new FormData();
-				postImages.forEach(file => formData.append("images", file));
+				compressedFiles.forEach(file => formData.append("images", file));
 				formData.append("type", "postAttachment");
 				formData.append("userId", currentUser.id || currentUser._id);
 
 				const uploadRes = await apiFetch("/api/upload/images", { method: "POST", body: formData });
 				const uploadData = await uploadRes.json();
-				if (uploadRes.ok) finalImageUrls = uploadData.imageUrls;
-				else {
+				if (uploadRes.ok) {
+					finalImageUrls = uploadData.imageUrls || [];
+				} else {
 					setIsUploadingImage(false);
-					return toast.error("Failed to upload image. " + uploadData.message);
+					setUploadStage("idle");
+					return toast.error("Failed to upload image. " + (uploadData.message || ""));
 				}
 			}
 
 			// Submit Post (using Forum API which syncs ActivityFeed)
+			setUploadStage("submitting");
 			const postTitle = newPost.title?.trim() 
 				|| (newPost.content?.trim().split('\n')[0].slice(0, 80) || "Community Post");
 			const postContent = newPost.content?.trim() || postTitle;
@@ -563,10 +604,14 @@ export default function Forum() {
 
 			const data = await res.json();
 			setIsUploadingImage(false);
+			setUploadStage("idle");
 			if (!res.ok) return toast.error(data.message || "Failed to post. Please try again.");
 
 			setNewPost(defaultNewPost);
 			setPostImages([]);
+			if (fileInputRef.current) {
+				fileInputRef.current.value = "";
+			}
 			setShowTitleInput(false);
 			setShowMatchmakingDetails(false);
 			setShowGearDetails(false);
@@ -578,7 +623,9 @@ export default function Forum() {
 			setFeed(prev => [data, ...prev.filter(p => (p._id || p.referenceId) !== data._id)]);
 		} catch (error) {
 			setIsUploadingImage(false);
+			setUploadStage("idle");
 			console.error("Failed to post", error);
+			toast.error(error.message || "Failed to create post. Please try again.");
 		}
 	};
 
@@ -792,9 +839,7 @@ export default function Forum() {
 												onClick={() => { 
 													setSearchInput(''); 
 													setDebouncedSearch(''); 
-													setPage(1); 
-													setFeed([]); 
-													setNewPostsQueue([]);
+													resetFeedAndPagination();
 													searchInputRef.current?.focus(); 
 												}} 
 												aria-label="Clear search"
@@ -818,9 +863,7 @@ export default function Forum() {
 								value={dateRange}
 								onChange={(e) => {
 									setDateRange(e.target.value);
-									setPage(1);
-									setFeed([]);
-									setNewPostsQueue([]);
+									resetFeedAndPagination();
 								}}
 								displayEmpty
 								aria-label="Filter by date range"
@@ -840,9 +883,7 @@ export default function Forum() {
 									value={customStartDate}
 									onChange={(e) => {
 										setCustomStartDate(e.target.value);
-										setPage(1);
-										setFeed([]);
-										setNewPostsQueue([]);
+										resetFeedAndPagination();
 									}}
 									slotProps={{ htmlInput: { 'aria-label': 'Start date' } }}
 									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
@@ -854,9 +895,7 @@ export default function Forum() {
 									value={customEndDate}
 									onChange={(e) => {
 										setCustomEndDate(e.target.value);
-										setPage(1);
-										setFeed([]);
-										setNewPostsQueue([]);
+										resetFeedAndPagination();
 									}}
 									slotProps={{ htmlInput: { 'aria-label': 'End date' } }}
 									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
@@ -868,7 +907,7 @@ export default function Forum() {
 							variant="outlined" 
 							size="small" 
 							color="inherit"
-							onClick={() => { setPage(1); setFeed([]); setNewPostsQueue([]); }}
+							onClick={resetFeedAndPagination}
 							sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 38, px: 1.5 }}
 							aria-label="Refresh feed"
 						>
@@ -916,9 +955,7 @@ export default function Forum() {
 							color={selectedCategory === cat.id ? "primary" : "default"}
 							onClick={() => {
 								setSelectedCategory(prev => prev === cat.id && cat.id !== "all" ? "all" : cat.id);
-								setPage(1);
-								setFeed([]);
-								setNewPostsQueue([]);
+								resetFeedAndPagination();
 							}}
 							clickable
 							sx={{ 
@@ -939,9 +976,7 @@ export default function Forum() {
 							color={selectedTag === item.tag ? "primary" : "default"}
 							onClick={() => {
 								setSelectedTag(prev => prev === item.tag ? "" : item.tag);
-								setPage(1);
-								setFeed([]);
-								setNewPostsQueue([]);
+								resetFeedAndPagination();
 							}}
 							clickable
 							sx={{ 
@@ -1026,8 +1061,7 @@ export default function Forum() {
 									onClick={() => {
 										setSearchInput('');
 										setDebouncedSearch('');
-										setPage(1);
-										setNewPostsQueue([]);
+										resetFeedAndPagination();
 									}}
 								>
 									Clear Search
@@ -1041,9 +1075,7 @@ export default function Forum() {
 									size="small" 
 									onClick={() => {
 										setSelectedCategory('all');
-										setPage(1);
-										setFeed([]);
-										setNewPostsQueue([]);
+										resetFeedAndPagination();
 									}}
 								>
 									View All Categories
@@ -1057,9 +1089,7 @@ export default function Forum() {
 									size="small" 
 									onClick={() => {
 										setDateRange('all');
-										setPage(1);
-										setFeed([]);
-										setNewPostsQueue([]);
+										resetFeedAndPagination();
 									}}
 								>
 									View All Dates
@@ -1250,7 +1280,7 @@ export default function Forum() {
 					</IconButton>
 				</DialogTitle>
 
-				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, p: 2.5 }}>
+				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, p: { xs: 2, sm: 2.5 } }}>
 					{/* Author Avatar, Name, and Pills */}
 					<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
 						<Avatar
@@ -1331,6 +1361,46 @@ export default function Forum() {
 							fullWidth 
 							value={newPost.title} 
 							onChange={(e) => setNewPost({ ...newPost, title: e.target.value })} 
+							slotProps={{
+								inputLabel: {
+									shrink: true,
+									sx: {
+										bgcolor: 'background.paper',
+										px: 0.75,
+										borderRadius: 0.5,
+										fontWeight: 600,
+										color: 'text.secondary',
+										'&.Mui-focused': { color: 'primary.main' }
+									}
+								}
+							}}
+							sx={{
+								'& .MuiOutlinedInput-root': {
+									borderRadius: 2,
+									'& fieldset': {
+										borderColor: 'divider',
+										transition: 'border-color 0.2s ease-in-out',
+									},
+									'&:hover fieldset': {
+										borderColor: 'primary.main',
+									},
+									'&.Mui-focused fieldset': {
+										borderColor: 'primary.main',
+										borderWidth: 1.5,
+									},
+									'& input': {
+										py: 1.25,
+										px: 1.5,
+										fontSize: '0.95rem',
+										outline: 'none !important',
+										boxShadow: 'none !important',
+									},
+									'& input:focus, & input:focus-visible': {
+										outline: 'none !important',
+										boxShadow: 'none !important',
+									}
+								}
+							}}
 						/>
 					)}
 
@@ -1344,6 +1414,46 @@ export default function Forum() {
 						fullWidth 
 						value={newPost.content} 
 						onChange={(e) => setNewPost({ ...newPost, content: e.target.value })} 
+						slotProps={{
+							inputLabel: {
+								shrink: true,
+								sx: {
+									bgcolor: 'background.paper',
+									px: 0.75,
+									borderRadius: 0.5,
+									fontWeight: 600,
+									color: 'text.secondary',
+									'&.Mui-focused': { color: 'primary.main' }
+								}
+							}
+						}}
+						sx={{
+							'& .MuiOutlinedInput-root': {
+								borderRadius: 2,
+								p: 1.5,
+								'& fieldset': {
+									borderColor: 'divider',
+									transition: 'border-color 0.2s ease-in-out',
+								},
+								'&:hover fieldset': {
+									borderColor: 'primary.main',
+								},
+								'&.Mui-focused fieldset': {
+									borderColor: 'primary.main',
+									borderWidth: 1.5,
+								},
+								'& textarea': {
+									fontSize: '1rem',
+									lineHeight: 1.5,
+									outline: 'none !important',
+									boxShadow: 'none !important',
+								},
+								'& textarea:focus, & textarea:focus-visible': {
+									outline: 'none !important',
+									boxShadow: 'none !important',
+								}
+							}
+						}}
 					/>
 
 					{/* Player-Decided Matchmaking Options (Clean, Collapsible) */}
@@ -1626,15 +1736,28 @@ export default function Forum() {
 						<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
 							{/* Hidden File Input */}
 							<input
-								accept="image/*"
+								ref={fileInputRef}
+								accept="image/jpeg,image/png,image/webp,image/gif"
 								style={{ display: "none" }}
 								id="post-image-upload"
 								type="file"
 								multiple
 								onChange={(e) => {
-									const files = Array.from(e.target.files);
-									if (files.length + postImages.length > 4) return alert("Maximum 4 images allowed");
-									setPostImages(prev => [...prev, ...files]);
+									const files = Array.from(e.target.files || []);
+									if (files.length === 0) return;
+									if (files.length + postImages.length > 4) {
+										toast.error("Maximum 4 images allowed");
+										e.target.value = "";
+										return;
+									}
+									const validImages = files.filter(f => f.type && f.type.startsWith("image/"));
+									if (validImages.length < files.length) {
+										toast.error("Only image files are allowed.");
+									}
+									if (validImages.length > 0) {
+										setPostImages(prev => [...prev, ...validImages]);
+									}
+									e.target.value = "";
 								}}
 							/>
 							<label htmlFor="post-image-upload">
@@ -1718,17 +1841,9 @@ export default function Forum() {
 					)}
 				</DialogContent>
 				<DialogActions sx={{ px: 3, pb: 2.5 }}>
-					{(newPost.title || newPost.content) && (
+					{Boolean(newPost.title || newPost.content || postImages.length > 0 || (newPost.tags && newPost.tags.length > 0)) && (
 						<Button 
-							onClick={() => {
-								setNewPost(defaultNewPost);
-								setShowTitleInput(false);
-								setShowMatchmakingDetails(false);
-								setShowGearDetails(false);
-								setShowTagsSelector(false);
-								if (typeof window !== "undefined") sessionStorage.removeItem("mbc_community_post_draft");
-								toast.success("Draft cleared");
-							}} 
+							onClick={handleClearDraft} 
 							color="error" 
 							size="small"
 							sx={{ fontWeight: "bold", mr: "auto" }}
@@ -1738,8 +1853,22 @@ export default function Forum() {
 					)}
 
 					<Button onClick={() => setIsModalOpen(false)} color="inherit" sx={{ fontWeight: "bold" }}>Cancel</Button>
-					<Button onClick={handleSubmit} variant="contained" disabled={!isFormValid || isUploadingImage} sx={{ fontWeight: "bold", px: 4, borderRadius: 2 }}>
-						{isUploadingImage ? <CircularProgress size={24} color="inherit" /> : "Post"}
+					<Button 
+						onClick={handleSubmit} 
+						variant="contained" 
+						disabled={!isFormValid || isUploadingImage} 
+						sx={{ fontWeight: "bold", px: 4, borderRadius: 2 }}
+					>
+						{isUploadingImage ? (
+							<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+								<CircularProgress size={18} color="inherit" />
+								<span>
+									{uploadStage === "compressing" ? "Compressing..." :
+									 uploadStage === "uploading" ? "Uploading..." :
+									 uploadStage === "submitting" ? "Posting..." : "Processing..."}
+								</span>
+							</Box>
+						) : "Post"}
 					</Button>
 				</DialogActions>
 			</Dialog>

@@ -1,51 +1,152 @@
 // client/src/utils/imageUtils.js
 
 /**
- * Reads an image file, resizes it if it's too wide, and compresses it to a lightweight JPEG Base64 string.
- * @param {File} file - The image file from the input picker.
- * @param {number} maxWidth - The maximum width in pixels (e.g., 1200 for covers, 400 for avatars).
- * @param {number} quality - JPEG compression quality (0.0 to 1.0).
- * @returns {Promise<string>} - The compressed Base64 string.
+ * Compresses an image file client-side to ensure it is under the target size (default < 1MB)
+ * and within maximum dimensions (default 1600px) using HTML5 Canvas.
+ *
+ * @param {File} file - The raw input file from file picker or camera.
+ * @param {Object|number} [options] - Options object or maxWidthOrHeight number for backward compatibility.
+ * @param {number} [options.maxSizeMB=1.0] - Target size ceiling in MB (default 1.0).
+ * @param {number} [options.maxWidthOrHeight=1600] - Max width or height in px (default 1600).
+ * @param {number} [options.initialQuality=0.8] - Starting JPEG compression quality (0.1 to 1.0).
+ * @returns {Promise<File>} - Resolves with the compressed File object.
  */
-export const compressImage = (file, maxWidth = 800, quality = 0.7) => {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
+export const compressImage = (file, options = {}, positionalQuality = 0.8) => {
+	// Support backward-compatible positional signature compressImage(file, maxWidth, quality)
+	let config = {};
+	if (typeof options === "number") {
+		config = {
+			maxWidthOrHeight: options,
+			initialQuality: typeof positionalQuality === "number" ? positionalQuality : 0.8,
+			maxSizeMB: 1.0
+		};
+	} else if (options && typeof options === "object") {
+		config = options;
+	}
 
-		// 1. Read the file as a raw data URL
-		reader.readAsDataURL(file);
+	const {
+		maxSizeMB = 1.0,
+		maxWidthOrHeight = 1600,
+		initialQuality = 0.8
+	} = config;
 
-		reader.onload = (event) => {
-			const img = new Image();
-			img.src = event.target.result;
+	return new Promise((resolve) => {
+		// Non-image or missing file guard
+		if (!file || typeof file.type !== "string" || !file.type.startsWith("image/")) {
+			return resolve(file);
+		}
 
-			img.onload = () => {
-				// 2. Calculate the new dimensions keeping the aspect ratio
-				let width = img.width;
-				let height = img.height;
+		const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
-				if (width > maxWidth) {
-					height = Math.round((height * maxWidth) / width);
-					width = maxWidth;
+		// Preserve animated GIFs if within ceiling
+		if (file.type === "image/gif" && typeof file.size === "number" && file.size <= maxSizeBytes) {
+			return resolve(file);
+		}
+
+		// Fallback for non-browser/SSR/JSDOM environments without full 2D canvas & toBlob
+		if (typeof window === "undefined" || typeof document === "undefined") {
+			return resolve(file);
+		}
+
+		const canvasTest = document.createElement("canvas");
+		if (
+			!canvasTest.getContext ||
+			!canvasTest.getContext("2d") ||
+			typeof canvasTest.toBlob !== "function" ||
+			typeof window.URL === "undefined" ||
+			typeof window.URL.createObjectURL !== "function"
+		) {
+			return resolve(file);
+		}
+
+		let objectUrl;
+		try {
+			objectUrl = URL.createObjectURL(file);
+		} catch (err) {
+			console.warn("Could not create object URL for compression fallback:", err);
+			return resolve(file);
+		}
+
+		const img = new Image();
+
+		img.onload = () => {
+			if (objectUrl) {
+				URL.revokeObjectURL(objectUrl);
+			}
+			try {
+				let { width, height } = img;
+
+				// Fast path: already under target size and within dimensions
+				if (typeof file.size === "number" && file.size <= maxSizeBytes && width <= maxWidthOrHeight && height <= maxWidthOrHeight) {
+					return resolve(file);
 				}
 
-				// 3. Create a hidden canvas element
-				const canvas = document.createElement("canvas");
-				canvas.width = width;
-				canvas.height = height;
-				const ctx = canvas.getContext("2d");
+				// Compute scale ratio maintaining aspect ratio
+				if (width > maxWidthOrHeight || height > maxWidthOrHeight) {
+					if (width >= height) {
+						height = Math.round((height * maxWidthOrHeight) / width);
+						width = maxWidthOrHeight;
+					} else {
+						width = Math.round((width * maxWidthOrHeight) / height);
+						height = maxWidthOrHeight;
+					}
+				}
 
-				// 4. Draw the image onto the canvas at the new smaller size
+				const canvas = document.createElement("canvas");
+				canvas.width = Math.max(1, width);
+				canvas.height = Math.max(1, height);
+				const ctx = canvas.getContext("2d");
+				if (!ctx) {
+					return resolve(file);
+				}
+
+				// High quality rendering
+				ctx.imageSmoothingEnabled = true;
+				ctx.imageSmoothingQuality = "high";
 				ctx.drawImage(img, 0, 0, width, height);
 
-				// 5. Export the canvas as a compressed JPEG string
-				const compressedBase64 = canvas.toDataURL(
-					"image/jpeg",
-					quality,
-				);
-				resolve(compressedBase64);
-			};
-			img.onerror = (err) => reject(err);
+				const exportBlob = (currentQuality) => {
+					canvas.toBlob(
+						(blob) => {
+							if (!blob) {
+								return resolve(file); // graceful fallback
+							}
+
+							// If still above ceiling and quality can be reduced further, step down
+							if (blob.size > maxSizeBytes && currentQuality > 0.4) {
+								return exportBlob(Math.max(0.3, currentQuality - 0.15));
+							}
+
+							const originalName = (file && typeof file.name === "string" && file.name) ? file.name : "compressed-photo.jpg";
+							const newFileName = originalName.replace(/\.[^/.]+$/, "") + ".jpg";
+
+							const compressedFile = new File([blob], newFileName, {
+								type: "image/jpeg",
+								lastModified: Date.now()
+							});
+
+							resolve(compressedFile);
+						},
+						"image/jpeg",
+						currentQuality
+					);
+				};
+
+				exportBlob(initialQuality);
+			} catch (err) {
+				console.warn("Canvas compression failed, falling back to original file:", err);
+				resolve(file);
+			}
 		};
-		reader.onerror = (err) => reject(err);
+
+		img.onerror = (err) => {
+			if (objectUrl) {
+				URL.revokeObjectURL(objectUrl);
+			}
+			console.warn("Image load error during compression:", err);
+			resolve(file);
+		};
+
+		img.src = objectUrl;
 	});
 };
