@@ -354,7 +354,7 @@ router.get("/notifications/:userId", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid user ID format." });
 		}
 
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
 		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
 			return res.status(403).json({ message: "Unauthorized to access these notifications." });
 		}
@@ -376,18 +376,44 @@ router.put("/notifications/:userId/read", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid user ID format." });
 		}
 
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
 		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
 			return res.status(403).json({ message: "Unauthorized to update these notifications." });
 		}
 
-		await Notification.updateMany(
+		const result = await Notification.updateMany(
 			{ targetUserId: req.params.userId, read: false },
 			{ read: true },
 		);
-		res.json({ success: true });
+
+		const io = req.io || req.app?.get("io");
+		if (io) io.to(req.params.userId).emit("notificationsMarkedRead", { userId: req.params.userId, unreadCount: 0 });
+
+		res.json({ success: true, markedReadCount: result.modifiedCount ?? 0, unreadCount: 0 });
 	} catch (error) {
 		res.status(500).json({ message: "Error updating notifications" });
+	}
+});
+
+router.delete("/notifications/:userId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to clear these notifications." });
+		}
+
+		const result = await Notification.deleteMany({ targetUserId: req.params.userId });
+
+		const io = req.io || req.app?.get("io");
+		if (io) io.to(req.params.userId).emit("notificationsCleared", { userId: req.params.userId });
+
+		res.json({ success: true, message: "All notifications cleared.", deletedCount: result.deletedCount ?? 0 });
+	} catch (error) {
+		res.status(500).json({ message: "Error clearing notifications" });
 	}
 });
 
@@ -400,14 +426,18 @@ router.put("/notifications/single/:notifId/read", authMiddleware, async (req, re
 		const notif = await Notification.findById(req.params.notifId);
 		if (!notif) return res.status(404).json({ message: "Notification not found" });
 
-		const currentUserId = (req.user.id || req.user.userId).toString();
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
 		if (req.user.role !== "admin" && currentUserId !== notif.targetUserId?.toString()) {
 			return res.status(403).json({ message: "Unauthorized to update this notification." });
 		}
 
 		notif.read = true;
 		await notif.save();
-		res.json({ success: true });
+
+		const io = req.io || req.app?.get("io");
+		if (io) io.to(notif.targetUserId.toString()).emit("notificationRead", { notifId: notif._id, read: true });
+
+		res.json({ success: true, notification: notif });
 	} catch (error) {
 		res.status(500).json({ message: "Error updating notification" });
 	}
@@ -1105,7 +1135,7 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 					req.io,
 					post.authorId.toString(),
 					`${authorName} commented: "${truncateText(content)}"`,
-					`/forum?postId=${post._id}&highlight=${newComment._id}`,
+					`/community?postId=${post._id}&highlight=${newComment._id}`,
 				);
 			}
 
@@ -1123,7 +1153,7 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 							req.io,
 							u._id.toString(),
 							`${authorName} mentioned you in a badminton comment: "${truncateText(content)}"`,
-							`/forum?postId=${post._id}`
+							`/community?postId=${post._id}`
 						);
 					}
 				}
@@ -1254,7 +1284,7 @@ router.post(
 						req.io,
 						commentToReply.authorId.toString(),
 						`${authorName} replied: "${truncateText(content)}"`,
-						`/forum?postId=${post._id}&highlight=${newReply._id}`,
+						`/community?postId=${post._id}&highlight=${newReply._id}`,
 					);
 				}
 			}
@@ -1573,7 +1603,7 @@ router.put("/:postId/like", authMiddleware, async (req, res) => {
 					req.io,
 					post.authorId.toString(),
 					`${userName} liked your post.`,
-					`/forum?postId=${post._id}`,
+					`/community?postId=${post._id}`,
 				);
 			}
 		}
@@ -1620,7 +1650,7 @@ router.put("/:postId/comments/:commentId/like", authMiddleware, async (req, res)
 					req.io,
 					comment.authorId.toString(),
 					`${userName} liked your comment.`,
-					`/forum?postId=${post._id}&highlight=${comment._id}`,
+					`/community?postId=${post._id}&highlight=${comment._id}`,
 				);
 			}
 		}
@@ -1671,7 +1701,7 @@ router.put(
 						req.io,
 						reply.authorId.toString(),
 						`${userName} liked your reply.`,
-						`/forum?postId=${post._id}&highlight=${reply._id}`,
+						`/community?postId=${post._id}&highlight=${reply._id}`,
 					);
 				}
 			}
@@ -1859,7 +1889,7 @@ const handleReactionRoute = async (req, res) => {
 					req.io,
 					post.authorId.toString(),
 					`${userName} ${notificationSuffix}`,
-					`/forum?postId=${post._id}`
+					`/community?postId=${post._id}`
 				);
 			}
 		}
@@ -1956,7 +1986,7 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 				req.io,
 				post.authorId.toString(),
 				`${currentUserName} joined your badminton rally!`,
-				`/post/${post._id}`
+				`/community?postId=${post._id}`
 			);
 		}
 
@@ -2017,7 +2047,7 @@ router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
 				req.io,
 				post.authorId.toString(),
 				`${currentUserName} accepted your match challenge!`,
-				`/post/${post._id}`
+				`/community?postId=${post._id}`
 			);
 		}
 
@@ -2075,7 +2105,7 @@ router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (
 					req.io,
 					comment.authorId.toString(),
 					`${req.user.name || "The author"} marked your answer as the accepted solution!`,
-					`/post/${post._id}`
+					`/community?postId=${post._id}`
 				);
 			}
 		}

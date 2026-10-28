@@ -11,7 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
 import { getOptimizedAvatar } from "../utils/image";
-import { Link as RouterLink, useLocation } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 
 const formatTime = (dateString) => {
 	if (!dateString) return "";
@@ -48,6 +48,8 @@ const formatShortTime = (dateString) => {
 const Messages = () => {
 	const { user } = useAuth();
 	const location = useLocation();
+	const navigate = useNavigate();
+	const handledTargetIdRef = useRef(null);
 	const [recentChats, setRecentChats] = useState([]);
 	const [activeChat, setActiveChat] = useState(() => {
 		const saved = localStorage.getItem("activeChat");
@@ -78,27 +80,40 @@ const Messages = () => {
 	}
 
 	useEffect(() => {
-		if (location.state?.targetUserId && user) {
-			const targetId = location.state.targetUserId;
-			// check if already in recentChats
-			const existingChat = recentChats.find(c => c.friend._id === targetId);
-			if (existingChat) {
-				startNewChat(existingChat.friend);
-			} else {
-				// fetch user basic info to start chat
-				apiFetch('/api/profile/' + targetId)
-					.then(res => res.json())
-					.then(data => {
-						if (data && data._id) {
-							startNewChat(data);
-						}
-					})
-					.catch(err => console.error("Error fetching target user", err));
+		const searchParams = new URLSearchParams(location.search);
+		const queryUserId = searchParams.get("userId");
+		const targetId = location.state?.targetUserId || queryUserId;
+
+		if (targetId && user) {
+			if (handledTargetIdRef.current === targetId) {
+				return;
 			}
-			// clear state so it doesn't loop
-			window.history.replaceState({}, document.title);
+			handledTargetIdRef.current = targetId;
+
+			if (activeChat?._id !== targetId && activeChat?.id !== targetId) {
+				// check if already in recentChats
+				const existingChat = recentChats.find(
+					c => c.friend?._id === targetId || c.friend?.id === targetId
+				);
+				if (existingChat) {
+					startNewChat(existingChat.friend);
+				} else {
+					// fetch user basic info to start chat
+					apiFetch('/api/profile/' + targetId)
+						.then(res => res ? res.json() : null)
+						.then(data => {
+							if (data && (data._id || data.id)) {
+								startNewChat(data);
+							}
+						})
+						.catch(err => console.error("Error fetching target user", err));
+				}
+			}
+
+			// Cleanly clear location.search and location.state in React Router context
+			navigate("/messages", { replace: true, state: {} });
 		}
-	}, [location.state, user, recentChats]);
+	}, [location.state, location.search, user, recentChats, activeChat, navigate]);
 
 	useEffect(() => {
 		activeChatRef.current = activeChat;

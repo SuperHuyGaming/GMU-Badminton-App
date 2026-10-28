@@ -87,6 +87,11 @@ const AdminRoute = ({ children }) => {
 	return children;
 };
 
+export const ForumRedirect = () => {
+	const location = useLocation();
+	return <Navigate to={`/community${location.search}${location.hash}`} replace />;
+};
+
 const AnimatedRoutes = () => {
 	const location = useLocation();
 	const { user } = useAuth();
@@ -163,7 +168,7 @@ const AnimatedRoutes = () => {
 						}
 					/>
 					<Route
-						path="/forum" element={<Navigate to="/community" replace />}
+						path="/forum" element={<ForumRedirect />}
 					/>
 					<Route
 						path="/community"

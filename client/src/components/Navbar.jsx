@@ -1,6 +1,6 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useMemo } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener, Tabs, Tab } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import HistoryIcon from '@mui/icons-material/History';
@@ -283,23 +283,43 @@ export default function Navbar() {
     const { openFeedbackModal } = useFeedback();
     useTranslation();
     const { notifications, unreadCount, unreadMessages, markAsRead, markSingleAsRead, clearNotifications } = useNotifications();
-    // eslint-disable-next-line no-unused-vars
     const navigate = useNavigate();
     const location = useLocation();
     const [anchorEl, setAnchorEl] = useState(null);
     const open = Boolean(anchorEl);
     const [notifAnchorEl, setNotifAnchorEl] = useState(null);
     const notifOpen = Boolean(notifAnchorEl);
+    const [notifFilter, setNotifFilter] = useState("all");
     const [mobileOpen, setMobileOpen] = useState(false);
+
+    const filteredNotifications = useMemo(() => {
+        if (notifFilter === 'unread') return notifications.filter(n => !n.read);
+        return notifications;
+    }, [notifications, notifFilter]);
     
     const handleAvatarClick = (event) => setAnchorEl(event.currentTarget);
     const handleMenuClose = () => setAnchorEl(null);
     
     const handleNotifClick = (event) => {
         setNotifAnchorEl(event.currentTarget);
+        if (unreadCount > 0) {
+            markAsRead();
+        }
     };
     
     const handleNotifClose = () => setNotifAnchorEl(null);
+
+    const handleNotifItemClick = (notif) => {
+        handleNotifClose();
+        const notifId = notif?._id || notif?.id;
+        if (!notif?.read && notifId) {
+            markSingleAsRead(notifId);
+        }
+        if (notif?.link) {
+            navigate(notif.link);
+        }
+    };
+
     const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
     
     const handleLogout = async () => {
@@ -547,7 +567,7 @@ export default function Navbar() {
 										}}
 									>
 										<Badge
-											badgeContent={unreadCount}
+											badgeContent={notifOpen ? 0 : unreadCount}
 											color="error"
 										>
 											<BellIcon />
@@ -596,87 +616,126 @@ export default function Navbar() {
 											<Typography fontWeight="bold" color="text.primary">
 												Notifications
 											</Typography>
-											{notifications.length > 0 && (
-												<Box sx={{ display: 'flex', gap: 2 }}>
-													<Typography
-														variant="caption"
-														component="button"
-														sx={{ 
-															background: 'none',
-															border: 'none',
-															padding: 0,
-															cursor: "pointer", 
-															fontWeight: "bold", 
-															color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
-															"&:hover": { textDecoration: "underline" },
-															"&:focus-visible": { outline: '2px solid #FFCC33', borderRadius: '2px' }
-														}}
-														onClick={markAsRead}
-														aria-label="Mark all notifications as read"
-													>
-														Mark all as read
-													</Typography>
-													<Typography
-														variant="caption"
-														component="button"
-														sx={{ 
-															background: 'none',
-															border: 'none',
-															padding: 0,
-															cursor: "pointer", 
-															fontWeight: "bold", 
-															color: (theme) => theme.palette.mode === 'dark' ? '#ff8a80' : '#b91c1c',
-															"&:hover": { textDecoration: "underline" },
-															"&:focus-visible": { outline: '2px solid #b91c1c', borderRadius: '2px' }
-														}}
-														onClick={clearNotifications}
-														aria-label="Clear all notifications"
-													>
-														Clear All
-													</Typography>
-												</Box>
-											)}
+											<Box sx={{ display: 'flex', gap: 1 }}>
+												<Button
+													size="small"
+													variant="text"
+													onClick={markAsRead}
+													disabled={notifications.length === 0}
+													aria-label="Mark all as read"
+													sx={{
+														minWidth: 'auto',
+														p: 0.5,
+														fontSize: '0.75rem',
+														fontWeight: 'bold',
+														textTransform: 'none',
+														color: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
+														'&:hover': { textDecoration: 'underline', backgroundColor: 'transparent' },
+														'&.Mui-disabled': { opacity: 0.4 },
+													}}
+												>
+													Mark all as read
+												</Button>
+												<Button
+													size="small"
+													variant="text"
+													onClick={clearNotifications}
+													disabled={notifications.length === 0}
+													aria-label="Clear All"
+													sx={{
+														minWidth: 'auto',
+														p: 0.5,
+														fontSize: '0.75rem',
+														fontWeight: 'bold',
+														textTransform: 'none',
+														color: (theme) => theme.palette.mode === 'dark' ? '#ff8a80' : '#b91c1c',
+														'&:hover': { textDecoration: 'underline', backgroundColor: 'transparent' },
+														'&.Mui-disabled': { opacity: 0.4 },
+													}}
+												>
+													Clear All
+												</Button>
+											</Box>
 										</Box>
 
-										{notifications.length === 0 ? (
+										<Box sx={{ borderBottom: (theme) => `1px solid ${theme.palette.divider}` }}>
+											<Tabs
+												value={notifFilter}
+												onChange={(_, val) => setNotifFilter(val)}
+												variant="fullWidth"
+												textColor="primary"
+												indicatorColor="primary"
+												aria-label="Notification filters"
+												sx={{
+													minHeight: 38,
+													'& .MuiTab-root': {
+														minHeight: 38,
+														py: 0.5,
+														textTransform: 'none',
+														fontWeight: 'bold',
+														fontSize: '0.85rem',
+													}
+												}}
+											>
+												<Tab
+													data-testid="notif-tab-all"
+													value="all"
+													label={`All (${notifications.length})`}
+													aria-label="All"
+												/>
+												<Tab
+													data-testid="notif-tab-unread"
+													value="unread"
+													label={`Unread (${unreadCount})`}
+													aria-label="Unread"
+												/>
+											</Tabs>
+										</Box>
+
+										{filteredNotifications.length === 0 ? (
 											<MenuItem
 												sx={{
 													py: 3,
+													px: 2,
 													justifyContent: "center",
-													color: "text.primary",
+													textAlign: "center",
+													display: "flex",
+													flexDirection: "column",
+													alignItems: "center",
+													color: "text.secondary",
 												}}
 												disableRipple
 											>
-												No new notifications
+												<Typography variant="body2" color="text.secondary" fontWeight="medium">
+													{notifFilter === "unread" ? "All caught up! 🎉" : "No notifications"}
+												</Typography>
 											</MenuItem>
 										) : (
-											notifications.map((notif, index) => (
+											filteredNotifications.map((notif, index) => (
 												<motion.div
-													key={notif._id || notif.id}
+													key={notif._id || notif.id || index}
 													initial={{ opacity: 0, x: 20 }}
 													animate={{ opacity: 1, x: 0 }}
 													transition={{ delay: index * 0.05 }}
 												>
 													<MenuItem
-														component={RouterLink}
-														to={notif.link}
-														onClick={() => {
-															handleNotifClose();
-															if (!notif.read) markSingleAsRead(notif._id || notif.id);
-														}}
+														onClick={() => handleNotifItemClick(notif)}
 														aria-label={`${notif.read ? "Read" : "Unread"}: ${notif.message}`}
 														sx={{
 															whiteSpace: "normal",
 															py: 1.5,
 															px: 2,
+															display: "flex",
+															alignItems: "flex-start",
+															gap: 1.5,
 															backgroundColor: notif.read 
 																? "transparent" 
-																: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.08)' : 'rgba(0, 92, 46, 0.06)',
+																: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.12)' : 'rgba(0, 92, 46, 0.08)',
 															borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
 															"&:hover": {
 																backgroundColor: notif.read 
 																	? (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'
-																	: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.15)' : 'rgba(0, 92, 46, 0.12)',
+																	: (theme) => theme.palette.mode === 'dark' ? 'rgba(128, 226, 126, 0.18)' : 'rgba(0, 92, 46, 0.14)',
 															},
 															"&:focus-visible": {
 																outline: '2px solid #FFCC33',
@@ -684,29 +743,45 @@ export default function Navbar() {
 															}
 														}}
 													>
-														<Box>
-														<Typography
-															variant="body2"
-															sx={{
-																lineHeight: 1.3,
-																fontWeight: notif.read ? "normal" : "bold"
-															}}
-														>
-															{notif.message}
-														</Typography>
-														<Typography
-															variant="caption"
-															color="text.primary"
-															sx={{
-																mt: 0.5,
-																display:
-																	"block",
-															}}
-														>
-															{formatNotificationTime(notif.time)}
-														</Typography>
-													</Box>
-												</MenuItem>
+														{!notif.read && (
+															<Box
+																component="span"
+																data-testid="unread-pip"
+																aria-hidden="true"
+																sx={{
+																	width: 8,
+																	height: 8,
+																	borderRadius: "50%",
+																	backgroundColor: (theme) => theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e',
+																	flexShrink: 0,
+																	mt: 0.8,
+																	boxShadow: (theme) => `0 0 4px ${theme.palette.mode === 'dark' ? '#80e27e' : '#005c2e'}`,
+																}}
+															/>
+														)}
+														<Box sx={{ flex: 1, minWidth: 0 }}>
+															<Typography
+																variant="body2"
+																sx={{
+																	lineHeight: 1.3,
+																	fontWeight: notif.read ? "normal" : "bold",
+																	color: "text.primary",
+																}}
+															>
+																{notif.message}
+															</Typography>
+															<Typography
+																variant="caption"
+																color="text.secondary"
+																sx={{
+																	mt: 0.5,
+																	display: "block",
+																}}
+															>
+																{formatNotificationTime(notif.time)}
+															</Typography>
+														</Box>
+													</MenuItem>
 												</motion.div>
 											))
 										)}

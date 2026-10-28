@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, useAnimation } from "framer-motion";
 import socket from "../utils/socket";
 import apiFetch from "../utils/api";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
 	Typography,
@@ -372,10 +372,17 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	// Toggles the imported dialog component
 	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-	const urlParams = new URLSearchParams(window.location.search);
-	const highlightId = urlParams.get("highlight");
+	const location = useLocation();
+	const urlParams = useMemo(() => {
+		const searchStr = location?.search || (typeof window !== "undefined" ? window.location.search : "");
+		return new URLSearchParams(searchStr);
+	}, [location?.search]);
+	const hash = location?.hash || (typeof window !== "undefined" ? window.location.hash : "") || "";
+	const hashCommentId = hash.startsWith("#comment-") ? hash.replace("#comment-", "") : null;
+	const highlightId = urlParams.get("highlight") || urlParams.get("commentId") || hashCommentId;
 	const { postId: routePostId } = useParams();
 	const urlPostId = urlParams.get("postId") || routePostId;
+	const highlightHandledRef = useRef(null);
 
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
@@ -435,7 +442,15 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	}, [localPost._id]);
 
 	useEffect(() => {
-		if (urlPostId === localPost._id) {
+		const isTargetPost = urlPostId === localPost._id;
+		const containsComment = highlightId && localPost?.comments?.some((c) => String(c?._id || c?.id) === String(highlightId));
+		if (isTargetPost || containsComment) {
+			const actionKey = `${localPost._id}_${urlPostId || ''}_${highlightId || ''}`;
+			if (highlightHandledRef.current === actionKey) {
+				return;
+			}
+			highlightHandledRef.current = actionKey;
+
 			// eslint-disable-next-line react-hooks/set-state-in-effect
 			if (highlightId) setIsCommentModalOpen(true);
 			setTimeout(() => {
@@ -444,7 +459,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					?.scrollIntoView({ behavior: "smooth", block: "center" });
 			}, 300);
 		}
-	}, [urlPostId, highlightId, localPost._id]);
+	}, [urlPostId, highlightId, localPost._id, localPost.comments]);
 
 	useEffect(() => {
 		if (isCommentModalOpen && import.meta.env.MODE !== 'test') {

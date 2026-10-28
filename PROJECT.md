@@ -1,120 +1,133 @@
-﻿# Project: Project Titan (20-Problem Enterprise Engineering Overhaul)
+# Project: Notifications System Sprint Overhaul
 
 ## Architecture
-GMU Badminton Connect is an enterprise collegiate platform structured into:
-- **Scraper & Ingestion Layer**:
-  - `server/utils/autonomousHunter.js`: Autonomous discovery queue, batch processing, heap ceilings.
-  - `server/utils/deduplication.js`: Jaro-Winkler (>0.85 threshold) + 48h temporal window deduplication with draw, link, and RSVP merging.
-  - `server/utils/linkHealthChecker.js`: Routine HEAD/GET healthcheck crawler, fallback to host club homepage.
-  - `server/utils/sanitizeScrapedTitle.js`: Delimiter-aware and inline navigation debris stripping without discarding valid events.
-  - `server/utils/instagramScraper.js` & `server/utils/linkResolution.js`: Instagram posts, bio links, Linktree, and Google Forms resolution.
-- **Cache & Performance Layer**:
-  - `server/utils/redis.js`: Tagged active keys (`SADD tournaments:active_keys`) with non-blocking $O(1)$ `UNLINK` pipelines.
-  - `server/routes/tournaments.js`: Query projection omitting heavy division brackets and attendee objects for directory listings.
-  - `client/src/pages/Tournaments.jsx`: Virtualized card grid (`react-window`) and decoupled lazy flyer images (`<LazyFlyerImage>`).
-- **Real-Time Interactive Systems & Fair Play**:
-  - `server/models/TournamentMatch.js`: Optimistic concurrency locking (`optimisticConcurrency: true`, versioning `__v`) and bracket match advance endpoints.
-  - `client/src/components/UmpireDigitalPad.jsx`: Offline PWA resilience with IndexedDB local ledger and auto-replay on Wi-Fi reconnection.
-  - `server/routes/courts.js` & `server/utils/bwfRules.js`: Strict BWF 21-point rally scoring, 2-point clear deuce, 30-point golden cap, 60s/120s interval timers, Game 3 side change at 11 points.
-  - `server/models/Court.js` & `server/routes/courts.js`: RAC Gymnasium Court 1â€“6 scheduling, dynamic match duration estimation, 10-min walkover forfeit countdown, auto-advancement.
-  - `server/utils/glicko2.js`: Glicko-2 MMR engine tracking Rating ($R$), Rating Deviation ($RD$), and Volatility ($\sigma$) with inactivity decay.
-- **Community Integrity & Accessibility**:
-  - `server/routes/friends.js`: Bi-directional atomic friend state transitions with session/transaction idempotency.
-  - `server/models/Post.js` & `server/routes/forum.js`: Community spam filtering, report counter, and 3-report auto-quarantine trigger.
-  - `server/routes/tournaments.js`: Atomic RSVP capacity enforcement and FIFO waitlist queue.
-  - `client/src/App.jsx` & UI: WCAG 2.1 AA color contrast compliance ($\ge 4.5:1$), universal `:focus-visible` keyboard rings, and dynamic `aria-live` regions.
-- **Automated QA & Bot Harness**:
-  - 10-Persona Collegiate Synthetic Bot Simulation (`client/src/userBotsSimulation.test.jsx`) exercising all 20 workflows under adversarial memory pressure.
+The notification system spans the full stack of Mason Badminton Connect:
+- **Backend Persistence & Sockets**: Mongoose `Notification` model with compound indexes (`{ targetUserId: 1, time: -1 }`, `{ targetUserId: 1, read: 1 }`). Express routes in `server/routes/forum.js` handling `GET /notifications/:userId`, `PUT /notifications/:userId/read`, `DELETE /notifications/:userId`, and `PUT /notifications/single/:notifId/read`. Real-time socket events emitted to user room (`userId`) via Socket.io (`newNotification`, `notificationsMarkedRead`, `notificationsCleared`, `notificationRead`).
+- **Frontend Hook & Synchronization Layer**: `client/src/hooks/useNotifications.js` provides reactive state (`notifications`, `unreadCount`, `unreadMessages`), deduplicated socket listener (`newNotification`), and multi-tab synchronization listeners (`notificationsMarkedRead`, `notificationsCleared`).
+- **Frontend Navigation & Deep-Link Layer**: `client/src/App.jsx` preserves query search parameters and hash fragments during `/forum` redirection to `/community`. `PostCard.jsx` and `Forum.jsx` inspect `?postId=` and `?highlight=` / `#comment-...` to scroll and highlight target comments. `Messages.jsx` inspects `?userId=` to open active conversation threads.
+- **Frontend Presentation Layer**: `client/src/components/Navbar.jsx` renders the bell icon, unread counter badge, and dropdown menu. Implements Bell Read-on-Open invariant (`badgeContent={notifOpen ? 0 : unreadCount}` + async `markAsRead`), segmented tabs ("All" / "Unread"), bulk actions ("Mark all as read" / "Clear All"), distinct unread pip & background styling, and empty state illustrations.
+- **Test Infrastructure**: Automated unit and integration tests in `server/tests/notifications.test.js`, `client/src/hooks/useNotifications.test.js`, and `client/src/components/Navbar.test.jsx`.
 
 ## Feature Inventory
-| # | Feature / Problem | Description | Milestone | Source |
-|---|-------------------|-------------|-----------|--------|
-| 1 | P1: Fuzzy Deduplication & ML Ensemble | Multi-stage ML candidate pruning (temporal, length, trigrams) + Hybrid Ensemble (40% TF-IDF Cosine, 35% Jaro-Winkler, 25% Levenshtein) with draw/link/attendee merging | M1 | User Directive & Survey |
-| 2 | P2: Strict Temporal Horizon | Auto-archive elapsed tournaments (`endDate < Date.now()`), status filter in directory queries | M1 | Survey (tournaments.js:8, cronJobs.js:122) |
-| 3 | P3: Link Healthcheck Crawler | Routine HEAD/GET verifier, `linkStatus: 'expired'` badge, fallback to host club homepage | M1 | Survey (Tournament.js, Tournaments.jsx:760) |
-| 4 | P4: Title Sanitizer | Strip navigation debris ("Skip to main content", "a smashing sport", delimiters) without discarding | M1 | Survey (sanitizeScrapedTitle.js:75) |
-| 5 | P5: Instagram & Linktree Bio Link Resolution | Extract registration forms from Instagram bio links, Linktree, and Google Forms | M1 | User Directive (Instagram & Linktree) |
-| 6 | P6: Scraper Heap Pressure Ceiling | Stream Cheerio DOM parsing, getHeapPressureLimitBytes (<200MB), dynamic GC yield | M2 | Survey (autonomousHunter.js, scraper.js) |
-| 7 | P7: Atomic Redis Tagged Invalidation | SADD active keys, O(1) set-based cache eviction via UNLINK pipelines | M2 | Survey (tournaments.js:149, adminTournaments.js) |
-| 8 | P8: Database Query Projection | Project summary fields for directory queries, deferring brackets/attendees to detail endpoint | M2 | Survey (tournaments.js:75, Tournament.js) |
-| 9 | P9: Client-Side Virtualization | Virtualize directory card grid (`react-window`) & lazy flyer decoupling | M2 | Survey (Tournaments.jsx:594) |
-| 10 | P10: Bracket OCC Lock | Mongoose document versioning and WebSocket locks on bracket match progression | M3 | Survey (TournamentMatch.js, matchmaking.js) |
-| 11 | P11: Offline PWA IndexedDB Sync | Umpire pad offline state persistence with auto-replay on reconnect | M3 | Survey (UmpireDigitalPad.jsx) |
-| 12 | P12: Strict BWF Rules Engine | Official 21-pt rally scoring, 2-pt deuce lead, 30-pt ceiling, interval timers, side change at 11 | M3 | Survey (courts.js, UmpireDigitalPad.jsx) |
-| 13 | P13: RAC Court Deadlock Prevention | Dynamic match duration estimation, 10-min walkover forfeit timer, auto-advance Courts 1-6 | M3 | Survey (Court.js, courts.js) |
-| 14 | P14: Glicko-2 MMR Engine | Player rating deviation ($RD$) and volatility ($\sigma$) with inactivity decay | M3 | Survey (elo.js, User.js) |
-| 15 | P15: Bi-Directional Social Integrity | Atomic MongoDB transactional mutations for friend states & waitlist promotions | M4 | Survey (friends.js:127) |
-| 16 | P16: Feed Anti-Spam & Moderation | Automated spam analysis, rate limiting, and 3-report quarantine triggers | M4 | Survey (Post.js, forum.js) |
-| 17 | P17: Atomic Tournament RSVP Capping | Capacity enforcement and FIFO waitlist queue promotions | M4 | Survey (tournaments.js:112, Tournament.js) |
-| 18 | P18: Dynamic CORS Hardening | Restrict Render regex to GMU prefixes and preflight isolation for rate limiters | M2 | Survey (server.js:103) |
-| 19 | P19: WCAG 2.1 AA Compliance | Contrast ratio $\ge 4.5:1$, keyboard navigation rings, dynamic aria-live announcements | M4 | Survey (App.jsx:313, index.css) |
-| 20 | P20: 10-Persona Synthetic Bot Harness | Multi-user exploration harness testing all 20 workflows under heap pressure | M5 | Survey (userBotsSimulation.test.jsx) |
+| # | Feature | Description | Milestone | Source |
+|---|---------|-------------|-----------|--------|
+| 1 | Bell Read-on-Open Invariant | Clicking notification bell immediately clears badge to 0/hidden and triggers async mark-all-read API | M3 | R1 |
+| 2 | Backend Mark-All-Read & Sockets | `PUT /api/forum/notifications/:userId/read` marks all unread as read, returns counts, emits `notificationsMarkedRead` | M1 | R1, R4 |
+| 3 | Segmented View Filtering | "All" vs "Unread" toggle controls in notification dropdown filtering items dynamically | M3 | R2 |
+| 4 | Distinct Unread Styling | Unread items visually distinguished with circular indicator pip and subtle tinted background | M3 | R2 |
+| 5 | Bulk Actions ("Mark All Read" & "Clear All") | UI buttons to mark all read or clear all notifications with immediate feedback | M3 | R2 |
+| 6 | Backend Clear-All Endpoint | `DELETE /api/forum/notifications/:userId` deletes user notifications from DB, emits `notificationsCleared` | M1 | R2, R4 |
+| 7 | Contextual Empty States | Clean empty illustrations/text ("No notifications" for All; "All caught up" for Unread) | M3 | R2 |
+| 8 | Deep-Link Parameter Preservation | `App.jsx` preserves query params and hash when redirecting `/forum` to `/community` | M2 | R3 |
+| 9 | Target Entity Deep-Linking | Clicking notification item navigates to post comment, chat thread, or tournament and closes menu | M2, M3 | R3 |
+| 10 | Target Comment Highlighting | `PostCard.jsx` scrolls to and highlights target comment when `commentId` / `highlight` matches | M2 | R3 |
+| 11 | Direct Message Deep-Linking | `Messages.jsx` parses `?userId=` search parameter to activate chat conversation | M2 | R3 |
+| 12 | Real-Time Badge Increment (Menu Closed) | Incoming socket `newNotification` increments unread count and updates badge when dropdown is closed | M2 | R4 |
+| 13 | Smooth Real-Time Append (Menu Open) | Incoming socket `newNotification` prepends to notification list without race condition or duplication | M2 | R4 |
+| 14 | Cross-Tab Socket Synchronization | `notificationsMarkedRead` and `notificationsCleared` sync badge and list across all open tabs/devices | M1, M2 | R4 |
+| 15 | Notification Database Indexing | Compound indexes `{ targetUserId: 1, time: -1 }` and `{ targetUserId: 1, read: 1 }` in `Notification.js` | M1 | Survey |
+| 16 | Dedicated Backend Test Suite | `server/tests/notifications.test.js` covering all notification endpoints, auth checks, and sockets | M1 | Acceptance Criteria |
+| 17 | Notification Hook Test Suite | `client/src/hooks/useNotifications.test.js` testing initial fetch, actions, and socket sync | M2 | Acceptance Criteria |
+| 18 | Navbar Notification Test Suite | `client/src/components/Navbar.test.jsx` verifying bell click, badge clearing, tabs, and bulk actions | M3 | Acceptance Criteria |
+| 19 | 100% Full-Suite Test & Lint Pass | Full client & server test suites pass (100%), 0 lint warnings/errors, client build passes | M4 | Quality Gate |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M0 | Survey & Architecture Baseline | Survey codebase across all 20 problems | none | DONE |
-| M1 | Ingestion Deduplication & Reliability | P1, P2, P3, P4, P5 | M0 | DONE |
-| M2 | Performance, RAM Governance & Scaling | P6, P7, P8, P9, P18 | M1 | DONE |
-| M3 | Interactive Systems, BWF Umpire Pad & Fair Play | P10, P11, P12, P13, P14 | M2 | DONE |
-| M4 | Community Integrity & Accessibility | P15, P16, P17, P19 | M3 | DONE |
-| M5 | 10-Persona Synthetic Bot Verification & Victory Audit | P20, Full Suite Verification | M1, M2, M3, M4 | DONE |
+| M1 | Backend Notification Foundation & Sockets | Mongoose indexes, `PUT /read`, `DELETE /:userId`, socket events, `server/tests/notifications.test.js` | none | DONE |
+| M2 | Frontend Notification Hook & Deep-Link Routing | `useNotifications.js`, `App.jsx` redirect preservation, `Messages.jsx` & `PostCard.jsx` deep links, `useNotifications.test.js` | M1 Contracts | DONE |
+| M3 | Navbar Notification UI, Filtering & UX | Bell read-on-open handler, badge reset invariant, segmented tabs, bulk actions, unread pip/styling, `Navbar.test.jsx` | M2 | DONE |
+| M4 | Full Regression Verification & Quality Gate | Full client (`vitest`) and server (`jest`) test suites pass 100%, 0 lint errors/warnings, production build | M1, M2, M3 | DONE |
 
 ## Interface Contracts
 
-### 1. Ingestion Deduplication Engine (`server/utils/deduplication.js`)
-- `deduplicateTournament(candidate, existingTournaments, options)`:
-  - Input: candidate tournament object, array of existing tournaments, options `{ titleThreshold: 0.85, windowHours: 48 }`
-  - Output: `{ isDuplicate: Boolean, canonicalId: ObjectId|null, mergedData: Object, matchScore: Number }`
-  - Merges: union of `divisions`, `registrationUrl` fallback, `attendees` array, keeps earliest `startDate` and latest `endDate`.
+### Backend ↔ Frontend API Contract
 
-### 2. Link Health Checker (`server/utils/linkHealthChecker.js`)
-- `checkUrlHealth(url, timeoutMs)`:
-  - Input: URL string, timeout (e.g., 5000ms)
-  - Output: `{ linkStatus: 'valid' | 'expired' | 'fallback', httpStatus: Number, checkedAt: Date }`
-- `Tournament` Schema fields:
-  - `linkStatus`: `{ type: String, enum: ['valid', 'expired', 'warning', 'unchecked'], default: 'unchecked' }`
-  - `linkLastChecked`: `{ type: Date }`
-  - `fallbackRegistrationUrl`: `{ type: String }`
+#### 1. Fetch Notifications
+- **Endpoint**: `GET /api/forum/notifications/:userId`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response 200**:
+  ```json
+  [
+    {
+      "_id": "671fb2a0e28b1234567890ab",
+      "targetUserId": "660000000000000000000001",
+      "message": "string",
+      "link": "string",
+      "read": false,
+      "time": "2026-10-28T00:30:00.000Z"
+    }
+  ]
+  ```
 
-### 3. Title Sanitizer (`server/utils/sanitizeScrapedTitle.js`)
-- `cleanTitle(rawTitle)`:
-  - Strips leading/trailing/inline boilerplate: `"Skip to main content"`, `"A smashing sport for all ages"`, `"Select Your Sport"`, `"Menu Select"`.
-  - Normalizes whitespace and removes trailing delimiters (`-`, `|`, `/`).
-  - Preserves legitimate tournament names without returning `null` on slogan presence.
+#### 2. Mark All as Read
+- **Endpoint**: `PUT /api/forum/notifications/:userId/read`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response 200**:
+  ```json
+  {
+    "success": true,
+    "markedReadCount": 3,
+    "unreadCount": 0
+  }
+  ```
+- **Socket Emission**: `io.to(userId).emit("notificationsMarkedRead", { userId, unreadCount: 0 })`
 
-### 4. Scraper Heap Pressure Ceiling & GC Governance (`server/utils/autonomousHunter.js`)
-- `checkHeapPressure(limitBytes = 200 * 1024 * 1024)`:
-  - Returns `{ isHigh: Boolean, heapUsed: Number, heapLimit: Number, action: 'continue' | 'throttle' | 'pause' }`.
-- Cheerio dereferencing and V8 GC yielding (`await new Promise(r => setImmediate(r))`).
+#### 3. Clear All Notifications
+- **Endpoint**: `DELETE /api/forum/notifications/:userId`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response 200**:
+  ```json
+  {
+    "success": true,
+    "message": "All notifications cleared.",
+    "deletedCount": 12
+  }
+  ```
+- **Socket Emission**: `io.to(userId).emit("notificationsCleared", { userId })`
 
-### 5. Atomic Redis Tagged Invalidation (`server/utils/redis.js`)
-- `tagCacheKey(tag, key)`: `SADD tournaments:active_keys <key>`
-- `invalidateCacheTag(tag)`: Atomically gets all members from `tournaments:active_keys`, unlinks keys in a pipeline, and deletes the tag set.
+#### 4. Mark Single as Read
+- **Endpoint**: `PUT /api/forum/notifications/single/:notifId/read`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response 200**:
+  ```json
+  {
+    "success": true,
+    "notification": {
+      "_id": "671fb2a0e28b1234567890ab",
+      "read": true
+    }
+  }
+  ```
+- **Socket Emission**: `io.to(targetUserId).emit("notificationRead", { notifId, read: true })`
 
-### 6. Query Projection for Directory Listings (`server/routes/tournaments.js`)
-- `GET /api/tournaments`:
-  - Selects only: `_id tournamentName startDate endDate location city state venue entryFee registrationDeadline registrationUrl linkStatus status isArchived confidenceScore divisions.divisionName divisions.maxDraw divisionCount attendeeCount bannerUrl sourceUrl`.
-  - Excludes: `divisions.matches`, `divisions.teams`, `divisions.brackets`, full `attendees` objects.
+### Socket.io Event Contracts
+- `newNotification` (Server $\to$ User Room): `{ _id, targetUserId, message, link, read: false, time }`
+- `notificationsMarkedRead` (Server $\to$ User Room): `{ userId, unreadCount: 0 }`
+- `notificationsCleared` (Server $\to$ User Room): `{ userId }`
+- `notificationRead` (Server $\to$ User Room): `{ notifId, read: true }`
 
-### 7. Client-Side Virtualized Directory Card Grid (`client/src/pages/Tournaments.jsx`)
-- Virtualized list or windowed grid rendering for tournament cards.
-- `<LazyFlyerImage src={bannerUrl} alt={name} />` with placeholder skeleton.
-
-### 8. Dynamic CORS Hardening & Rate-Limiting Preflight Isolation (`server/index.js` or `server/server.js`)
-- Dynamic origin verification whitelist: GMU domains, localhost, staging.
-- Preflight `OPTIONS` exemption from express-rate-limit (`skip: (req) => req.method === 'OPTIONS'`).
-- 204 response on `OPTIONS` with `Access-Control-Max-Age: 86400`.
+### Frontend Hook Contract (`useNotifications`)
+```typescript
+interface UseNotificationsReturn {
+  notifications: Array<NotificationItem>;
+  unreadCount: number;
+  unreadMessages: number;
+  loading: boolean;
+  markAsRead: () => Promise<void>;
+  markSingleAsRead: (id: string) => Promise<void>;
+  clearNotifications: () => Promise<void>;
+}
+```
 
 ## Code Layout
-- Backend: `server/`
-  - Ingestion: `server/utils/autonomousHunter.js`, `server/utils/deduplication.js`, `server/utils/linkHealthChecker.js`, `server/utils/sanitizeScrapedTitle.js`, `server/utils/instagramScraper.js`
-  - Cache: `server/utils/redis.js`
-  - Models: `server/models/Tournament.js`, `server/models/ProposedTournament.js`, `server/models/Court.js`, `server/models/User.js`, `server/models/TournamentMatch.js`, `server/models/Post.js`
-  - Routes: `server/routes/tournaments.js`, `server/routes/adminTournaments.js`, `server/routes/courts.js`, `server/routes/friends.js`, `server/routes/forum.js`
-  - Tests: `server/tests/`
-- Frontend: `client/`
-  - Pages: `client/src/pages/Tournaments.jsx`, `client/src/pages/admin/TournamentApprovals.jsx`, `client/src/pages/Matchmaking.jsx`, `client/src/pages/Community.jsx`
-  - Components: `client/src/components/TournamentBracket.jsx`, `client/src/components/UmpireDigitalPad.jsx`, `client/src/components/CourtQueueViewer.jsx`, `client/src/components/LazyFlyerImage.jsx`
-  - Tests: `client/src/`
-
+- `server/models/Notification.js`: Notification schema and compound indexes.
+- `server/routes/forum.js`: Notification API routes and socket dispatch helper.
+- `server/tests/notifications.test.js`: Integration tests for notification endpoints and socket events.
+- `client/src/hooks/useNotifications.js`: Notification state, socket listeners, and API actions.
+- `client/src/hooks/useNotifications.test.js`: Unit tests for `useNotifications` hook.
+- `client/src/App.jsx`: Route table with query-preserving `/forum` redirect.
+- `client/src/pages/Messages.jsx`: Chat thread selection via `?userId=` parameter.
+- `client/src/components/forum/PostCard.jsx`: Comment highlighting via query and hash params.
+- `client/src/components/Navbar.jsx`: Bell button, badge counter, dropdown menu, tabs, bulk actions, and item rendering.
+- `client/src/components/Navbar.test.jsx`: Unit tests for Navbar notification interactions.
