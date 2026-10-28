@@ -4,6 +4,7 @@ import PostCard from './PostCard';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import apiFetch from '../utils/api';
+import socket from '../utils/socket';
 
 // Mock the API calls and navigate
 const mockNavigate = vi.fn();
@@ -535,5 +536,174 @@ describe('PostCard Component QA Tests', () => {
 
         expect(screen.getByTestId('badge-community-guide')).toBeInTheDocument();
         expect(screen.getByText('Community Guide')).toBeInTheDocument();
+    });
+
+    // ── Milestone 2: J1 Facebook Reactions Dock ─────────────────────────────
+
+    it('reveals 6 Facebook reactions in dock on hover and allows reacting with Love', async () => {
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                ...mockPost,
+                reactions: [{ userId: mockUser.id, emoji: '❤️', reactionType: 'love' }]
+            })
+        });
+
+        const { container } = renderWithContext(mockPost, mockUser);
+        const reactBtn = screen.getByRole('button', { name: /React to post/i });
+        const reactionBox = reactBtn.closest('.MuiBox-root');
+
+        // Hover over the reaction box to trigger the dock
+        fireEvent.mouseEnter(reactionBox || container);
+
+        const dock = await screen.findByTestId('reactions-dock');
+        expect(dock).toBeInTheDocument();
+        expect(within(dock).getByText('👍')).toBeInTheDocument();
+        expect(within(dock).getByText('❤️')).toBeInTheDocument();
+        expect(within(dock).getByText('🏸')).toBeInTheDocument();
+        expect(within(dock).getByText('😮')).toBeInTheDocument();
+        expect(within(dock).getByText('😂')).toBeInTheDocument();
+        expect(within(dock).getByText('😢')).toBeInTheDocument();
+
+        // Click Love reaction
+        const loveBtn = within(dock).getByRole('button', { name: /React with Love/i });
+        fireEvent.click(loveBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                expect.stringContaining(`/api/forum/${mockPost._id}/react`),
+                expect.objectContaining({
+                    method: 'POST',
+                    body: JSON.stringify({ emoji: '❤️' })
+                })
+            );
+            expect(within(reactBtn).getByText('❤️')).toBeInTheDocument();
+            expect(within(reactBtn).getByText('Love')).toBeInTheDocument();
+        });
+    });
+
+    it('updates reactions in real-time when socket reactionUpdated event is emitted', async () => {
+        renderWithContext(mockPost, mockUser);
+
+        // Emit reactionUpdated on client socket
+        socket.emit('reactionUpdated', {
+            postId: mockPost._id,
+            reactions: [
+                { userId: 'u-1', emoji: '❤️', reactionType: 'love' },
+                { userId: 'u-2', emoji: '😮', reactionType: 'wow' }
+            ],
+            action: 'added'
+        });
+
+        // Trigger the socket callback registered in PostCard
+        const listeners = socket.listeners ? socket.listeners('reactionUpdated') : [];
+        if (listeners.length > 0) {
+            listeners.forEach(fn => fn({
+                postId: mockPost._id,
+                reactions: [
+                    { userId: 'u-1', emoji: '❤️', reactionType: 'love' },
+                    { userId: 'u-2', emoji: '😮', reactionType: 'wow' }
+                ]
+            }));
+        }
+
+        await waitFor(() => {
+            const reactionsBtn = screen.getByTestId('view-reactions-btn');
+            expect(reactionsBtn).toHaveTextContent('2');
+        });
+    });
+
+    // ── Milestone 2: J5 Post Pinning Hierarchy ──────────────────────────────
+
+    it('allows post author to toggle pin megathread from 3-dots card menu', async () => {
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ message: 'Post pin toggled', isPinned: true })
+        });
+
+        renderWithContext(mockPost, mockUser);
+
+        const moreBtn = screen.getByRole('button', { name: /more options/i });
+        fireEvent.click(moreBtn);
+
+        const pinOption = screen.getByRole('menuitem', { name: /📌 Pin Megathread/i });
+        expect(pinOption).toBeInTheDocument();
+        fireEvent.click(pinOption);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                `/api/forum/${mockPost._id}/pin`,
+                expect.objectContaining({ method: 'PUT' })
+            );
+        });
+    });
+
+    // ── Milestone 2: J6 Audience Privacy Indicators ─────────────────────────
+
+    it('renders audience privacy icons (Public, Friends Only, Only Me) with tooltips', () => {
+        const publicPost = { ...mockPost, visibility: 'PUBLIC' };
+        const { unmount: unmount1 } = renderWithContext(publicPost, mockUser);
+        expect(screen.getByLabelText(/Privacy: Public/i)).toBeInTheDocument();
+        unmount1();
+
+        const friendsPost = { ...mockPost, visibility: 'FRIENDS_ONLY' };
+        const { unmount: unmount2 } = renderWithContext(friendsPost, mockUser);
+        expect(screen.getByLabelText(/Privacy: Friends Only/i)).toBeInTheDocument();
+        unmount2();
+
+        const privatePost = { ...mockPost, visibility: 'ONLY_ME' };
+        renderWithContext(privatePost, mockUser);
+        expect(screen.getByLabelText(/Privacy: Only Me/i)).toBeInTheDocument();
+    });
+
+    // ── Milestone 2: J7 ShareModal & Quote Preview Card ─────────────────────
+
+    it('renders quote preview card when post is a repost of originalPost', () => {
+        const repost = {
+            ...mockPost,
+            _id: 'repost-999',
+            title: 'My thoughts on tournament',
+            content: 'Great event announced by the club!',
+            originalPostId: 'orig-post-1',
+            originalPost: {
+                _id: 'orig-post-1',
+                authorName: 'President Alex',
+                title: 'Spring Open 2026 Announcement',
+                content: 'Full bracket and registration details inside.',
+                category: 'meetup_rally'
+            }
+        };
+
+        renderWithContext(repost, mockUser);
+
+        const quoteCard = screen.getByTestId('post-quote-card');
+        expect(quoteCard).toBeInTheDocument();
+        expect(within(quoteCard).getByText('President Alex')).toBeInTheDocument();
+        expect(within(quoteCard).getByText('Spring Open 2026 Announcement')).toBeInTheDocument();
+        expect(within(quoteCard).getByText(/Full bracket and registration details/)).toBeInTheDocument();
+    });
+
+    it('opens ShareModal dialog when clicking share button', () => {
+        renderWithContext(mockPost, mockUser);
+        const shareBtn = screen.getByRole('button', { name: /share/i });
+        fireEvent.click(shareBtn);
+
+        expect(screen.getByTestId('share-modal')).toBeInTheDocument();
+        expect(screen.getByText('Share Post')).toBeInTheDocument();
+    });
+
+    // ── Milestone 2: J9 Post Edit Transparency ──────────────────────────────
+
+    it('renders (Edited) badge with tooltip when post.isEdited is true', () => {
+        const editedPost = {
+            ...mockPost,
+            isEdited: true,
+            editedAt: new Date().toISOString()
+        };
+
+        renderWithContext(editedPost, mockUser);
+        const editedBadge = screen.getByTestId('post-edited-badge');
+        expect(editedBadge).toBeInTheDocument();
+        expect(editedBadge).toHaveTextContent('(Edited)');
     });
 });

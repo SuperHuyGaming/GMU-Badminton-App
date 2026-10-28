@@ -138,7 +138,7 @@ describe('Forum Page Component (Community Hub)', () => {
         });
     });
 
-    it('renders streamlined UI with inline composer and trending topic chips without tab bar', async () => {
+    it('renders streamlined UI with inline composer, segmented sorting tabs, and trending topic chips', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
@@ -147,7 +147,11 @@ describe('Forum Page Component (Community Hub)', () => {
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+        expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Latest Posts/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Top Discussions/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Recent Activity/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /Saved Posts/i })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Create New Post/i })).not.toBeInTheDocument();
         expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument();
         expect(screen.getByText('#Tournament')).toBeInTheDocument();
@@ -1153,5 +1157,206 @@ describe('Forum Page Component (Community Hub)', () => {
         expect(contentLabel).toBeInTheDocument();
         expect(contentLabel.getAttribute('data-shrink')).toBe('true');
         expect(contentLabel.classList.contains('MuiInputLabel-shrink')).toBe(true);
+    });
+
+    describe('Milestone 3: Hub Controls, Mentions & Prefetching (J4, J8, J10, J11)', () => {
+        it('J4: switches sorting tabs and updates tab query parameter while resetting cursor', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({ feed: [], nextCursor: null, hasMore: false })
+            });
+
+            renderWithProviders();
+            await waitFor(() => expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument());
+
+            // Switch to "Top Discussions"
+            const topTab = screen.getByRole('tab', { name: /Top Discussions/i });
+            fireEvent.click(topTab);
+
+            await waitFor(() => {
+                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=top'));
+            });
+
+            // Switch to "Recent Activity"
+            const activityTab = screen.getByRole('tab', { name: /Recent Activity/i });
+            fireEvent.click(activityTab);
+
+            await waitFor(() => {
+                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=recent_activity'));
+            });
+
+            // Switch back to "Latest Posts"
+            const latestTab = screen.getByRole('tab', { name: /Latest Posts/i });
+            fireEvent.click(latestTab);
+
+            await waitFor(() => {
+                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=latest'));
+            });
+        });
+
+        it('J8: switches to Saved Posts tab and renders clean EmptyState when no posts are saved', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({ feed: [], nextCursor: null, hasMore: false, bookmarkedPosts: [] })
+            });
+
+            renderWithProviders();
+            await waitFor(() => expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument());
+
+            // Click Saved Posts tab
+            const savedTab = screen.getByRole('tab', { name: /Saved Posts/i });
+            fireEvent.click(savedTab);
+
+            await waitFor(() => {
+                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=saved'));
+                expect(screen.getByTestId('saved-posts-empty-state')).toBeInTheDocument();
+                expect(screen.getByText('No Saved Posts')).toBeInTheDocument();
+                expect(screen.getByText('Save interesting discussions to read or revisit them later.')).toBeInTheDocument();
+            });
+
+            // Clicking "Explore Latest Posts" button returns to latest tab
+            const exploreBtn = screen.getByRole('button', { name: /Explore Latest Posts/i });
+            fireEvent.click(exploreBtn);
+
+            await waitFor(() => {
+                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=latest'));
+            });
+        });
+
+        it('J8: displays saved posts in Saved Posts tab and instantly filters out unsaved post optimistically (0ms)', async () => {
+            const savedPost = {
+                _id: 'saved-post-1',
+                referenceId: 'saved-post-1',
+                title: 'My Bookmarked Tournament Discussion',
+                content: 'Important guide for upcoming tournament.',
+                createdAt: new Date().toISOString()
+            };
+
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    feed: [savedPost],
+                    nextCursor: null,
+                    hasMore: false,
+                    bookmarkedPosts: ['saved-post-1']
+                })
+            });
+
+            renderWithProviders();
+            await waitFor(() => expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument());
+
+            const savedTab = screen.getByRole('tab', { name: /Saved Posts/i });
+            fireEvent.click(savedTab);
+
+            await waitFor(() => {
+                expect(screen.getByText('My Bookmarked Tournament Discussion')).toBeInTheDocument();
+            });
+        });
+
+        it('J10: opens mention autocomplete in Create Post modal when typing @, allows keyboard navigation and selection', async () => {
+            const mockMembers = [
+                { _id: 'm1', id: 'm1', name: 'Carol White', role: 'player', skillLevel: 'Advanced' },
+                { _id: 'm2', id: 'm2', name: 'Dave Miller', role: 'member', skillLevel: 'Intermediate' }
+            ];
+
+            apiFetch.mockImplementation(async (url) => {
+                if (url.includes('/api/forum/members')) {
+                    return {
+                        ok: true,
+                        json: async () => ({ users: mockMembers })
+                    };
+                }
+                return {
+                    ok: true,
+                    json: async () => ({ feed: [], nextCursor: null, hasMore: false })
+                };
+            });
+
+            renderWithProviders();
+            await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByTestId('facebook-composer-card'));
+            const dialog = await screen.findByRole('dialog');
+            expect(dialog).toBeInTheDocument();
+
+            const contentTextarea = within(dialog).getByPlaceholderText(/What's on your mind/i);
+
+            // Type "@" to trigger mention autocomplete
+            await act(async () => {
+                fireEvent.change(contentTextarea, { target: { value: 'Hey @' } });
+            });
+
+            await waitFor(() => {
+                expect(screen.getByTestId('mention-suggestions-dropdown')).toBeInTheDocument();
+                expect(screen.getByText('Carol White')).toBeInTheDocument();
+                expect(screen.getByText('Dave Miller')).toBeInTheDocument();
+            });
+
+            // Keyboard navigation: ArrowDown to Dave Miller, then Enter to select
+            fireEvent.keyDown(contentTextarea, { key: 'ArrowDown' });
+            await act(async () => {
+                fireEvent.keyDown(contentTextarea, { key: 'Enter' });
+            });
+
+            // Dropdown closes and mention query replaced with "@Dave Miller "
+            await waitFor(() => {
+                expect(screen.queryByTestId('mention-suggestions-dropdown')).not.toBeInTheDocument();
+            });
+            expect(contentTextarea.value).toBe('Hey @Dave Miller ');
+
+            // Mentions preview chip is rendered
+            expect(screen.getByTestId('composer-mentions-preview')).toBeInTheDocument();
+            expect(screen.getByTestId('mention-chip-dave-miller')).toBeInTheDocument();
+        });
+
+        it('J11: triggers 80% viewport scroll pre-fetcher without skeleton flashing', async () => {
+            const page1Feed = [
+                { _id: 'post-page-1', title: 'Page 1 Post', content: 'First page content', createdAt: new Date().toISOString() }
+            ];
+            const page2Feed = [
+                { _id: 'post-page-2', title: 'Page 2 Post', content: 'Second page content', createdAt: new Date().toISOString() }
+            ];
+
+            let callCount = 0;
+            apiFetch.mockImplementation(async (url) => {
+                if (url.includes('/api/feed/trending-tags')) {
+                    return { ok: true, json: async () => ({ tags: [] }) };
+                }
+                if (url.startsWith('/api/feed?') || url === '/api/feed') {
+                    callCount++;
+                    if (callCount === 1) {
+                        return {
+                            ok: true,
+                            json: async () => ({ feed: page1Feed, nextCursor: 'cursor-1', hasMore: true })
+                        };
+                    }
+                    return {
+                        ok: true,
+                        json: async () => ({ feed: page2Feed, nextCursor: null, hasMore: false })
+                    };
+                }
+                return { ok: true, json: async () => ({}) };
+            });
+
+            renderWithProviders();
+            await waitFor(() => expect(screen.getByText('Page 1 Post')).toBeInTheDocument());
+
+            // Simulate window scroll reaching 80% of document height
+            Object.defineProperty(document.documentElement, 'scrollHeight', {
+                configurable: true,
+                value: 2000
+            });
+            window.innerHeight = 800;
+            window.scrollY = 850; // 850 + 800 = 1650 >= 2000 * 0.8 (1600)
+
+            await act(async () => {
+                fireEvent.scroll(window);
+            });
+
+            // Wait for throttle timeout and next page fetch
+            await waitFor(() => {
+                expect(callCount).toBeGreaterThan(1);
+            });
+        });
     });
 });

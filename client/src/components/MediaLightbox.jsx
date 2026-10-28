@@ -20,6 +20,8 @@ export default function MediaLightbox({
 	authorPic = "",
 }) {
 	const [currentIndex, setCurrentIndex] = React.useState(initialIndex);
+	const touchStartX = React.useRef(null);
+	const touchStartY = React.useRef(null);
 
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
@@ -35,6 +37,33 @@ export default function MediaLightbox({
 	const handleNext = useCallback(() => {
 		setCurrentIndex((prev) => (prev < total - 1 ? prev + 1 : 0));
 	}, [total]);
+
+	// Touch swipe navigation for mobile (50px delta threshold)
+	const handleTouchStart = (e) => {
+		if (e.touches && e.touches.length > 0) {
+			touchStartX.current = e.touches[0].clientX;
+			touchStartY.current = e.touches[0].clientY;
+		}
+	};
+
+	const handleTouchEnd = (e) => {
+		if (touchStartX.current === null) return;
+		if (e.changedTouches && e.changedTouches.length > 0) {
+			const touchEndX = e.changedTouches[0].clientX;
+			const touchEndY = e.changedTouches[0].clientY;
+			const diffX = touchEndX - touchStartX.current;
+			const diffY = touchEndY - (touchStartY.current || 0);
+			if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
+				if (diffX < 0) {
+					handleNext(); // swiped left -> next
+				} else {
+					handlePrev(); // swiped right -> prev
+				}
+			}
+		}
+		touchStartX.current = null;
+		touchStartY.current = null;
+	};
 
 	// Keyboard arrow navigation
 	useEffect(() => {
@@ -166,6 +195,9 @@ export default function MediaLightbox({
 
 			{/* MAIN IMAGE DISPLAY WITH PREV/NEXT ARROWS */}
 			<Box
+				data-testid="lightbox-main-container"
+				onTouchStart={handleTouchStart}
+				onTouchEnd={handleTouchEnd}
 				sx={{
 					position: "relative",
 					flex: 1,

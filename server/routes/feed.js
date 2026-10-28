@@ -101,7 +101,7 @@ router.get("/trending-tags", async (req, res, next) => {
 
 router.get("/", authMiddleware, async (req, res, next) => {
 	try {
-		const allowedTabs = ["saved", "latest", "top", "foryou"];
+		const allowedTabs = ["saved", "latest", "top", "foryou", "activity", "recent_activity", "recent"];
 		const tab = allowedTabs.includes(req.query.tab) ? req.query.tab : "foryou";
 		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
 		const cursor = req.query.cursor; // The _id of the last item
@@ -109,8 +109,8 @@ router.get("/", authMiddleware, async (req, res, next) => {
 		const parsedSessionTime = req.query.sessionTime ? parseInt(req.query.sessionTime, 10) : NaN;
 		const sessionTime = !isNaN(parsedSessionTime) ? new Date(parsedSessionTime) : new Date();
 
-		const userDoc = await User.findById(req.user.id).select("skillLevel bookmarkedPosts");
-		const currentUser = userDoc || { skillLevel: "Beginner", bookmarkedPosts: [] };
+		const userDoc = await User.findById(req.user.id).select("skillLevel bookmarkedPosts savedPosts friends");
+		const currentUser = userDoc || { skillLevel: "Beginner", bookmarkedPosts: [], savedPosts: [], friends: [] };
 
 		const rawQuerySearch = typeof req.query.search === "string"
 			? req.query.search
@@ -131,14 +131,36 @@ router.get("/", authMiddleware, async (req, res, next) => {
 			return res.json(cached.data);
 		}
 
+		const userId = req.user.id ? req.user.id.toString() : "";
+		const userObjId = mongoose.isValidObjectId(userId) ? new mongoose.Types.ObjectId(userId) : null;
+		const friendIds = Array.isArray(currentUser.friends)
+			? currentUser.friends.map(f => (f._id ? f._id.toString() : f.toString()))
+			: [];
+		const friendObjIds = friendIds
+			.filter(id => mongoose.isValidObjectId(id))
+			.map(id => new mongoose.Types.ObjectId(id));
+
+		const visibilityOr = [
+			{ visibility: 'PUBLIC' },
+			{ visibility: { $exists: false } },
+		];
+		if (userObjId) {
+			visibilityOr.push({ authorId: userObjId });
+			visibilityOr.push({ authorId: userId });
+		} else if (userId) {
+			visibilityOr.push({ authorId: userId });
+		}
+		if (friendIds.length > 0) {
+			visibilityOr.push({
+				visibility: 'FRIENDS_ONLY',
+				authorId: { $in: [...friendIds, ...friendObjIds] }
+			});
+		}
+
 		let matchStage = {
 			status: { $nin: ["quarantined", "deleted"] },
 			isFlagged: { $ne: true },
-			$or: [
-				{ visibility: 'PUBLIC' },
-				{ visibility: { $exists: false } }, // backward compatibility
-				{ authorId: mongoose.isValidObjectId(req.user.id) ? new mongoose.Types.ObjectId(req.user.id) : req.user.id }
-			]
+			$or: visibilityOr
 		};
 
 		if (req.query.tag && typeof req.query.tag === "string") {
@@ -220,7 +242,11 @@ router.get("/", authMiddleware, async (req, res, next) => {
 		}
 
 		if (tab === "saved") {
-			matchStage.referenceId = { $in: currentUser.bookmarkedPosts || [] };
+			const savedIds = [
+				...(currentUser.savedPosts || []),
+				...(currentUser.bookmarkedPosts || [])
+			];
+			matchStage.referenceId = { $in: savedIds };
 			matchStage.type = "post";
 			if (lastDoc) {
 				matchStage.createdAt = {
@@ -233,7 +259,13 @@ router.get("/", authMiddleware, async (req, res, next) => {
 			const hasMore = feedItems.length > limit;
 			if (hasMore) feedItems.pop();
 			const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
-			const payload = { feed: feedItems, hasMore, nextCursor, bookmarkedPosts: currentUser.bookmarkedPosts || [] };
+			const payload = {
+				feed: feedItems,
+				hasMore,
+				nextCursor,
+				bookmarkedPosts: currentUser.bookmarkedPosts || [],
+				savedPosts: currentUser.savedPosts || currentUser.bookmarkedPosts || []
+			};
 			const etag = feedCache.set(cacheKey, payload, 30);
 			res.setHeader("ETag", etag);
 			res.setHeader("X-Feed-Cache", "MISS");
@@ -251,7 +283,37 @@ router.get("/", authMiddleware, async (req, res, next) => {
 			const hasMore = feedItems.length > limit;
 			if (hasMore) feedItems.pop();
 			const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
-			const payload = { feed: feedItems, hasMore, nextCursor, bookmarkedPosts: currentUser.bookmarkedPosts || [] };
+			const payload = {
+				feed: feedItems,
+				hasMore,
+				nextCursor,
+				bookmarkedPosts: currentUser.bookmarkedPosts || [],
+				savedPosts: currentUser.savedPosts || currentUser.bookmarkedPosts || []
+			};
+			const etag = feedCache.set(cacheKey, payload, 30);
+			res.setHeader("ETag", etag);
+			res.setHeader("X-Feed-Cache", "MISS");
+			return res.json(payload);
+		}
+
+		if (tab === "recent_activity" || tab === "activity" || tab === "recent") {
+			if (lastDoc) {
+				matchStage.lastActivityAt = {
+					...(matchStage.lastActivityAt || {}),
+					$lt: lastDoc.lastActivityAt || lastDoc.createdAt
+				};
+			}
+			const feedItems = await ActivityFeed.find(matchStage).sort({ isPinned: -1, lastActivityAt: -1, createdAt: -1 }).limit(limit + 1).lean();
+			const hasMore = feedItems.length > limit;
+			if (hasMore) feedItems.pop();
+			const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
+			const payload = {
+				feed: feedItems,
+				hasMore,
+				nextCursor,
+				bookmarkedPosts: currentUser.bookmarkedPosts || [],
+				savedPosts: currentUser.savedPosts || currentUser.bookmarkedPosts || []
+			};
 			const etag = feedCache.set(cacheKey, payload, 30);
 			res.setHeader("ETag", etag);
 			res.setHeader("X-Feed-Cache", "MISS");
@@ -341,7 +403,11 @@ router.get("/", authMiddleware, async (req, res, next) => {
 				});
 			}
 
-			pipeline.push({ $sort: { isPinned: -1, velocityScore: -1, _id: -1 } });
+			if (isForYou) {
+				pipeline.push({ $sort: { isPinned: -1, velocityScore: -1, _id: -1 } });
+			} else {
+				pipeline.push({ $sort: { isPinned: -1, score: -1, createdAt: -1, _id: -1 } });
+			}
 			pipeline.push({ $limit: limit + 1 });
 
 			const feedItems = await ActivityFeed.aggregate(pipeline);
@@ -349,7 +415,13 @@ router.get("/", authMiddleware, async (req, res, next) => {
 			if (hasMore) feedItems.pop();
 			const nextCursor = feedItems.length > 0 ? feedItems[feedItems.length - 1]._id : null;
 
-			const payload = { feed: feedItems, hasMore, nextCursor, bookmarkedPosts: currentUser.bookmarkedPosts || [] };
+			const payload = {
+				feed: feedItems,
+				hasMore,
+				nextCursor,
+				bookmarkedPosts: currentUser.bookmarkedPosts || [],
+				savedPosts: currentUser.savedPosts || currentUser.bookmarkedPosts || []
+			};
 			const etag = feedCache.set(cacheKey, payload, 30);
 			res.setHeader("ETag", etag);
 			res.setHeader("X-Feed-Cache", "MISS");

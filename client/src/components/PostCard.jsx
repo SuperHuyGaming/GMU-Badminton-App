@@ -1,7 +1,7 @@
 // client/src/components/PostCard.jsx
 // eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { motion, useAnimation } from "framer-motion";
+import { motion, useAnimation, AnimatePresence } from "framer-motion";
 import socket from "../utils/socket";
 import apiFetch from "../utils/api";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
@@ -31,12 +31,12 @@ import {
 	Select,
 } from "@mui/material";
 
-// Badminton Reaction Trio
-const BADMINTON_REACTIONS = [
-	{ emoji: "💥", type: "smash", label: "Smash", tooltip: "Smash (Like/Hype)" },
-	{ emoji: "🧊", type: "ice_drop", label: "Ice Drop", tooltip: "Ice Drop (IDK/Cold)" },
-	{ emoji: "⚡", type: "clutch", label: "Clutch", tooltip: "Clutch (Game-Winner)" },
-];
+// Facebook Reactions & Legacy Compatibility
+import {
+	FACEBOOK_REACTIONS,
+	ALL_REACTIONS,
+	getReactionMeta,
+} from "../constants/reactions";
 
 const CATEGORY_CONFIG = {
 	general: { label: "General", bg: "rgba(0, 0, 0, 0.05)", color: "text.secondary", border: "rgba(0, 0, 0, 0.12)" },
@@ -55,6 +55,7 @@ import LikesModal from "./LikesModal";
 import PostCommentsInline from "./PostCommentsInline";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import MediaLightbox from "./MediaLightbox";
+import ShareModal from "./ShareModal";
 
 // In-memory cache for fetched comments to ensure instant re-rendering and prevent vanishing on re-renders
 const postCommentsMemoryCache = new Map();
@@ -208,6 +209,78 @@ const renderFacebookReactionIcon = (emoji) => {
 					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>👍</span>
 				</Box>
 			);
+		case "❤️":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #FF4B72 0%, #FA383E 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						fontSize: "0.75rem",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					❤️
+				</Box>
+			);
+		case "😮":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #F7B125 0%, #FFC107 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						fontSize: "0.75rem",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					😮
+				</Box>
+			);
+		case "😂":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #F7B125 0%, #FFC107 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						fontSize: "0.75rem",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					😂
+				</Box>
+			);
+		case "😢":
+			return (
+				<Box
+					sx={{
+						width: 20,
+						height: 20,
+						borderRadius: "50%",
+						background: "linear-gradient(135deg, #1877F2 0%, #0084FF 100%)",
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						fontSize: "0.75rem",
+						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+					}}
+				>
+					😢
+				</Box>
+			);
 		default:
 			return (
 				<Box
@@ -229,6 +302,64 @@ const renderFacebookReactionIcon = (emoji) => {
 	}
 };
 
+// J6 Audience Privacy Indicator Icon
+const renderPrivacyIcon = (visibility) => {
+	switch (visibility) {
+		case "ONLY_ME":
+			return (
+				<Tooltip title="Only Me" arrow placement="top">
+					<Box
+						component="span"
+						data-testid="post-privacy-icon"
+						aria-label="Privacy: Only Me"
+						sx={{ display: "inline-flex", alignItems: "center", ml: 0.75, color: "text.secondary", verticalAlign: "middle" }}
+					>
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+							<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+						</svg>
+					</Box>
+				</Tooltip>
+			);
+		case "FRIENDS_ONLY":
+			return (
+				<Tooltip title="Friends Only" arrow placement="top">
+					<Box
+						component="span"
+						data-testid="post-privacy-icon"
+						aria-label="Privacy: Friends Only"
+						sx={{ display: "inline-flex", alignItems: "center", ml: 0.75, color: "text.secondary", verticalAlign: "middle" }}
+					>
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+							<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+							<circle cx="9" cy="7" r="4" />
+							<path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+							<path d="M16 3.13a4 4 0 0 1 0 7.75" />
+						</svg>
+					</Box>
+				</Tooltip>
+			);
+		case "PUBLIC":
+		default:
+			return (
+				<Tooltip title="Public" arrow placement="top">
+					<Box
+						component="span"
+						data-testid="post-privacy-icon"
+						aria-label="Privacy: Public"
+						sx={{ display: "inline-flex", alignItems: "center", ml: 0.75, color: "text.secondary", verticalAlign: "middle" }}
+					>
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+							<circle cx="12" cy="12" r="10" />
+							<line x1="2" y1="12" x2="22" y2="12" />
+							<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+						</svg>
+					</Box>
+				</Tooltip>
+			);
+	}
+};
+
 // eslint-disable-next-line no-unused-vars
 export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false, isAuthorOnline = false }) {
 	const navigate = useNavigate();
@@ -239,6 +370,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+	const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
 	const isAuthor = Boolean(localPost?.authorId && currentUserId && String(localPost.authorId) === String(currentUserId));
 
@@ -435,11 +567,23 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 			}
 		};
 
+		const handleReactionUpdated = (payload) => {
+			const targetId = String(localPost._id || localPost.referenceId || "");
+			if (payload && targetId && String(payload.postId) === targetId) {
+				setLocalPost(prev => ({
+					...prev,
+					reactions: payload.reactions || prev.reactions,
+				}));
+			}
+		};
+
 		socket.on("postUpdated", handlePostUpdated);
+		socket.on("reactionUpdated", handleReactionUpdated);
 		return () => {
 			socket.off("postUpdated", handlePostUpdated);
+			socket.off("reactionUpdated", handleReactionUpdated);
 		};
-	}, [localPost._id]);
+	}, [localPost._id, localPost.referenceId]);
 
 	useEffect(() => {
 		const isTargetPost = urlPostId === localPost._id;
@@ -561,9 +705,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		// Optimistic reaction update
 		const prevReactions = localPost.reactions || [];
 		const existingIndex = prevReactions.findIndex(
-			(r) => r && String(r.userId) === String(currentUserId)
+			(r) => r && String(r.userId || r._id || r.id) === String(currentUserId)
 		);
 		let updatedReactions = [...prevReactions];
+		const reactionMeta = getReactionMeta(emoji);
 		if (existingIndex > -1) {
 			if (prevReactions[existingIndex].emoji === emoji) {
 				// Same emoji -> toggle off
@@ -573,7 +718,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				updatedReactions[existingIndex] = {
 					...updatedReactions[existingIndex],
 					emoji,
-					reactionType: BADMINTON_REACTIONS.find((b) => b.emoji === emoji)?.type || "custom",
+					reactionType: reactionMeta?.type || "custom",
 				};
 			}
 		} else {
@@ -582,7 +727,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				userId: currentUserId,
 				userName: currentUser?.name || "Player",
 				emoji,
-				reactionType: BADMINTON_REACTIONS.find((b) => b.emoji === emoji)?.type || "custom",
+				reactionType: reactionMeta?.type || "custom",
 				createdAt: new Date(),
 			});
 		}
@@ -590,13 +735,19 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 		try {
 			const res = await apiFetch(`/api/forum/${targetPostId}/react`, {
-				method: "PUT",
+				method: "POST",
 				body: JSON.stringify({ emoji }),
 			});
 			if (res && res.ok) {
 				const updated = await res.json();
-				if (updated && (updated._id || updated.referenceId)) {
-					setLocalPost(prev => ({ ...prev, ...updated, _id: prev._id, reactions: updated.reactions || prev.reactions }));
+				if (updated) {
+					const reactionsList = updated.reactions || updated.post?.reactions;
+					setLocalPost(prev => ({
+						...prev,
+						...(updated.post || (updated._id ? updated : {})),
+						_id: prev._id,
+						reactions: reactionsList || prev.reactions
+					}));
 				}
 			} else {
 				setLocalPost((prev) => ({ ...prev, reactions: prevReactions }));
@@ -608,7 +759,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	};
 
 	const handleTogglePin = async () => {
-		if (!currentUser || currentUser.role !== "admin") return;
+		if (!currentUser || (currentUser.role !== "admin" && String(currentUserId) !== String(localPost.authorId))) return;
 		try {
 			const res = await apiFetch(`/api/forum/${localPost._id}/pin`, {
 				method: "PUT",
@@ -623,28 +774,15 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		}
 	};
 
-	const handleShare = async (e) => {
+	const handleShare = (e) => {
 		e?.stopPropagation();
 		const shareUrl = `${window.location.origin}/community#post-${localPost._id}`;
-		if (navigator.share && (typeof navigator.canShare !== "function" || navigator.canShare({ url: shareUrl }))) {
-			try {
-				await navigator.share({
-					title: localPost.title || "Mason Badminton Connect",
-					text: `Check out "${localPost.title}" by ${localPost.authorName || 'a club member'} on GMU Badminton Connect!`,
-					url: shareUrl,
-				});
-				toast.success("Shared successfully! 🏸");
-				return;
-			} catch (err) {
-				if (err.name === "AbortError") return;
-			}
+		if (navigator.clipboard?.writeText) {
+			navigator.clipboard.writeText(shareUrl).then(() => {
+				toast.success("Post link copied to clipboard! 📋");
+			}).catch(() => {});
 		}
-		if (navigator.clipboard) {
-			await navigator.clipboard.writeText(shareUrl);
-			toast.success("Post link copied to clipboard! 📋");
-		} else {
-			toast(shareUrl);
-		}
+		setIsShareModalOpen(true);
 	};
 
 	const handleSaveEdit = async () => {
@@ -1028,16 +1166,25 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								*/}
 							</span>{" "}
 							• {formatTime(localPost.timestamp)}
+							{renderPrivacyIcon(localPost.visibility)}
 							{localPost.isEdited && (
-								<span
-									style={{
-										fontStyle: "italic",
-										marginLeft: "6px",
-										opacity: 0.7,
-									}}
+								<Tooltip
+									title={`Edited on ${formatTime(localPost.editedAt || localPost.updatedAt || localPost.timestamp)}`}
+									arrow
+									placement="top"
 								>
-									(edited)
-								</span>
+									<span
+										data-testid="post-edited-badge"
+										style={{
+											fontStyle: "italic",
+											marginLeft: "6px",
+											opacity: 0.7,
+											cursor: "pointer",
+										}}
+									>
+										(Edited)
+									</span>
+								</Tooltip>
 							)}
 						</Typography>
 					</Box>
@@ -1078,7 +1225,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										✎ Edit Post
 									</MenuItem>
 								)}
-								{currentUser?.role === "admin" && (
+								{(currentUser?.role === "admin" || String(currentUserId) === String(localPost.authorId)) && (
 									<MenuItem
 										onClick={() => {
 											handleTogglePin();
@@ -1540,6 +1687,108 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							{localPost.content}
 						</Typography>
 
+						{/* QUOTE PREVIEW CARD ON REPOSTS */}
+						{Boolean(localPost.originalPost || localPost.originalPostId) && (
+							<Paper
+								variant="outlined"
+								data-testid="post-quote-card"
+								role="button"
+								tabIndex={0}
+								onClick={(e) => {
+									e.stopPropagation();
+									const origId = localPost.originalPost?._id || localPost.originalPostId;
+									if (origId) {
+										const targetEl = document.getElementById(`post-${origId}`);
+										if (targetEl) targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+										else navigate(`/community#post-${origId}`);
+									}
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										const origId = localPost.originalPost?._id || localPost.originalPostId;
+										if (origId) {
+											const targetEl = document.getElementById(`post-${origId}`);
+											if (targetEl) targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+											else navigate(`/community#post-${origId}`);
+										}
+									}
+								}}
+								sx={{
+									mt: 1.5,
+									mb: 1.5,
+									p: 1.5,
+									borderRadius: 2.5,
+									bgcolor: "action.hover",
+									borderColor: "divider",
+									cursor: "pointer",
+									transition: "all 0.2s ease",
+									"&:hover": {
+										borderColor: "primary.main",
+										bgcolor: "action.selected",
+									},
+								}}
+							>
+								<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+									<Avatar
+										src={localPost.originalPost?.authorPic}
+										alt={localPost.originalPost?.authorName || "Original author"}
+										sx={{ width: 26, height: 26, bgcolor: "secondary.main", fontSize: "0.75rem" }}
+									>
+										{!localPost.originalPost?.authorPic && (localPost.originalPost?.authorName?.charAt(0).toUpperCase() || "A")}
+									</Avatar>
+									<Box>
+										<Typography variant="subtitle2" fontWeight="bold" sx={{ fontSize: "0.82rem", lineHeight: 1.2 }}>
+											{localPost.originalPost?.authorName || "Club Member"}
+										</Typography>
+										{localPost.originalPost?.category && (
+											<Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
+												• {CATEGORY_CONFIG[localPost.originalPost.category]?.label || localPost.originalPost.category}
+											</Typography>
+										)}
+									</Box>
+								</Box>
+
+								{localPost.originalPost?.title && (
+									<Typography variant="body2" fontWeight="bold" sx={{ mb: 0.5, fontSize: "0.9rem" }}>
+										{localPost.originalPost.title}
+									</Typography>
+								)}
+
+								<Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
+									<Typography
+										variant="body2"
+										color="text.secondary"
+										sx={{
+											flex: 1,
+											display: "-webkit-box",
+											WebkitLineClamp: 3,
+											WebkitBoxOrient: "vertical",
+											overflow: "hidden",
+											fontSize: "0.82rem",
+											lineHeight: 1.5,
+										}}
+									>
+										{localPost.originalPost?.content || "Click to view original discussion"}
+									</Typography>
+									{(localPost.originalPost?.imageUrls?.[0] || localPost.originalPost?.imageUrl || localPost.originalPost?.mediaUrls?.[0]) && (
+										<Box
+											component="img"
+											src={localPost.originalPost?.imageUrls?.[0] || localPost.originalPost?.imageUrl || localPost.originalPost?.mediaUrls?.[0]}
+											alt="Original post thumbnail"
+											sx={{
+												width: 56,
+												height: 56,
+												borderRadius: 1.5,
+												objectFit: "cover",
+												flexShrink: 0,
+											}}
+										/>
+									)}
+								</Box>
+							</Paper>
+						)}
+
                         {localPost.tags && localPost.tags.length > 0 && (
                             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1, pointerEvents: 'none' }}>
                                 {localPost.tags.map(tag => (
@@ -1907,29 +2156,53 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						}}
 						sx={{ position: 'relative', flex: 1, display: 'flex' }}
 					>
-						{/* Floating Reaction Bar with Badminton Reaction Trio */}
-						<Collapse in={showReactions} timeout="auto" unmountOnExit sx={{ position: 'absolute', bottom: '100%', left: 0, mb: 1, zIndex: 10 }}>
-							<Paper elevation={6} sx={{ display: 'flex', gap: 0.5, p: 0.8, borderRadius: 10, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-								{BADMINTON_REACTIONS.map((item) => (
-									<Tooltip key={item.type} title={item.tooltip} arrow>
-										<IconButton 
-											aria-label={`React with ${item.label}`}
-											onClick={(e) => { 
-												e.stopPropagation(); 
-												handleReaction(item.emoji); 
-											}}
-											sx={{ 
-												p: 0.8,
-												transition: 'transform 0.15s ease', 
-												'&:hover': { transform: 'scale(1.35)' } 
-											}}
-										>
-											<Typography fontSize="1.3rem">{item.emoji}</Typography>
-										</IconButton>
-									</Tooltip>
-								))}
-							</Paper>
-						</Collapse>
+						{/* Floating Reaction Bar with Framer Motion Spring Pop-up & Hover Scaling */}
+						<AnimatePresence>
+							{showReactions && (
+								<motion.div
+									initial={{ opacity: 0, scale: 0.8, y: 10 }}
+									animate={{ opacity: 1, scale: 1, y: -8 }}
+									exit={{ opacity: 0, scale: 0.8, y: 10 }}
+									transition={{ type: "spring", stiffness: 450, damping: 28 }}
+									style={{ position: "absolute", bottom: "100%", left: 0, zIndex: 100, marginBottom: 8 }}
+								>
+									<Paper
+										elevation={8}
+										data-testid="reactions-dock"
+										sx={{
+											display: "flex",
+											gap: 0.8,
+											p: 0.8,
+											borderRadius: 10,
+											bgcolor: "background.paper",
+											border: "1px solid",
+											borderColor: "divider",
+											boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+										}}
+									>
+										{FACEBOOK_REACTIONS.map((item) => (
+											<Tooltip key={item.type} title={item.tooltip} arrow placement="top">
+												<motion.div
+													whileHover={{ scale: 1.45, y: -6, transition: { type: "spring", stiffness: 500 } }}
+													whileTap={{ scale: 0.9 }}
+												>
+													<IconButton
+														aria-label={`React with ${item.label}`}
+														onClick={(e) => {
+															e.stopPropagation();
+															handleReaction(item.emoji);
+														}}
+														sx={{ p: 0.8, fontSize: "1.35rem" }}
+													>
+														<span>{item.emoji}</span>
+													</IconButton>
+												</motion.div>
+											</Tooltip>
+										))}
+									</Paper>
+								</motion.div>
+							)}
+						</AnimatePresence>
 
 						<Button
 							aria-label="React to post"
@@ -1938,7 +2211,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								else handleReaction('💥');
 							}}
 							color={currentUserReaction || hasLiked ? "primary" : "inherit"}
-							sx={actionBtnStyle}
+							sx={{
+								...actionBtnStyle,
+								...(currentUserReaction
+									? { color: getReactionMeta(currentUserReaction)?.color || "primary.main" }
+									: {}),
+							}}
 						>
 							<Box sx={{ mr: { xs: 0.5, sm: 1 }, display: "flex", alignItems: "center" }}>
 								<Typography component="span" sx={{ fontSize: "1.1rem" }}>
@@ -1948,7 +2226,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							<Box sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
 								{(() => {
 									if (currentUserReaction) {
-										const match = BADMINTON_REACTIONS.find((b) => b.emoji === currentUserReaction);
+										const match = ALL_REACTIONS.find((b) => b.emoji === currentUserReaction);
 										return match ? match.label : "Reacted";
 									}
 									return "Smash";
@@ -2013,6 +2291,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				onClose={() =>
 					setLikesModal({ open: false, title: "", list: [], reactions: [], initialTab: "all" })
 				}
+			/>
+
+			{/* SHARE / REPOST MODAL */}
+			<ShareModal
+				open={isShareModalOpen}
+				onClose={() => setIsShareModalOpen(false)}
+				post={localPost}
+				currentUser={currentUser}
 			/>
 
 			{/* IMPORTED POST COMMENTS INLINE */}
