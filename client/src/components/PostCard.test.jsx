@@ -69,15 +69,15 @@ describe('PostCard Component QA Tests', () => {
         const postWithReactions = {
             ...mockPost,
             reactions: [
-                { userId: 'user-123', emoji: '🏸' },
-                { userId: 'user-456', emoji: '🏸' },
-                { userId: 'user-789', emoji: '🔥' },
+                { userId: 'user-123', emoji: '👍' },
+                { userId: 'user-456', emoji: '👍' },
+                { userId: 'user-789', emoji: '❤️' },
             ],
         };
         renderWithContext(postWithReactions, mockUser);
         const reactionsBtn = screen.getByTestId('view-reactions-btn');
-        expect(within(reactionsBtn).getByText('🏸')).toBeInTheDocument();
-        expect(within(reactionsBtn).getByText('🔥')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('👍')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('❤️')).toBeInTheDocument();
         expect(within(reactionsBtn).getByText('3')).toBeInTheDocument();
     });
 
@@ -88,21 +88,21 @@ describe('PostCard Component QA Tests', () => {
         commentButton.click();
     });
 
-    it('renders Badminton Reaction Trio chips (💥, 🧊, ⚡)', () => {
+    it('renders Facebook Reaction cluster (👍, ❤️, 😂)', () => {
         const postWithTrio = {
             ...mockPost,
             reactions: [
-                { userId: 'user-1', emoji: '💥', reactionType: 'smash' },
-                { userId: 'user-2', emoji: '💥', reactionType: 'smash' },
-                { userId: 'user-3', emoji: '🧊', reactionType: 'ice_drop' },
-                { userId: 'user-4', emoji: '⚡', reactionType: 'clutch' },
+                { userId: 'user-1', emoji: '👍', reactionType: 'like' },
+                { userId: 'user-2', emoji: '👍', reactionType: 'like' },
+                { userId: 'user-3', emoji: '❤️', reactionType: 'love' },
+                { userId: 'user-4', emoji: '😂', reactionType: 'haha' },
             ],
         };
         renderWithContext(postWithTrio, mockUser);
         const reactionsBtn = screen.getByTestId('view-reactions-btn');
-        expect(within(reactionsBtn).getByText('💥')).toBeInTheDocument();
-        expect(within(reactionsBtn).getByText('🧊')).toBeInTheDocument();
-        expect(within(reactionsBtn).getByText('⚡')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('👍')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('❤️')).toBeInTheDocument();
+        expect(within(reactionsBtn).getByText('😂')).toBeInTheDocument();
         expect(within(reactionsBtn).getByText('4')).toBeInTheDocument();
     });
 
@@ -136,38 +136,37 @@ describe('PostCard Component QA Tests', () => {
         expect(screen.getByText(/David Kim, Chris Lee/)).toBeInTheDocument();
     });
 
-    it('renders Smash label on primary reaction button when user has not reacted', () => {
+    it('renders Like label on primary reaction button when user has not reacted', () => {
         renderWithContext(mockPost, mockUser);
         const reactButton = screen.getByRole('button', { name: /React to post/i });
         expect(reactButton).toBeInTheDocument();
-        expect(screen.getByText('Smash')).toBeInTheDocument();
-        expect(screen.getByText('💥')).toBeInTheDocument();
+        expect(screen.getByText('Like')).toBeInTheDocument();
     });
 
-    it('renders active reaction label on primary button when user has reacted with Ice Drop', () => {
+    it('renders active reaction label on primary button when user has reacted with Love', () => {
         const reactedPost = {
             ...mockPost,
             reactions: [
-                { userId: mockUser.id, emoji: '🧊', reactionType: 'ice_drop' }
+                { userId: mockUser.id, emoji: '❤️', reactionType: 'love' }
             ],
         };
         renderWithContext(reactedPost, mockUser);
         const reactButton = screen.getByRole('button', { name: /React to post/i });
-        expect(within(reactButton).getByText('Ice Drop')).toBeInTheDocument();
-        expect(within(reactButton).getByText('🧊')).toBeInTheDocument();
+        expect(within(reactButton).getByText('Love')).toBeInTheDocument();
+        expect(within(reactButton).getByText('❤️')).toBeInTheDocument();
     });
 
-    it('renders active reaction label on primary button when user has reacted with Clutch', () => {
+    it('renders active reaction label on primary button when user has reacted with Haha', () => {
         const reactedPost = {
             ...mockPost,
             reactions: [
-                { userId: mockUser.id, emoji: '⚡', reactionType: 'clutch' }
+                { userId: mockUser.id, emoji: '😂', reactionType: 'haha' }
             ],
         };
         renderWithContext(reactedPost, mockUser);
         const reactButton = screen.getByRole('button', { name: /React to post/i });
-        expect(within(reactButton).getByText('Clutch')).toBeInTheDocument();
-        expect(within(reactButton).getByText('⚡')).toBeInTheDocument();
+        expect(within(reactButton).getByText('Haha')).toBeInTheDocument();
+        expect(within(reactButton).getByText('😂')).toBeInTheDocument();
     });
 
     it('supports user objects with _id instead of id for reaction detection', () => {
@@ -175,13 +174,13 @@ describe('PostCard Component QA Tests', () => {
         const reactedPost = {
             ...mockPost,
             reactions: [
-                { userId: 'mongo-user-456', emoji: '💥', reactionType: 'smash' }
+                { userId: 'mongo-user-456', emoji: '❤️', reactionType: 'love' }
             ],
         };
         renderWithContext(reactedPost, userWithMongoId);
         const reactButton = screen.getByRole('button', { name: /React to post/i });
-        expect(within(reactButton).getByText('Smash')).toBeInTheDocument();
-        expect(within(reactButton).getByText('💥')).toBeInTheDocument();
+        expect(within(reactButton).getByText('Love')).toBeInTheDocument();
+        expect(within(reactButton).getByText('❤️')).toBeInTheDocument();
     });
 
     it('renders scorecard banner when matchDetails only contains winner', () => {
@@ -197,12 +196,12 @@ describe('PostCard Component QA Tests', () => {
         expect(screen.getByText('Winner: Challenger Duo')).toBeInTheDocument();
     });
 
-    it('optimistically adds reaction when clicking Smash reaction button', async () => {
+    it('optimistically adds reaction when clicking Like reaction button', async () => {
         apiFetch.mockResolvedValueOnce({
             ok: true,
             json: async () => ({
                 ...mockPost,
-                reactions: [{ userId: mockUser.id, emoji: '💥', reactionType: 'smash' }]
+                reactions: [{ userId: mockUser.id, emoji: '👍', reactionType: 'like' }]
             })
         });
         renderWithContext(mockPost, mockUser);
@@ -210,7 +209,7 @@ describe('PostCard Component QA Tests', () => {
         fireEvent.click(reactButton);
         await waitFor(() => {
             const reactionsBtn = screen.getByTestId('view-reactions-btn');
-            expect(within(reactionsBtn).getByText('💥')).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('👍')).toBeInTheDocument();
             expect(within(reactionsBtn).getByText('1')).toBeInTheDocument();
         });
     });
@@ -560,7 +559,7 @@ describe('PostCard Component QA Tests', () => {
         expect(dock).toBeInTheDocument();
         expect(within(dock).getByText('👍')).toBeInTheDocument();
         expect(within(dock).getByText('❤️')).toBeInTheDocument();
-        expect(within(dock).getByText('🏸')).toBeInTheDocument();
+        expect(within(dock).getByText('😡')).toBeInTheDocument();
         expect(within(dock).getByText('😮')).toBeInTheDocument();
         expect(within(dock).getByText('😂')).toBeInTheDocument();
         expect(within(dock).getByText('😢')).toBeInTheDocument();

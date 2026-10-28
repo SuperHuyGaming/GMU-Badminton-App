@@ -480,9 +480,9 @@ describe('🤖 5-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
                 likes: ['user-alan'],
                 likedBy: ['user-alan'],
                 reactions: [
-                    { userId: 'user-alan', emoji: '🏸' },
-                    { userId: 'user-kevin', emoji: '🏸' },
-                    { userId: 'user-marcus', emoji: '🔥' },
+                    { userId: 'user-alan', emoji: '👍' },
+                    { userId: 'user-kevin', emoji: '👍' },
+                    { userId: 'user-marcus', emoji: '❤️' },
                 ],
                 comments: [
                     {
@@ -509,8 +509,8 @@ describe('🤖 5-USER SYNTHETIC BOT SUITE: END-TO-END FEATURE EXPLORATION', () =
             // 2. Facebook-style Reactions cluster
             const reactionsBtn = screen.getByTestId('view-reactions-btn');
             expect(reactionsBtn).toBeInTheDocument();
-            expect(within(reactionsBtn).getByText('🏸')).toBeInTheDocument();
-            expect(within(reactionsBtn).getByText('🔥')).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('👍')).toBeInTheDocument();
+            expect(within(reactionsBtn).getByText('❤️')).toBeInTheDocument();
             expect(within(reactionsBtn).getByText('3')).toBeInTheDocument();
 
             // 3. Comment accordion toggle

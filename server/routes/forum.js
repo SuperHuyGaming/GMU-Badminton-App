@@ -2072,7 +2072,8 @@ const BADMINTON_REACTIONS_MAP = {
 	"😢": { reactionType: "sad", notificationText: "felt sad about your post." },
 	"🔥": { reactionType: "smash", notificationText: "smashed your post." },
 	"💯": { reactionType: "clutch", notificationText: "marked your post as clutch." },
-	"👏": { reactionType: "like", notificationText: "applauded your post." }
+	"👏": { reactionType: "like", notificationText: "applauded your post." },
+	"😡": { reactionType: "angry", notificationText: "reacted to your post." }
 };
 
 const REACTION_TYPE_TO_EMOJI = {
@@ -2084,11 +2085,12 @@ const REACTION_TYPE_TO_EMOJI = {
 	sad: "😢",
 	ice_drop: "🧊",
 	clutch: "⚡",
+	angry: "😡",
 };
 
 const ALLOWED_EMOJIS = [
 	"👍", "❤️", "🏸", "😮", "😂", "😢", "💥", "🧊", "⚡",
-	"🔥", "💯", "👏"
+	"🔥", "💯", "👏", "😡"
 ];
 
 const handleReactionRoute = async (req, res) => {

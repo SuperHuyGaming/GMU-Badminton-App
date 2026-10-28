@@ -96,7 +96,7 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 			// Verify all 6 Facebook reactions are rendered with accessible aria labels
 			expect(within(dock).getByRole('button', { name: /React with Like/i })).toBeInTheDocument();
 			expect(within(dock).getByRole('button', { name: /React with Love/i })).toBeInTheDocument();
-			expect(within(dock).getByRole('button', { name: /React with Smash/i })).toBeInTheDocument();
+			expect(within(dock).getByRole('button', { name: /React with Angry/i })).toBeInTheDocument();
 			expect(within(dock).getByRole('button', { name: /React with Wow/i })).toBeInTheDocument();
 			expect(within(dock).getByRole('button', { name: /React with Haha/i })).toBeInTheDocument();
 			expect(within(dock).getByRole('button', { name: /React with Sad/i })).toBeInTheDocument();
@@ -165,8 +165,7 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 					})
 				);
 				// Rolled back to default
-				expect(within(reactBtn).getByText('💥')).toBeInTheDocument();
-				expect(within(reactBtn).getByText('Smash')).toBeInTheDocument();
+				expect(within(reactBtn).getByText('Like')).toBeInTheDocument();
 			});
 		});
 
@@ -197,9 +196,8 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 			// Clicking the main button with active reaction calls handleReaction with the same emoji (toggle off)
 			fireEvent.click(reactBtn);
 
-			// Optimistic check: immediately removed, resets to Smash
-			expect(within(reactBtn).getByText('💥')).toBeInTheDocument();
-			expect(within(reactBtn).getByText('Smash')).toBeInTheDocument();
+			// Optimistic check: immediately removed, resets to Like
+			expect(within(reactBtn).getByText('Like')).toBeInTheDocument();
 
 			// Wait for failed API response to roll back
 			await waitFor(() => {
@@ -256,7 +254,7 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 					json: async () => ({
 						...basePost,
 						reactions: [
-							{ userId: mockUser.id, emoji: '🏸', reactionType: 'smash' },
+							{ userId: mockUser.id, emoji: '😡', reactionType: 'angry' },
 						],
 					}),
 				};
@@ -272,18 +270,18 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 
 			const likeBtn = within(dock).getByRole('button', { name: /React with Like/i });
 			const loveBtn = within(dock).getByRole('button', { name: /React with Love/i });
-			const smashBtn = within(dock).getByRole('button', { name: /React with Smash/i });
+			const angryBtn = within(dock).getByRole('button', { name: /React with Angry/i });
 
 			// Rapid fire clicks in immediate succession
 			fireEvent.click(likeBtn);
 			fireEvent.click(loveBtn);
-			fireEvent.click(smashBtn);
+			fireEvent.click(angryBtn);
 
 			expect(callCount).toBeGreaterThanOrEqual(1);
 
 			await waitFor(() => {
-				expect(within(reactBtn).getByText('🏸')).toBeInTheDocument();
-				expect(within(reactBtn).getByText('Smash')).toBeInTheDocument();
+				expect(within(reactBtn).getByText('😡')).toBeInTheDocument();
+				expect(within(reactBtn).getByText('Angry')).toBeInTheDocument();
 			});
 		});
 

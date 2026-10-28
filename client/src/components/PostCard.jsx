@@ -34,8 +34,8 @@ import {
 // Facebook Reactions & Legacy Compatibility
 import {
 	FACEBOOK_REACTIONS,
-	ALL_REACTIONS,
 	getReactionMeta,
+	normalizeReactionEmoji,
 } from "../constants/reactions";
 
 const CATEGORY_CONFIG = {
@@ -62,245 +62,15 @@ const postCommentsMemoryCache = new Map();
 const hasPopulatedComments = (arr) =>
 	Array.isArray(arr) && arr.length > 0 && arr.some((c) => c && (c._id || c.text || c.content));
 import {
+	ThumbUpOutline,
 	ThumbUpFilled,
 	MessageCircleIcon,
 	ShareIcon,
 	MoreVertIcon,
 } from "./Icons";
-
-// Facebook-style vibrant circular reaction icon badges
-const renderFacebookReactionIcon = (emoji) => {
-	switch (emoji) {
-		case "💥":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #FF4B72 0%, #FA383E 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M10 2L11.8 6.5L16.5 5.5L13.5 9.5L17.5 13L12.5 13L12 17.5L9.5 13.5L4.5 15L7.5 11L3 8L8.2 8L10 2Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>💥</span>
-				</Box>
-			);
-		case "🧊":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #1877F2 0%, #0084FF 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M10 3.5L15 6.4V11.6L10 14.5L5 11.6V6.4L10 3.5ZM10 5L6.5 7.1L10 9.1L13.5 7.1L10 5ZM6 8.1V11L9.5 13V10.1L6 8.1ZM14 8.1L10.5 10.1V13L14 11V8.1Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🧊</span>
-				</Box>
-			);
-		case "⚡":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #FFD93B 0%, #F7B125 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M11 2.5L5.5 10.5H10.5L9.5 16.5L15 8.5H10L11 2.5Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>⚡</span>
-				</Box>
-			);
-		case "🏸":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #00C853 0%, #00A854 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M13.5 3.5C12 2 9.8 2 8.3 3.5C7.2 4.6 6.9 6.2 7.4 7.5L3.5 11.4C3.2 11.7 3.2 12.3 3.5 12.6L4.4 13.5C4.7 13.8 5.3 13.8 5.6 13.5L9.5 9.6C10.8 10.1 12.4 9.8 13.5 8.7C15 7.2 15 5 13.5 3.5ZM12.4 7.6C11.5 8.5 10.1 8.5 9.2 7.6C8.3 6.7 8.3 5.3 9.2 4.4C10.1 3.5 11.5 3.5 12.4 4.4C13.3 5.3 13.3 6.7 12.4 7.6Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🏸</span>
-				</Box>
-			);
-		case "🔥":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #FF6F00 0%, #FF3D00 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M10 2.5C9.8 4 8.5 5.5 7.5 6.8C6.3 8.3 5.5 9.8 5.5 11.5C5.5 14 7.5 16 10 16C12.5 16 14.5 14 14.5 11.5C14.5 9 13 7 11.8 5.5C11 4.5 10.3 3.3 10 2.5ZM10 14C8.9 14 8 13.1 8 12C8 10.8 8.8 10.8 9.5 9.8C9.8 8.4 10.2 8 10.5 7.5C10.8 8.5 11.5 9.5 11.8 10.2C12 10.8 12 11.4 12 12C12 13.1 11.1 14 10 14Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>🔥</span>
-				</Box>
-			);
-		case "👍":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #2D88FF 0%, #0E56D8 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					<svg viewBox="0 0 20 20" width="13" height="13" fill="none">
-						<path
-							d="M6.5 13.5H4.5V8.5H6.5V13.5ZM14.5 8.8C14.5 8.1 13.9 7.5 13.2 7.5H10.2L10.7 5.2C10.8 4.6 10.2 3.9 9.5 3.9C9.1 3.9 8.8 4.1 8.6 4.3L6.5 7.5V13.5H12.4C13 13.5 13.5 13.1 13.6 12.5L14.5 8.8Z"
-							fill="#FFFFFF"
-						/>
-					</svg>
-					<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>👍</span>
-				</Box>
-			);
-		case "❤️":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #FF4B72 0%, #FA383E 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: "0.75rem",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					❤️
-				</Box>
-			);
-		case "😮":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #F7B125 0%, #FFC107 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: "0.75rem",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					😮
-				</Box>
-			);
-		case "😂":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #F7B125 0%, #FFC107 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: "0.75rem",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					😂
-				</Box>
-			);
-		case "😢":
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #1877F2 0%, #0084FF 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: "0.75rem",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					😢
-				</Box>
-			);
-		default:
-			return (
-				<Box
-					sx={{
-						width: 20,
-						height: 20,
-						borderRadius: "50%",
-						background: "linear-gradient(135deg, #00A3FF 0%, #0066FF 100%)",
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: "0.75rem",
-						boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
-					}}
-				>
-					{emoji}
-				</Box>
-			);
-	}
-};
+import {
+	FacebookReactionIcon,
+} from "./FacebookReactionTokens";
 
 // J6 Audience Privacy Indicator Icon
 const renderPrivacyIcon = (visibility) => {
@@ -367,6 +137,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const currentUserId = currentUser?.id || currentUser?._id;
     const controls = useAnimation();
 	const touchTimer = useRef(null);
+	const hoverTimer = useRef(null);
+	const leaveTimer = useRef(null);
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -634,7 +406,6 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 			: (typeof localPost.commentCount === 'number'
 				? localPost.commentCount
 				: (Array.isArray(localPost.comments) ? localPost.comments.length : 0));
-	const hasLiked = localPost.likedBy?.includes(currentUserId);
 	const currentUserReaction = (localPost.reactions || []).find(
 		(r) => r && String(r.userId) === String(currentUserId)
 	)?.emoji;
@@ -644,7 +415,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		const emojis = [];
 		const seen = new Set();
 		(localPost.reactions || []).forEach((r) => {
-			const emoji = typeof r === 'string' ? r : r?.emoji;
+			const rawEmoji = typeof r === 'string' ? r : r?.emoji;
+			const emoji = normalizeReactionEmoji(rawEmoji);
 			if (emoji && !seen.has(emoji)) {
 				seen.add(emoji);
 				emojis.push(emoji);
@@ -656,10 +428,38 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const [showHeart, setShowHeart] = useState(false);
 	const [showReactions, setShowReactions] = useState(false);
 
+	const handleReactionBoxMouseEnter = () => {
+		if (leaveTimer.current) {
+			clearTimeout(leaveTimer.current);
+			leaveTimer.current = null;
+		}
+		hoverTimer.current = setTimeout(() => {
+			setShowReactions(true);
+		}, 320);
+	};
+
+	const handleReactionBoxMouseLeave = () => {
+		if (hoverTimer.current) {
+			clearTimeout(hoverTimer.current);
+			hoverTimer.current = null;
+		}
+		leaveTimer.current = setTimeout(() => {
+			setShowReactions(false);
+		}, 250);
+	};
+
+	useEffect(() => {
+		return () => {
+			if (hoverTimer.current) clearTimeout(hoverTimer.current);
+			if (leaveTimer.current) clearTimeout(leaveTimer.current);
+			if (touchTimer.current) clearTimeout(touchTimer.current);
+		};
+	}, []);
+
 	const handleDoubleTap = (e) => {
 		e.preventDefault();
 		if (!currentUserReaction) {
-			handleReaction('💥');
+			handleReaction('❤️');
 		}
 		setShowHeart(true);
 		setTimeout(() => setShowHeart(false), 1000);
@@ -2049,44 +1849,55 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							>
 								{/* Overlapping distinct Facebook-style reaction badges */}
 								<Box sx={{ display: "inline-flex", alignItems: "center" }}>
-									{distinctReactionEmojis.slice(0, 3).map((emoji, index) => (
-										<Box
-											key={emoji}
-											component="span"
-											onClick={(e) => {
-												e.stopPropagation();
-												let tab = "all";
-												if (emoji === "💥") tab = "smash";
-												else if (emoji === "🧊") tab = "ice_drop";
-												else if (emoji === "⚡") tab = "clutch";
-												openLikes(
-													e,
-													"Post Reactions",
-													[],
-													localPost.reactions,
-													tab
-												);
-											}}
-											sx={{
-												display: "inline-flex",
-												alignItems: "center",
-												justifyContent: "center",
-												position: "relative",
-												borderRadius: "50%",
-												border: (theme) => `2px solid ${theme.palette.mode === "dark" ? "#061a14" : "#ffffff"}`,
-												ml: index > 0 ? "-6px" : 0,
-												zIndex: 3 - index,
-												boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
-												transition: "transform 0.15s ease",
-												"&:hover": {
-													transform: "scale(1.25)",
-													zIndex: 10,
-												},
-											}}
-										>
-											{renderFacebookReactionIcon(emoji)}
-										</Box>
-									))}
+									{distinctReactionEmojis.slice(0, 3).map((rawEmoji, index) => {
+										const emoji = normalizeReactionEmoji(rawEmoji);
+										return (
+											<Box
+												key={`${emoji}-${index}`}
+												component="span"
+												onClick={(e) => {
+													e.stopPropagation();
+													const tab =
+														emoji === "❤️"
+															? "love"
+															: emoji === "😂"
+															? "haha"
+															: emoji === "😮"
+															? "wow"
+															: emoji === "😢"
+															? "sad"
+															: emoji === "😡"
+															? "angry"
+															: "like";
+													openLikes(
+														e,
+														"Post Reactions",
+														[],
+														localPost.reactions,
+														tab
+													);
+												}}
+												sx={{
+													display: "inline-flex",
+													alignItems: "center",
+													justifyContent: "center",
+													position: "relative",
+													borderRadius: "50%",
+													border: (theme) => `2px solid ${theme.palette.mode === "dark" ? "#061a14" : "#ffffff"}`,
+													ml: index > 0 ? "-6px" : 0,
+													zIndex: 3 - index,
+													boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+													transition: "transform 0.15s ease",
+													"&:hover": {
+														transform: "scale(1.25)",
+														zIndex: 10,
+													},
+												}}
+											>
+												<FacebookReactionIcon emoji={emoji} size={18} />
+											</Box>
+										);
+									})}
 								</Box>
 
 								{/* Only a single number total for those reactions */}
@@ -2146,10 +1957,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					}}
 				>
 					<Box 
-						onMouseEnter={() => setShowReactions(true)} 
-						onMouseLeave={() => setShowReactions(false)}
+						onMouseEnter={handleReactionBoxMouseEnter} 
+						onMouseLeave={handleReactionBoxMouseLeave}
 						onTouchStart={() => {
-							touchTimer.current = setTimeout(() => setShowReactions(true), 400);
+							touchTimer.current = setTimeout(() => setShowReactions(true), 380);
 						}}
 						onTouchEnd={() => {
 							if (touchTimer.current) clearTimeout(touchTimer.current);
@@ -2160,39 +1971,64 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<AnimatePresence>
 							{showReactions && (
 								<motion.div
-									initial={{ opacity: 0, scale: 0.8, y: 10 }}
-									animate={{ opacity: 1, scale: 1, y: -8 }}
-									exit={{ opacity: 0, scale: 0.8, y: 10 }}
+									initial={{ opacity: 0, scale: 0.85, y: 6 }}
+									animate={{ opacity: 1, scale: 1, y: -6 }}
+									exit={{ opacity: 0, scale: 0.85, y: 6 }}
 									transition={{ type: "spring", stiffness: 450, damping: 28 }}
-									style={{ position: "absolute", bottom: "100%", left: 0, zIndex: 100, marginBottom: 8 }}
+									style={{ position: "absolute", bottom: "100%", left: 0, zIndex: 120, marginBottom: 6 }}
 								>
 									<Paper
-										elevation={8}
+										elevation={6}
 										data-testid="reactions-dock"
+										onMouseEnter={() => {
+											if (leaveTimer.current) {
+												clearTimeout(leaveTimer.current);
+												leaveTimer.current = null;
+											}
+										}}
+										onMouseLeave={handleReactionBoxMouseLeave}
 										sx={{
 											display: "flex",
-											gap: 0.8,
-											p: 0.8,
-											borderRadius: 10,
-											bgcolor: "background.paper",
+											gap: "3px",
+											px: "6px",
+											py: "3px",
+											borderRadius: "24px",
+											bgcolor: (theme) =>
+												theme.palette.mode === "dark"
+													? "rgba(36, 37, 38, 0.98)"
+													: "rgba(255, 255, 255, 0.98)",
+											backdropFilter: "blur(6px)",
 											border: "1px solid",
 											borderColor: "divider",
-											boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+											boxShadow: "0 4px 16px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08)",
+											alignItems: "center",
 										}}
 									>
 										{FACEBOOK_REACTIONS.map((item) => (
 											<Tooltip key={item.type} title={item.tooltip} arrow placement="top">
 												<motion.div
-													whileHover={{ scale: 1.45, y: -6, transition: { type: "spring", stiffness: 500 } }}
+													whileHover={{ scale: 1.35, y: -6, transition: { type: "spring", stiffness: 500 } }}
 													whileTap={{ scale: 0.9 }}
 												>
 													<IconButton
 														aria-label={`React with ${item.label}`}
 														onClick={(e) => {
 															e.stopPropagation();
+															if (hoverTimer.current) clearTimeout(hoverTimer.current);
+															if (leaveTimer.current) clearTimeout(leaveTimer.current);
+															setShowReactions(false);
 															handleReaction(item.emoji);
 														}}
-														sx={{ p: 0.8, fontSize: "1.35rem" }}
+														sx={{
+															width: 34,
+															height: 34,
+															p: 0,
+															fontSize: "1.35rem",
+															display: "flex",
+															alignItems: "center",
+															justifyContent: "center",
+															transition: "transform 0.15s ease",
+														}}
 													>
 														<span>{item.emoji}</span>
 													</IconButton>
@@ -2207,29 +2043,43 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<Button
 							aria-label="React to post"
 							onClick={() => {
+								if (hoverTimer.current) clearTimeout(hoverTimer.current);
+								if (leaveTimer.current) clearTimeout(leaveTimer.current);
+								setShowReactions(false);
 								if (currentUserReaction) handleReaction(currentUserReaction);
-								else handleReaction('💥');
+								else handleReaction('👍');
 							}}
-							color={currentUserReaction || hasLiked ? "primary" : "inherit"}
+							color={currentUserReaction ? "primary" : "inherit"}
 							sx={{
 								...actionBtnStyle,
 								...(currentUserReaction
-									? { color: getReactionMeta(currentUserReaction)?.color || "primary.main" }
-									: {}),
+									? { color: getReactionMeta(currentUserReaction)?.color || "#1877F2" }
+									: { color: "text.secondary" }),
 							}}
 						>
 							<Box sx={{ mr: { xs: 0.5, sm: 1 }, display: "flex", alignItems: "center" }}>
-								<Typography component="span" sx={{ fontSize: "1.1rem" }}>
-									{currentUserReaction || '💥'}
-								</Typography>
+								{currentUserReaction ? (
+									currentUserReaction === "👍" ? (
+										<>
+											<ThumbUpFilled style={{ width: 19, height: 19, color: "#1877F2" }} />
+											<span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)", opacity: 0 }}>👍</span>
+										</>
+									) : (
+										<Typography component="span" sx={{ fontSize: "1.15rem", lineHeight: 1 }}>
+											{currentUserReaction}
+										</Typography>
+									)
+								) : (
+									<ThumbUpOutline style={{ width: 19, height: 19 }} />
+								)}
 							</Box>
-							<Box sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
+							<Box sx={{ display: "inline-block", fontSize: { xs: "0.8rem", sm: "0.875rem" }, fontWeight: currentUserReaction ? 600 : 500 }}>
 								{(() => {
 									if (currentUserReaction) {
-										const match = ALL_REACTIONS.find((b) => b.emoji === currentUserReaction);
-										return match ? match.label : "Reacted";
+										const meta = getReactionMeta(currentUserReaction);
+										return meta ? meta.label : "Like";
 									}
-									return "Smash";
+									return "Like";
 								})()}
 							</Box>
 						</Button>

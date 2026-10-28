@@ -21,12 +21,12 @@ export const FACEBOOK_REACTIONS = [
 		bgGradient: "linear-gradient(135deg, #FF4B72 0%, #FA383E 100%)",
 	},
 	{
-		emoji: "🏸",
-		type: "smash",
-		label: "Smash",
-		tooltip: "Smash",
-		color: "#FFB300",
-		bgGradient: "linear-gradient(135deg, #FFA000 0%, #FFB300 100%)",
+		emoji: "😂",
+		type: "haha",
+		label: "Haha",
+		tooltip: "Haha",
+		color: "#F7B125",
+		bgGradient: "linear-gradient(135deg, #FFD23F 0%, #F7B125 100%)",
 	},
 	{
 		emoji: "😮",
@@ -34,15 +34,7 @@ export const FACEBOOK_REACTIONS = [
 		label: "Wow",
 		tooltip: "Wow",
 		color: "#F7B125",
-		bgGradient: "linear-gradient(135deg, #F7B125 0%, #FFC107 100%)",
-	},
-	{
-		emoji: "😂",
-		type: "haha",
-		label: "Haha",
-		tooltip: "Haha",
-		color: "#F7B125",
-		bgGradient: "linear-gradient(135deg, #F7B125 0%, #FFC107 100%)",
+		bgGradient: "linear-gradient(135deg, #FFD23F 0%, #F7B125 100%)",
 	},
 	{
 		emoji: "😢",
@@ -50,60 +42,76 @@ export const FACEBOOK_REACTIONS = [
 		label: "Sad",
 		tooltip: "Sad",
 		color: "#F7B125",
-		bgGradient: "linear-gradient(135deg, #F7B125 0%, #FFC107 100%)",
+		bgGradient: "linear-gradient(135deg, #FFD23F 0%, #F7B125 100%)",
+	},
+	{
+		emoji: "😡",
+		type: "angry",
+		label: "Angry",
+		tooltip: "Angry",
+		color: "#E41E3F",
+		bgGradient: "linear-gradient(135deg, #FF5252 0%, #E41E3F 100%)",
 	},
 ];
 
 /**
- * Legacy Badminton reactions preserved for backward compatibility
+ * Normalizes any legacy or custom reaction emoji to a canonical Facebook reaction
  */
-export const LEGACY_REACTIONS = [
-	{
-		emoji: "💥",
-		type: "smash",
-		label: "Smash",
-		tooltip: "Smash (Like/Hype)",
-		color: "#FF4B72",
-		bgGradient: "linear-gradient(135deg, #FF4B72 0%, #FA383E 100%)",
-	},
-	{
-		emoji: "🧊",
-		type: "ice_drop",
-		label: "Ice Drop",
-		tooltip: "Ice Drop (IDK/Cold)",
-		color: "#1877F2",
-		bgGradient: "linear-gradient(135deg, #1877F2 0%, #0084FF 100%)",
-	},
-	{
-		emoji: "⚡",
-		type: "clutch",
-		label: "Clutch",
-		tooltip: "Clutch (Game-Winner)",
-		color: "#FFD700",
-		bgGradient: "linear-gradient(135deg, #FFD93B 0%, #F7B125 100%)",
-	},
-];
+export const normalizeReactionEmoji = (emoji) => {
+	switch (emoji) {
+		case "💥":
+		case "🧊":
+		case "⚡":
+		case "🏸":
+		case "🔥":
+		case "💯":
+		case "👏":
+			return "👍";
+		case "👍":
+		case "❤️":
+		case "😂":
+		case "😮":
+		case "😢":
+		case "😡":
+			return emoji;
+		default:
+			return emoji || "👍";
+	}
+};
 
 /**
- * All allowed reactions combined
+ * Normalizes reaction types
  */
-export const ALL_REACTIONS = [
-	...FACEBOOK_REACTIONS,
-	...LEGACY_REACTIONS,
-];
+export const normalizeReactionType = (type, emoji) => {
+	if (type === "smash" || type === "ice_drop" || type === "clutch") {
+		return "like";
+	}
+	if (type && ["like", "love", "haha", "wow", "sad", "angry"].includes(type)) {
+		return type;
+	}
+	const normEmoji = normalizeReactionEmoji(emoji);
+	const match = FACEBOOK_REACTIONS.find((r) => r.emoji === normEmoji);
+	return match ? match.type : "like";
+};
 
 /**
- * Helper to find metadata for an emoji
+ * All allowed reactions combined - strictly authentic Facebook reactions
+ */
+export const ALL_REACTIONS = FACEBOOK_REACTIONS;
+
+/**
+ * Helper to find metadata for an emoji (normalizes legacy emojis so Smash/IceDrop never leaks)
  */
 export const getReactionMeta = (emoji) => {
 	if (!emoji) return null;
-	const match = ALL_REACTIONS.find((r) => r.emoji === emoji);
+	const normalized = normalizeReactionEmoji(emoji);
+	const match = FACEBOOK_REACTIONS.find((r) => r.emoji === normalized);
 	if (match) return match;
 	return {
-		emoji,
-		type: "custom",
-		label: "Reacted",
-		tooltip: "Reacted",
+		emoji: "👍",
+		type: "like",
+		label: "Like",
+		tooltip: "Like",
 		color: "#1877F2",
 		bgGradient: "linear-gradient(135deg, #1877F2 0%, #0084FF 100%)",
 	};

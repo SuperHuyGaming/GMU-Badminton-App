@@ -12,10 +12,11 @@ import {
 	Box,
 	Tabs,
 	Tab,
-	Chip,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { CloseIcon } from "./Icons";
+import { FacebookReactionIcon } from "./FacebookReactionTokens";
+import { normalizeReactionType, normalizeReactionEmoji } from "../constants/reactions";
 
 export default function LikesModal({
 	open,
@@ -47,14 +48,9 @@ export default function LikesModal({
 				if (!id || seenIds.has(id)) return;
 				seenIds.add(id);
 
-				const emoji = r.emoji || "💥";
-				let type = r.reactionType;
-				if (!type) {
-					if (emoji === "💥") type = "smash";
-					else if (emoji === "🧊") type = "ice_drop";
-					else if (emoji === "⚡") type = "clutch";
-					else type = "custom";
-				}
+				const rawEmoji = r.emoji || "👍";
+				const emoji = normalizeReactionEmoji(rawEmoji);
+				const type = normalizeReactionType(r.reactionType, emoji);
 
 				items.push({
 					id,
@@ -86,28 +82,25 @@ export default function LikesModal({
 		return items;
 	}, [reactions, list]);
 
-	// Tally counts
+	// Tally counts across Facebook canonical reaction types
 	const counts = useMemo(() => {
 		const res = {
 			all: allItems.length,
 			like: 0,
 			love: 0,
-			smash: 0,
-			wow: 0,
 			haha: 0,
+			wow: 0,
 			sad: 0,
-			ice_drop: 0,
-			clutch: 0,
+			angry: 0,
 		};
 		allItems.forEach((item) => {
 			if (item.type === "like" || item.emoji === "👍") res.like += 1;
 			else if (item.type === "love" || item.emoji === "❤️") res.love += 1;
-			else if (item.type === "smash" || item.emoji === "🏸" || item.emoji === "💥") res.smash += 1;
-			else if (item.type === "wow" || item.emoji === "😮") res.wow += 1;
 			else if (item.type === "haha" || item.emoji === "😂") res.haha += 1;
+			else if (item.type === "wow" || item.emoji === "😮") res.wow += 1;
 			else if (item.type === "sad" || item.emoji === "😢") res.sad += 1;
-			else if (item.type === "ice_drop" || item.emoji === "🧊") res.ice_drop += 1;
-			else if (item.type === "clutch" || item.emoji === "⚡") res.clutch += 1;
+			else if (item.type === "angry" || item.emoji === "😡") res.angry += 1;
+			else res.like += 1;
 		});
 		return res;
 	}, [allItems]);
@@ -118,30 +111,21 @@ export default function LikesModal({
 		return allItems.filter((item) => {
 			if (activeTab === "like") return item.type === "like" || item.emoji === "👍";
 			if (activeTab === "love") return item.type === "love" || item.emoji === "❤️";
-			if (activeTab === "smash") return item.type === "smash" || item.emoji === "🏸" || item.emoji === "💥";
-			if (activeTab === "wow") return item.type === "wow" || item.emoji === "😮";
 			if (activeTab === "haha") return item.type === "haha" || item.emoji === "😂";
+			if (activeTab === "wow") return item.type === "wow" || item.emoji === "😮";
 			if (activeTab === "sad") return item.type === "sad" || item.emoji === "😢";
-			if (activeTab === "ice_drop") return item.type === "ice_drop" || item.emoji === "🧊";
-			if (activeTab === "clutch") return item.type === "clutch" || item.emoji === "⚡";
+			if (activeTab === "angry") return item.type === "angry" || item.emoji === "😡";
 			return true;
 		});
 	}, [allItems, activeTab]);
 
-	const smashEmoji = useMemo(() => {
-		const match = allItems.find((i) => i.type === "smash" || i.emoji === "💥" || i.emoji === "🏸");
-		return match?.emoji || "🏸";
-	}, [allItems]);
-
 	const hasSpecificReactions =
 		counts.like > 0 ||
 		counts.love > 0 ||
-		counts.smash > 0 ||
-		counts.wow > 0 ||
 		counts.haha > 0 ||
+		counts.wow > 0 ||
 		counts.sad > 0 ||
-		counts.ice_drop > 0 ||
-		counts.clutch > 0;
+		counts.angry > 0;
 
 	return (
 		<Dialog
@@ -187,7 +171,7 @@ export default function LikesModal({
 				</IconButton>
 			</DialogTitle>
 
-			{/* REACTION TABS (All, Smash, Ice Drop, Clutch) */}
+			{/* FACEBOOK REACTION TABS (All, Like, Love, Haha, Wow, Sad, Angry) */}
 			{hasSpecificReactions && (
 				<Box sx={{ borderBottom: 1, borderColor: "divider", bgcolor: "background.default" }}>
 					<Tabs
@@ -219,11 +203,11 @@ export default function LikesModal({
 								data-testid="likes-modal-tab-love"
 							/>
 						)}
-						{counts.smash > 0 && (
+						{counts.haha > 0 && (
 							<Tab
-								label={`${smashEmoji} ${counts.smash}`}
-								value="smash"
-								data-testid="likes-modal-tab-smash"
+								label={`😂 ${counts.haha}`}
+								value="haha"
+								data-testid="likes-modal-tab-haha"
 							/>
 						)}
 						{counts.wow > 0 && (
@@ -233,13 +217,6 @@ export default function LikesModal({
 								data-testid="likes-modal-tab-wow"
 							/>
 						)}
-						{counts.haha > 0 && (
-							<Tab
-								label={`😂 ${counts.haha}`}
-								value="haha"
-								data-testid="likes-modal-tab-haha"
-							/>
-						)}
 						{counts.sad > 0 && (
 							<Tab
 								label={`😢 ${counts.sad}`}
@@ -247,18 +224,11 @@ export default function LikesModal({
 								data-testid="likes-modal-tab-sad"
 							/>
 						)}
-						{counts.ice_drop > 0 && (
+						{counts.angry > 0 && (
 							<Tab
-								label={`🧊 ${counts.ice_drop}`}
-								value="ice_drop"
-								data-testid="likes-modal-tab-ice_drop"
-							/>
-						)}
-						{counts.clutch > 0 && (
-							<Tab
-								label={`⚡ ${counts.clutch}`}
-								value="clutch"
-								data-testid="likes-modal-tab-clutch"
+								label={`😡 ${counts.angry}`}
+								value="angry"
+								data-testid="likes-modal-tab-angry"
 							/>
 						)}
 					</Tabs>
@@ -303,12 +273,9 @@ export default function LikesModal({
 									{u.name}
 								</Typography>
 							</Box>
-							<Chip
-								label={u.emoji}
-								size="small"
-								variant="outlined"
-								sx={{ fontSize: "1rem", height: 26, minWidth: 32 }}
-							/>
+							<Box sx={{ display: "inline-flex", alignItems: "center" }}>
+								<FacebookReactionIcon emoji={u.emoji} size={22} />
+							</Box>
 						</ListItemButton>
 					))}
 
