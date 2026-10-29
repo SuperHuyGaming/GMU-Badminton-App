@@ -475,15 +475,12 @@ describe('Milestone 1 (M1): Backend Models, Indexes, & Facebook-Style Social Hub
 	// 5. J5: PINNING HIERARCHY & AUTHORIZATION
 	// ==========================================
 	describe('5. J5 Post Pinning Hierarchy Authorization (PUT /api/forum/:postId/pin)', () => {
-		it('allows author of the post to toggle isPinned', async () => {
+		it('rejects author of the post from pinning with 403 Forbidden if not admin', async () => {
 			const mockDoc = {
 				_id: postId,
 				authorId,
 				isPinned: false,
-				save: jest.fn().mockResolvedValue(true),
-				toObject() {
-					return { _id: this._id, authorId: this.authorId, isPinned: this.isPinned };
-				},
+				save: jest.fn(),
 			};
 			Post.findById.mockResolvedValue(mockDoc);
 
@@ -491,10 +488,9 @@ describe('Milestone 1 (M1): Backend Models, Indexes, & Facebook-Style Social Hub
 				.put(`/api/forum/${postId}/pin`)
 				.set('Authorization', `Bearer ${tokenAuthor}`);
 
-			expect(res.status).toBe(200);
-			expect(res.body.isPinned).toBe(true);
-			expect(mockDoc.isPinned).toBe(true);
-			expect(mockDoc.save).toHaveBeenCalled();
+			expect(res.status).toBe(403);
+			expect(res.body.message).toContain('Only administrators can pin or unpin posts');
+			expect(mockDoc.save).not.toHaveBeenCalled();
 		});
 
 		it('allows admin to toggle isPinned for any post', async () => {
@@ -532,7 +528,7 @@ describe('Milestone 1 (M1): Backend Models, Indexes, & Facebook-Style Social Hub
 				.set('Authorization', `Bearer ${tokenStranger}`);
 
 			expect(res.status).toBe(403);
-			expect(res.body.message).toContain('Only administrators and post authors');
+			expect(res.body.message).toContain('Only administrators can pin or unpin posts');
 			expect(mockDoc.save).not.toHaveBeenCalled();
 		});
 	});

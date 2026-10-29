@@ -2031,12 +2031,10 @@ router.put("/:postId/pin", authMiddleware, async (req, res) => {
 		const post = await findPostByIdOrActivityFeed(req.params.postId);
 		if (!post) return res.status(404).json({ message: "Post not found." });
 
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const isAdmin = req.user.role === "admin";
-		const isAuthor = post.authorId && post.authorId.toString() === currentUserId;
+		const isAdmin = req.user && req.user.role === "admin";
 
-		if (!isAdmin && !isAuthor) {
-			return res.status(403).json({ message: "Only administrators and post authors can pin posts." });
+		if (!isAdmin) {
+			return res.status(403).json({ message: "Only administrators can pin or unpin posts." });
 		}
 
 		post.isPinned = !post.isPinned;

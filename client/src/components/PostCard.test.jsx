@@ -614,13 +614,14 @@ describe('PostCard Component QA Tests', () => {
 
     // ── Milestone 2: J5 Post Pinning Hierarchy ──────────────────────────────
 
-    it('allows post author to toggle pin megathread from 3-dots card menu', async () => {
+    it('allows admin user to toggle pin megathread from 3-dots card menu', async () => {
         apiFetch.mockResolvedValueOnce({
             ok: true,
             json: async () => ({ message: 'Post pin toggled', isPinned: true })
         });
 
-        renderWithContext(mockPost, mockUser);
+        const adminUser = { ...mockUser, role: 'admin' };
+        renderWithContext(mockPost, adminUser);
 
         const moreBtn = screen.getByRole('button', { name: /more options/i });
         fireEvent.click(moreBtn);
@@ -636,6 +637,13 @@ describe('PostCard Component QA Tests', () => {
             );
         });
     });
+    it('hides pin megathread option for non-admin author', () => {
+        renderWithContext(mockPost, mockUser);
+        const moreBtn = screen.getByRole('button', { name: /more options/i });
+        fireEvent.click(moreBtn);
+        expect(screen.queryByRole('menuitem', { name: /Pin Megathread/i })).not.toBeInTheDocument();
+    });
+
 
     // ── Milestone 2: J6 Audience Privacy Indicators ─────────────────────────
 

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/preserve-manual-memoization */
 // eslint-disable-next-line no-unused-vars
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import apiFetch from "../utils/api";
@@ -134,6 +135,50 @@ export default function Forum() {
 	const [searchInput, setSearchInput] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [isSearchFocused, setIsSearchFocused] = useState(false);
+	const [pullDistance, setPullDistance] = useState(0);
+	const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+	const [isPulling, setIsPulling] = useState(false);
+	const touchStartYRef = useRef(0);
+	const isPullingRef = useRef(false);
+
+	const handleTouchStart = (e) => {
+		if (window.scrollY <= 0 && e.touches.length === 1) {
+			touchStartYRef.current = e.touches[0].clientY;
+			isPullingRef.current = true;
+			setIsPulling(true);
+		} else {
+			isPullingRef.current = false;
+		}
+	};
+
+	const handleTouchMove = (e) => {
+		if (!isPullingRef.current || isPullRefreshing || window.scrollY > 0) return;
+		const currentY = e.touches[0].clientY;
+		const diff = currentY - touchStartYRef.current;
+		if (diff > 0) {
+			const distance = Math.min(Math.pow(diff, 0.85) * 1.5, 80);
+			setPullDistance(distance);
+		} else {
+			setPullDistance(0);
+		}
+	};
+
+	const handleTouchEnd = () => {
+		if (!isPullingRef.current) return;
+		isPullingRef.current = false;
+		setIsPulling(false);
+		if (pullDistance >= 45 && !isPullRefreshing) {
+			setIsPullRefreshing(true);
+			setPullDistance(45);
+			resetFeedAndPagination();
+			setTimeout(() => {
+				setIsPullRefreshing(false);
+				setPullDistance(0);
+			}, 450);
+		} else {
+			setPullDistance(0);
+		}
+	};
 	const searchInputRef = useRef(null);
 	const [dateRange, setDateRange] = useState("all");
 	const [customStartDate, setCustomStartDate] = useState("");
@@ -327,12 +372,14 @@ export default function Forum() {
 	const lastFeedElementRef = useCallback(node => {
 		if (isLoading || isFetchingMore) return;
 		if (observer.current) observer.current.disconnect();
-		observer.current = new IntersectionObserver(entries => {
-			if (entries[0].isIntersecting && hasMore) {
-				setPage(prevPage => prevPage + 1);
-			}
-		});
-		if (node) observer.current.observe(node);
+		if (typeof IntersectionObserver !== 'undefined') {
+			observer.current = new IntersectionObserver(entries => {
+				if (entries[0].isIntersecting && hasMore) {
+					setPage(prevPage => prevPage + 1);
+				}
+			});
+			if (node) observer.current.observe(node);
+		}
 	}, [isLoading, isFetchingMore, hasMore]);
 
 	// J11: 80% Viewport Infinite Scroll Pre-fetcher (Seamless append without skeleton flashing)
@@ -698,6 +745,10 @@ export default function Forum() {
 						0% { border-color: #006633; box-shadow: 0 0 24px rgba(0, 102, 51, 0.5); transform: scale(1.02); }
 						100% { border-color: inherit; box-shadow: inherit; transform: scale(1); }
 					}
+										@keyframes spinSlow {
+						from { transform: rotate(0deg); }
+						to { transform: rotate(360deg); }
+					}
 					.highlight-post-active {
 						animation: highlightPostFlash 3.2s cubic-bezier(0.16, 1, 0.3, 1);
 					}
@@ -708,46 +759,228 @@ export default function Forum() {
 				sx={{ 
 					display: 'flex', 
 					justifyContent: 'space-between', 
-					alignItems: { xs: 'flex-start', sm: 'center' }, 
-					mb: { xs: 1.5, sm: 2.5 }, 
-					mt: { xs: 0.5, sm: 1.5 },
-					flexWrap: 'wrap', 
+					alignItems: { xs: 'stretch', sm: 'center' }, 
+					flexDirection: { xs: 'column', sm: 'row' },
+					mb: { xs: 1.5, sm: 2 }, 
+					mt: { xs: 0.5, sm: 1 },
 					gap: 1.5 
 				}}
 			>
 				<Box>
-					<Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: { xs: 0, sm: 0.5 }, fontSize: { xs: '1.4rem', sm: '2.1rem' } }}>
+					<Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: { xs: 0, sm: 0.3 }, fontSize: { xs: '1.4rem', sm: '2rem' } }}>
 						Community Hub
 					</Typography>
-					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' }, display: { xs: 'none', sm: 'block' } }}>
+					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.85rem', sm: '0.92rem' }, display: { xs: 'none', sm: 'block' } }}>
 						Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
 					</Typography>
 				</Box>
-				{currentUser?.role === 'admin' && (
-					<Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+
+				{/* Top Search Bar & Utility Controls Located Above Feed (Modeled after Facebook Top Header) */}
+				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' }, ml: { sm: 'auto' } }}>
+					{/* Search Input with Instant Keyboard Shortcut ('/' or Cmd+K) */}
+					<TextField 
+						inputRef={searchInputRef}
+						placeholder="Search posts by title, author, court, tags..."
+						size="small"
+						value={searchInput}
+						onChange={(e) => setSearchInput(e.target.value)}
+						onKeyDown={handleSearchKeyDown}
+						onFocus={() => setIsSearchFocused(true)}
+						onBlur={() => setIsSearchFocused(false)}
+						sx={{ 
+							flex: { xs: '1 1 100%', sm: '0 0 240px', md: '0 0 280px' },
+							'& .MuiOutlinedInput-root': {
+								borderRadius: 6,
+								bgcolor: 'background.paper',
+								height: 40,
+								transition: 'all 0.2s ease-in-out',
+								'&:hover': {
+									boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+								},
+								'&.Mui-focused': {
+									boxShadow: '0 4px 12px rgba(0, 80, 40, 0.12)'
+								}
+							}
+						}}
+						slotProps={{
+							input: {
+								startAdornment: (
+									<InputAdornment position="start">
+										<SearchIcon fontSize="small" color={isSearchFocused ? "primary" : "action"} />
+									</InputAdornment>
+								),
+								endAdornment: (
+									<InputAdornment position="end" sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+										{!isSearchFocused && !searchInput && (
+											<Typography 
+												variant="caption" 
+												sx={{ 
+													bgcolor: 'action.hover', 
+													px: 0.9, 
+													py: 0.3, 
+													borderRadius: 1, 
+													color: 'text.secondary', 
+													fontWeight: 'bold', 
+													fontSize: '0.72rem',
+													display: { xs: 'none', md: 'block' }, 
+													pointerEvents: 'none' 
+												}}
+											>
+												/
+											</Typography>
+										)}
+										{searchInput && (
+											<IconButton 
+												size="small" 
+												onClick={() => { 
+													setSearchInput(''); 
+													setDebouncedSearch(''); 
+													resetFeedAndPagination();
+													searchInputRef.current?.focus(); 
+												}} 
+												aria-label="Clear search"
+											>
+												<CloseIcon fontSize="small" />
+											</IconButton>
+										)}
+									</InputAdornment>
+								),
+								inputProps: {
+									'aria-label': 'Search community posts'
+								}
+							}
+						}}
+					/>
+
+					{/* Date Range Selector */}
+					<FormControl size="small" sx={{ minWidth: 110, flex: { xs: '1 1 auto', sm: 'none' } }}>
+						<Select
+							value={dateRange}
+							onChange={(e) => {
+								setDateRange(e.target.value);
+								resetFeedAndPagination();
+							}}
+							displayEmpty
+							aria-label="Filter by date range"
+							sx={{ borderRadius: 6, height: 40, fontWeight: 600, fontSize: '0.82rem', bgcolor: 'background.paper' }}
+						>
+							{DATE_OPTIONS.map(opt => (
+								<MenuItem key={opt.id} value={opt.id}>{opt.label}</MenuItem>
+							))}
+						</Select>
+					</FormControl>
+
+					{/* Desktop Reload Button (Website reload button) */}
+					<Tooltip title="Reload feed">
+						<IconButton 
+							size="small" 
+							color="inherit"
+							onClick={resetFeedAndPagination}
+							data-testid="feed-reload-btn"
+							aria-label="Refresh feed"
+							sx={{ 
+								width: 40, 
+								height: 40, 
+								borderRadius: 6, 
+								border: '1px solid', 
+								borderColor: 'divider', 
+								bgcolor: 'background.paper',
+								transition: 'all 0.2s ease-in-out',
+								'&:hover': {
+									bgcolor: 'action.hover',
+									borderColor: 'primary.main',
+									color: 'primary.main'
+								}
+							}}
+						>
+							<RefreshIcon sx={{ fontSize: 20, animation: (isLoading || isPullRefreshing) ? 'spinSlow 1s linear infinite' : 'none' }} />
+						</IconButton>
+					</Tooltip>
+
+					{/* Compact / Comfortable Density Toggle */}
+					<Tooltip title={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}>
+						<Button 
+							variant={feedDensity === "compact" ? "contained" : "outlined"} 
+							size="small" 
+							color="primary"
+							onClick={handleToggleDensity}
+							data-testid="feed-density-toggle"
+							aria-label={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}
+							sx={{ 
+								minWidth: 'auto', 
+								borderRadius: 6, 
+								display: 'inline-flex', 
+								gap: 0.8, 
+								fontWeight: 'bold', 
+								height: 40, 
+								px: 1.5,
+								fontSize: '0.82rem',
+								textTransform: 'none'
+							}}
+						>
+							{feedDensity === "compact" ? "📋 Compact" : "🖼 Comfortable"}
+						</Button>
+					</Tooltip>
+
+					{currentUser?.role === 'admin' && (
 						<Button
 							variant="outlined"
 							color="error"
 							onClick={() => setIsModQueueOpen(true)}
 							data-testid="admin-moderation-queue-btn"
 							sx={{
-								borderRadius: 2.5,
+								borderRadius: 6,
 								fontWeight: 'bold',
 								textTransform: 'none',
 								px: { xs: 1.5, sm: 2 },
-								py: { xs: 0.6, sm: 1 },
-								fontSize: { xs: '0.8rem', sm: '0.875rem' }
+								height: 40,
+								fontSize: { xs: '0.8rem', sm: '0.85rem' }
 							}}
 						>
-							🛡️ Moderation Queue
+							🛡️ Mod Queue
 						</Button>
-					</Box>
-				)}
+					)}
+				</Box>
 			</Box>
 
-			{/* INLINE COMPOSER & FEED FILTERS */}
-			<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2, gap: 1.5 }}>
-				{/* FACEBOOK-STYLE COMPOSER CARD */}
+			{/* INLINE COMPOSER & FEED FILTERS WITH MOBILE PULL-TO-REFRESH */}
+			<Box 
+				onTouchStart={handleTouchStart}
+				onTouchMove={handleTouchMove}
+				onTouchEnd={handleTouchEnd}
+				sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2, gap: 1.5 }}
+			>
+				{/* MOBILE PULL-TO-REFRESH VISUAL INDICATOR */}
+				{(pullDistance > 0 || isPullRefreshing) && (
+					<Box 
+						data-testid="mobile-pull-to-refresh-indicator"
+						sx={{ 
+							display: { xs: 'flex', md: 'none' },
+							alignItems: 'center',
+							justifyContent: 'center',
+							height: pullDistance,
+							overflow: 'hidden',
+							transition: isPulling ? 'none' : 'height 0.25s ease',
+							width: '100%',
+							gap: 1,
+							color: 'primary.main',
+							fontWeight: 600,
+							fontSize: '0.85rem'
+						}}
+					>
+						<CircularProgress 
+							size={20} 
+							variant={isPullRefreshing ? "indeterminate" : "determinate"}
+							value={isPullRefreshing ? undefined : Math.min(100, (pullDistance / 45) * 100)}
+							sx={{ color: 'primary.main' }}
+						/>
+						<Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+							{isPullRefreshing ? "Refreshing feed..." : pullDistance >= 45 ? "Release to refresh" : "Pull down to refresh"}
+						</Typography>
+					</Box>
+				)}
+
+				{/* 1. FACEBOOK-STYLE COMPOSER CARD (PROMINENTLY AT THE VERY TOP OF FEED) */}
 				{Boolean(currentUser) && (
 					<Paper 
 						elevation={0}
@@ -826,174 +1059,34 @@ export default function Forum() {
 					</Paper>
 				)}
 
-				{/* POST SEARCH & DATE RANGE CONTROLS */}
-				<Paper 
-					elevation={0}
-					sx={{ 
-						width: '100%',
-						maxWidth: '680px',
-						display: 'flex', 
-						alignItems: 'center', 
-						justifyContent: 'space-between',
-						gap: 1.5,
-						p: 1.5,
-						borderRadius: 3,
-						border: '1px solid',
-						borderColor: 'divider',
-						bgcolor: 'background.paper',
-						flexWrap: 'wrap'
-					}}
-				>
-					{/* Search Input with Instant Keyboard Shortcut ('/' or Cmd+K) */}
-					<TextField 
-						inputRef={searchInputRef}
-						placeholder="Search posts by title, author, court, tags..."
-						size="small"
-						value={searchInput}
-						onChange={(e) => setSearchInput(e.target.value)}
-						onKeyDown={handleSearchKeyDown}
-						onFocus={() => setIsSearchFocused(true)}
-						onBlur={() => setIsSearchFocused(false)}
-						sx={{ 
-							flex: { xs: '1 1 100%', sm: '1 1 280px' },
-							'& .MuiOutlinedInput-root': {
-								borderRadius: 2.5,
-								transition: 'all 0.2s ease-in-out',
-								'&:hover': {
-									boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-								},
-								'&.Mui-focused': {
-									boxShadow: '0 4px 12px rgba(0, 80, 40, 0.12)'
-								}
-							}
-						}}
-						slotProps={{
-							input: {
-								startAdornment: (
-									<InputAdornment position="start">
-										<SearchIcon color={isSearchFocused ? "primary" : "action"} />
-									</InputAdornment>
-								),
-								endAdornment: (
-									<InputAdornment position="end" sx={{ display: 'flex', gap: 0.8, alignItems: 'center' }}>
-										{!isSearchFocused && !searchInput && (
-											<Typography 
-												variant="caption" 
-												sx={{ 
-													bgcolor: 'action.hover', 
-													px: 0.9, 
-													py: 0.4, 
-													borderRadius: 1, 
-													color: 'text.secondary', 
-													fontWeight: 'bold', 
-													fontSize: '0.75rem',
-													display: { xs: 'none', sm: 'block' }, 
-													pointerEvents: 'none' 
-												}}
-											>
-												/
-											</Typography>
-										)}
-										{searchInput && (
-											<IconButton 
-												size="small" 
-												onClick={() => { 
-													setSearchInput(''); 
-													setDebouncedSearch(''); 
-													resetFeedAndPagination();
-													searchInputRef.current?.focus(); 
-												}} 
-												aria-label="Clear search"
-											>
-												<CloseIcon fontSize="small" />
-											</IconButton>
-										)}
-									</InputAdornment>
-								),
-								inputProps: {
-									'aria-label': 'Search community posts'
-								}
-							}
-						}}
-					/>
-
-					{/* Date Range Selector & Refresh */}
-					<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-						<FormControl size="small" sx={{ minWidth: 125 }}>
-							<Select
-								value={dateRange}
-								onChange={(e) => {
-									setDateRange(e.target.value);
-									resetFeedAndPagination();
-								}}
-								displayEmpty
-								aria-label="Filter by date range"
-								sx={{ borderRadius: 2.5, fontWeight: 600, fontSize: '0.85rem' }}
-							>
-								{DATE_OPTIONS.map(opt => (
-									<MenuItem key={opt.id} value={opt.id}>{opt.label}</MenuItem>
-								))}
-							</Select>
-						</FormControl>
-
-						{dateRange === 'custom' && (
-							<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-								<TextField
-									type="date"
-									size="small"
-									value={customStartDate}
-									onChange={(e) => {
-										setCustomStartDate(e.target.value);
-										resetFeedAndPagination();
-									}}
-									slotProps={{ htmlInput: { 'aria-label': 'Start date' } }}
-									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-								/>
-								<Typography variant="caption" color="text.secondary">to</Typography>
-								<TextField
-									type="date"
-									size="small"
-									value={customEndDate}
-									onChange={(e) => {
-										setCustomEndDate(e.target.value);
-										resetFeedAndPagination();
-									}}
-									slotProps={{ htmlInput: { 'aria-label': 'End date' } }}
-									sx={{ width: 135, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-								/>
-							</Box>
-						)}
-
-						<Button 
-							variant="outlined" 
-							size="small" 
-							color="inherit"
-							onClick={resetFeedAndPagination}
-							sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 1, fontWeight: 'bold', height: 38, px: 1.5 }}
-							aria-label="Refresh feed"
-						>
-							<RefreshIcon sx={{ fontSize: 18 }} />
-							<Box sx={{ display: { xs: 'none', sm: 'block' } }}>Refresh</Box>
-						</Button>
-
-						<Tooltip title={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}>
-							<Button 
-								variant={feedDensity === "compact" ? "contained" : "outlined"} 
-								size="small" 
-								color="primary"
-								onClick={handleToggleDensity}
-								data-testid="feed-density-toggle"
-								aria-label={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}
-								sx={{ minWidth: 'auto', borderRadius: 2, display: 'flex', gap: 0.8, fontWeight: 'bold', height: 38, px: 1.5 }}
-							>
-								{feedDensity === "compact" ? "📋 Compact" : "🖼 Comfortable"}
-							</Button>
-						</Tooltip>
-
+				{dateRange === 'custom' && (
+					<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, maxWidth: '680px', width: '100%', px: 1 }}>
+						<TextField
+							type="date"
+							size="small"
+							value={customStartDate}
+							onChange={(e) => {
+								setCustomStartDate(e.target.value);
+								resetFeedAndPagination();
+							}}
+							slotProps={{ htmlInput: { 'aria-label': 'Start date' } }}
+							sx={{ width: 145, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+						/>
+						<Typography variant="caption" color="text.secondary">to</Typography>
+						<TextField
+							type="date"
+							size="small"
+							value={customEndDate}
+							onChange={(e) => {
+								setCustomEndDate(e.target.value);
+								resetFeedAndPagination();
+							}}
+							slotProps={{ htmlInput: { 'aria-label': 'End date' } }}
+							sx={{ width: 145, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+						/>
 					</Box>
-				</Paper>
+				)}
 
-				
 				{/* UNIFIED FILTER STRIP (Categories + Trending) */}
 				<Box 
 					sx={{ 
@@ -1413,8 +1506,14 @@ export default function Forum() {
 										}}
 									>
 										<MenuItem value="general">💬 General Discussion</MenuItem>
-										<MenuItem value="find_partner">🤝 Find Players & Matches</MenuItem>
-										<MenuItem value="gear_exchange">🎒 Gear & Equipment</MenuItem>
+										<MenuItem value="find_partner">🤝 Find Players</MenuItem>
+										<MenuItem value="meetup_rally">🏸 Meetup / Rally</MenuItem>
+										<MenuItem value="challenge_match">⚔️ Challenge Match</MenuItem>
+										<MenuItem value="match_result">🏆 Match Result</MenuItem>
+										<MenuItem value="gear_exchange">🎒 Gear Exchange</MenuItem>
+										<MenuItem value="gear_review">⭐ Gear Review</MenuItem>
+										<MenuItem value="training">🎯 Training & Drills</MenuItem>
+										<MenuItem value="qa_forum">❓ Questions & Advice</MenuItem>
 									</Select>
 								</Box>
 

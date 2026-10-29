@@ -462,12 +462,7 @@ describe('Milestone 2 Adversarial Stress Suite (challenger_2_m2_14)', () => {
 			);
 		};
 
-		it('allows author to toggle megathread pin and reflects status update', async () => {
-			apiFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ message: 'Post pin toggled', isPinned: true }),
-			});
-
+		it('strictly denies non-admin author from pinning (pin option only for admins)', () => {
 			const authorUser = { id: 'author-alice', name: 'Alice Champion', role: 'player' };
 			renderPostWithUser(basePost, authorUser);
 
@@ -475,20 +470,8 @@ describe('Milestone 2 Adversarial Stress Suite (challenger_2_m2_14)', () => {
 			const moreBtn = screen.getByRole('button', { name: /more options/i });
 			fireEvent.click(moreBtn);
 
-			// Pin option is present for author
-			const pinMenuItem = screen.getByRole('menuitem', { name: /📌 Pin Megathread/i });
-			expect(pinMenuItem).toBeInTheDocument();
-			fireEvent.click(pinMenuItem);
-
-			await waitFor(() => {
-				expect(apiFetch).toHaveBeenCalledWith(
-					`/api/forum/${basePost._id}/pin`,
-					expect.objectContaining({ method: 'PUT' })
-				);
-			});
-
-			// Pinned ribbon should render
-			expect(await screen.findByText('📌 Pinned Megathread')).toBeInTheDocument();
+			// Pin option is NOT present for regular author (admin only)
+			expect(screen.queryByRole('menuitem', { name: /Pin Megathread/i })).not.toBeInTheDocument();
 		});
 
 		it('allows admin user to toggle megathread pin even if admin is NOT the author', async () => {

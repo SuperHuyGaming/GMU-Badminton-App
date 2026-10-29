@@ -277,16 +277,13 @@ describe('Adversarial Stress Test: J4, J5, J6, J8 Backend Implementation', () =>
 	describe('2. J5 Pinning Hierarchy Authorization Tests', () => {
 		const targetPostId = '660000000000000000000201';
 
-		it('allows author of the post to pin their post', async () => {
+		it('rejects author of the post if not admin with 403 Forbidden', async () => {
 			const mockPost = {
 				_id: targetPostId,
 				authorId,
 				title: 'Author Post',
 				isPinned: false,
-				save: jest.fn().mockResolvedValue(true),
-				toObject() {
-					return { _id: this._id, authorId: this.authorId, isPinned: this.isPinned };
-				},
+				save: jest.fn(),
 			};
 			Post.findById.mockResolvedValue(mockPost);
 
@@ -294,15 +291,12 @@ describe('Adversarial Stress Test: J4, J5, J6, J8 Backend Implementation', () =>
 				.put(`/api/forum/${targetPostId}/pin`)
 				.set('Authorization', `Bearer ${tokenAuthor}`);
 
-			expect(res.status).toBe(200);
-			expect(res.body.success).toBe(true);
-			expect(res.body.isPinned).toBe(true);
-			expect(mockPost.isPinned).toBe(true);
-			expect(mockPost.save).toHaveBeenCalled();
-			expect(mockIo.emit).toHaveBeenCalledWith('postUpdated', expect.anything());
+			expect(res.status).toBe(403);
+			expect(res.body.message).toContain('Only administrators can pin or unpin posts');
+			expect(mockPost.save).not.toHaveBeenCalled();
 		});
 
-		it('allows author of the post to unpin their post (toggle off)', async () => {
+		it('allows administrator to unpin any user post (toggle off)', async () => {
 			const mockPost = {
 				_id: targetPostId,
 				authorId,
@@ -317,7 +311,7 @@ describe('Adversarial Stress Test: J4, J5, J6, J8 Backend Implementation', () =>
 
 			const res = await request(app)
 				.put(`/api/forum/${targetPostId}/pin`)
-				.set('Authorization', `Bearer ${tokenAuthor}`);
+				.set('Authorization', `Bearer ${tokenAdmin}`);
 
 			expect(res.status).toBe(200);
 			expect(res.body.isPinned).toBe(false);
@@ -361,7 +355,7 @@ describe('Adversarial Stress Test: J4, J5, J6, J8 Backend Implementation', () =>
 				.set('Authorization', `Bearer ${tokenStranger}`);
 
 			expect(res.status).toBe(403);
-			expect(res.body.message).toContain('Only administrators and post authors can pin posts');
+			expect(res.body.message).toContain('Only administrators can pin or unpin posts');
 			expect(mockPost.save).not.toHaveBeenCalled();
 		});
 

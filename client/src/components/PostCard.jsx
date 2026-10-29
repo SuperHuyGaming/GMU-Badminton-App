@@ -559,7 +559,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	};
 
 	const handleTogglePin = async () => {
-		if (!currentUser || (currentUser.role !== "admin" && String(currentUserId) !== String(localPost.authorId))) return;
+		if (!currentUser || currentUser.role !== "admin") return;
 		try {
 			const res = await apiFetch(`/api/forum/${localPost._id}/pin`, {
 				method: "PUT",
@@ -1025,7 +1025,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										✎ Edit Post
 									</MenuItem>
 								)}
-								{(currentUser?.role === "admin" || String(currentUserId) === String(localPost.authorId)) && (
+								{currentUser?.role === "admin" && (
 									<MenuItem
 										onClick={() => {
 											handleTogglePin();
