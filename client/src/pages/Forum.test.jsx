@@ -147,11 +147,11 @@ describe('Forum Page Component (Community Hub)', () => {
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Latest Posts/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Top Discussions/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Recent Activity/i })).toBeInTheDocument();
-        expect(screen.getByRole('tab', { name: /Saved Posts/i })).toBeInTheDocument();
+        expect(screen.queryByTestId('feed-sorting-bar')).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /Latest Posts/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /Top Discussions/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /Recent Activity/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: /Saved Posts/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Create New Post/i })).not.toBeInTheDocument();
         expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument();
         expect(screen.getByText('#Tournament')).toBeInTheDocument();
@@ -1160,97 +1160,19 @@ describe('Forum Page Component (Community Hub)', () => {
     });
 
     describe('Milestone 3: Hub Controls, Mentions & Prefetching (J4, J8, J10, J11)', () => {
-        it('J4: switches sorting tabs and updates tab query parameter while resetting cursor', async () => {
+        it('does not render feed sorting tabs and defaults to clean latest feed', async () => {
             apiFetch.mockResolvedValue({
                 ok: true,
                 json: async () => ({ feed: [], nextCursor: null, hasMore: false })
             });
 
             renderWithProviders();
-            await waitFor(() => expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument());
+            await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-            // Switch to "Top Discussions"
-            const topTab = screen.getByRole('tab', { name: /Top Discussions/i });
-            fireEvent.click(topTab);
-
-            await waitFor(() => {
-                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=top'));
-            });
-
-            // Switch to "Recent Activity"
-            const activityTab = screen.getByRole('tab', { name: /Recent Activity/i });
-            fireEvent.click(activityTab);
-
-            await waitFor(() => {
-                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=recent_activity'));
-            });
-
-            // Switch back to "Latest Posts"
-            const latestTab = screen.getByRole('tab', { name: /Latest Posts/i });
-            fireEvent.click(latestTab);
-
-            await waitFor(() => {
-                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=latest'));
-            });
-        });
-
-        it('J8: switches to Saved Posts tab and renders clean EmptyState when no posts are saved', async () => {
-            apiFetch.mockResolvedValue({
-                ok: true,
-                json: async () => ({ feed: [], nextCursor: null, hasMore: false, bookmarkedPosts: [] })
-            });
-
-            renderWithProviders();
-            await waitFor(() => expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument());
-
-            // Click Saved Posts tab
-            const savedTab = screen.getByRole('tab', { name: /Saved Posts/i });
-            fireEvent.click(savedTab);
-
-            await waitFor(() => {
-                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=saved'));
-                expect(screen.getByTestId('saved-posts-empty-state')).toBeInTheDocument();
-                expect(screen.getByText('No Saved Posts')).toBeInTheDocument();
-                expect(screen.getByText('Save interesting discussions to read or revisit them later.')).toBeInTheDocument();
-            });
-
-            // Clicking "Explore Latest Posts" button returns to latest tab
-            const exploreBtn = screen.getByRole('button', { name: /Explore Latest Posts/i });
-            fireEvent.click(exploreBtn);
-
-            await waitFor(() => {
-                expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tab=latest'));
-            });
-        });
-
-        it('J8: displays saved posts in Saved Posts tab and instantly filters out unsaved post optimistically (0ms)', async () => {
-            const savedPost = {
-                _id: 'saved-post-1',
-                referenceId: 'saved-post-1',
-                title: 'My Bookmarked Tournament Discussion',
-                content: 'Important guide for upcoming tournament.',
-                createdAt: new Date().toISOString()
-            };
-
-            apiFetch.mockResolvedValue({
-                ok: true,
-                json: async () => ({
-                    feed: [savedPost],
-                    nextCursor: null,
-                    hasMore: false,
-                    bookmarkedPosts: ['saved-post-1']
-                })
-            });
-
-            renderWithProviders();
-            await waitFor(() => expect(screen.getByTestId('feed-sorting-bar')).toBeInTheDocument());
-
-            const savedTab = screen.getByRole('tab', { name: /Saved Posts/i });
-            fireEvent.click(savedTab);
-
-            await waitFor(() => {
-                expect(screen.getByText('My Bookmarked Tournament Discussion')).toBeInTheDocument();
-            });
+            expect(screen.queryByTestId('feed-sorting-bar')).not.toBeInTheDocument();
+            expect(screen.queryByRole('tab', { name: /Top Discussions/i })).not.toBeInTheDocument();
+            expect(screen.queryByRole('tab', { name: /Recent Activity/i })).not.toBeInTheDocument();
+            expect(screen.queryByRole('tab', { name: /Saved Posts/i })).not.toBeInTheDocument();
         });
 
         it('J10: opens mention autocomplete in Create Post modal when typing @, allows keyboard navigation and selection', async () => {

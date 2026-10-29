@@ -22,13 +22,6 @@ import { compressImage } from "../utils/imageUtils";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useMentionAutocomplete, renderContentWithMentions } from "../hooks/useMentionAutocomplete";
 
-const FEED_SORT_TABS = [
-	{ id: "top", label: "🔥 Top Discussions" },
-	{ id: "recent_activity", label: "⚡ Recent Activity" },
-	{ id: "latest", label: "🕒 Latest Posts" },
-	{ id: "saved", label: "🔖 Saved Posts" }
-];
-
 const CATEGORY_FILTERS = [
 	{ id: "all", label: "All" },
 	{ id: "general", label: "💬 General" },
@@ -1060,61 +1053,6 @@ export default function Forum() {
 			</Box>
 
 			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%', maxWidth: '680px', mx: 'auto' }}>
-				{/* J4 SMART FEED SORTING BAR */}
-				<Paper
-					elevation={0}
-					data-testid="feed-sorting-bar"
-					role="tablist"
-					aria-label="Feed sorting options"
-					sx={{
-						width: '100%',
-						display: 'flex',
-						alignItems: 'center',
-						justifyContent: 'space-between',
-						p: 0.5,
-						borderRadius: 3,
-						bgcolor: 'background.paper',
-						border: '1px solid',
-						borderColor: 'divider',
-						gap: 0.5,
-						overflowX: 'auto',
-						scrollbarWidth: 'none',
-						'&::-webkit-scrollbar': { display: 'none' }
-					}}
-				>
-					{FEED_SORT_TABS.map((t) => {
-						const isActive = tab === t.id;
-						return (
-							<Button
-								key={t.id}
-								role="tab"
-								aria-selected={isActive}
-								data-testid={`sort-tab-${t.id}`}
-								onClick={() => handleTabChange(t.id)}
-								sx={{
-									flex: { xs: '1 0 auto', sm: 1 },
-									py: 0.8,
-									px: { xs: 1.5, sm: 2 },
-									borderRadius: 2.5,
-									textTransform: 'none',
-									fontWeight: isActive ? 800 : 600,
-									fontSize: { xs: '0.8rem', sm: '0.875rem' },
-									whiteSpace: 'nowrap',
-									color: isActive ? 'primary.contrastText' : 'text.primary',
-									bgcolor: isActive ? 'primary.main' : 'transparent',
-									boxShadow: isActive ? '0 2px 8px rgba(0, 102, 51, 0.25)' : 'none',
-									transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-									'&:hover': {
-										bgcolor: isActive ? 'primary.dark' : 'action.selected',
-									}
-								}}
-							>
-								{t.label}
-							</Button>
-						);
-					})}
-				</Paper>
-
 				{/* NEW POSTS PILL */}
 				{newPostsQueue.length > 0 && (
 					<Box 
