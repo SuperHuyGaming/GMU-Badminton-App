@@ -15,8 +15,11 @@ import {
     RadioGroup, 
     Divider,
     Avatar,
-    Button
+    Button,
+    TextField,
+    InputAdornment
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import posthog from 'posthog-js';
 import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
@@ -32,6 +35,7 @@ export default function SearchResults() {
     const { user } = useAuth();
     const searchQuery = queryParams.get('q') || '';
 
+    const [localSearchInput, setLocalSearchInput] = useState(searchQuery);
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [page, setPage] = useState(1);
@@ -54,6 +58,7 @@ export default function SearchResults() {
     const [prevQuery, setPrevQuery] = useState(searchQuery);
     if (searchQuery !== prevQuery) {
         setPrevQuery(searchQuery);
+        setLocalSearchInput(searchQuery);
         setResults([]);
         setPage(1);
         setHasMore(true);
@@ -186,19 +191,62 @@ export default function SearchResults() {
 
     return (
         <Box sx={{ flexGrow: 1, pt: { xs: 1, sm: 2 }, pb: 4 }}>
-            <Typography 
-                variant="h4" 
-                component="h1" 
-                fontWeight="bold" 
-                mb={3} 
-                sx={{ 
-                    color: 'text.primary',
-                    fontSize: { xs: '1.5rem', sm: '1.875rem', md: '2.125rem' },
-                    wordBreak: 'break-word'
-                }}
-            >
-                Search Results for "{searchQuery}"
-            </Typography>
+            <Box sx={{ mb: 3 }}>
+                <Typography 
+                    variant="h4" 
+                    component="h1" 
+                    fontWeight="bold" 
+                    mb={1.5} 
+                    sx={{ 
+                        color: 'text.primary',
+                        fontSize: { xs: '1.5rem', sm: '1.875rem', md: '2.125rem' },
+                        wordBreak: 'break-word'
+                    }}
+                >
+                    {searchQuery ? `Search Results for "${searchQuery}"` : "Search GMU Badminton"}
+                </Typography>
+                <Box 
+                    component="form" 
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (localSearchInput.trim()) {
+                            navigate(`/search?q=${encodeURIComponent(localSearchInput.trim())}`);
+                        }
+                    }}
+                    sx={{ display: 'flex', gap: 1, maxWidth: 520 }}
+                >
+                    <TextField
+                        fullWidth
+                        size="small"
+                        placeholder="Search players, posts, or keywords..."
+                        value={localSearchInput}
+                        onChange={(e) => setLocalSearchInput(e.target.value)}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon color="action" />
+                                    </InputAdornment>
+                                )
+                            }
+                        }}
+                    />
+                    <Button 
+                        variant="contained" 
+                        type="submit" 
+                        sx={{ 
+                            bgcolor: '#FFCC33', 
+                            color: '#1a202c', 
+                            fontWeight: 'bold',
+                            textTransform: 'none',
+                            px: 2.5,
+                            '&:hover': { bgcolor: '#e6b800' }
+                        }}
+                    >
+                        Search
+                    </Button>
+                </Box>
+            </Box>
 
             <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                 {/* Left Sidebar - Faceted Filtering */}

@@ -705,50 +705,23 @@ export default function Forum() {
 					}
 				`}
 			</style>
-			{/* Clean, Modern Header Modeled after Facebook & Community Directory */}
-			<Box 
+			{/* Accessible Hidden Page Landmark for Screen Readers (Facebook layout starts immediately at feed) */}
+			<Typography 
+				component="h1" 
 				sx={{ 
-					display: 'flex', 
-					justifyContent: 'space-between', 
-					alignItems: { xs: 'stretch', sm: 'center' }, 
-					flexDirection: { xs: 'column', sm: 'row' },
-					mb: { xs: 1.5, sm: 2 }, 
-					mt: { xs: 0.5, sm: 1 },
-					gap: 1.5 
+					position: 'absolute', 
+					width: '1px', 
+					height: '1px', 
+					padding: 0, 
+					margin: '-1px', 
+					overflow: 'hidden', 
+					clip: 'rect(0, 0, 0, 0)', 
+					whiteSpace: 'nowrap', 
+					border: 0 
 				}}
 			>
-				<Box>
-					<Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: '-0.5px', mb: { xs: 0, sm: 0.3 }, fontSize: { xs: '1.4rem', sm: '2rem' } }}>
-						Community Hub
-					</Typography>
-					<Typography color="text.secondary" sx={{ fontSize: { xs: '0.85rem', sm: '0.92rem' }, display: { xs: 'none', sm: 'block' } }}>
-						Connect, discuss matches, share equipment tips, and track all the badminton action on campus.
-					</Typography>
-				</Box>
-
-				{currentUser?.role === 'admin' && (
-					<Box sx={{ ml: { sm: 'auto' } }}>
-						<Button
-							variant="outlined"
-							color="error"
-							size="small"
-							onClick={() => setIsModQueueOpen(true)}
-							data-testid="admin-moderation-queue-btn"
-							startIcon={<span>🛡️</span>}
-							sx={{
-								borderRadius: 6,
-								fontWeight: 'bold',
-								textTransform: 'none',
-								px: { xs: 1.5, sm: 2 },
-								height: 38,
-								fontSize: { xs: '0.8rem', sm: '0.85rem' }
-							}}
-						>
-							Mod Queue
-						</Button>
-					</Box>
-				)}
-			</Box>
+				Community Hub
+			</Typography>
 
 			{/* INLINE COMPOSER & FEED FILTERS WITH MOBILE PULL-TO-REFRESH */}
 			<Box 

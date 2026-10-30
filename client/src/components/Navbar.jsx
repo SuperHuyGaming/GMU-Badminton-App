@@ -1,8 +1,9 @@
-import { useState, useContext, useEffect, useMemo } from 'react';
+import { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener, Tabs, Tab } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -39,12 +40,20 @@ const SunIcon = () => (
 );
 
 
-const GlobalSearch = () => {
+const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+        if (shouldFocus && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [shouldFocus]);
     const [open, setOpen] = useState(false);
     const [options, setOptions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [inputValue, setInputValue] = useState("");
     const navigate = useNavigate();
+    const location = useLocation();
     
     // Search history for specific players
     const [recentSearches, setRecentSearches] = useState(() => {
@@ -163,6 +172,7 @@ const GlobalSearch = () => {
                             setInputValue("");
                             setOptions([]);
                             setOpen(false);
+                            if (onCloseMobile) onCloseMobile();
                         }
                     }}
                     filterOptions={(x) => x}
@@ -171,22 +181,29 @@ const GlobalSearch = () => {
                         return (
                             <TextField
                                 {...params}
-                                placeholder="Search players..."
+                                inputRef={inputRef}
+                                placeholder="Search GMU Badminton..."
                                 variant="outlined"
                                 size="small"
                                 onClick={() => setOpen(true)}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter' && inputValue.trim()) {
                                         e.preventDefault();
-                                        navigate(`/search?q=${encodeURIComponent(inputValue.trim())}`);
+                                        const trimmed = inputValue.trim();
+                                        if (location.pathname.startsWith('/community')) {
+                                            navigate(`/community?search=${encodeURIComponent(trimmed)}`);
+                                        } else {
+                                            navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+                                        }
                                         setOpen(false);
+                                        if (onCloseMobile) onCloseMobile();
                                     }
                                 }}
                                 slotProps={{
                                     ...params.slotProps,
                                     htmlInput: {
                                         ...params.slotProps?.htmlInput,
-                                        'aria-label': 'Search players',
+                                        'aria-label': 'Search GMU Badminton',
                                     },
                                     input: {
                                         ...inputSlot,
@@ -291,6 +308,7 @@ export default function Navbar() {
     const notifOpen = Boolean(notifAnchorEl);
     const [notifFilter, setNotifFilter] = useState("all");
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
     const filteredNotifications = useMemo(() => {
         if (notifFilter === 'unread') return notifications.filter(n => !n.read);
@@ -337,53 +355,98 @@ export default function Navbar() {
 					}}
 				>
 					<Toolbar sx={{ justifyContent: "space-between", px: { xs: 1, sm: 2, md: 3 } }}>
-						<Box
-							sx={{
-								display: "flex",
-								alignItems: "center",
-								gap: { xs: 1, md: 3 },
-							}}
-						>
-							<IconButton
-								color="inherit"
-								edge="start"
-								onClick={handleDrawerToggle}
-								sx={{ display: { md: "none" } }}
-								aria-label="Open navigation menu"
-								aria-expanded={mobileOpen}
-								aria-controls="mobile-menu"
-							>
-								<HamburgerIcon />
-							</IconButton>
-
-							<Typography
-								variant="h6"
-								component={RouterLink}
-								to="/"
-								sx={{
-									textDecoration: "none",
-									color: "#FFF275",
-									fontWeight: 900,
-									fontSize: { xs: "1rem", sm: "1.1rem" },
-									letterSpacing: "-0.5px",
-									"&:focus-visible": {
-										outline: "2px solid #ffffff",
-										outlineOffset: "2px",
-										borderRadius: "2px",
-									},
-								}}
-							>
-								GMU Badminton
-							</Typography>
-
+						{mobileSearchOpen ? (
 							<Box
-								component="nav"
-								aria-label="Main navigation"
+								data-testid="mobile-search-bar"
 								sx={{
-									display: { xs: "none", md: "flex" },
+									display: { xs: "flex", md: "none" },
+									alignItems: "center",
+									width: "100%",
 									gap: 1,
+									py: 0.5,
 								}}
 							>
+								<IconButton
+									color="inherit"
+									onClick={() => setMobileSearchOpen(false)}
+									aria-label="Close search"
+									size="small"
+									edge="start"
+								>
+									<ArrowBackIcon />
+								</IconButton>
+								<Box sx={{ flex: 1 }}>
+									<GlobalSearch shouldFocus onCloseMobile={() => setMobileSearchOpen(false)} />
+								</Box>
+							</Box>
+						) : (
+							<>
+								{/* Left Section: Brand Logo + Persistent Facebook-style Search */}
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: { xs: 1, md: 1.5 },
+									}}
+								>
+									<IconButton
+										color="inherit"
+										edge="start"
+										onClick={handleDrawerToggle}
+										sx={{ display: { md: "none" } }}
+										aria-label="Open navigation menu"
+										aria-expanded={mobileOpen}
+										aria-controls="mobile-menu"
+									>
+										<HamburgerIcon />
+									</IconButton>
+
+									<Typography
+										variant="h6"
+										component={RouterLink}
+										to="/"
+										sx={{
+											textDecoration: "none",
+											color: "#FFF275",
+											fontWeight: 900,
+											fontSize: { xs: "1rem", sm: "1.1rem" },
+											letterSpacing: "-0.5px",
+											whiteSpace: "nowrap",
+											"&:focus-visible": {
+												outline: "2px solid #ffffff",
+												outlineOffset: "2px",
+												borderRadius: "2px",
+											},
+										}}
+									>
+										GMU Badminton
+									</Typography>
+
+									{/* Facebook-style Left Search next to brand logo */}
+									<Box
+										sx={{
+											display: { xs: "none", md: "flex" },
+											width: { md: 220, lg: 280 },
+											ml: { md: 0.5, lg: 1 },
+										}}
+									>
+										<GlobalSearch />
+									</Box>
+								</Box>
+
+								{/* Center Navigation Tabs */}
+								<Box
+									component="nav"
+									aria-label="Main navigation"
+									sx={{
+										display: { xs: "none", md: "flex" },
+										alignItems: "center",
+										justifyContent: "center",
+										gap: 1,
+										flex: 1,
+										mx: { md: 1, lg: 2 },
+									}}
+								>
 								{[
 									{ label: "Dashboard", path: "/" },
 									{ label: "Community", path: "/community" },
@@ -471,35 +534,27 @@ export default function Navbar() {
 										</Button>
 									</>
 								)}
-							</Box>
-						</Box>
+								</Box>
 
-						<Box
-							sx={{
-								display: { xs: "none", md: "flex" },
-								flex: 1,
-								justifyContent: "center",
-								maxWidth: 380,
-								mx: { md: 1, lg: 2 },
-							}}
-						>
-							<GlobalSearch />
-						</Box>
-
-						<Box
-							sx={{
-								display: "flex",
-								alignItems: "center",
-								gap: { xs: 0.5, sm: 1, md: 2 },
-							}}
-						>
-							<IconButton
-								color="inherit"
-								component={RouterLink}
-								to="/search"
-								aria-label="Search"
-								sx={{
-									display: { xs: "inline-flex", lg: "none" },
+								{/* Right Utility Icons */}
+								<Box
+									sx={{
+										display: "flex",
+										alignItems: "center",
+										gap: { xs: 0.5, sm: 1, md: 2 },
+									}}
+								>
+									<IconButton
+										color="inherit"
+										component={RouterLink}
+										to="/search"
+										aria-label="Search"
+										onClick={(e) => {
+											e.preventDefault();
+											setMobileSearchOpen(true);
+										}}
+										sx={{
+											display: { xs: "inline-flex", md: "none" },
 									transition: "all 0.2s",
 									"&:hover": { color: "#FFF275" },
 									"&:focus-visible": {
@@ -925,7 +980,9 @@ export default function Navbar() {
 									Login
 								</Button>
 							)}
-						</Box>
+								</Box>
+							</>
+						)}
 					</Toolbar>
 				</AppBar>
 

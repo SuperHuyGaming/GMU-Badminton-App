@@ -52,6 +52,7 @@ describe('Navbar Component & Global Search UI', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        window.history.pushState({}, 'Test', '/');
         mockNotificationState = {
             notifications: [],
             unreadCount: 0,
@@ -62,7 +63,8 @@ describe('Navbar Component & Global Search UI', () => {
         };
     });
 
-    const renderNavbar = (user = mockUser) => {
+    const renderNavbar = (user = mockUser, initialPath = '/') => {
+        if (initialPath) window.history.pushState({}, 'Test', initialPath);
         return render(
             <AuthContext.Provider value={{ user, logout: vi.fn() }}>
                 <ColorModeContext.Provider value={{ toggleColorMode: vi.fn() }}>
@@ -77,7 +79,7 @@ describe('Navbar Component & Global Search UI', () => {
     it('renders the brand title and global search input', () => {
         renderNavbar();
         expect(screen.getByText('GMU Badminton')).toBeInTheDocument();
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         expect(searchInput).toBeInTheDocument();
     });
 
@@ -92,7 +94,7 @@ describe('Navbar Component & Global Search UI', () => {
         });
 
         renderNavbar();
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         fireEvent.change(searchInput, { target: { value: 'Alice' } });
 
         await waitFor(() => {
@@ -114,7 +116,7 @@ describe('Navbar Component & Global Search UI', () => {
         });
 
         renderNavbar({ id: 'u2', name: 'Bob', university: 'GMU' });
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         fireEvent.change(searchInput, { target: { value: 'Alice' } });
 
         await waitFor(() => {
@@ -124,7 +126,7 @@ describe('Navbar Component & Global Search UI', () => {
 
     it('does not trigger API call when input is empty or whitespace', async () => {
         renderNavbar();
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         fireEvent.change(searchInput, { target: { value: '   ' } });
 
         // Wait to verify no call was made
@@ -142,7 +144,7 @@ describe('Navbar Component & Global Search UI', () => {
         });
 
         renderNavbar();
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         fireEvent.change(searchInput, { target: { value: 'Alice' } });
 
         await waitFor(() => {
@@ -156,7 +158,7 @@ describe('Navbar Component & Global Search UI', () => {
 
     it('navigates to search page when Enter is pressed with a valid query', () => {
         renderNavbar();
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         fireEvent.change(searchInput, { target: { value: 'Alice' } });
         fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
 
@@ -165,7 +167,7 @@ describe('Navbar Component & Global Search UI', () => {
 
     it('does not navigate when Enter is pressed with whitespace or empty query', () => {
         renderNavbar();
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         fireEvent.change(searchInput, { target: { value: '   ' } });
         fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
 
@@ -176,7 +178,7 @@ describe('Navbar Component & Global Search UI', () => {
         renderNavbar();
 
         // Search input is rendered with accessible placeholder
-        const searchInput = screen.getByPlaceholderText('Search players...');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
         expect(searchInput).toBeInTheDocument();
 
         // Hamburger button has accessible open navigation menu label and controls
@@ -188,6 +190,27 @@ describe('Navbar Component & Global Search UI', () => {
         const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });
         expect(mobileSearchBtn).toBeInTheDocument();
         expect(mobileSearchBtn).toHaveAttribute('href', '/search');
+    });
+
+    it('opens interactive mobile search bar when mobile search button is clicked and closes on back', () => {
+        renderNavbar();
+        const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });
+        fireEvent.click(mobileSearchBtn);
+
+        expect(screen.getByTestId('mobile-search-bar')).toBeInTheDocument();
+        const closeBtn = screen.getByRole('button', { name: 'Close search' });
+        fireEvent.click(closeBtn);
+
+        expect(screen.queryByTestId('mobile-search-bar')).not.toBeInTheDocument();
+    });
+
+    it('navigates to /community?search= when Enter is pressed while on /community', () => {
+        renderNavbar(mockUser, '/community');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
+        fireEvent.change(searchInput, { target: { value: 'Doubles' } });
+        fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+        expect(mockNavigate).toHaveBeenCalledWith('/community?search=Doubles');
     });
 
     it('does not render the Leaderboard navigation link', () => {
