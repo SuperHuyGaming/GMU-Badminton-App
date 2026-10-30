@@ -314,17 +314,9 @@ describe('🤖 Comprehensive Community User Bots Simulation Sprint', () => {
 			});
 		});
 
-		it('triggers feed refresh when clicking desktop Reload Feed button in header', async () => {
+		it('renders clean Facebook-style header without dated manual reload button', async () => {
 			renderCommunity(botAlice);
-			await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-			apiFetch.mockClear();
-
-			const reloadBtn = screen.getByRole('button', { name: /refresh feed/i });
-			fireEvent.click(reloadBtn);
-
-			await waitFor(() => {
-				expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/api/feed?tab=latest'));
-			});
+			expect(screen.queryByTestId('feed-reload-btn')).not.toBeInTheDocument();
 		});
 	});
 
@@ -375,15 +367,11 @@ describe('🤖 Comprehensive Community User Bots Simulation Sprint', () => {
 		});
 	});
 
-	// ── WORKFLOW 7: SEARCH, DENSITY TOGGLE & CATEGORY FILTERING ─────────────
-	describe('7. Search, Density Toggle & Category Filtering Workflow', () => {
-		it('toggles feed density between Comfortable and Compact view modes', async () => {
+	// ── WORKFLOW 7: SEARCH, DENSITY & CATEGORY FILTERING ────────────────────
+	describe('7. Search, Density & Category Filtering Workflow', () => {
+		it('maintains clean comfortable feed layout without cluttered density button', async () => {
 			renderCommunity(botAlice);
-			const densityBtn = screen.getByTestId('feed-density-toggle');
-			expect(densityBtn).toHaveTextContent(/Comfortable/i);
-
-			fireEvent.click(densityBtn);
-			expect(densityBtn).toHaveTextContent(/Compact/i);
+			expect(screen.queryByTestId('feed-density-toggle')).not.toBeInTheDocument();
 		});
 
 		it('filters feed when clicking category chip in trending strip', async () => {
@@ -399,15 +387,19 @@ describe('🤖 Comprehensive Community User Bots Simulation Sprint', () => {
 			});
 		});
 
-		it('filters feed when searching with keyword in header search input', async () => {
-			renderCommunity(botAlice);
-			const searchInput = screen.getByLabelText('Search community posts');
-			fireEvent.change(searchInput, { target: { value: 'Doubles' } });
-			fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+		it('filters feed when searching with URL search query parameter', async () => {
+			render(
+				<AuthContext.Provider value={{ user: botAlice, token: 'fake-token' }}>
+					<MemoryRouter initialEntries={['/community?search=Doubles']}>
+						<Forum />
+					</MemoryRouter>
+				</AuthContext.Provider>
+			);
 
 			await waitFor(() => {
 				expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('search=Doubles'));
 			});
+			expect(screen.getByTestId('active-search-indicator')).toBeInTheDocument();
 		});
 	});
 });

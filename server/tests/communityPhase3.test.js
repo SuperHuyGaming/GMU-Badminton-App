@@ -241,8 +241,9 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 
 			await request(app).get('/api/forum?search=RACQUET');
 			const callArg = Post.find.mock.calls[0][0];
-			expect(callArg.$or).toBeDefined();
-			expect(callArg.$or).toEqual(
+			const searchOr = callArg.$or || callArg.$and?.find(c => c.$or?.some(o => o.title))?.$or;
+			expect(searchOr).toBeDefined();
+			expect(searchOr).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({ title: { $regex: expect.any(RegExp) } }),
 					expect.objectContaining({ content: { $regex: expect.any(RegExp) } }),
@@ -260,7 +261,8 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			await request(app).get('/api/forum').query({ search: '[Court+1] (test)' });
 			expect(Post.find).toHaveBeenCalled();
 			const callArg = Post.find.mock.calls[0][0];
-			expect(callArg.$or[0].title.$regex.source).toContain('\\[Court\\+1\\] \\(test\\)');
+			const searchOr = callArg.$or || callArg.$and?.find(c => c.$or?.some(o => o.title))?.$or;
+			expect(searchOr[0].title.$regex.source).toContain('\\[Court\\+1\\] \\(test\\)');
 		});
 
 		it('applies dateRange filter to createdAt', async () => {
@@ -279,7 +281,8 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			await request(app).get('/api/forum?search=doubles&category=find_partner&dateRange=today');
 			const callArg = Post.find.mock.calls[0][0];
 			expect(callArg.category).toEqual({ $in: ['find_partner', 'meetup_rally'] });
-			expect(callArg.$or).toBeDefined();
+			const searchOr = callArg.$or || callArg.$and?.find(c => c.$or?.some(o => o.title))?.$or;
+			expect(searchOr).toBeDefined();
 			expect(callArg.createdAt.$gte).toBeInstanceOf(Date);
 		});
 	});
@@ -508,7 +511,8 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 				.set('Authorization', `Bearer ${userToken}`);
 			expect(forumRes.status).toBe(200);
 			const forumQuery = Post.find.mock.calls[0][0];
-			expect(forumQuery.$or.some(o => o['gearDetails.brand'])).toBe(true);
+			const searchOr = forumQuery.$or || forumQuery.$and?.find(c => c.$or?.some(o => o['gearDetails.brand']))?.$or;
+			expect(searchOr?.some(o => o['gearDetails.brand'])).toBe(true);
 		});
 
 		it('safely handles non-string search parameters without crashing with TypeError', async () => {

@@ -8,13 +8,12 @@ import {
 	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
 	Skeleton, CircularProgress, Avatar, Button, Select, MenuItem,
-	Checkbox, FormControl, InputAdornment, IconButton, Tooltip
+	Checkbox, IconButton, Tooltip
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
-import RefreshIcon from "@mui/icons-material/Refresh";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import PostCard from "../components/PostCard";
 import AdminModerationModal from "../components/AdminModerationModal";
@@ -28,14 +27,6 @@ const CATEGORY_FILTERS = [
 	{ id: "general", label: "💬 General" },
 	{ id: "find_partner", label: "🤝 Find Players" },
 	{ id: "gear_exchange", label: "🎒 Gear & Equipment" }
-];
-
-const DATE_OPTIONS = [
-	{ id: "all", label: "All Dates" },
-	{ id: "today", label: "Today" },
-	{ id: "week", label: "This Week" },
-	{ id: "month", label: "This Month" },
-	{ id: "custom", label: "Custom Range" }
 ];
 
 const DEFAULT_TRENDING_TAGS = [
@@ -63,17 +54,14 @@ export default function Forum() {
 	const { postId: routePostId } = useParams();
 	const location = useLocation();
 	const navigate = useNavigate();
+	const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+	const urlSearch = searchParams.get("search") || searchParams.get("q") || "";
 
 	const [tab, setTab] = useState("latest");
 	const tabsCacheRef = useRef({});
-	const [feedDensity, setFeedDensity] = useState(() => {
+	const [feedDensity] = useState(() => {
 		return typeof window !== 'undefined' ? (localStorage.getItem("mbc_feed_density") || "comfortable") : "comfortable";
 	});
-	const handleToggleDensity = () => {
-		const next = feedDensity === "comfortable" ? "compact" : "comfortable";
-		setFeedDensity(next);
-		if (typeof window !== 'undefined') localStorage.setItem("mbc_feed_density", next);
-	};
 
 	const [showBackToTop, setShowBackToTop] = useState(false);
 	useEffect(() => {
@@ -132,9 +120,7 @@ export default function Forum() {
 	useEffect(() => {
 		selectedCategoryRef.current = selectedCategory;
 	}, [selectedCategory]);
-	const [searchInput, setSearchInput] = useState("");
-	const [debouncedSearch, setDebouncedSearch] = useState("");
-	const [isSearchFocused, setIsSearchFocused] = useState(false);
+	const searchInput = urlSearch;
 	const [pullDistance, setPullDistance] = useState(0);
 	const [isPullRefreshing, setIsPullRefreshing] = useState(false);
 	const [isPulling, setIsPulling] = useState(false);
@@ -179,10 +165,7 @@ export default function Forum() {
 			setPullDistance(0);
 		}
 	};
-	const searchInputRef = useRef(null);
-	const [dateRange, setDateRange] = useState("all");
-	const [customStartDate, setCustomStartDate] = useState("");
-	const [customEndDate, setCustomEndDate] = useState("");
+
 	const [feed, setFeed] = useState([]);
 	const feedRef = useRef(feed);
 	useEffect(() => {
@@ -405,15 +388,6 @@ export default function Forum() {
 		return () => window.removeEventListener("scroll", handleWindowScroll);
 	}, [hasMore, isFetchingMore, isLoading]);
 
-	// Debounce search input by 250ms
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			setDebouncedSearch(searchInput.trim());
-			setPage(1);
-		}, 250);
-		return () => clearTimeout(timer);
-	}, [searchInput]);
-
 	// Global keyboard shortcuts: Press '/' or 'Cmd+K' / 'Ctrl+K' to quickly focus search
 	useEffect(() => {
 		const handleGlobalKeyDown = (e) => {
@@ -425,7 +399,8 @@ export default function Forum() {
 				((e.metaKey || e.ctrlKey) && e.key === 'k')
 			) {
 				e.preventDefault();
-				searchInputRef.current?.focus();
+				const topSearch = document.getElementById('global-search') || document.querySelector('input[placeholder*="Search"]');
+				topSearch?.focus();
 			}
 		};
 		window.addEventListener('keydown', handleGlobalKeyDown);
@@ -459,22 +434,6 @@ export default function Forum() {
 		setFeedRefreshKey(k => k + 1);
 	}, [tab]);
 
-	const handleSearchKeyDown = (e) => {
-		if (e.key === 'Enter') {
-			e.preventDefault();
-			setDebouncedSearch(searchInput.trim());
-			resetFeedAndPagination();
-		} else if (e.key === 'Escape') {
-			e.preventDefault();
-			if (searchInput) {
-				setSearchInput('');
-				setDebouncedSearch('');
-				resetFeedAndPagination();
-			}
-			searchInputRef.current?.blur();
-		}
-	};
-
 	useEffect(() => {
 		let isCancelled = false;
 		const fetchFeed = async () => {
@@ -491,18 +450,10 @@ export default function Forum() {
 			try {
 				const tagQuery = selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : "";
 				const catQuery = selectedCategory && selectedCategory !== "all" ? `&category=${encodeURIComponent(selectedCategory)}` : "";
-				const searchQuery = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : "";
-				let dateQuery = "";
-				if (dateRange && dateRange !== "all") {
-					dateQuery = `&dateRange=${encodeURIComponent(dateRange)}&tzOffset=${new Date().getTimezoneOffset()}`;
-					if (dateRange === "custom") {
-						if (customStartDate) dateQuery += `&startDate=${encodeURIComponent(customStartDate)}`;
-						if (customEndDate) dateQuery += `&endDate=${encodeURIComponent(customEndDate)}`;
-					}
-				}
+				const searchQuery = urlSearch ? `&search=${encodeURIComponent(urlSearch)}` : "";
 				const cursorQuery = cursorRef.current ? `&cursor=${cursorRef.current}` : "";
 				const sessionQuery = `&sessionTime=${sessionTimeRef.current}`;
-				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${catQuery}${searchQuery}${dateQuery}${cursorQuery}${sessionQuery}`);
+				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${catQuery}${searchQuery}${cursorQuery}${sessionQuery}`);
 				if (!isCancelled && res && res.ok) {
 					const data = await res.json();
 					if (isCancelled) return;
@@ -548,7 +499,7 @@ export default function Forum() {
 		return () => {
 			isCancelled = true;
 		};
-	}, [tab, page, selectedTag, selectedCategory, debouncedSearch, dateRange, customStartDate, customEndDate, feedRefreshKey]);
+	}, [tab, page, selectedTag, selectedCategory, urlSearch, feedRefreshKey]);
 
 	const displayedFeed = useMemo(() => {
 		return feed.filter(item => {
@@ -775,172 +726,28 @@ export default function Forum() {
 					</Typography>
 				</Box>
 
-				{/* Top Search Bar & Utility Controls Located Above Feed (Modeled after Facebook Top Header) */}
-				<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' }, ml: { sm: 'auto' } }}>
-					{/* Search Input with Instant Keyboard Shortcut ('/' or Cmd+K) */}
-					<TextField 
-						inputRef={searchInputRef}
-						placeholder="Search posts by title, author, court, tags..."
-						size="small"
-						value={searchInput}
-						onChange={(e) => setSearchInput(e.target.value)}
-						onKeyDown={handleSearchKeyDown}
-						onFocus={() => setIsSearchFocused(true)}
-						onBlur={() => setIsSearchFocused(false)}
-						sx={{ 
-							flex: { xs: '1 1 100%', sm: '0 0 240px', md: '0 0 280px' },
-							'& .MuiOutlinedInput-root': {
-								borderRadius: 6,
-								bgcolor: 'background.paper',
-								height: 40,
-								transition: 'all 0.2s ease-in-out',
-								'&:hover': {
-									boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-								},
-								'&.Mui-focused': {
-									boxShadow: '0 4px 12px rgba(0, 80, 40, 0.12)'
-								}
-							}
-						}}
-						slotProps={{
-							input: {
-								startAdornment: (
-									<InputAdornment position="start">
-										<SearchIcon fontSize="small" color={isSearchFocused ? "primary" : "action"} />
-									</InputAdornment>
-								),
-								endAdornment: (
-									<InputAdornment position="end" sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-										{!isSearchFocused && !searchInput && (
-											<Typography 
-												variant="caption" 
-												sx={{ 
-													bgcolor: 'action.hover', 
-													px: 0.9, 
-													py: 0.3, 
-													borderRadius: 1, 
-													color: 'text.secondary', 
-													fontWeight: 'bold', 
-													fontSize: '0.72rem',
-													display: { xs: 'none', md: 'block' }, 
-													pointerEvents: 'none' 
-												}}
-											>
-												/
-											</Typography>
-										)}
-										{searchInput && (
-											<IconButton 
-												size="small" 
-												onClick={() => { 
-													setSearchInput(''); 
-													setDebouncedSearch(''); 
-													resetFeedAndPagination();
-													searchInputRef.current?.focus(); 
-												}} 
-												aria-label="Clear search"
-											>
-												<CloseIcon fontSize="small" />
-											</IconButton>
-										)}
-									</InputAdornment>
-								),
-								inputProps: {
-									'aria-label': 'Search community posts'
-								}
-							}
-						}}
-					/>
-
-					{/* Date Range Selector */}
-					<FormControl size="small" sx={{ minWidth: 110, flex: { xs: '1 1 auto', sm: 'none' } }}>
-						<Select
-							value={dateRange}
-							onChange={(e) => {
-								setDateRange(e.target.value);
-								resetFeedAndPagination();
-							}}
-							displayEmpty
-							aria-label="Filter by date range"
-							sx={{ borderRadius: 6, height: 40, fontWeight: 600, fontSize: '0.82rem', bgcolor: 'background.paper' }}
-						>
-							{DATE_OPTIONS.map(opt => (
-								<MenuItem key={opt.id} value={opt.id}>{opt.label}</MenuItem>
-							))}
-						</Select>
-					</FormControl>
-
-					{/* Desktop Reload Button (Website reload button) */}
-					<Tooltip title="Reload feed">
-						<IconButton 
-							size="small" 
-							color="inherit"
-							onClick={resetFeedAndPagination}
-							data-testid="feed-reload-btn"
-							aria-label="Refresh feed"
-							sx={{ 
-								width: 40, 
-								height: 40, 
-								borderRadius: 6, 
-								border: '1px solid', 
-								borderColor: 'divider', 
-								bgcolor: 'background.paper',
-								transition: 'all 0.2s ease-in-out',
-								'&:hover': {
-									bgcolor: 'action.hover',
-									borderColor: 'primary.main',
-									color: 'primary.main'
-								}
-							}}
-						>
-							<RefreshIcon sx={{ fontSize: 20, animation: (isLoading || isPullRefreshing) ? 'spinSlow 1s linear infinite' : 'none' }} />
-						</IconButton>
-					</Tooltip>
-
-					{/* Compact / Comfortable Density Toggle */}
-					<Tooltip title={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}>
-						<Button 
-							variant={feedDensity === "compact" ? "contained" : "outlined"} 
-							size="small" 
-							color="primary"
-							onClick={handleToggleDensity}
-							data-testid="feed-density-toggle"
-							aria-label={feedDensity === "compact" ? "Switch to Comfortable View" : "Switch to Compact View"}
-							sx={{ 
-								minWidth: 'auto', 
-								borderRadius: 6, 
-								display: 'inline-flex', 
-								gap: 0.8, 
-								fontWeight: 'bold', 
-								height: 40, 
-								px: 1.5,
-								fontSize: '0.82rem',
-								textTransform: 'none'
-							}}
-						>
-							{feedDensity === "compact" ? "📋 Compact" : "🖼 Comfortable"}
-						</Button>
-					</Tooltip>
-
-					{currentUser?.role === 'admin' && (
+				{currentUser?.role === 'admin' && (
+					<Box sx={{ ml: { sm: 'auto' } }}>
 						<Button
 							variant="outlined"
 							color="error"
+							size="small"
 							onClick={() => setIsModQueueOpen(true)}
 							data-testid="admin-moderation-queue-btn"
+							startIcon={<span>🛡️</span>}
 							sx={{
 								borderRadius: 6,
 								fontWeight: 'bold',
 								textTransform: 'none',
 								px: { xs: 1.5, sm: 2 },
-								height: 40,
+								height: 38,
 								fontSize: { xs: '0.8rem', sm: '0.85rem' }
 							}}
 						>
-							🛡️ Mod Queue
+							Mod Queue
 						</Button>
-					)}
-				</Box>
+					</Box>
+				)}
 			</Box>
 
 			{/* INLINE COMPOSER & FEED FILTERS WITH MOBILE PULL-TO-REFRESH */}
@@ -977,6 +784,41 @@ export default function Forum() {
 						<Typography variant="caption" sx={{ fontWeight: 'bold' }}>
 							{isPullRefreshing ? "Refreshing feed..." : pullDistance >= 45 ? "Release to refresh" : "Pull down to refresh"}
 						</Typography>
+					</Box>
+				)}
+
+				{/* ACTIVE SEARCH INDICATOR (WHEN FILTERED VIA URL SEARCH) */}
+				{Boolean(urlSearch) && (
+					<Box 
+						data-testid="active-search-indicator"
+						sx={{ 
+							width: '100%', 
+							maxWidth: '680px', 
+							display: 'flex', 
+							alignItems: 'center', 
+							justifyContent: 'space-between',
+							p: 1.5, 
+							borderRadius: 2.5, 
+							bgcolor: 'action.hover',
+							border: '1px solid',
+							borderColor: 'divider',
+							boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
+						}}
+					>
+						<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+							<SearchIcon fontSize="small" color="primary" />
+							<Typography variant="body2" sx={{ fontWeight: 600 }}>
+								Showing posts matching <strong>"{urlSearch}"</strong>
+							</Typography>
+						</Box>
+						<Button 
+							size="small" 
+							color="inherit"
+							onClick={() => navigate('/community')}
+							sx={{ textTransform: 'none', fontWeight: 'bold', fontSize: '0.8rem' }}
+						>
+							Clear
+						</Button>
 					</Box>
 				)}
 
@@ -1057,34 +899,6 @@ export default function Forum() {
 							</Typography>
 						</Box>
 					</Paper>
-				)}
-
-				{dateRange === 'custom' && (
-					<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, maxWidth: '680px', width: '100%', px: 1 }}>
-						<TextField
-							type="date"
-							size="small"
-							value={customStartDate}
-							onChange={(e) => {
-								setCustomStartDate(e.target.value);
-								resetFeedAndPagination();
-							}}
-							slotProps={{ htmlInput: { 'aria-label': 'Start date' } }}
-							sx={{ width: 145, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-						/>
-						<Typography variant="caption" color="text.secondary">to</Typography>
-						<TextField
-							type="date"
-							size="small"
-							value={customEndDate}
-							onChange={(e) => {
-								setCustomEndDate(e.target.value);
-								resetFeedAndPagination();
-							}}
-							slotProps={{ htmlInput: { 'aria-label': 'End date' } }}
-							sx={{ width: 145, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-						/>
-					</Box>
 				)}
 
 				{/* UNIFIED FILTER STRIP (Categories + Trending) */}
@@ -1237,17 +1051,13 @@ export default function Forum() {
 									Explore Latest Posts
 								</Button>
 							</Box>
-						) : searchInput ? (
+						) : urlSearch ? (
 							<>
-								<Typography color="text.primary">No posts match &quot;{searchInput}&quot;.</Typography>
+								<Typography color="text.primary">No posts match &quot;{urlSearch}&quot;.</Typography>
 								<Button 
 									variant="outlined" 
 									size="small" 
-									onClick={() => {
-										setSearchInput('');
-										setDebouncedSearch('');
-										resetFeedAndPagination();
-									}}
+									onClick={() => navigate('/community')}
 								>
 									Clear Search
 								</Button>
@@ -1264,20 +1074,6 @@ export default function Forum() {
 									}}
 								>
 									View All Categories
-								</Button>
-							</>
-						) : dateRange !== 'all' ? (
-							<>
-								<Typography color="text.primary">No posts match the selected date range.</Typography>
-								<Button 
-									variant="outlined" 
-									size="small" 
-									onClick={() => {
-										setDateRange('all');
-										resetFeedAndPagination();
-									}}
-								>
-									View All Dates
 								</Button>
 							</>
 						) : (

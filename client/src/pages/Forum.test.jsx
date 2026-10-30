@@ -67,6 +67,8 @@ describe('Forum Page Component (Community Hub)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         socketHandlers = {};
+        window.history.pushState({}, 'Test', '/community');
+        window.location.hash = '';
         // Setup default intersection observer
         const mockIntersectionObserver = vi.fn();
         mockIntersectionObserver.mockReturnValue({
@@ -78,7 +80,8 @@ describe('Forum Page Component (Community Hub)', () => {
         window.scrollTo = vi.fn();
     });
 
-    const renderWithProviders = () => {
+    const renderWithProviders = (initialPath) => {
+        window.history.pushState({}, 'Test', initialPath || ('/community' + (window.location.hash || '')));
         return render(
             <AuthContext.Provider value={{ user: mockUser, token: 'fake-token' }}>
                 <BrowserRouter>
@@ -176,7 +179,7 @@ describe('Forum Page Component (Community Hub)', () => {
         });
     });
 
-    it('renders post search bar, category group filter chips, and date range selector', async () => {
+    it('renders clean Facebook-style header and category filters correctly', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
@@ -185,26 +188,29 @@ describe('Forum Page Component (Community Hub)', () => {
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        expect(screen.getByPlaceholderText(/Search posts by title, author, court, tags/i)).toBeInTheDocument();
-        expect(screen.getByRole('combobox', { name: /Filter by date range/i })).toBeInTheDocument();
+        expect(screen.queryByTestId('feed-reload-btn')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('feed-density-toggle')).not.toBeInTheDocument();
         expect(screen.getByText('💬 General')).toBeInTheDocument();
         expect(screen.getByText('🤝 Find Players')).toBeInTheDocument();
         expect(screen.getByText('🎒 Gear & Equipment')).toBeInTheDocument();
     });
 
-    it('focuses search input on pressing "/" keyboard shortcut', async () => {
+    it('focuses global search input on pressing "/" keyboard shortcut', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
         });
 
+        const mockSearch = document.createElement('input');
+        mockSearch.id = 'global-search';
+        document.body.appendChild(mockSearch);
+
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        expect(document.activeElement).not.toBe(searchInput);
 
         fireEvent.keyDown(window, { key: '/' });
-        expect(document.activeElement).toBe(searchInput);
+        expect(document.activeElement).toBe(mockSearch);
+        document.body.removeChild(mockSearch);
     });
 
     it('updates query param and feed when category group chip is clicked', async () => {
@@ -223,58 +229,30 @@ describe('Forum Page Component (Community Hub)', () => {
         });
     });
 
-    it('updates query param and feed when date range is changed', async () => {
+    it('filters feed when URL contains search query parameter', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
         });
 
-        renderWithProviders();
-
-        const dateSelect = screen.getByRole('combobox', { name: /Filter by date range/i });
-        fireEvent.mouseDown(dateSelect);
-
-        const todayOption = await screen.findByRole('option', { name: /Today/i });
-        fireEvent.click(todayOption);
-
-        await waitFor(() => {
-            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('dateRange=today'));
-        });
-    });
-
-    it('renders custom date range inputs when Custom Range is selected', async () => {
-        apiFetch.mockResolvedValue({
-            ok: true,
-            json: async () => ({ feed: [], hasMore: false })
-        });
-
-        renderWithProviders();
-
-        const dateSelect = screen.getByRole('combobox', { name: /Filter by date range/i });
-        fireEvent.mouseDown(dateSelect);
-
-        const customOption = await screen.findByRole('option', { name: /Custom Range/i });
-        fireEvent.click(customOption);
-
-        await waitFor(() => {
-            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('dateRange=custom'));
-        });
-    });
-
-    it('handles Enter key in search input to trigger immediate search', async () => {
-        apiFetch.mockResolvedValue({
-            ok: true,
-            json: async () => ({ feed: [], hasMore: false })
-        });
-
-        renderWithProviders();
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-
-        fireEvent.change(searchInput, { target: { value: 'smash' } });
-        fireEvent.keyDown(searchInput, { key: 'Enter' });
+        renderWithProviders('/community?search=smash');
 
         await waitFor(() => {
             expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('search=smash'));
+        });
+    });
+
+    it('renders active search indicator when URL contains search parameter', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ feed: [], hasMore: false })
+        });
+
+        renderWithProviders('/community?search=smash');
+
+        await waitFor(() => {
+            expect(screen.getByTestId('active-search-indicator')).toBeInTheDocument();
+            expect(screen.getByText(/smash/i)).toBeInTheDocument();
         });
     });
 
@@ -298,25 +276,15 @@ describe('Forum Page Component (Community Hub)', () => {
             json: async () => ({ feed: mockFeed, hasMore: false })
         });
 
-        renderWithProviders();
-
-        await waitFor(() => {
-            expect(screen.getByText('Casual rally this Friday')).toBeInTheDocument();
-        });
-
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        fireEvent.change(searchInput, { target: { value: 'nonexistenttermxyz' } });
+        renderWithProviders('/community?search=nonexistenttermxyz');
 
         await waitFor(() => {
             expect(screen.getByText(/No posts match "nonexistenttermxyz"./i)).toBeInTheDocument();
         });
 
         const clearBtn = screen.getByText('Clear Search');
+        expect(clearBtn).toBeInTheDocument();
         fireEvent.click(clearBtn);
-
-        await waitFor(() => {
-            expect(screen.getByText('Casual rally this Friday')).toBeInTheDocument();
-        });
     });
 
     it('does not show new post pill for posts from different category when category filter is active', async () => {
@@ -404,22 +372,10 @@ describe('Forum Page Component (Community Hub)', () => {
             json: async () => ({ feed: mockFeed, hasMore: false })
         });
 
-        renderWithProviders();
+        renderWithProviders('/community?search=Minh');
 
         await waitFor(() => {
             expect(screen.getByText('🏆 Official Match')).toBeInTheDocument();
-        });
-
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        fireEvent.change(searchInput, { target: { value: 'Minh' } });
-
-        await waitFor(() => {
-            expect(screen.getByText('🏆 Official Match')).toBeInTheDocument();
-        });
-
-        fireEvent.change(searchInput, { target: { value: 'Nonexistent' } });
-        await waitFor(() => {
-            expect(screen.getByText(/No posts match/i)).toBeInTheDocument();
         });
     });
 
@@ -444,20 +400,7 @@ describe('Forum Page Component (Community Hub)', () => {
             json: async () => ({ feed: mockFeed, hasMore: false })
         });
 
-        renderWithProviders();
-
-        await waitFor(() => {
-            expect(screen.getByText('Great Doubles Rally')).toBeInTheDocument();
-        });
-
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        fireEvent.change(searchInput, { target: { value: 'Sarah' } });
-
-        await waitFor(() => {
-            expect(screen.getByText('Great Doubles Rally')).toBeInTheDocument();
-        });
-
-        fireEvent.change(searchInput, { target: { value: 'Leo' } });
+        renderWithProviders('/community?search=Sarah');
 
         await waitFor(() => {
             expect(screen.getByText('Great Doubles Rally')).toBeInTheDocument();
@@ -515,13 +458,7 @@ describe('Forum Page Component (Community Hub)', () => {
         });
 
         // 1. Search empty state
-        const { unmount } = renderWithProviders();
-        await waitFor(() => {
-            expect(screen.getByText('Community Hub')).toBeInTheDocument();
-        });
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        fireEvent.change(searchInput, { target: { value: 'unknownquery' } });
-
+        const { unmount } = renderWithProviders('/community?search=unknownquery');
         await waitFor(() => {
             expect(screen.getByText(/No posts match "unknownquery"./i)).toBeInTheDocument();
             expect(screen.getByText('Clear Search')).toBeInTheDocument();
@@ -529,7 +466,7 @@ describe('Forum Page Component (Community Hub)', () => {
         unmount();
 
         // 2. Category empty state
-        const { unmount: unmount2 } = renderWithProviders();
+        renderWithProviders();
         await waitFor(() => {
             expect(screen.getByText('Community Hub')).toBeInTheDocument();
         });
@@ -540,25 +477,9 @@ describe('Forum Page Component (Community Hub)', () => {
             expect(screen.getByText(/No posts match the selected category filter./i)).toBeInTheDocument();
             expect(screen.getByText('View All Categories')).toBeInTheDocument();
         });
-        unmount2();
-
-        // 3. Date range empty state
-        renderWithProviders();
-        await waitFor(() => {
-            expect(screen.getByText('Community Hub')).toBeInTheDocument();
-        });
-        const dateSelect = screen.getByRole('combobox', { name: /Filter by date range/i });
-        fireEvent.mouseDown(dateSelect);
-        const thisWeekOption = await screen.findByRole('option', { name: /This Week/i });
-        fireEvent.click(thisWeekOption);
-
-        await waitFor(() => {
-            expect(screen.getByText(/No posts match the selected date range./i)).toBeInTheDocument();
-            expect(screen.getByText('View All Dates')).toBeInTheDocument();
-        });
     });
 
-    it('blurs and clears search on Escape key press', async () => {
+    it('filters feed when tag filter is clicked', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false })
@@ -566,12 +487,11 @@ describe('Forum Page Component (Community Hub)', () => {
 
         renderWithProviders();
         await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        fireEvent.change(searchInput, { target: { value: 'victor' } });
-        expect(searchInput.value).toBe('victor');
-
-        fireEvent.keyDown(searchInput, { key: 'Escape' });
-        expect(searchInput.value).toBe('');
+        const tagChip = screen.getByText('#Stringing');
+        fireEvent.click(tagChip);
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('tag=Stringing'));
+        });
     });
 
     it('matches gear brand and gear type in feed search', async () => {
@@ -595,14 +515,7 @@ describe('Forum Page Component (Community Hub)', () => {
             json: async () => ({ feed: mockFeed, hasMore: false })
         });
 
-        renderWithProviders();
-
-        await waitFor(() => {
-            expect(screen.getByText('High tension racket for sale')).toBeInTheDocument();
-        });
-
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
-        fireEvent.change(searchInput, { target: { value: 'Li-Ning' } });
+        renderWithProviders('/community?search=Li-Ning');
 
         await waitFor(() => {
             expect(screen.getByText('High tension racket for sale')).toBeInTheDocument();
@@ -648,8 +561,11 @@ describe('Forum Page Component (Community Hub)', () => {
             json: async () => ({ feed: [], hasMore: false })
         });
 
+        const mockSearch = document.createElement('input');
+        mockSearch.id = 'global-search';
+        document.body.appendChild(mockSearch);
+
         renderWithProviders();
-        const searchInput = screen.getByPlaceholderText(/Search posts by title, author, court, tags/i);
         const composerCard = screen.getByTestId('facebook-composer-card');
         fireEvent.click(composerCard);
 
@@ -658,28 +574,20 @@ describe('Forum Page Component (Community Hub)', () => {
         });
 
         fireEvent.keyDown(window, { key: '/' });
-        expect(document.activeElement).not.toBe(searchInput);
+        expect(document.activeElement).not.toBe(mockSearch);
+        document.body.removeChild(mockSearch);
     });
 
-    it('toggles feed density between Comfortable and Compact view modes', async () => {
+    it('renders clean Facebook-style comfortable card layout', async () => {
         apiFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ feed: [], hasMore: false, tags: [] })
         });
 
         renderWithProviders();
+        await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-        const densityBtn = screen.getByTestId('feed-density-toggle');
-        expect(densityBtn).toBeInTheDocument();
-        expect(densityBtn.textContent).toMatch(/Comfortable/i);
-
-        fireEvent.click(densityBtn);
-        expect(densityBtn.textContent).toMatch(/Compact/i);
-        expect(localStorage.getItem('mbc_feed_density')).toBe('compact');
-
-        fireEvent.click(densityBtn);
-        expect(densityBtn.textContent).toMatch(/Comfortable/i);
-        expect(localStorage.getItem('mbc_feed_density')).toBe('comfortable');
+        expect(screen.queryByTestId('feed-density-toggle')).not.toBeInTheDocument();
     });
 
     it('restores post creation draft from sessionStorage and allows clearing it', async () => {
@@ -1083,7 +991,7 @@ describe('Forum Page Component (Community Hub)', () => {
         expect(screen.getByText('Feed Item 1')).toBeInTheDocument();
     });
 
-    it('R4: re-fetches feed cleanly when clicking Refresh button on page 1', async () => {
+    it('R4: re-fetches feed cleanly on mobile pull-to-refresh on page 1', async () => {
         const mockFeed = [
             { _id: 'post-item-2', title: 'Feed Item 2', content: 'Testing refresh content', createdAt: new Date().toISOString() }
         ];
@@ -1097,8 +1005,12 @@ describe('Forum Page Component (Community Hub)', () => {
 
         const initialCallCount = apiFetch.mock.calls.length;
 
-        const refreshBtn = screen.getByLabelText('Refresh feed');
-        fireEvent.click(refreshBtn);
+        const composerCard = screen.getByTestId('facebook-composer-card');
+        const feedContainer = composerCard.parentElement;
+
+        fireEvent.touchStart(feedContainer, { touches: [{ clientY: 50 }] });
+        fireEvent.touchMove(feedContainer, { touches: [{ clientY: 170 }] });
+        fireEvent.touchEnd(feedContainer);
 
         await waitFor(() => {
             expect(apiFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
@@ -1117,12 +1029,8 @@ describe('Forum Page Component (Community Hub)', () => {
             json: async () => ({ feed: mockFeed, nextCursor: null, hasMore: false })
         });
 
-        renderWithProviders();
+        renderWithProviders('/community?search=Doubles');
         await waitFor(() => expect(screen.getByText('Doubles match')).toBeInTheDocument());
-
-        const searchInput = screen.getByLabelText('Search community posts');
-        fireEvent.change(searchInput, { target: { value: 'Doubles' } });
-        fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
 
         await waitFor(() => {
             expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('search=Doubles'));

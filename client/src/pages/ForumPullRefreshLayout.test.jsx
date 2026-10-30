@@ -101,26 +101,12 @@ describe('Forum Pull-to-Refresh, Facebook Top Search & Admin Pin Tests', () => {
 		expect(composer).toHaveTextContent("What's on your mind, Player?");
 	});
 
-	it('renders search bar above the feed in header next to reload button', async () => {
+	it('renders clean Facebook-style header without cluttered reload button or inline search', async () => {
 		renderForum(mockPlayer);
-		const searchInput = screen.getByLabelText('Search community posts');
-		expect(searchInput).toBeInTheDocument();
-
-		const reloadBtn = screen.getByRole('button', { name: /refresh feed/i });
-		expect(reloadBtn).toBeInTheDocument();
-	});
-
-	it('triggers feed refresh when clicking the desktop Reload Feed button', async () => {
-		renderForum(mockPlayer);
-		await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-		apiFetch.mockClear();
-
-		const reloadBtn = screen.getByRole('button', { name: /refresh feed/i });
-		fireEvent.click(reloadBtn);
-
-		await waitFor(() => {
-			expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('/api/feed?tab=latest'));
-		});
+		await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
+		expect(screen.queryByRole('button', { name: /refresh feed/i })).not.toBeInTheDocument();
+		expect(screen.queryByLabelText('Search community posts')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('feed-density-toggle')).not.toBeInTheDocument();
 	});
 
 	it('supports mobile touch pull-to-refresh down gesture and refreshes feed', async () => {

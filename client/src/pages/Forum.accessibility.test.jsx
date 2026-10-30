@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BrowserRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import Forum from './Forum';
 import apiFetch from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
@@ -9,47 +9,52 @@ vi.mock('../utils/api', () => ({
 	default: vi.fn()
 }));
 
-let socketHandlers = {};
+vi.mock('react-hot-toast', () => ({
+	default: {
+		success: vi.fn(),
+		error: vi.fn()
+	},
+	toast: {
+		success: vi.fn(),
+		error: vi.fn()
+	}
+}));
+
 vi.mock('../utils/socket', () => ({
 	default: {
-		on: vi.fn((event, cb) => { socketHandlers[event] = cb; }),
-		off: vi.fn((event) => { delete socketHandlers[event]; }),
+		on: vi.fn(),
+		off: vi.fn(),
 		emit: vi.fn()
 	}
 }));
 
-vi.mock('@mui/lab/Masonry', () => ({
-	default: ({ children }) => <div data-testid="masonry-mock">{children}</div>
-}));
-
 vi.mock('../components/PostCard', () => ({
 	default: ({ post }) => (
-		<article data-testid={`post-card-${post._id}`} aria-label={post.title}>
+		<div data-testid={`post-card-${post._id}`}>
 			<h3>{post.title}</h3>
 			<p>{post.content}</p>
-		</article>
+		</div>
 	)
 }));
 
-const mockUser = { id: 'admin1', name: 'Admin Officer', role: 'admin' };
-
 describe('Community Hub Phase 10: Accessibility (WCAG 2.1 AA) & Keyboard Navigation', () => {
+	const mockUser = {
+		id: 'u123',
+		name: 'Accessibility Tester',
+		role: 'admin',
+		profilePic: 'https://example.com/avatar.jpg'
+	};
+
 	beforeEach(() => {
 		vi.clearAllMocks();
-		socketHandlers = {};
-		window.IntersectionObserver = vi.fn().mockImplementation(() => ({
-			observe: vi.fn(),
-			unobserve: vi.fn(),
-			disconnect: vi.fn()
-		}));
 	});
 
-	const renderWithProviders = (user = mockUser) => {
+	const renderWithProviders = (currentUser = mockUser) => {
 		return render(
-			<AuthContext.Provider value={{ user, token: 'mock-token' }}>
-				<BrowserRouter>
+			<AuthContext.Provider value={{ user: currentUser, token: 'fake-jwt-token' }}>
+				<MemoryRouter>
 					<Forum />
-				</BrowserRouter>
+				</MemoryRouter>
 			</AuthContext.Provider>
 		);
 	};
@@ -68,26 +73,30 @@ describe('Community Hub Phase 10: Accessibility (WCAG 2.1 AA) & Keyboard Navigat
 		const filterRegion = screen.getByRole('region', { name: /Category and topic filters/i });
 		expect(filterRegion).toBeInTheDocument();
 
-		// Search input accessible label
-		const searchInput = screen.getByRole('textbox', { name: /Search community posts/i });
-		expect(searchInput).toBeInTheDocument();
+		// Facebook composer card accessible button
+		const composerCard = screen.getByTestId('facebook-composer-card');
+		expect(composerCard).toBeInTheDocument();
 	});
 
-	it('focuses search input when pressing "/" keyboard shortcut', async () => {
+	it('focuses global search input when pressing "/" keyboard shortcut', async () => {
 		apiFetch.mockResolvedValue({
 			ok: true,
 			json: async () => ({ feed: [], hasMore: false, tags: [] })
 		});
 
+		// Mock global search input in navbar
+		const mockSearch = document.createElement('input');
+		mockSearch.id = 'global-search';
+		document.body.appendChild(mockSearch);
+
 		renderWithProviders();
 		await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
-
-		const searchInput = screen.getByRole('textbox', { name: /Search community posts/i });
 
 		// Trigger global '/' keydown
 		fireEvent.keyDown(window, { key: '/', code: 'Slash' });
 
-		expect(document.activeElement).toBe(searchInput);
+		expect(document.activeElement).toBe(mockSearch);
+		document.body.removeChild(mockSearch);
 	});
 
 	it('renders accessible Create Post dialog with aria-labelledby and focus traps', async () => {
@@ -108,22 +117,22 @@ describe('Community Hub Phase 10: Accessibility (WCAG 2.1 AA) & Keyboard Navigat
 		expect(screen.getByText('Create a Post')).toHaveAttribute('id', 'create-post-dialog-title');
 	});
 
-	it('renders accessible Admin Moderation Queue dialog with aria-labelledby when triggered by admin', async () => {
-		apiFetch.mockImplementation((url) => {
-			if (url.includes('/reports')) {
-				return Promise.resolve({ ok: true, json: async () => [] });
-			}
-			return Promise.resolve({ ok: true, json: async () => ({ feed: [], hasMore: false, tags: [] }) });
+	it('allows keyboard interaction on category filter chips (Enter / Space key)', async () => {
+		apiFetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({ feed: [], hasMore: false, tags: [] })
 		});
 
 		renderWithProviders();
 		await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
 
-		const modBtn = screen.getByTestId('admin-moderation-queue-btn');
-		fireEvent.click(modBtn);
+		const generalFilter = screen.getByText('💬 General');
+		expect(generalFilter).toBeInTheDocument();
 
-		const dialogs = await screen.findAllByRole('dialog');
-		const modDialog = dialogs.find(d => d.getAttribute('aria-labelledby') === 'moderation-queue-dialog-title');
-		expect(modDialog).toBeInTheDocument();
+		fireEvent.click(generalFilter);
+
+		await waitFor(() => {
+			expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('category=general'));
+		});
 	});
 });
