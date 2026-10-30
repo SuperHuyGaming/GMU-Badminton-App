@@ -141,6 +141,31 @@ describe('Forum Pull-to-Refresh, Facebook Top Search & Admin Pin Tests', () => {
 		});
 	});
 
+	it('renders active search indicator when URL contains search and clears it', async () => {
+		render(
+			<AuthContext.Provider value={{ user: mockPlayer, token: 'mock-token' }}>
+				<BrowserRouter>
+					<Forum />
+				</BrowserRouter>
+			</AuthContext.Provider>
+		);
+		// Simulate URL search parameter
+		window.history.pushState({}, '', '/community?search=Doubles');
+		render(
+			<AuthContext.Provider value={{ user: mockPlayer, token: 'mock-token' }}>
+				<BrowserRouter>
+					<Forum />
+				</BrowserRouter>
+			</AuthContext.Provider>
+		);
+		await waitFor(() => expect(screen.getByTestId('active-search-indicator')).toBeInTheDocument());
+		expect(screen.getByText(/showing posts matching/i)).toBeInTheDocument();
+		expect(screen.getByText(/"Doubles"/i)).toBeInTheDocument();
+
+		const clearBtn = screen.getByRole('button', { name: /clear/i });
+		fireEvent.click(clearBtn);
+	});
+
 	it('includes full categories and privacy selections in Create Post modal', async () => {
 		renderForum(mockPlayer);
 		await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());

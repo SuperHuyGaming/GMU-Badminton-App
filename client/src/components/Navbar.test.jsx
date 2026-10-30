@@ -204,6 +204,18 @@ describe('Navbar Component & Global Search UI', () => {
         expect(screen.queryByTestId('mobile-search-bar')).not.toBeInTheDocument();
     });
 
+    it('closes mobile search bar when Escape key is pressed', () => {
+        renderNavbar();
+        const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });
+        fireEvent.click(mobileSearchBtn);
+
+        expect(screen.getByTestId('mobile-search-bar')).toBeInTheDocument();
+        const searchInput = screen.getAllByPlaceholderText('Search GMU Badminton...')[0];
+        fireEvent.keyDown(searchInput, { key: 'Escape', code: 'Escape' });
+
+        expect(screen.queryByTestId('mobile-search-bar')).not.toBeInTheDocument();
+    });
+
     it('navigates to /community?search= when Enter is pressed while on /community', () => {
         renderNavbar(mockUser, '/community');
         const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');

@@ -197,6 +197,9 @@ const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
                                         }
                                         setOpen(false);
                                         if (onCloseMobile) onCloseMobile();
+                                    } else if (e.key === 'Escape') {
+                                        setOpen(false);
+                                        if (onCloseMobile) onCloseMobile();
                                     }
                                 }}
                                 slotProps={{

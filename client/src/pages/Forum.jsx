@@ -421,6 +421,14 @@ export default function Forum() {
 		setFeedRefreshKey(k => k + 1);
 	}, []);
 
+	const prevUrlSearchRef = useRef(urlSearch);
+	useEffect(() => {
+		if (prevUrlSearchRef.current !== urlSearch) {
+			prevUrlSearchRef.current = urlSearch;
+			resetFeedAndPagination();
+		}
+	}, [urlSearch, resetFeedAndPagination]);
+
 	// J4: Smart Feed Sorting Tab Switching Handler
 	const handleTabChange = useCallback((newTab) => {
 		if (newTab === tab) return;
