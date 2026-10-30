@@ -958,7 +958,7 @@ export default function Navbar() {
 						/>
 						<List component="nav" aria-label="Mobile navigation links">
 							{[
-								{ label: "Search", path: "/search" },
+
 								{ label: "Dashboard", path: "/" },
 								{ label: "Community", path: "/community" },
 								{ label: "Players", path: "/matchmaking" },

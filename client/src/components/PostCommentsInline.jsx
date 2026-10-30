@@ -164,11 +164,20 @@ export default function PostCommentsInline({
 		if (localPost.authorName)
 			userMap.set(localPost.authorName, localPost.authorId);
 		localPost.comments?.forEach((c) => {
-			userMap.set(c.authorName, c.authorId);
-			c.replies?.forEach((r) => userMap.set(r.authorName, r.authorId));
+			const name = c.authorName || c.userName;
+			if (name && typeof name === "string") userMap.set(name, c.authorId || c.userId);
+			c.replies?.forEach((r) => {
+				const rName = r.authorName || r.userName;
+				if (rName && typeof rName === "string") userMap.set(rName, r.authorId || r.userId);
+			});
 		});
 
-		if (userMap.size === 0)
+		const names = Array.from(userMap.keys())
+			.filter((n) => typeof n === "string" && n.trim().length > 0)
+			.sort((a, b) => b.length - a.length)
+			.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+		if (names.length === 0)
 			return (
 				<Typography
 					variant="body2"
@@ -183,10 +192,6 @@ export default function PostCommentsInline({
 					{content}
 				</Typography>
 			);
-
-		const names = Array.from(userMap.keys())
-			.sort((a, b) => b.length - a.length)
-			.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 		const regex = new RegExp(`(@(?:${names.join("|")}))`, "g");
 		const parts = content.split(regex);
 

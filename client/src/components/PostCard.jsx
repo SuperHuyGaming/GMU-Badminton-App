@@ -272,6 +272,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const [isEditing, setIsEditing] = useState(false);
 	const [editTitle, setEditTitle] = useState(post.title);
 	const [editContent, setEditContent] = useState(post.content);
+	const [editVisibility, setEditVisibility] = useState(post.visibility || "PUBLIC");
 
 	// Toggles the imported dialog component
 	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -313,6 +314,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		});
 		setEditTitle(post.title);
 		setEditContent(post.content);
+		setEditVisibility(post.visibility || "PUBLIC");
 	}, [post]);
 
 	// INSTANT COMMENT INJECTION & REAL-TIME SYNC
@@ -594,6 +596,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					userId: currentUserId,
 					title: editTitle,
 					content: editContent,
+					visibility: editVisibility,
 				}),
 			});
 			const data = await res.json();
@@ -1113,6 +1116,22 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							onChange={(e) => setEditContent(e.target.value)}
 							sx={{ mb: 2, bgcolor: "background.paper" }}
 						/>
+						<Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+							<Typography variant="caption" sx={{ color: "text.secondary", fontWeight: "bold" }}>
+								Audience:
+							</Typography>
+							<Select
+								size="small"
+								value={editVisibility}
+								onChange={(e) => setEditVisibility(e.target.value)}
+								sx={{ fontSize: "0.8rem", borderRadius: 2 }}
+								inputProps={{ "aria-label": "Edit audience privacy" }}
+							>
+								<MenuItem value="PUBLIC">🌍 Public</MenuItem>
+								<MenuItem value="FRIENDS_ONLY">👥 Friends Only</MenuItem>
+								<MenuItem value="ONLY_ME">🔒 Only Me</MenuItem>
+							</Select>
+						</Box>
 						<Box sx={{ display: "flex", gap: 1 }}>
 							<Button
 								variant="contained"
@@ -1133,6 +1152,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									setIsEditing(false);
 									setEditTitle(localPost.title);
 									setEditContent(localPost.content);
+									setEditVisibility(localPost.visibility || "PUBLIC");
 								}}
 								sx={{
 									fontWeight: "bold",
@@ -1786,7 +1806,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									alignItems: 'center'
 								}}
 							>
-								<ThumbUpFilled style={{ fontSize: '100px', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.3))' }} />
+								<FacebookReactionIcon emoji="👍" size={88} />
 							</Box>
 						)}
 					</Box>
@@ -1922,6 +1942,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						{totalCommentsCount > 0 && (
 							<Typography
 								role="button"
+								aria-label="View comments"
 								tabIndex={0}
 								variant="body2"
 								color="text.secondary"
@@ -1962,8 +1983,17 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						onTouchStart={() => {
 							touchTimer.current = setTimeout(() => setShowReactions(true), 380);
 						}}
+						onTouchMove={() => {
+							if (touchTimer.current) {
+								clearTimeout(touchTimer.current);
+								touchTimer.current = null;
+							}
+						}}
 						onTouchEnd={() => {
-							if (touchTimer.current) clearTimeout(touchTimer.current);
+							if (touchTimer.current) {
+								clearTimeout(touchTimer.current);
+								touchTimer.current = null;
+							}
 						}}
 						sx={{ position: 'relative', flex: 1, display: 'flex' }}
 					>

@@ -709,7 +709,10 @@ router.get("/", async (req, res) => {
 		}
 
 		if (searchOr) {
-			query.$or = searchOr;
+			query.$and = [
+				{ $or: visibilityOr },
+				{ $or: searchOr }
+			];
 		} else {
 			query.$or = visibilityOr;
 		}
@@ -972,11 +975,32 @@ router.get("/user/:userId", async (req, res) => {
 		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
 		const skip = (page - 1) * limit;
 
-		const rawPosts = await Post.find({
+		const currentUser = getOptionalUser(req);
+		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : "";
+		const targetUserId = req.params.userId.toString();
+		const isSelf = currentUserId && currentUserId === targetUserId;
+		const isAdmin = currentUser && currentUser.role === "admin";
+
+		let visibilityOr = [{ visibility: "PUBLIC" }, { visibility: { $exists: false } }];
+		if (isSelf || isAdmin) {
+			visibilityOr = null;
+		} else if (currentUserId) {
+			const targetUser = await User.findById(targetUserId).select("friends").lean();
+			const isFriend = targetUser && Array.isArray(targetUser.friends) &&
+				targetUser.friends.some(f => (f._id || f).toString() === currentUserId);
+			if (isFriend) {
+				visibilityOr = [{ visibility: { $in: ["PUBLIC", "FRIENDS_ONLY"] } }, { visibility: { $exists: false } }];
+			}
+		}
+
+		const query = {
 			authorId: req.params.userId,
 			isFlagged: { $ne: true },
 			status: { $nin: ['quarantined', 'deleted'] }
-		})
+		};
+		if (visibilityOr) query.$or = visibilityOr;
+
+		const rawPosts = await Post.find(query)
 			.sort({ timestamp: -1 })
 			.skip(skip)
 			.limit(limit)
@@ -1064,7 +1088,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const { title, content, category, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
+		const { title, content, category, visibility, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
 		}
@@ -1088,6 +1112,13 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 				return res.status(400).json({ message: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}` });
 			}
 			post.category = category;
+		}
+
+		if (visibility) {
+			if (!["PUBLIC", "FRIENDS_ONLY", "ONLY_ME"].includes(visibility)) {
+				return res.status(400).json({ message: "Invalid visibility. Allowed: PUBLIC, FRIENDS_ONLY, ONLY_ME" });
+			}
+			post.visibility = visibility;
 		}
 
 		if (matchDetails && typeof matchDetails === "object") {
@@ -1139,7 +1170,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
 				const p = ActivityFeed.updateOne(
 					{ referenceId: post._id },
-					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
+					{ $set: { title: post.title, content: post.content, category: post.category, visibility: post.visibility, isEdited: true, editedAt: post.editedAt, reactions: post.reactions, likes: post.likedBy?.length || 0 } }
 				);
 				if (p && typeof p.catch === 'function') p.catch(() => {});
 			}
@@ -1367,6 +1398,29 @@ router.get("/:postId/comments", async (req, res) => {
 
 		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
 		if (!post) return res.status(404).json({ message: "Post not found" });
+		if (post.status === "quarantined" || post.status === "deleted") {
+			return res.status(404).json({ message: "Post not available" });
+		}
+
+		const currentUser = getOptionalUser(req);
+		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : null;
+		const postAuthorId = post.authorId ? post.authorId.toString() : null;
+		const isAuthor = Boolean(currentUserId && postAuthorId && currentUserId === postAuthorId);
+		const isAdmin = Boolean(currentUser && currentUser.role === "admin");
+
+		if (post.visibility === "ONLY_ME" && !isAuthor && !isAdmin) {
+			return res.status(403).json({ message: "This post is private." });
+		} else if (post.visibility === "FRIENDS_ONLY" && !isAuthor && !isAdmin) {
+			if (!currentUserId) {
+				return res.status(403).json({ message: "This post is only visible to friends of the author." });
+			}
+			const authorUser = await User.findById(post.authorId).select("friends").lean();
+			const isFriend = authorUser && Array.isArray(authorUser.friends) &&
+				authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
+			if (!isFriend) {
+				return res.status(403).json({ message: "This post is only visible to friends of the author." });
+			}
+		}
 
 		const hydratedPost = await hydrateWithPictures(post);
 		res.json({ comments: hydratedPost.comments || [] });

@@ -59,7 +59,13 @@ export default function MobileNav() {
 	const location = useLocation();
 	const [value, setValue] = useState(0);
 
-	const currentUser = JSON.parse(localStorage.getItem("user"));
+	let currentUser = null;
+	try {
+		const raw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+		currentUser = raw ? JSON.parse(raw) : null;
+	} catch {
+		currentUser = null;
+	}
 
 	// Sync the active tab with the current URL
 	useEffect(() => {
