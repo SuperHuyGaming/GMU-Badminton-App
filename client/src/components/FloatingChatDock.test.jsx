@@ -188,4 +188,50 @@ describe('FloatingChatDock Component', () => {
             expect(screen.getByText('Hey Alex!')).toBeInTheDocument();
         });
     });
+    it('allows choosing from active community members when opened without active recipient', async () => {
+        apiFetch.mockImplementation(async (url) => {
+            if (url.includes('/api/messages/recent/')) {
+                return { ok: true, json: async () => [] };
+            }
+            if (url.includes('/api/forum/members')) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        users: [
+                            { _id: 'user-member-1', name: 'Jordan Smith', skillLevel: 'Advanced', profilePic: '' },
+                            { _id: 'user-member-2', name: 'Taylor Lee', skillLevel: 'Intermediate', profilePic: '' }
+                        ]
+                    })
+                };
+            }
+            if (url.includes('/api/messages/user-self-1/user-member-1')) {
+                return { ok: true, json: async () => [] };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderChatDock();
+        fireEvent.click(screen.getByTestId('floating-chat-launcher'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('floating-chat-window')).toBeInTheDocument();
+        });
+
+        expect(screen.getByText(/Select a badminton partner to start chatting/i)).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(screen.getByText('Jordan Smith')).toBeInTheDocument();
+            expect(screen.getByText('Taylor Lee')).toBeInTheDocument();
+        });
+
+        const chatJordanBtn = screen.getByRole('button', { name: /chat with jordan smith/i });
+        fireEvent.click(chatJordanBtn);
+
+        await waitFor(() => {
+            expect(screen.getByText('Say hi to Jordan Smith! 👋')).toBeInTheDocument();
+        });
+
+        const input = screen.getByPlaceholderText('Aa');
+        expect(input).not.toBeDisabled();
+    });
 });

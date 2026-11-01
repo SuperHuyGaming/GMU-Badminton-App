@@ -225,10 +225,10 @@ export default function Tournaments() {
     const [divisionFilter, setDivisionFilter] = useState('all'); // 'all' | 'singles' | 'doubles' | 'mixed'
     const [sortBy, setSortBy] = useState('date_asc'); // 'date_asc' | 'date_desc' | 'rsvp_desc' | 'name_asc'
     const [sortAnchorEl, setSortAnchorEl] = useState(null);
-    const [searchInput, setSearchInput] = useState(() => searchParams.get('q') || '');
+    const [searchInput, setSearchInput] = useState(() => searchParams.get('search') || searchParams.get('q') || '');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const searchInputRef = useRef(null);
-    const searchQuery = searchParams.get('q') || '';
+    const searchQuery = searchParams.get('search') || searchParams.get('q') || '';
     const filterUpcoming = searchParams.get('upcoming') !== 'false'; // default true
     const filterWeekend = searchParams.get('weekend') === 'true';
     const selectedSkills = useMemo(() => {
@@ -274,9 +274,9 @@ export default function Tournaments() {
     // Debounce server query and URL updates by 250ms on searchInput change
     useEffect(() => {
         const timer = setTimeout(() => {
-            const currentQ = searchParams.get('q') || '';
+            const currentQ = searchParams.get('search') || searchParams.get('q') || '';
             if (searchInput !== currentQ) {
-                updateFilters({ q: searchInput });
+                updateFilters({ q: searchInput, search: null });
             }
         }, 250);
         return () => clearTimeout(timer);

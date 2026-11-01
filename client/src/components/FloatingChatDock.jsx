@@ -347,13 +347,13 @@ export default function FloatingChatDock() {
                         <Typography
                             variant="caption"
                             sx={{
-                                color: isRecipientOnline ? 'success.main' : 'text.secondary',
+                                color: !activeRecipient ? 'text.secondary' : (isRecipientOnline ? 'success.main' : 'text.secondary'),
                                 fontSize: '0.72rem',
                                 fontWeight: 500,
                                 display: 'block'
                             }}
                         >
-                            {isRecipientOnline ? 'Active now' : 'Offline'}
+                            {!activeRecipient ? 'Choose a player' : (isRecipientOnline ? 'Active now' : 'Offline')}
                         </Typography>
                     </Box>
                 </Box>

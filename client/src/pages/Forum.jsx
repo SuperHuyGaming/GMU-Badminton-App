@@ -35,7 +35,7 @@ const DEFAULT_BUDDIES = [
 
 const DEFAULT_UPCOMING_TOURNAMENTS = [
 	{
-		_id: 't-fall-2026-1',
+		_id: '65f01a1b2c3d4e5f6a7b8c98',
 		tournamentName: 'Mason Fall Open 2026',
 		eventLocation: 'George Mason RAC Gym',
 		startDate: 'Oct 15-16',
@@ -43,7 +43,7 @@ const DEFAULT_UPCOMING_TOURNAMENTS = [
 		badgeColor: 'success'
 	},
 	{
-		_id: 't-fall-2026-2',
+		_id: '65f01a1b2c3d4e5f6a7b8c99',
 		tournamentName: 'Capital Fall Classic 2026',
 		eventLocation: 'CBA Columbia, MD',
 		startDate: 'Nov 5-6',
@@ -1039,7 +1039,7 @@ export default function Forum() {
 						data-testid="active-search-indicator"
 						sx={{ 
 							width: '100%', 
-							maxWidth: '680px', 
+							maxWidth: '100%', 
 							display: 'flex', 
 							alignItems: 'center', 
 							justifyContent: 'space-between',
@@ -1085,7 +1085,7 @@ export default function Forum() {
 						}}
 						sx={{
 							width: '100%',
-							maxWidth: '680px',
+							maxWidth: '100%',
 							p: { xs: 1.5, sm: 2 },
 							borderRadius: { xs: 2.5, sm: 3 },
 							border: '1px solid',
@@ -1150,7 +1150,7 @@ export default function Forum() {
 				{/* UNIFIED FILTER STRIP (Categories + Trending) */}
 				<Box 
 					sx={{ 
-						width: '100%', maxWidth: '680px', display: 'flex', gap: 1, overflowX: 'auto', px: 0.5, py: 0.5, alignItems: 'center',
+						width: '100%', maxWidth: '100%', display: 'flex', gap: 1, overflowX: 'auto', px: 0.5, py: 0.5, alignItems: 'center',
 						scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } 
 					}}
 					data-testid="trending-tags-strip"
@@ -1205,7 +1205,7 @@ export default function Forum() {
 				</Box>
 			</Box>
 
-			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%', maxWidth: '680px', mx: 'auto' }}>
+			<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%', maxWidth: '100%', mx: 'auto' }}>
 				{/* NEW POSTS PILL */}
 				{newPostsQueue.length > 0 && (
 					<Box 
@@ -1466,7 +1466,7 @@ export default function Forum() {
 					sx={{ 
 						width: { lg: 300, xl: 340 }, 
 						flexShrink: 0, 
-						display: { xs: 'none', xl: 'block' }, 
+						display: { xs: 'none', lg: 'block' }, 
 						position: 'sticky', 
 						top: 84,
 						alignSelf: 'flex-start'
