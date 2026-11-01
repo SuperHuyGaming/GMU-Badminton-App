@@ -713,4 +713,43 @@ describe('PostCard Component QA Tests', () => {
         expect(editedBadge).toBeInTheDocument();
         expect(editedBadge).toHaveTextContent('(Edited)');
     });
+
+    it('allows author to edit post content and change audience privacy visibility', async () => {
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                ...mockPost,
+                title: 'Updated Post Title',
+                content: 'Updated post content body',
+                visibility: 'FRIENDS_ONLY',
+                isEdited: true
+            })
+        });
+
+        renderWithContext(mockPost, mockUser);
+
+        const menuBtn = screen.getByRole('button', { name: /more options/i });
+        fireEvent.click(menuBtn);
+
+        const editOption = screen.getByText(/edit post/i);
+        fireEvent.click(editOption);
+
+        expect(screen.getByLabelText(/edit title/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/edit details/i)).toBeInTheDocument();
+        const audienceSelect = screen.getByLabelText(/edit audience privacy/i);
+        expect(audienceSelect).toBeInTheDocument();
+
+        const saveBtn = screen.getByRole('button', { name: /save changes/i });
+        fireEvent.click(saveBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                `/api/forum/${mockPost._id}`,
+                expect.objectContaining({
+                    method: 'PUT',
+                    body: expect.stringContaining('"visibility":"PUBLIC"')
+                })
+            );
+        });
+    });
 });

@@ -54,6 +54,25 @@ const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
     const [inputValue, setInputValue] = useState("");
     const navigate = useNavigate();
     const location = useLocation();
+
+    // Global '/' key shortcut to focus search input on desktop
+    useEffect(() => {
+        if (onCloseMobile) return;
+        const handleGlobalSlashShortcut = (e) => {
+            if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                const targetTag = e.target?.tagName;
+                if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag) && !e.target?.isContentEditable) {
+                    e.preventDefault();
+                    if (inputRef.current) {
+                        inputRef.current.focus();
+                        setOpen(true);
+                    }
+                }
+            }
+        };
+        window.addEventListener('keydown', handleGlobalSlashShortcut);
+        return () => window.removeEventListener('keydown', handleGlobalSlashShortcut);
+    }, [onCloseMobile]);
     
     // Search history for specific players
     const [recentSearches, setRecentSearches] = useState(() => {

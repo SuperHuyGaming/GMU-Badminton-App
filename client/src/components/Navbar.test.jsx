@@ -230,6 +230,15 @@ describe('Navbar Component & Global Search UI', () => {
         expect(screen.getByText('/')).toBeInTheDocument();
     });
 
+    it('focuses search input when forward slash key / is pressed', () => {
+        renderNavbar();
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).toBe(searchInput);
+    });
+
     it('does not render the Leaderboard navigation link', () => {
         renderNavbar();
 
