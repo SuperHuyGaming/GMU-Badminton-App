@@ -105,7 +105,7 @@ describe('Forum 3-Column Facebook Layout & Ecosystem Tests', () => {
         expect(screen.getByText('Upcoming Tournaments')).toBeInTheDocument();
         expect(screen.getByText('Mason Fall Open 2026')).toBeInTheDocument();
         expect(screen.getByText('Badminton Buddies')).toBeInTheDocument();
-        expect(screen.getByText('Tu Pham')).toBeInTheDocument();
+        expect(screen.getByText('Alex Chen')).toBeInTheDocument();
     });
 
     it('navigates to /tournaments when clicking Tournaments shortcut', async () => {
@@ -131,13 +131,13 @@ describe('Forum 3-Column Facebook Layout & Ecosystem Tests', () => {
             expect(screen.getByTestId('facebook-right-rail')).toBeInTheDocument();
         });
 
-        const chatTuBtn = screen.getByRole('button', { name: /chat with tu pham/i });
+        const chatTuBtn = screen.getByRole('button', { name: /chat with alex chen/i });
         fireEvent.click(chatTuBtn);
 
         expect(chatEventSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 detail: expect.objectContaining({
-                    name: 'Tu Pham'
+                    name: 'Alex Chen'
                 })
             })
         );

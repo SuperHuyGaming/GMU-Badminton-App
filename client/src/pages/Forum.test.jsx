@@ -1118,9 +1118,10 @@ describe('Forum Page Component (Community Hub)', () => {
             });
 
             await waitFor(() => {
-                expect(screen.getByTestId('mention-suggestions-dropdown')).toBeInTheDocument();
-                expect(screen.getByText('Carol White')).toBeInTheDocument();
-                expect(screen.getByText('Dave Miller')).toBeInTheDocument();
+                const dropdown = screen.getByTestId('mention-suggestions-dropdown');
+                expect(dropdown).toBeInTheDocument();
+                expect(within(dropdown).getByText('Carol White')).toBeInTheDocument();
+                expect(within(dropdown).getByText('Dave Miller')).toBeInTheDocument();
             });
 
             // Keyboard navigation: ArrowDown to Dave Miller, then Enter to select

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Paper, Typography, Avatar, IconButton, TextField,
-    Badge, Tooltip, CircularProgress, Menu, MenuItem, ListItemAvatar, ListItemText
+    Badge, Tooltip, CircularProgress, Menu, MenuItem, ListItemAvatar, ListItemText, Button
 } from '@mui/material';
 import ChatBubbleOutlinedIcon from '@mui/icons-material/ChatBubbleOutlined';
 import CloseIcon from '@mui/icons-material/Close';
@@ -25,6 +25,7 @@ export default function FloatingChatDock() {
     const [recentConversations, setRecentConversations] = useState([]);
     const [onlineUserIds, setOnlineUserIds] = useState(new Set());
     const [conversationsMenuAnchor, setConversationsMenuAnchor] = useState(null);
+    const [communityMembers, setCommunityMembers] = useState([]);
 
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
@@ -123,6 +124,27 @@ export default function FloatingChatDock() {
             fetchMessages(activeRecipient._id);
         }
     }, [activeRecipient, isOpen, isMinimized, fetchMessages]);
+
+    // Load available community members when chat is open without active recipient
+    useEffect(() => {
+        if (!isOpen || isMinimized || activeRecipient) return;
+        let isCancelled = false;
+        const fetchMembers = async () => {
+            try {
+                const res = await apiFetch('/api/forum/members?limit=8');
+                if (!isCancelled && res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data?.users) && data.users.length > 0) {
+                        setCommunityMembers(data.users.filter(u => String(u._id || u.id) !== String(currentUserId)));
+                    }
+                }
+            } catch (err) {
+                console.warn('[FloatingChatDock] Failed to load members for chat picker:', err.message);
+            }
+        };
+        fetchMembers();
+        return () => { isCancelled = true; };
+    }, [isOpen, isMinimized, activeRecipient, currentUserId]);
 
     // Socket listeners for real-time messaging
     useEffect(() => {
@@ -433,10 +455,70 @@ export default function FloatingChatDock() {
                         <CircularProgress size={24} />
                     </Box>
                 ) : !activeRecipient ? (
-                    <Box sx={{ m: 'auto', textAlign: 'center', p: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
+                    <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mb: 0.5, fontWeight: 500 }}>
                             Select a badminton partner to start chatting! 🏸
                         </Typography>
+                        {(communityMembers.length > 0 ? communityMembers : [
+                            { _id: '65f01a1b2c3d4e5f6a7b8c91', name: 'Alex Chen', role: 'Advanced Singles' },
+                            { _id: '65f01a1b2c3d4e5f6a7b8c92', name: 'David Kim', role: 'Intermediate Doubles' }
+                        ]).map((m) => (
+                            <Box
+                                key={m._id || m.id}
+                                onClick={() => {
+                                    const targetId = m._id || m.id;
+                                    setActiveRecipient({
+                                        _id: targetId,
+                                        name: m.name,
+                                        avatarUrl: m.profilePic || m.avatarUrl || ''
+                                    });
+                                    fetchMessages(targetId);
+                                    setTimeout(() => inputRef.current?.focus(), 200);
+                                }}
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    p: 1,
+                                    borderRadius: 2,
+                                    bgcolor: 'background.paper',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                    '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.light' }
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                                    <Avatar src={m.profilePic || m.avatarUrl} sx={{ width: 32, height: 32, fontSize: '0.8rem' }}>
+                                        {m.name ? m.name.charAt(0) : 'U'}
+                                    </Avatar>
+                                    <Box>
+                                        <Typography variant="body2" fontWeight="600" sx={{ fontSize: '0.85rem' }}>
+                                            {m.name}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.72rem' }}>
+                                            {m.skillLevel || m.role || 'Member'}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    aria-label={`Chat with ${m.name}`}
+                                    sx={{
+                                        borderRadius: 4,
+                                        fontSize: '0.72rem',
+                                        py: 0.2,
+                                        px: 1.2,
+                                        textTransform: 'none',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    Chat
+                                </Button>
+                            </Box>
+                        ))}
                     </Box>
                 ) : messages.length === 0 ? (
                     <Box sx={{ m: 'auto', textAlign: 'center', p: 2 }}>

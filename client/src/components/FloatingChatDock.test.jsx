@@ -32,19 +32,19 @@ const mockRecentConversations = [
     {
         partner: {
             _id: 'user-friend-1',
-            name: 'Tu Pham',
+            name: 'Alex Chen',
             avatarUrl: 'https://example.com/tu.png'
         },
-        lastMessage: 'Cuối tuần đi đánh cầu không?'
+        lastMessage: 'Ready for court 3 tonight?'
     }
 ];
 
 const mockMessages = [
     {
         _id: 'msg-1',
-        sender: { _id: 'user-friend-1', name: 'Tu Pham' },
+        sender: { _id: 'user-friend-1', name: 'Alex Chen' },
         recipient: { _id: 'user-self-1', name: 'Current Player' },
-        content: 'sao roi ong',
+        content: 'Hey, are we playing doubles at RAC?',
         createdAt: new Date().toISOString()
     }
 ];
@@ -100,7 +100,7 @@ describe('FloatingChatDock Component', () => {
         await waitFor(() => {
             expect(screen.getByTestId('floating-chat-window')).toBeInTheDocument();
         });
-        expect(screen.getByText('Tu Pham')).toBeInTheDocument();
+        expect(screen.getByText('Alex Chen')).toBeInTheDocument();
         expect(screen.getByPlaceholderText('Aa')).toBeInTheDocument();
     });
 
@@ -140,7 +140,7 @@ describe('FloatingChatDock Component', () => {
             new CustomEvent('openChatWithUser', {
                 detail: {
                     _id: 'user-friend-2',
-                    name: 'Nhat Quang',
+                    name: 'David Kim',
                     avatarUrl: ''
                 }
             })
@@ -148,7 +148,7 @@ describe('FloatingChatDock Component', () => {
 
         await waitFor(() => {
             expect(screen.getByTestId('floating-chat-window')).toBeInTheDocument();
-            expect(screen.getByText('Nhat Quang')).toBeInTheDocument();
+            expect(screen.getByText('David Kim')).toBeInTheDocument();
         });
     });
 
@@ -159,7 +159,7 @@ describe('FloatingChatDock Component', () => {
                     ok: true,
                     json: async () => ({
                         _id: 'msg-new-1',
-                        content: 'Hey Tu!',
+                        content: 'Hey Alex!',
                         sender: { _id: 'user-self-1', name: 'Current Player' },
                         createdAt: new Date().toISOString()
                     })
@@ -176,7 +176,7 @@ describe('FloatingChatDock Component', () => {
         });
 
         const input = screen.getByPlaceholderText('Aa');
-        fireEvent.change(input, { target: { value: 'Hey Tu!' } });
+        fireEvent.change(input, { target: { value: 'Hey Alex!' } });
 
         const sendBtn = screen.getByRole('button', { name: /send message/i });
         fireEvent.click(sendBtn);
@@ -185,7 +185,7 @@ describe('FloatingChatDock Component', () => {
             expect(apiFetch).toHaveBeenCalledWith('/api/messages', expect.objectContaining({
                 method: 'POST'
             }));
-            expect(screen.getByText('Hey Tu!')).toBeInTheDocument();
+            expect(screen.getByText('Hey Alex!')).toBeInTheDocument();
         });
     });
 });

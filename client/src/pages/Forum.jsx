@@ -15,6 +15,7 @@ import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import StorefrontIcon from "@mui/icons-material/Storefront";
+import DynamicFeedIcon from "@mui/icons-material/DynamicFeed";
 import CloseIcon from "@mui/icons-material/Close";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
@@ -25,6 +26,31 @@ import socket from "../utils/socket";
 import { compressImage } from "../utils/imageUtils";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useMentionAutocomplete, renderContentWithMentions } from "../hooks/useMentionAutocomplete";
+
+const DEFAULT_BUDDIES = [
+	{ _id: '65f01a1b2c3d4e5f6a7b8c91', name: 'Alex Chen', role: 'Advanced Singles', skillLevel: 'Advanced', online: true },
+	{ _id: '65f01a1b2c3d4e5f6a7b8c92', name: 'David Kim', role: 'Intermediate Doubles', skillLevel: 'Intermediate', online: true },
+	{ _id: '65f01a1b2c3d4e5f6a7b8c93', name: 'Mason Shuttle Club', role: 'Club Organizer', skillLevel: 'Club Admin', online: false }
+];
+
+const DEFAULT_UPCOMING_TOURNAMENTS = [
+	{
+		_id: 't-fall-2026-1',
+		tournamentName: 'Mason Fall Open 2026',
+		eventLocation: 'George Mason RAC Gym',
+		startDate: 'Oct 15-16',
+		badge: 'Open Registration',
+		badgeColor: 'success'
+	},
+	{
+		_id: 't-fall-2026-2',
+		tournamentName: 'Capital Fall Classic 2026',
+		eventLocation: 'CBA Columbia, MD',
+		startDate: 'Nov 5-6',
+		badge: 'Doubles / Singles',
+		badgeColor: 'primary'
+	}
+];
 
 const CATEGORY_FILTERS = [
 	{ id: "all", label: "All" },
@@ -116,6 +142,41 @@ export default function Forum() {
 		return () => { isMounted = false; };
 	}, []);
  // "foryou", "top", "latest"
+	const [communityMembers, setCommunityMembers] = useState([]);
+	const [upcomingTournaments, setUpcomingTournaments] = useState([]);
+
+	useEffect(() => {
+		let isCancelled = false;
+		const fetchSidebarData = async () => {
+			try {
+				const memRes = await apiFetch("/api/forum/members?limit=8");
+				if (!isCancelled && memRes && memRes.ok) {
+					const memData = await memRes.json();
+					if (Array.isArray(memData?.users) && memData.users.length > 0) {
+						const currentId = currentUser?._id || currentUser?.id;
+						setCommunityMembers(memData.users.filter(u => String(u._id || u.id) !== String(currentId)));
+					}
+				}
+			} catch (err) {
+				console.warn("Failed to load community members for sidebar:", err);
+			}
+
+			try {
+				const tournRes = await apiFetch("/api/tournaments?status=published");
+				if (!isCancelled && tournRes && tournRes.ok) {
+					const tournData = await tournRes.json();
+					if (Array.isArray(tournData?.tournaments) && tournData.tournaments.length > 0) {
+						setUpcomingTournaments(tournData.tournaments.slice(0, 3));
+					}
+				}
+			} catch (err) {
+				console.warn("Failed to load tournaments for sidebar:", err);
+			}
+		};
+		fetchSidebarData();
+		return () => { isCancelled = true; };
+	}, [currentUser]);
+
 	const [selectedTag, setSelectedTag] = useState("");
 	const [selectedCategory, setSelectedCategory] = useState("all");
 	const currentUserRef = useRef(currentUser);
@@ -701,6 +762,27 @@ export default function Forum() {
 		}
 	};
 
+	const displayBuddies = useMemo(() => {
+		if (communityMembers.length > 0) {
+			return communityMembers.slice(0, 4);
+		}
+		return DEFAULT_BUDDIES;
+	}, [communityMembers]);
+
+	const displayTournaments = useMemo(() => {
+		if (upcomingTournaments.length > 0) {
+			return upcomingTournaments.map(t => ({
+				_id: t._id,
+				tournamentName: t.tournamentName || t.name,
+				eventLocation: t.eventLocation || t.location || 'George Mason RAC Gym',
+				startDate: t.startDate ? new Date(t.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Upcoming',
+				badge: t.status === 'open' ? 'Open Registration' : 'Upcoming',
+				badgeColor: t.status === 'open' ? 'success' : 'primary'
+			}));
+		}
+		return DEFAULT_UPCOMING_TOURNAMENTS;
+	}, [upcomingTournaments]);
+
 	return (
 		<Box sx={{ pb: 10 }}>
 			<style>
@@ -740,18 +822,21 @@ export default function Forum() {
 			<Box 
 				sx={{ 
 					width: '100%', 
+					maxWidth: { xs: '100%', lg: '1440px', xl: '1680px' }, 
+					mx: 'auto', 
 					display: 'flex', 
 					justifyContent: 'center', 
 					alignItems: 'flex-start', 
-					gap: { lg: 3, xl: 4 },
-					px: { xs: 0, sm: 1, md: 2 }
+					gap: { lg: 3, xl: 4 }, 
+					px: { xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }, 
+					pt: { xs: 1, sm: 1.5, md: 2 }
 				}}
 			>
-				{/* 1. LEFT NAVIGATION RAIL (lg+ screens, width 260px, sticky) */}
+				{/* 1. LEFT NAVIGATION RAIL (lg+ screens, width 280-320px, sticky) */}
 				<Box 
 					data-testid="facebook-left-rail"
 					sx={{ 
-						width: 260, 
+						width: { lg: 280, xl: 320 }, 
 						flexShrink: 0, 
 						display: { xs: 'none', lg: 'block' }, 
 						position: 'sticky', 
@@ -813,6 +898,30 @@ export default function Forum() {
 						<Typography variant="caption" sx={{ px: 1.5, py: 0.75, fontWeight: 'bold', color: 'text.secondary' }}>
 							Quick Shortcuts
 						</Typography>
+						<Button
+							fullWidth
+							startIcon={<DynamicFeedIcon color={tab === 'latest' ? 'primary' : 'inherit'} />}
+							onClick={() => {
+								handleTabChange('latest');
+								setSelectedCategory('all');
+								setSelectedTag('');
+								window.scrollTo({ top: 0, behavior: 'smooth' });
+							}}
+							sx={{
+								justifyContent: 'flex-start',
+								borderRadius: 2,
+								px: 1.5,
+								py: 1,
+								textTransform: 'none',
+								fontWeight: tab === 'latest' ? 'bold' : 500,
+								color: tab === 'latest' ? 'primary.main' : 'text.primary',
+								bgcolor: tab === 'latest' ? 'action.selected' : 'transparent',
+								'&:hover': { bgcolor: 'action.hover' }
+							}}
+						>
+							Community Feed
+						</Button>
+
 						<Button
 							fullWidth
 							startIcon={<BookmarkBorderIcon color="secondary" />}
@@ -886,7 +995,7 @@ export default function Forum() {
 				</Box>
 
 				{/* 2. CENTER FEED COLUMN (width 100%, maxWidth 680px) */}
-				<Box sx={{ width: '100%', maxWidth: '680px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+				<Box sx={{ flex: 1, width: '100%', maxWidth: { xs: '100%', sm: 680, md: 700, lg: 720, xl: 760 }, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 					{/* INLINE COMPOSER & FEED FILTERS WITH MOBILE PULL-TO-REFRESH */}
 					<Box 
 						onTouchStart={handleTouchStart}
@@ -1355,7 +1464,7 @@ export default function Forum() {
 				<Box 
 					data-testid="facebook-right-rail"
 					sx={{ 
-						width: 300, 
+						width: { lg: 300, xl: 340 }, 
 						flexShrink: 0, 
 						display: { xs: 'none', xl: 'block' }, 
 						position: 'sticky', 
@@ -1391,45 +1500,28 @@ export default function Forum() {
 						</Box>
 
 						<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-							<Box
-								onClick={() => navigate('/tournaments')}
-								sx={{
-									p: 1.25,
-									borderRadius: 2,
-									bgcolor: 'action.hover',
-									cursor: 'pointer',
-									transition: 'all 0.2s',
-									'&:hover': { transform: 'translateY(-1px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
-								}}
-							>
-								<Typography variant="body2" fontWeight="bold" noWrap>
-									Mason Fall Open 2026
-								</Typography>
-								<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-									George Mason RAC Gym • Oct 15-16
-								</Typography>
-								<Chip label="Open Registration" size="small" color="success" sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }} />
-							</Box>
-
-							<Box
-								onClick={() => navigate('/tournaments')}
-								sx={{
-									p: 1.25,
-									borderRadius: 2,
-									bgcolor: 'action.hover',
-									cursor: 'pointer',
-									transition: 'all 0.2s',
-									'&:hover': { transform: 'translateY(-1px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
-								}}
-							>
-								<Typography variant="body2" fontWeight="bold" noWrap>
-									Capital Fall Classic 2026
-								</Typography>
-								<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-									CBA Columbia, MD • Nov 5-6
-								</Typography>
-								<Chip label="Doubles / Singles" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }} />
-							</Box>
+							{displayTournaments.map(t => (
+								<Box
+									key={t._id}
+									onClick={() => navigate(`/tournaments?search=${encodeURIComponent(t.tournamentName)}`)}
+									sx={{
+										p: 1.25,
+										borderRadius: 2,
+										bgcolor: 'action.hover',
+										cursor: 'pointer',
+										transition: 'all 0.2s',
+										'&:hover': { transform: 'translateY(-1px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
+									}}
+								>
+									<Typography variant="body2" fontWeight="bold" noWrap>
+										{t.tournamentName}
+									</Typography>
+									<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+										{t.eventLocation} • {t.startDate}
+									</Typography>
+									<Chip label={t.badge} size="small" color={t.badgeColor} sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }} />
+								</Box>
+							))}
 						</Box>
 					</Paper>
 
@@ -1451,11 +1543,7 @@ export default function Forum() {
 						</Box>
 
 						<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-							{[
-								{ _id: 'u-budd-1', name: 'Tu Pham', role: 'Advanced Singles', online: true },
-								{ _id: 'u-budd-2', name: 'Nhat Quang', role: 'Intermediate Doubles', online: true },
-								{ _id: 'u-budd-3', name: 'Mason Shuttle Club', role: 'Club Organizer', online: false }
-							].map(buddy => (
+							{displayBuddies.map(buddy => (
 								<Box
 									key={buddy._id}
 									sx={{
@@ -1476,7 +1564,7 @@ export default function Forum() {
 											overlap="circular"
 											anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 										>
-											<Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'primary.light' }}>
+											<Avatar src={buddy.profilePic} sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'primary.light' }}>
 												{buddy.name.charAt(0)}
 											</Avatar>
 										</Badge>
@@ -1485,7 +1573,7 @@ export default function Forum() {
 												{buddy.name}
 											</Typography>
 											<Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.68rem' }}>
-												{buddy.role}
+												{buddy.role || buddy.skillLevel || 'Member'}
 											</Typography>
 										</Box>
 									</Box>
