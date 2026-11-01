@@ -1114,11 +1114,12 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			post.category = category;
 		}
 
-		if (visibility) {
-			if (!["PUBLIC", "FRIENDS_ONLY", "ONLY_ME"].includes(visibility)) {
+		const targetVis = visibility || req.body.privacy;
+		if (targetVis) {
+			if (!["PUBLIC", "FRIENDS_ONLY", "ONLY_ME"].includes(targetVis)) {
 				return res.status(400).json({ message: "Invalid visibility. Allowed: PUBLIC, FRIENDS_ONLY, ONLY_ME" });
 			}
-			post.visibility = visibility;
+			post.visibility = targetVis;
 		}
 
 		if (matchDetails && typeof matchDetails === "object") {

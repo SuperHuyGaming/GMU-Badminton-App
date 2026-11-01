@@ -836,9 +836,7 @@ describe('Public Tournaments Page Component', () => {
             expect(screen.getByText(/Waitlisted #1/i)).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /leave waitlist/i })).toBeInTheDocument();
         });
-    });
-
-    it('opens interactive Tournament Bracket dialog from detail modal', async () => {
+    });    it('performs typo-tolerant fuzzy search using Fuse.js framework and verifies bracket viewer removal', async () => {
         render(
             <MemoryRouter initialEntries={['/tournaments']}>
                 <Tournaments />
@@ -853,16 +851,21 @@ describe('Public Tournaments Page Component', () => {
         const viewDetailsBtn = screen.getAllByRole('button', { name: /view details/i })[0];
         fireEvent.click(viewDetailsBtn);
 
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /view draws & bracket/i })).toBeInTheDocument();
-        });
+        // Bracket button is cleanly removed from the detail modal
+        expect(screen.queryByRole('button', { name: /view draws & bracket/i })).not.toBeInTheDocument();
 
-        // Click "View Draws & Bracket"
-        fireEvent.click(screen.getByRole('button', { name: /view draws & bracket/i }));
+        // Close the detail modal
+        const closeBtn = screen.getByRole('button', { name: /close dialog/i });
+        fireEvent.click(closeBtn);
+
+        // Perform typo-tolerant fuzzy search ("Champinship" typo -> matches "Mason Open Championships 2027")
+        const searchInput = screen.getByPlaceholderText(/Search tournaments, clubs, venues/i);
+        fireEvent.change(searchInput, { target: { value: 'Champinship' } });
 
         await waitFor(() => {
-            expect(screen.getByText(/Draws & Brackets/i)).toBeInTheDocument();
-            expect(apiFetch).toHaveBeenCalledWith('/api/tournaments/t-1/matches');
+            expect(screen.getByTestId('search-results-count')).toBeInTheDocument();
+            expect(screen.getByText(/Found 1 tournament matching/i)).toBeInTheDocument();
+            expect(screen.getByText('Mason Open Championships 2027')).toBeInTheDocument();
         });
     });
 

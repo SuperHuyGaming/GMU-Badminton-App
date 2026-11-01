@@ -27,7 +27,6 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import AddIcon from '@mui/icons-material/Add';
 import ShareIcon from '@mui/icons-material/Share';
 import SortIcon from '@mui/icons-material/Sort';
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { VirtuosoGrid } from 'react-virtuoso';
@@ -35,7 +34,7 @@ import { VirtuosoGrid } from 'react-virtuoso';
 import EmptyTournaments from '../components/EmptyTournaments';
 import MapPinIcon from '../components/MapPinIcon';
 import LazyFlyerImage from '../components/LazyFlyerImage';
-import TournamentBracket from '../components/TournamentBracket';
+import Fuse from 'fuse.js';
 import apiFetch from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import socket from '../utils/socket';
@@ -221,9 +220,6 @@ export default function Tournaments() {
     const [viewMode, setViewMode] = useState(searchParams.get('view') || 'list'); // 'list' | 'calendar'
     const [selectedTournament, setSelectedTournament] = useState(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
-    const [bracketDialogOpen, setBracketDialogOpen] = useState(false);
-    const [bracketData, setBracketData] = useState(null);
-    const [loadingBracket, setLoadingBracket] = useState(false);
 
     // Filter and Sort states
     const [divisionFilter, setDivisionFilter] = useState('all'); // 'all' | 'singles' | 'doubles' | 'mixed'
@@ -383,70 +379,6 @@ export default function Tournaments() {
         };
     }, [fetchTournaments]);
 
-    // Fetch live matches when bracket dialog is opened
-    useEffect(() => {
-        if (!bracketDialogOpen || !selectedTournament?._id) return;
-
-        let isMounted = true;
-        const loadBracketMatches = async () => {
-            setLoadingBracket(true);
-            try {
-                const res = await apiFetch(`/api/tournaments/${selectedTournament._id}/matches`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (isMounted && data.matches && data.matches.length > 0) {
-                        const roundsMap = {};
-                        data.matches.forEach((m) => {
-                            const rName = m.round || 'Round 1';
-                            if (!roundsMap[rName]) {
-                                roundsMap[rName] = {
-                                    id: `r-${rName}`,
-                                    name: rName,
-                                    matches: []
-                                };
-                            }
-                            roundsMap[rName].matches.push({
-                                id: m._id || m.id,
-                                team1: {
-                                    name: m.team1?.[0]?.name || (Array.isArray(m.team1) ? m.team1.map(p => p.name).join(' & ') : 'TBD'),
-                                    score: m.team1Score ?? 0,
-                                    seed: m.team1?.[0]?.seed,
-                                    isWinner: m.winner === (m.team1?.[0]?.name || 'team1')
-                                },
-                                team2: {
-                                    name: m.team2?.[0]?.name || (Array.isArray(m.team2) ? m.team2.map(p => p.name).join(' & ') : 'TBD'),
-                                    score: m.team2Score ?? 0,
-                                    seed: m.team2?.[0]?.seed,
-                                    isWinner: m.winner === (m.team2?.[0]?.name || 'team2')
-                                },
-                                status: m.matchStatus || 'SCHEDULED',
-                                court: m.courtNumber ? `Court ${m.courtNumber}` : undefined,
-                                winner: m.winner
-                            });
-                        });
-
-                        setBracketData({
-                            id: `draw-${selectedTournament._id}`,
-                            tournamentName: selectedTournament.tournamentName || 'Tournament Bracket',
-                            division: selectedTournament.divisions?.[0]?.name || 'Open Flight',
-                            format: 'SINGLE_ELIMINATION',
-                            rounds: Object.values(roundsMap)
-                        });
-                    }
-                }
-            } catch (err) {
-                console.warn('[Tournaments] Error loading bracket matches:', err.message);
-            } finally {
-                if (isMounted) setLoadingBracket(false);
-            }
-        };
-
-        loadBracketMatches();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [bracketDialogOpen, selectedTournament]);
 
     const handleClearFilters = () => {
         setSearchInput('');
@@ -512,6 +444,28 @@ export default function Tournaments() {
         });
     }, []);
 
+    // Setup Fuse.js fuzzy search framework instance with weighted domain fields
+    const fuse = useMemo(() => {
+        return new Fuse(tournaments, {
+            keys: [
+                { name: 'tournamentName', weight: 0.40 },
+                { name: 'hostUniversity', weight: 0.25 },
+                { name: 'hostClubHandle', weight: 0.15 },
+                { name: 'eventLocation', weight: 0.15 },
+                { name: 'city', weight: 0.10 },
+                { name: 'state', weight: 0.05 },
+                { name: 'originalCaption', weight: 0.10 },
+                { name: 'divisions.name', weight: 0.05 },
+                { name: 'divisions.code', weight: 0.05 },
+                { name: 'skillLevels', weight: 0.05 }
+            ],
+            threshold: 0.3,
+            distance: 100,
+            ignoreLocation: true,
+            minMatchCharLength: 2
+        });
+    }, [tournaments]);
+
     const filteredTournaments = useMemo(() => {
         let result = tournaments;
 
@@ -520,18 +474,39 @@ export default function Tournaments() {
             result = result.filter(t => matchesDivision(t, divisionFilter));
         }
 
-        // 2. Instant search query filter
+        // 2. Instant fuzzy search query filter powered by Fuse.js framework + synonym expansion
         const query = searchInput.trim();
         if (query) {
-            const upperQuery = query.toUpperCase();
-            const reverseAcronym = REVERSE_SYNONYMS[upperQuery];
-            const tokens = query.split(/\s+/).filter(Boolean);
-            result = result.filter(t => {
-                if (reverseAcronym && matchesSearch(t, reverseAcronym)) {
-                    return true;
-                }
-                return tokens.every(token => matchesSearch(t, token));
+            const variants = getSearchVariants(query);
+            const matchedItems = [];
+            const seen = new Set();
+
+            variants.forEach(v => {
+                fuse.search(v).forEach(r => {
+                    const key = r.item._id || r.item.id || r.item.tournamentName;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        matchedItems.push(r.item);
+                    }
+                });
             });
+
+            // Also check multi-token exact match fallback
+            const tokens = query.split(/\s+/).filter(Boolean);
+            if (tokens.length > 1) {
+                tournaments.forEach(t => {
+                    const key = t._id || t.id || t.tournamentName;
+                    if (!seen.has(key) && tokens.every(tok => matchesSearch(t, tok))) {
+                        seen.add(key);
+                        matchedItems.push(t);
+                    }
+                });
+            }
+
+            result = matchedItems;
+            if (divisionFilter !== 'all') {
+                result = result.filter(t => matchesDivision(t, divisionFilter));
+            }
         }
 
         // 3. Sorting
@@ -556,7 +531,7 @@ export default function Tournaments() {
         });
 
         return result;
-    }, [tournaments, divisionFilter, searchInput, sortBy, matchesDivision, matchesSearch]);
+    }, [tournaments, divisionFilter, searchInput, sortBy, matchesDivision, matchesSearch, fuse]);
 
     // RSVP Toggle handler
     const handleToggleRsvp = async (e, tournament) => {
@@ -1186,6 +1161,15 @@ END:VCALENDAR`;
                     </Button>
                 </Box>
             </Paper>
+
+            {/* Instant Search Results Count Indicator (Fuse.js Framework) */}
+            {searchInput.trim() && (
+                <Box sx={{ mb: 2, px: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary" data-testid="search-results-count">
+                        Found {filteredTournaments.length} tournament{filteredTournaments.length === 1 ? '' : 's'} matching &ldquo;<strong>{searchInput.trim()}</strong>&rdquo;
+                    </Typography>
+                </Box>
+            )}
 
             {/* Quick Filter Chips */}
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3, alignItems: 'center' }}>
@@ -2028,15 +2012,6 @@ END:VCALENDAR`;
                                                 </Button>
                                             )}
 
-                                            <Button
-                                                variant="outlined"
-                                                color="primary"
-                                                startIcon={<AccountTreeIcon />}
-                                                onClick={() => setBracketDialogOpen(true)}
-                                                sx={{ flex: 1, fontWeight: 700, borderRadius: 2, whiteSpace: 'nowrap' }}
-                                            >
-                                                View Draws & Bracket
-                                            </Button>
 
                                             <Button
                                                 variant="outlined"
@@ -2072,36 +2047,6 @@ END:VCALENDAR`;
                 )}
             </Dialog>
 
-            {/* INTERACTIVE TOURNAMENT BRACKET DIALOG */}
-            <Dialog 
-                open={bracketDialogOpen} 
-                onClose={() => { setBracketDialogOpen(false); setBracketData(null); }} 
-                maxWidth="lg" 
-                fullWidth
-                disableRestoreFocus
-                slotProps={{ paper: { sx: { borderRadius: 4, height: '85vh', display: 'flex', flexDirection: 'column' } } }}
-            >
-                <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid', borderColor: 'divider' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <AccountTreeIcon color="primary" />
-                        <Typography variant="h6" fontWeight="bold">
-                            {selectedTournament?.tournamentName ? `${selectedTournament.tournamentName} — Draws & Brackets` : 'Tournament Draws & Brackets'}
-                        </Typography>
-                    </Box>
-                    <IconButton onClick={() => { setBracketDialogOpen(false); setBracketData(null); }} aria-label="Close bracket dialog">
-                        <CloseIcon />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ p: 2, flex: 1, overflow: 'auto' }}>
-                    {loadingBracket ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 300 }}>
-                            <CircularProgress />
-                        </Box>
-                    ) : (
-                        <TournamentBracket bracketData={bracketData} />
-                    )}
-                </DialogContent>
-            </Dialog>
 
             {/* ADVANCED FILTERS DRAWER */}
             <Drawer anchor="right" open={filtersOpen} onClose={() => setFiltersOpen(false)} ModalProps={{ disableRestoreFocus: true }}>

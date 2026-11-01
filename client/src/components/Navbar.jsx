@@ -218,6 +218,28 @@ const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
                                         endAdornment: (
                                             <>
                                                 {loading ? <CircularProgress color="inherit" size={20} aria-label="Loading search results" /> : null}
+                                                {!inputValue && !open && !onCloseMobile && (
+                                                    <Box
+                                                        component="kbd"
+                                                        aria-label="Press forward slash to focus search"
+                                                        sx={{
+                                                            px: 0.8,
+                                                            py: 0.2,
+                                                            bgcolor: 'rgba(255, 255, 255, 0.15)',
+                                                            borderRadius: 1,
+                                                            color: 'rgba(255, 255, 255, 0.85)',
+                                                            fontSize: '0.72rem',
+                                                            fontFamily: 'monospace',
+                                                            fontWeight: 'bold',
+                                                            border: '1px solid rgba(255, 255, 255, 0.25)',
+                                                            display: { xs: 'none', md: 'inline-flex' },
+                                                            userSelect: 'none',
+                                                            pointerEvents: 'none'
+                                                        }}
+                                                    >
+                                                        /
+                                                    </Box>
+                                                )}
                                                 {inputSlot.endAdornment}
                                             </>
                                         ),

@@ -225,6 +225,11 @@ describe('Navbar Component & Global Search UI', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/community?search=Doubles');
     });
 
+    it('renders shortcut hint badge / in desktop search bar when empty', () => {
+        renderNavbar();
+        expect(screen.getByText('/')).toBeInTheDocument();
+    });
+
     it('does not render the Leaderboard navigation link', () => {
         renderNavbar();
 

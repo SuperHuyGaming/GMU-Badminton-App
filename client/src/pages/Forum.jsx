@@ -8,9 +8,13 @@ import {
 	Typography, Box, Paper, Chip, Dialog, DialogTitle,
 	DialogContent, DialogActions, TextField, useTheme, useMediaQuery,
 	Skeleton, CircularProgress, Avatar, Button, Select, MenuItem,
-	Checkbox, IconButton, Tooltip
+	Checkbox, IconButton, Tooltip, Badge
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
+import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
+import StorefrontIcon from "@mui/icons-material/Storefront";
 import CloseIcon from "@mui/icons-material/Close";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
@@ -284,6 +288,7 @@ export default function Forum() {
 	});
 
 	const [postImages, setPostImages] = useState([]);
+	const [isDragging, setIsDragging] = useState(false);
 	const [isUploadingImage, setIsUploadingImage] = useState(false);
 	const [uploadStage, setUploadStage] = useState('idle'); // 'idle' | 'compressing' | 'uploading' | 'submitting'
 	const fileInputRef = useRef(null);
@@ -731,9 +736,160 @@ export default function Forum() {
 				Community Hub
 			</Typography>
 
-			{/* INLINE COMPOSER & FEED FILTERS WITH MOBILE PULL-TO-REFRESH */}
+			{/* 3-COLUMN FACEBOOK-STYLE RESPONSIVE ECOSYSTEM CONTAINER */}
 			<Box 
-				onTouchStart={handleTouchStart}
+				sx={{ 
+					width: '100%', 
+					display: 'flex', 
+					justifyContent: 'center', 
+					alignItems: 'flex-start', 
+					gap: { lg: 3, xl: 4 },
+					px: { xs: 0, sm: 1, md: 2 }
+				}}
+			>
+				{/* 1. LEFT NAVIGATION RAIL (lg+ screens, width 260px, sticky) */}
+				<Box 
+					data-testid="facebook-left-rail"
+					sx={{ 
+						width: 260, 
+						flexShrink: 0, 
+						display: { xs: 'none', lg: 'block' }, 
+						position: 'sticky', 
+						top: 84,
+						alignSelf: 'flex-start'
+					}}
+				>
+					{/* Profile Quick Card */}
+					<Paper
+						elevation={0}
+						sx={{
+							p: 2,
+							mb: 2,
+							borderRadius: 3,
+							border: '1px solid',
+							borderColor: 'divider',
+							display: 'flex',
+							alignItems: 'center',
+							gap: 1.5,
+							cursor: 'pointer',
+							transition: 'all 0.2s',
+							'&:hover': { bgcolor: 'action.hover' }
+						}}
+						onClick={() => navigate('/profile')}
+					>
+						<Avatar
+							src={currentUser?.profilePic}
+							alt={currentUser?.name || "Player"}
+							sx={{ width: 44, height: 44, border: '2px solid', borderColor: 'primary.light' }}
+						>
+							{currentUser?.name?.charAt(0) || "U"}
+						</Avatar>
+						<Box sx={{ minWidth: 0, flex: 1 }}>
+							<Typography variant="subtitle2" fontWeight="bold" noWrap>
+								{currentUser?.name || "Mason Badminton"}
+							</Typography>
+							<Chip
+								label={currentUser?.skillLevel || "Intermediate"}
+								size="small"
+								color="primary"
+								sx={{ height: 20, fontSize: '0.68rem', fontWeight: 'bold', mt: 0.25 }}
+							/>
+						</Box>
+					</Paper>
+
+					{/* Shortcuts List */}
+					<Paper
+						elevation={0}
+						sx={{
+							p: 1,
+							borderRadius: 3,
+							border: '1px solid',
+							borderColor: 'divider',
+							display: 'flex',
+							flexDirection: 'column',
+							gap: 0.5
+						}}
+					>
+						<Typography variant="caption" sx={{ px: 1.5, py: 0.75, fontWeight: 'bold', color: 'text.secondary' }}>
+							Quick Shortcuts
+						</Typography>
+						<Button
+							fullWidth
+							startIcon={<BookmarkBorderIcon color="secondary" />}
+							onClick={() => handleTabChange('saved')}
+							sx={{
+								justifyContent: 'flex-start',
+								borderRadius: 2,
+								px: 1.5,
+								py: 1,
+								textTransform: 'none',
+								fontWeight: tab === 'saved' ? 'bold' : 500,
+								color: tab === 'saved' ? 'primary.main' : 'text.primary',
+								bgcolor: tab === 'saved' ? 'action.selected' : 'transparent',
+								'&:hover': { bgcolor: 'action.hover' }
+							}}
+						>
+							Saved Posts
+						</Button>
+						<Button
+							fullWidth
+							startIcon={<PeopleAltIcon color="primary" />}
+							onClick={() => navigate('/players')}
+							sx={{
+								justifyContent: 'flex-start',
+								borderRadius: 2,
+								px: 1.5,
+								py: 1,
+								textTransform: 'none',
+								fontWeight: 500,
+								color: 'text.primary',
+								'&:hover': { bgcolor: 'action.hover' }
+							}}
+						>
+							Find Players
+						</Button>
+						<Button
+							fullWidth
+							startIcon={<EmojiEventsIcon sx={{ color: '#f59e0b' }} />}
+							onClick={() => navigate('/tournaments')}
+							sx={{
+								justifyContent: 'flex-start',
+								borderRadius: 2,
+								px: 1.5,
+								py: 1,
+								textTransform: 'none',
+								fontWeight: 500,
+								color: 'text.primary',
+								'&:hover': { bgcolor: 'action.hover' }
+							}}
+						>
+							Tournaments
+						</Button>
+						<Button
+							fullWidth
+							startIcon={<StorefrontIcon color="action" />}
+							onClick={() => navigate('/marketplace')}
+							sx={{
+								justifyContent: 'flex-start',
+								borderRadius: 2,
+								px: 1.5,
+								py: 1,
+								textTransform: 'none',
+								fontWeight: 500,
+								color: 'text.primary',
+								'&:hover': { bgcolor: 'action.hover' }
+							}}
+						>
+							Gear Marketplace
+						</Button>
+					</Paper>
+				</Box>
+
+				{/* 2. CENTER FEED COLUMN (width 100%, maxWidth 680px) */}
+				<Box sx={{ width: '100%', maxWidth: '680px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+					{/* INLINE COMPOSER & FEED FILTERS WITH MOBILE PULL-TO-REFRESH */}
+					<Box 
+						onTouchStart={handleTouchStart}
 				onTouchMove={handleTouchMove}
 				onTouchEnd={handleTouchEnd}
 				sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2, gap: 1.5 }}
@@ -1192,6 +1348,170 @@ export default function Forum() {
                         You're all caught up! 🏸
                     </Typography>
                 )}
+					</Box>
+				</Box>
+
+				{/* 3. RIGHT SIDEBAR WIDGETS (xl+ screens, width 300px, sticky) */}
+				<Box 
+					data-testid="facebook-right-rail"
+					sx={{ 
+						width: 300, 
+						flexShrink: 0, 
+						display: { xs: 'none', xl: 'block' }, 
+						position: 'sticky', 
+						top: 84,
+						alignSelf: 'flex-start'
+					}}
+				>
+					{/* Upcoming Tournaments Widget */}
+					<Paper
+						elevation={0}
+						sx={{
+							p: 2,
+							mb: 2,
+							borderRadius: 3,
+							border: '1px solid',
+							borderColor: 'divider'
+						}}
+					>
+						<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+							<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+								<EmojiEventsIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
+								<Typography variant="subtitle2" fontWeight="bold">
+									Upcoming Tournaments
+								</Typography>
+							</Box>
+							<Button
+								size="small"
+								onClick={() => navigate('/tournaments')}
+								sx={{ textTransform: 'none', fontSize: '0.75rem', fontWeight: 'bold', p: 0 }}
+							>
+								See All
+							</Button>
+						</Box>
+
+						<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+							<Box
+								onClick={() => navigate('/tournaments')}
+								sx={{
+									p: 1.25,
+									borderRadius: 2,
+									bgcolor: 'action.hover',
+									cursor: 'pointer',
+									transition: 'all 0.2s',
+									'&:hover': { transform: 'translateY(-1px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
+								}}
+							>
+								<Typography variant="body2" fontWeight="bold" noWrap>
+									Mason Fall Open 2026
+								</Typography>
+								<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+									George Mason RAC Gym • Oct 15-16
+								</Typography>
+								<Chip label="Open Registration" size="small" color="success" sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }} />
+							</Box>
+
+							<Box
+								onClick={() => navigate('/tournaments')}
+								sx={{
+									p: 1.25,
+									borderRadius: 2,
+									bgcolor: 'action.hover',
+									cursor: 'pointer',
+									transition: 'all 0.2s',
+									'&:hover': { transform: 'translateY(-1px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
+								}}
+							>
+								<Typography variant="body2" fontWeight="bold" noWrap>
+									Capital Fall Classic 2026
+								</Typography>
+								<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+									CBA Columbia, MD • Nov 5-6
+								</Typography>
+								<Chip label="Doubles / Singles" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }} />
+							</Box>
+						</Box>
+					</Paper>
+
+					{/* Badminton Buddies / Quick Chat */}
+					<Paper
+						elevation={0}
+						sx={{
+							p: 2,
+							borderRadius: 3,
+							border: '1px solid',
+							borderColor: 'divider'
+						}}
+					>
+						<Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+							<PeopleAltIcon color="primary" sx={{ fontSize: 20 }} />
+							<Typography variant="subtitle2" fontWeight="bold">
+								Badminton Buddies
+							</Typography>
+						</Box>
+
+						<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+							{[
+								{ _id: 'u-budd-1', name: 'Tu Pham', role: 'Advanced Singles', online: true },
+								{ _id: 'u-budd-2', name: 'Nhat Quang', role: 'Intermediate Doubles', online: true },
+								{ _id: 'u-budd-3', name: 'Mason Shuttle Club', role: 'Club Organizer', online: false }
+							].map(buddy => (
+								<Box
+									key={buddy._id}
+									sx={{
+										display: 'flex',
+										alignItems: 'center',
+										justifyContent: 'space-between',
+										p: 0.75,
+										borderRadius: 2,
+										transition: 'all 0.15s',
+										'&:hover': { bgcolor: 'action.hover' }
+									}}
+								>
+									<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+										<Badge
+											color="success"
+											variant="dot"
+											invisible={!buddy.online}
+											overlap="circular"
+											anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+										>
+											<Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'primary.light' }}>
+												{buddy.name.charAt(0)}
+											</Avatar>
+										</Badge>
+										<Box sx={{ minWidth: 0 }}>
+											<Typography variant="body2" fontWeight="600" noWrap sx={{ fontSize: '0.82rem' }}>
+												{buddy.name}
+											</Typography>
+											<Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.68rem' }}>
+												{buddy.role}
+											</Typography>
+										</Box>
+									</Box>
+
+									<Button
+										size="small"
+										variant="outlined"
+										aria-label={`Chat with ${buddy.name}`}
+										onClick={() => window.dispatchEvent(new CustomEvent('openChatWithUser', { detail: buddy }))}
+										sx={{
+											borderRadius: 4,
+											fontSize: '0.7rem',
+											py: 0.2,
+											px: 1.25,
+											textTransform: 'none',
+											fontWeight: 'bold',
+											whiteSpace: 'nowrap'
+										}}
+									>
+										Chat
+									</Button>
+								</Box>
+							))}
+						</Box>
+					</Paper>
+				</Box>
 			</Box>
 
 			{/* Create Post Modal */}
@@ -1242,7 +1562,40 @@ export default function Forum() {
 					</IconButton>
 				</DialogTitle>
 
-				<DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, p: { xs: 2, sm: 2.5 } }}>
+				<DialogContent 
+					onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+					onDragLeave={(e) => {
+						if (!e.currentTarget.contains(e.relatedTarget)) {
+							setIsDragging(false);
+						}
+					}}
+					onDrop={(e) => {
+						e.preventDefault();
+						setIsDragging(false);
+						const files = Array.from(e.dataTransfer.files || []);
+						if (files.length === 0) return;
+						if (files.length + postImages.length > 4) {
+							toast.error("Maximum 4 images allowed");
+							return;
+						}
+						const validImages = files.filter(f => f.type && f.type.startsWith("image/"));
+						if (validImages.length < files.length) {
+							toast.error("Only image files are allowed.");
+						}
+						if (validImages.length > 0) {
+							setPostImages(prev => [...prev, ...validImages]);
+						}
+					}}
+					sx={{ 
+						display: "flex", 
+						flexDirection: "column", 
+						gap: 2, 
+						p: { xs: 2, sm: 2.5 },
+						border: isDragging ? '2px dashed #006633' : 'none',
+						bgcolor: isDragging ? 'action.hover' : 'background.paper',
+						transition: 'all 0.2s ease-in-out'
+					}}
+				>
 					{/* Author Avatar, Name, and Pills */}
 					<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
 						<Avatar
@@ -1885,16 +2238,67 @@ export default function Forum() {
 						</Box>
 					</Box>
 
-					{/* Image Thumbnails */}
+					{/* Image Thumbnails with Live Previews */}
 					{postImages.length > 0 && (
-						<Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+						<Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mt: 0.5 }} data-testid="composer-image-previews">
 							{postImages.map((file, idx) => (
-								<Chip
+								<Box
 									key={idx}
-									label={file.name}
-									size="small"
-									onDelete={() => setPostImages(prev => prev.filter((_, i) => i !== idx))}
-								/>
+									data-testid={`image-preview-thumbnail-${idx}`}
+									sx={{
+										position: 'relative',
+										width: 76,
+										borderRadius: 2,
+										overflow: 'hidden',
+										border: '1px solid',
+										borderColor: 'divider',
+										boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+										bgcolor: 'action.hover',
+										display: 'flex',
+										flexDirection: 'column',
+										alignItems: 'center'
+									}}
+								>
+									<Box sx={{ position: 'relative', width: '100%', height: 60 }}>
+										<img
+											src={typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : (file?.name || 'preview')}
+											alt={`upload preview ${idx + 1}`}
+											style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+										/>
+										<IconButton
+											size="small"
+											aria-label={`Remove image ${idx + 1}`}
+											onClick={() => setPostImages(prev => prev.filter((_, i) => i !== idx))}
+											sx={{
+												position: 'absolute',
+												top: 2,
+												right: 2,
+												p: 0.3,
+												bgcolor: 'rgba(0, 0, 0, 0.65)',
+												color: '#ffffff',
+												'&:hover': { bgcolor: 'rgba(0, 0, 0, 0.85)' }
+											}}
+										>
+											<CloseIcon sx={{ fontSize: 13 }} />
+										</IconButton>
+									</Box>
+									<Typography
+										variant="caption"
+										noWrap
+										sx={{
+											width: '100%',
+											px: 0.5,
+											py: 0.25,
+											fontSize: '0.65rem',
+											textAlign: 'center',
+											color: 'text.secondary',
+											textOverflow: 'ellipsis',
+											overflow: 'hidden'
+										}}
+									>
+										{file.name}
+									</Typography>
+								</Box>
 							))}
 						</Box>
 					)}

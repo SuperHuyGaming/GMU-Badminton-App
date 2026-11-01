@@ -20,6 +20,7 @@ const NotFound = React.lazy(() => import("./pages/NotFound"));
 const OnboardingWizard = React.lazy(() => import("./components/OnboardingWizard"));
 import PushNotificationPrompt from "./components/PushNotificationPrompt";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import FloatingChatDock from "./components/FloatingChatDock";
 import PendingMatchesPrompt from "./components/PendingMatchesPrompt";
 import ReportMatchModal from "./components/ReportMatchModal";
 import ServerWarmup from "./components/ServerWarmup";
@@ -570,6 +571,7 @@ function App() {
 						</ErrorBoundary>
 						{user && <PushNotificationPrompt />}
 						<PWAInstallPrompt />
+						{user && <FloatingChatDock />}
 					</Container>
 					</FeedbackProvider>
 				</BrowserRouter>

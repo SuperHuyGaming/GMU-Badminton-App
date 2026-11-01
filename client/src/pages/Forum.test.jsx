@@ -34,6 +34,7 @@ vi.mock('react-hot-toast', () => {
 
 // Mock socket utility
 let socketHandlers = {};
+        sessionStorage.clear();
 vi.mock('../utils/socket', () => ({
     default: {
         on: vi.fn((event, cb) => { socketHandlers[event] = cb; }),
