@@ -105,7 +105,29 @@ describe('Forum 3-Column Facebook Layout & Ecosystem Tests', () => {
         expect(screen.getByText('Upcoming Tournaments')).toBeInTheDocument();
         expect(screen.getByText('Mason Fall Open 2026')).toBeInTheDocument();
         expect(screen.getByText('Badminton Buddies')).toBeInTheDocument();
-        expect(screen.getByText('Alex Chen')).toBeInTheDocument();
+        // RAC court check-in widget must be gone from the community page
+        expect(screen.queryByText(/RAC Court Occupancy/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Check In to RAC Courts/i)).not.toBeInTheDocument();
+    });
+
+    it('shows a polite empty state (and no member dump) when the user has no play data', async () => {
+        apiFetch.mockImplementation(async (url) => {
+            if (url.includes('/api/feed')) return { ok: true, json: async () => mockFeedResponse };
+            if (url.includes('/api/profile')) return { ok: true, json: async () => ({ stats: { totalMatches: 0 } }) };
+            if (url.includes('/api/forum/members')) {
+                return { ok: true, json: async () => ({ users: [{ _id: 'u-dummy', name: 'Dummy Tester' }] }) };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderForum();
+
+        expect(await screen.findByTestId('buddies-empty-state')).toHaveTextContent(
+            'Play some matches to get buddy recommendations!'
+        );
+        expect(screen.queryByText('Dummy Tester')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^chat with/i })).not.toBeInTheDocument();
+        expect(apiFetch).not.toHaveBeenCalledWith('/api/matchmaking/discover');
     });
 
     it('navigates to /tournaments when clicking Tournaments shortcut', async () => {
@@ -124,6 +146,20 @@ describe('Forum 3-Column Facebook Layout & Ecosystem Tests', () => {
     it('dispatches openChatWithUser event when clicking Chat on a badminton buddy', async () => {
         const chatEventSpy = vi.fn();
         window.addEventListener('openChatWithUser', chatEventSpy);
+        apiFetch.mockImplementation(async (url) => {
+            if (url.includes('/api/feed')) return { ok: true, json: async () => mockFeedResponse };
+            if (url.includes('/api/profile')) return { ok: true, json: async () => ({ stats: { totalMatches: 12 } }) };
+            if (url.includes('/api/matchmaking/discover')) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        matches: [],
+                        recommended: [{ _id: 'u-alex', name: 'Alex Chen', skillLevel: 'Advanced' }]
+                    })
+                };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
 
         renderForum();
 
@@ -131,7 +167,7 @@ describe('Forum 3-Column Facebook Layout & Ecosystem Tests', () => {
             expect(screen.getByTestId('facebook-right-rail')).toBeInTheDocument();
         });
 
-        const chatTuBtn = screen.getByRole('button', { name: /chat with alex chen/i });
+        const chatTuBtn = await screen.findByRole('button', { name: /chat with alex chen/i });
         fireEvent.click(chatTuBtn);
 
         expect(chatEventSpy).toHaveBeenCalledWith(

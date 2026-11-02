@@ -6,9 +6,17 @@ import {
     InputAdornment, Avatar
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import apiFetch from '../utils/api';
 
 export default function Marketplace() {
+    const navigate = useNavigate();
+    // Go back in history when we arrived from inside the app; otherwise fall back to the community feed.
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.state?.idx > 0) navigate(-1);
+        else navigate('/community');
+    };
     const { user } = useAuth();
     const [listings, setListings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -116,7 +124,15 @@ export default function Marketplace() {
     };
 
     return (
-        <Box sx={{ maxWidth: 1200, mx: 'auto', p: 3, mt: 4 }}>
+        <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, sm: 3 }, mt: { xs: 2, sm: 4 } }}>
+            <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={handleBack}
+                aria-label="Go back"
+                sx={{ mb: 2, textTransform: 'none', fontWeight: 'bold', borderRadius: 2 }}
+            >
+                Back
+            </Button>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                     <Typography variant="h3" sx={{ fontWeight: 'bold' }}>

@@ -1015,6 +1015,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								anchorEl={anchorEl}
 								open={Boolean(anchorEl)}
 								onClose={() => setAnchorEl(null)}
+								// Keep the post actions (incl. Report Post) above the floating chat launcher.
+								sx={{ zIndex: (theme) => theme.zIndex.modal + 100 }}
 								slotProps={{
 									paper: {
 										elevation: 2,
