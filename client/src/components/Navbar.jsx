@@ -3,7 +3,6 @@ import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box, Divider, Avatar, Menu, MenuItem, IconButton, Drawer, List, ListItemButton, ListItemText, Badge, useTheme, Autocomplete, TextField, InputAdornment, CircularProgress, ClickAwayListener, Tabs, Tab } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -352,7 +351,6 @@ export default function Navbar() {
     const notifOpen = Boolean(notifAnchorEl);
     const [notifFilter, setNotifFilter] = useState("all");
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
     const filteredNotifications = useMemo(() => {
         if (notifFilter === 'unread') return notifications.filter(n => !n.read);
@@ -399,32 +397,7 @@ export default function Navbar() {
 					}}
 				>
 					<Toolbar sx={{ justifyContent: "space-between", px: { xs: 1, sm: 2, md: 3 } }}>
-						{mobileSearchOpen ? (
-							<Box
-								data-testid="mobile-search-bar"
-								sx={{
-									display: { xs: "flex", md: "none" },
-									alignItems: "center",
-									width: "100%",
-									gap: 1,
-									py: 0.5,
-								}}
-							>
-								<IconButton
-									color="inherit"
-									onClick={() => setMobileSearchOpen(false)}
-									aria-label="Close search"
-									size="small"
-									edge="start"
-								>
-									<ArrowBackIcon />
-								</IconButton>
-								<Box sx={{ flex: 1 }}>
-									<GlobalSearch shouldFocus onCloseMobile={() => setMobileSearchOpen(false)} />
-								</Box>
-							</Box>
-						) : (
-							<>
+						<>
 								{/* Left Section: Brand Logo + Persistent Facebook-style Search */}
 								<Box
 									sx={{
@@ -588,27 +561,7 @@ export default function Navbar() {
 										gap: { xs: 0.5, sm: 1, md: 2 },
 									}}
 								>
-									<IconButton
-										color="inherit"
-										component={RouterLink}
-										to="/search"
-										aria-label="Search"
-										onClick={(e) => {
-											e.preventDefault();
-											setMobileSearchOpen(true);
-										}}
-										sx={{
-											display: { xs: "inline-flex", md: "none" },
-									transition: "all 0.2s",
-									"&:hover": { color: "#FFF275" },
-									"&:focus-visible": {
-										outline: "2px solid #FFCC33",
-										outlineOffset: "2px",
-									},
-								}}
-							>
-								<SearchIcon />
-							</IconButton>
+									
 
 							<LanguageSwitcher />
 
@@ -1026,7 +979,6 @@ export default function Navbar() {
 							)}
 								</Box>
 							</>
-						)}
 					</Toolbar>
 				</AppBar>
 

@@ -501,7 +501,7 @@ export default function CommunityDirectory() {
                                     )
                                 },
                                 htmlInput: {
-                                    'aria-label': 'Search players',
+                                    'aria-label': 'Search community members',
                                     autoComplete: 'off',
                                 }
                             }}

@@ -174,7 +174,7 @@ describe('Navbar Component & Global Search UI', () => {
         expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    it('renders with accessible ARIA attributes and responsive mobile search button', () => {
+    it('renders with accessible ARIA attributes and does not render redundant mobile search button', () => {
         renderNavbar();
 
         // Search input is rendered with accessible placeholder
@@ -186,34 +186,15 @@ describe('Navbar Component & Global Search UI', () => {
         expect(hamburgerBtn).toHaveAttribute('aria-expanded', 'false');
         expect(hamburgerBtn).toHaveAttribute('aria-controls', 'mobile-menu');
 
-        // Responsive mobile search button is available
-        const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });
-        expect(mobileSearchBtn).toBeInTheDocument();
-        expect(mobileSearchBtn).toHaveAttribute('href', '/search');
-    });
-
-    it('opens interactive mobile search bar when mobile search button is clicked and closes on back', () => {
-        renderNavbar();
-        const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });
-        fireEvent.click(mobileSearchBtn);
-
-        expect(screen.getByTestId('mobile-search-bar')).toBeInTheDocument();
-        const closeBtn = screen.getByRole('button', { name: 'Close search' });
-        fireEvent.click(closeBtn);
-
+        // Redundant mobile search button and overlay are removed
+        expect(screen.queryByRole('link', { name: 'Search' })).not.toBeInTheDocument();
         expect(screen.queryByTestId('mobile-search-bar')).not.toBeInTheDocument();
     });
 
-    it('closes mobile search bar when Escape key is pressed', () => {
+    it('preserves clean toolbar layout without mobile search overlay interference', () => {
         renderNavbar();
-        const mobileSearchBtn = screen.getByRole('link', { name: 'Search' });
-        fireEvent.click(mobileSearchBtn);
-
-        expect(screen.getByTestId('mobile-search-bar')).toBeInTheDocument();
-        const searchInput = screen.getAllByPlaceholderText('Search GMU Badminton...')[0];
-        fireEvent.keyDown(searchInput, { key: 'Escape', code: 'Escape' });
-
         expect(screen.queryByTestId('mobile-search-bar')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Close search' })).not.toBeInTheDocument();
     });
 
     it('navigates to /community?search= when Enter is pressed while on /community', () => {

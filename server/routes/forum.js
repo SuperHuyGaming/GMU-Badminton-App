@@ -1315,7 +1315,13 @@ router.get("/members", async (req, res) => {
 	try {
 		const query = (req.query.q || req.query.query || req.query.search || "").trim();
 		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
-		const filter = { hideFromSearch: { $ne: true } };
+		const filter = {
+			hideFromSearch: { $ne: true },
+			$nor: [
+				{ name: /tu\s+pham/i },
+				{ name: /nhat\s+quang/i },
+			],
+		};
 		if (query) {
 			const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 			filter.name = { $regex: escaped, $options: "i" };
@@ -1325,15 +1331,17 @@ router.get("/members", async (req, res) => {
 			.limit(limit)
 			.lean();
 
-		const formatted = users.map((u) => ({
-			_id: u._id.toString(),
-			id: u._id.toString(),
-			name: u.name,
-			profilePic: u.profilePic || "",
-			role: u.role || "user",
-			skillLevel: u.skillLevel || "Intermediate",
-			badges: Array.isArray(u.badges) ? u.badges : [],
-		}));
+		const formatted = users
+			.filter((u) => !/tu\s+pham|nhat\s+quang/i.test(u.name || ""))
+			.map((u) => ({
+				_id: u._id.toString(),
+				id: u._id.toString(),
+				name: u.name,
+				profilePic: u.profilePic || "",
+				role: u.role || "user",
+				skillLevel: u.skillLevel || "Intermediate",
+				badges: Array.isArray(u.badges) ? u.badges : [],
+			}));
 
 		res.json({ users: formatted });
 	} catch (err) {
