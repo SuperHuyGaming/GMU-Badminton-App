@@ -4,6 +4,26 @@ const mongoose = require('mongoose');
 const Court = require('../models/Court');
 const TournamentMatch = require('../models/TournamentMatch');
 const bwfRules = require('../utils/bwfRules');
+const { authMiddleware } = require('../middleware/auth');
+const User = require('../models/User');
+
+const RAC_COORDINATES = { latitude: 38.8315, longitude: -77.3075 };
+const MAX_CHECKIN_DISTANCE_METERS = 200;
+
+function calculateHaversineDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // meters
+    const toRad = deg => (deg * Math.PI) / 180;
+    const φ1 = toRad(lat1);
+    const φ2 = toRad(lat2);
+    const Δφ = toRad(lat2 - lat1);
+    const Δλ = toRad(lon2 - lon1);
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
 
 /**
  * Safely emit updates over Socket.io
@@ -50,7 +70,13 @@ async function ensureRACCourtsInitialized() {
                 venue: "Recreation Athletic Complex (RAC)",
                 status: "AVAILABLE",
                 currentMatch: null,
-                queue: []
+                queue: [],
+                recreationalOccupancy: {
+                    isCheckedIn: false,
+                    checkedInUsers: [],
+                    queueCount: 0,
+                    estimatedWaitMinutes: 0
+                }
             });
         }
         courts.push(court);
@@ -338,6 +364,222 @@ router.post('/rebalance-queues', async (req, res) => {
             rebalancedMatches
         });
     } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * GET /api/courts/recreational-occupancy
+ * Returns RAC Courts 1-6 with recreational player occupancy and check-in statuses.
+ */
+router.get('/recreational-occupancy', async (req, res) => {
+    try {
+        await ensureRACCourtsInitialized();
+        const now = new Date();
+        const courts = await Court.find({ courtNumber: { $gte: 1, $lte: 6 } })
+            .sort({ courtNumber: 1 });
+
+        const formatted = await Promise.all(courts.map(async (court) => {
+            let checkedInUsers = court.recreationalOccupancy?.checkedInUsers || [];
+            const activeUsers = checkedInUsers.filter(u => u.expiresAt && new Date(u.expiresAt) > now);
+
+            if (activeUsers.length !== checkedInUsers.length) {
+                if (!court.recreationalOccupancy) {
+                    court.recreationalOccupancy = {};
+                }
+                court.recreationalOccupancy.checkedInUsers = activeUsers;
+                court.recreationalOccupancy.isCheckedIn = activeUsers.length > 0;
+                await court.save();
+            }
+
+            return {
+                courtNumber: court.courtNumber,
+                courtName: court.courtName,
+                status: court.status,
+                recreationalOccupancy: {
+                    isCheckedIn: Boolean(court.recreationalOccupancy?.isCheckedIn || activeUsers.length > 0),
+                    checkedInUsers: activeUsers.map(u => ({
+                        userId: u.userId ? u.userId.toString() : null,
+                        userName: u.userName,
+                        avatarUrl: u.avatarUrl,
+                        checkInTime: u.checkInTime,
+                        expiresAt: u.expiresAt
+                    })),
+                    queueCount: court.recreationalOccupancy?.queueCount || 0,
+                    estimatedWaitMinutes: court.recreationalOccupancy?.estimatedWaitMinutes || 0
+                },
+                updatedAt: court.updatedAt
+            };
+        }));
+
+        return res.status(200).json({ success: true, courts: formatted });
+    } catch (err) {
+        console.error("Error fetching recreational occupancy:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/courts/:courtNumber/check-in
+ * Authenticated GPS-validated physical check-in to RAC Courts 1-6.
+ */
+router.post('/:courtNumber/check-in', authMiddleware, async (req, res) => {
+    try {
+        const courtNumber = parseInt(req.params.courtNumber, 10);
+        if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
+            return res.status(400).json({ success: false, message: "Court number must be between 1 and 6" });
+        }
+
+        const userId = req.user.id || req.user.userId;
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const { latitude, longitude, isTestCheckIn } = req.body || {};
+
+        if (!isTestCheckIn) {
+            if (typeof latitude !== "number" || typeof longitude !== "number") {
+                return res.status(403).json({
+                    success: false,
+                    message: "Valid GPS coordinates required. You must be physically at the RAC to check in."
+                });
+            }
+
+            const distance = calculateHaversineDistanceMeters(
+                latitude,
+                longitude,
+                RAC_COORDINATES.latitude,
+                RAC_COORDINATES.longitude
+            );
+
+            if (distance > MAX_CHECKIN_DISTANCE_METERS) {
+                return res.status(403).json({
+                    success: false,
+                    message: `You are ${Math.round(distance)}m away from the RAC. You must be physically at the RAC to check in.`
+                });
+            }
+        }
+
+        await ensureRACCourtsInitialized();
+        let court = await Court.findOne({ courtNumber });
+        if (!court) {
+            return res.status(404).json({ success: false, message: `Court ${courtNumber} not found` });
+        }
+
+        // Clean up prior check-ins from other courts
+        const otherCourts = await Court.find({
+            courtNumber: { $ne: courtNumber },
+            "recreationalOccupancy.checkedInUsers.userId": userId
+        });
+        for (const oc of otherCourts) {
+            if (oc.recreationalOccupancy && oc.recreationalOccupancy.checkedInUsers) {
+                oc.recreationalOccupancy.checkedInUsers = oc.recreationalOccupancy.checkedInUsers.filter(
+                    u => u.userId?.toString() !== userId.toString()
+                );
+                oc.recreationalOccupancy.isCheckedIn = oc.recreationalOccupancy.checkedInUsers.length > 0;
+                await oc.save();
+            }
+        }
+
+        const now = new Date();
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+        if (!court.recreationalOccupancy) {
+            court.recreationalOccupancy = { isCheckedIn: false, checkedInUsers: [], queueCount: 0, estimatedWaitMinutes: 0 };
+        }
+
+        const activeUsers = (court.recreationalOccupancy.checkedInUsers || []).filter(
+            u => u.expiresAt && new Date(u.expiresAt) > now && u.userId?.toString() !== userId.toString()
+        );
+
+        activeUsers.push({
+            userId: user._id,
+            userName: user.name,
+            avatarUrl: user.profilePic || "",
+            checkInTime: now,
+            expiresAt
+        });
+
+        court.recreationalOccupancy.checkedInUsers = activeUsers;
+        court.recreationalOccupancy.isCheckedIn = true;
+        await court.save();
+
+        user.currentCourtCheckIn = {
+            courtNumber,
+            checkInTime: now,
+            expiresAt
+        };
+        user.checkInLocation = "RAC";
+        await user.save();
+
+        const io = req.io || req.app?.get('io');
+        if (io) {
+            io.emit('courtOccupancyUpdated', {
+                courtNumber,
+                recreationalOccupancy: court.recreationalOccupancy
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Successfully checked in to RAC Court ${courtNumber}`,
+            courtNumber,
+            checkIn: {
+                courtNumber,
+                checkInTime: now,
+                expiresAt
+            }
+        });
+    } catch (err) {
+        console.error("Error during RAC court check-in:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/courts/:courtNumber/check-out
+ * Clears current user's check-in from the specified RAC court.
+ */
+router.post('/:courtNumber/check-out', authMiddleware, async (req, res) => {
+    try {
+        const courtNumber = parseInt(req.params.courtNumber, 10);
+        if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
+            return res.status(400).json({ success: false, message: "Court number must be between 1 and 6" });
+        }
+
+        const userId = req.user.id || req.user.userId;
+        const court = await Court.findOne({ courtNumber });
+        if (court && court.recreationalOccupancy) {
+            court.recreationalOccupancy.checkedInUsers = (court.recreationalOccupancy.checkedInUsers || []).filter(
+                u => u.userId?.toString() !== userId.toString()
+            );
+            court.recreationalOccupancy.isCheckedIn = court.recreationalOccupancy.checkedInUsers.length > 0;
+            await court.save();
+        }
+
+        const user = await User.findById(userId);
+        if (user) {
+            user.currentCourtCheckIn = undefined;
+            if (user.checkInLocation === "RAC") {
+                user.checkInLocation = "None";
+            }
+            await user.save();
+        }
+
+        const io = req.io || req.app?.get('io');
+        if (io && court) {
+            io.emit('courtOccupancyUpdated', {
+                courtNumber,
+                recreationalOccupancy: court.recreationalOccupancy
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Successfully checked out of RAC Court ${courtNumber}`
+        });
+    } catch (err) {
+        console.error("Error checking out of RAC court:", err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });

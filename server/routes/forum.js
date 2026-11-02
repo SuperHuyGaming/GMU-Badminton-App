@@ -1350,6 +1350,99 @@ router.get("/members", async (req, res) => {
 	}
 });
 
+// ==========================================
+// MEMBER CARD / HOVER CARD HYDRATION
+// ==========================================
+router.get("/members/:userId/card", async (req, res) => {
+	try {
+		const { userId } = req.params;
+		if (!userId || !mongoose.isValidObjectId(userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const targetUser = await User.findById(userId).lean();
+		if (!targetUser) {
+			return res.status(404).json({ message: "Member not found." });
+		}
+
+		// Personal name filter invariant
+		if (/tu\s+pham|nhat\s+quang/i.test(targetUser.name || "")) {
+			return res.status(404).json({ message: "Member not found." });
+		}
+
+		// Presence hydration
+		const onlineUsers = req.app?.get("onlineUsers");
+		const isOnline = onlineUsers ? onlineUsers.has(userId.toString()) : false;
+
+		// Friendship status relative to optional authenticated user
+		let friendshipStatus = "none";
+		const caller = getOptionalUser(req);
+		if (caller) {
+			const callerId = (caller.id || caller.userId || "").toString();
+			if (callerId === userId.toString()) {
+				friendshipStatus = "self";
+			} else {
+				const callerUser = await User.findById(callerId)
+					.select("friends friendRequests sentFriendRequests")
+					.lean();
+				if (callerUser) {
+					const friendsList = (callerUser.friends || []).map((f) => (f?._id || f).toString());
+					const sentList = (callerUser.sentFriendRequests || []).map((f) => (f?._id || f).toString());
+					const receivedList = (callerUser.friendRequests || []).map((f) => (f?._id || f).toString());
+
+					if (friendsList.includes(userId.toString())) {
+						friendshipStatus = "friends";
+					} else if (sentList.includes(userId.toString())) {
+						friendshipStatus = "pending_sent";
+					} else if (receivedList.includes(userId.toString())) {
+						friendshipStatus = "pending_received";
+					}
+				}
+			}
+		}
+
+		const stats = targetUser.stats || {
+			totalMatches: 0,
+			winStreak: 0,
+			highestWinStreak: 0,
+		};
+		const totalMatches = Number(stats.totalMatches || 0);
+		const winStreak = Number(stats.winStreak || 0);
+		const winRate = totalMatches > 0 ? Math.round(((totalMatches + winStreak) / (totalMatches * 2)) * 100) : 0;
+
+		res.json({
+			user: {
+				_id: targetUser._id.toString(),
+				id: targetUser._id.toString(),
+				name: targetUser.name,
+				profilePic: targetUser.profilePic || "",
+				role: targetUser.role || "user",
+				skillLevel: targetUser.skillLevel || "Intermediate",
+				bio: targetUser.bio || "I'm ready to play!",
+				preferredPlay: targetUser.preferredPlay || "Any",
+				racket: targetUser.racket || "N/A",
+				homeUniversity: targetUser.homeUniversity || "George Mason University",
+				singlesElo: targetUser.singlesElo || 1200,
+				doublesElo: targetUser.doublesElo || 1200,
+				stats: {
+					totalMatches,
+					winStreak,
+					highestWinStreak: Number(stats.highestWinStreak || 0),
+					winRate,
+				},
+				isOnline,
+				friendshipStatus,
+				currentCourtCheckIn: targetUser.currentCourtCheckIn || null,
+				checkInLocation: targetUser.checkInLocation || "None",
+				badges: Array.isArray(targetUser.badges) ? targetUser.badges : [],
+			},
+		});
+	} catch (err) {
+		console.error("Error fetching member card:", err);
+		res.status(500).json({ message: "Failed to fetch member card" });
+	}
+});
+
 router.get("/:postId", async (req, res) => {
 	try {
 		if (!mongoose.isValidObjectId(req.params.postId)) {

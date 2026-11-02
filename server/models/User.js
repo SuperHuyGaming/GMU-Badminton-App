@@ -94,6 +94,11 @@ const userSchema = new mongoose.Schema({
 
 	// Matchmaking Masterplan Tasks
 	checkInLocation: { type: String, enum: ["RAC", "Skyline", "AFC", "None"], default: "None" },
+	currentCourtCheckIn: {
+		courtNumber: { type: Number },
+		checkInTime: { type: Date },
+		expiresAt: { type: Date }
+	},
 	inQueue: { type: Boolean, default: false },
 	queueJoinedAt: { type: Date },
 	preferredTimeOfDay: { type: String, enum: ["Morning", "Afternoon", "Evening", "Any"], default: "Any" },
