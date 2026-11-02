@@ -11,6 +11,7 @@ const { analyzeContent } = require("../utils/aiModeration");
 const { evaluateSpamHeuristics } = require("../utils/spamDetector");
 const { parseDateRange } = require("../utils/dateRange");
 const feedCache = require("../utils/feedCache");
+const { scrapeLinkPreview } = require("../utils/linkPreviewScraper");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
@@ -2633,6 +2634,115 @@ router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (
 	}
 });
 
+// 4. SSRF-Safe Link Preview Scraping Route
+const linkPreviewLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 30,
+	skip: (req) => req.method === "OPTIONS",
+	message: { message: "Too many link preview requests, please try again later." },
+});
+
+router.post("/link-preview", linkPreviewLimiter, async (req, res) => {
+	try {
+		const { url } = req.body;
+		if (!url || typeof url !== "string") {
+			return res.status(400).json({ message: "URL is required and must be a string." });
+		}
+
+		const preview = await scrapeLinkPreview(url);
+		return res.json(preview);
+	} catch (error) {
+		const message = error.message || "Failed to fetch link preview";
+		if (
+			message.includes("SSRF Protection") ||
+			message.includes("Forbidden") ||
+			message.includes("Invalid URL")
+		) {
+			return res.status(400).json({ message });
+		}
+		return res.status(422).json({ message: `Could not scrape link preview: ${message}` });
+	}
+});
+
+// 5. Comment Emoji Reactions
+const handleCommentReaction = async (req, res) => {
+	try {
+		const { postId, commentId } = req.params;
+		if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
+		}
+
+		const post = await findPostByIdOrActivityFeed(postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const comment = post.comments.id(commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found." });
+
+		const userId = (req.user.id || req.user.userId || req.user._id).toString();
+		const userName = req.user.name || "Player";
+		const { emoji = "👍", reactionType } = req.body;
+
+		if (!Array.isArray(comment.reactions)) {
+			comment.reactions = [];
+		}
+
+		const existingIndex = comment.reactions.findIndex(
+			(r) => String(r.userId) === userId
+		);
+
+		let action = "added";
+		if (existingIndex > -1) {
+			if (comment.reactions[existingIndex].emoji === emoji) {
+				// Toggle off
+				comment.reactions.splice(existingIndex, 1);
+				action = "removed";
+			} else {
+				// Switch emoji
+				comment.reactions[existingIndex].emoji = emoji;
+				comment.reactions[existingIndex].reactionType = reactionType || "custom";
+				comment.reactions[existingIndex].createdAt = new Date();
+				action = "changed";
+			}
+		} else {
+			comment.reactions.push({
+				userId,
+				userName,
+				emoji,
+				reactionType: reactionType || "custom",
+				createdAt: new Date(),
+			});
+		}
+
+		await post.save();
+		feedCache.invalidateFeed();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) {
+			req.io.emit("postUpdated", hydratedPost);
+			req.io.emit("commentReactionUpdated", {
+				postId: post._id.toString(),
+				commentId: comment._id.toString(),
+				reactions: comment.reactions,
+				action,
+				userId,
+			});
+		}
+
+		return res.json({
+			success: true,
+			message: "Comment reaction updated successfully",
+			action,
+			reactions: comment.reactions,
+			post: hydratedPost,
+		});
+	} catch (error) {
+		console.error("Error handling comment reaction:", error);
+		return res.status(500).json({ message: "Error updating comment reaction.", error: error.message });
+	}
+};
+
+router.put("/:postId/comments/:commentId/react", authMiddleware, handleCommentReaction);
+router.post("/:postId/comments/:commentId/react", authMiddleware, handleCommentReaction);
 
 module.exports = router;
 

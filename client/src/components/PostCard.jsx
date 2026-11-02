@@ -57,6 +57,8 @@ import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import MediaLightbox from "./MediaLightbox";
 import ShareModal from "./ShareModal";
 import MemberHoverCard from "./MemberHoverCard";
+import ReactionDock from "./ReactionDock";
+import LinkPreviewCard from "./LinkPreviewCard";
 
 // In-memory cache for fetched comments to ensure instant re-rendering and prevent vanishing on re-renders
 const postCommentsMemoryCache = new Map();
@@ -1630,6 +1632,75 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
                             </Box>
                         )}
 
+						{/* Video Media Player */}
+						{Boolean(localPost.videoUrl) && (
+							<Box
+								data-testid="post-video-container"
+								sx={{
+									mt: 2,
+									borderRadius: 3,
+									overflow: "hidden",
+									maxHeight: 460,
+									bgcolor: "black",
+									display: "flex",
+									justifyContent: "center",
+									alignItems: "center",
+								}}
+							>
+								<video
+									src={localPost.videoUrl}
+									poster={localPost.videoThumbnail || undefined}
+									controls
+									playsInline
+									data-testid="post-video-player"
+									style={{ width: "100%", maxHeight: 460, borderRadius: 12 }}
+								>
+									<track kind="captions" />
+									Your browser does not support the video tag.
+								</video>
+							</Box>
+						)}
+
+						{/* Audio Media Player */}
+						{Boolean(localPost.audioUrl) && (
+							<Box
+								data-testid="post-audio-container"
+								sx={{
+									mt: 2,
+									p: 1.5,
+									borderRadius: 3,
+									bgcolor: "action.hover",
+									display: "flex",
+									alignItems: "center",
+									gap: 1.5,
+								}}
+							>
+								<audio
+									src={localPost.audioUrl}
+									controls
+									data-testid="post-audio-player"
+									style={{ width: "100%", height: 38 }}
+								>
+									<track kind="captions" />
+									Your browser does not support the audio element.
+								</audio>
+							</Box>
+						)}
+
+						{/* Link Preview Cards */}
+						{Boolean(
+							(Array.isArray(localPost.linkPreviews) && localPost.linkPreviews.length > 0) ||
+							localPost.linkPreview
+						) && (
+							<Box data-testid="post-link-previews" sx={{ mt: 2 }}>
+								{Array.isArray(localPost.linkPreviews) && localPost.linkPreviews.length > 0
+									? localPost.linkPreviews.map((lp, idx) => (
+											<LinkPreviewCard key={lp?.url || idx} preview={lp} sx={{ mb: 1 }} />
+										))
+									: localPost.linkPreview && <LinkPreviewCard preview={localPost.linkPreview} />}
+							</Box>
+						)}
+
 						{images.length === 1 && (
 							<Box 
 								data-testid="collage-grid-1"
@@ -2010,9 +2081,13 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									transition={{ type: "spring", stiffness: 450, damping: 28 }}
 									style={{ position: "absolute", bottom: "100%", left: 0, zIndex: 120, marginBottom: 6 }}
 								>
-									<Paper
-										elevation={6}
+									<ReactionDock
 										data-testid="reactions-dock"
+										reactions={localPost.reactions}
+										userReaction={currentUserReaction}
+										items={FACEBOOK_REACTIONS}
+										showCounts={false}
+										compact
 										onMouseEnter={() => {
 											if (leaveTimer.current) {
 												clearTimeout(leaveTimer.current);
@@ -2020,8 +2095,13 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 											}
 										}}
 										onMouseLeave={handleReactionBoxMouseLeave}
+										onReact={(emoji) => {
+											if (hoverTimer.current) clearTimeout(hoverTimer.current);
+											if (leaveTimer.current) clearTimeout(leaveTimer.current);
+											setShowReactions(false);
+											handleReaction(emoji);
+										}}
 										sx={{
-											display: "flex",
 											gap: "3px",
 											px: "6px",
 											py: "3px",
@@ -2031,44 +2111,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 													? "rgba(36, 37, 38, 0.98)"
 													: "rgba(255, 255, 255, 0.98)",
 											backdropFilter: "blur(6px)",
-											border: "1px solid",
-											borderColor: "divider",
 											boxShadow: "0 4px 16px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08)",
-											alignItems: "center",
 										}}
-									>
-										{FACEBOOK_REACTIONS.map((item) => (
-											<Tooltip key={item.type} title={item.tooltip} arrow placement="top">
-												<motion.div
-													whileHover={{ scale: 1.35, y: -6, transition: { type: "spring", stiffness: 500 } }}
-													whileTap={{ scale: 0.9 }}
-												>
-													<IconButton
-														aria-label={`React with ${item.label}`}
-														onClick={(e) => {
-															e.stopPropagation();
-															if (hoverTimer.current) clearTimeout(hoverTimer.current);
-															if (leaveTimer.current) clearTimeout(leaveTimer.current);
-															setShowReactions(false);
-															handleReaction(item.emoji);
-														}}
-														sx={{
-															width: 34,
-															height: 34,
-															p: 0,
-															fontSize: "1.35rem",
-															display: "flex",
-															alignItems: "center",
-															justifyContent: "center",
-															transition: "transform 0.15s ease",
-														}}
-													>
-														<span>{item.emoji}</span>
-													</IconButton>
-												</motion.div>
-											</Tooltip>
-										))}
-									</Paper>
+									/>
 								</motion.div>
 							)}
 						</AnimatePresence>
