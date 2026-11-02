@@ -41,6 +41,11 @@ const PostSchema = new mongoose.Schema({
 		],
 		isFilled: { type: Boolean, default: false }
 	},
+	rsvp: {
+		capacity: { type: Number, default: 0 },
+		attendees: [{ type: String }],
+		waitlist: [{ type: String }]
+	},
 	challengeMatch: {
 		isEnabled: { type: Boolean, default: false },
 		matchType: { type: String, default: 'Friendly Scrimmage' },

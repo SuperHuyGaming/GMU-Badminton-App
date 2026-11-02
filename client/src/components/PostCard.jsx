@@ -205,19 +205,21 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		const prevMatchmaking = localPost.playerMatchmaking;
 		const rsvpList = Array.isArray(prevMatchmaking?.rsvpList) ? [...prevMatchmaking.rsvpList] : [];
 		const idx = rsvpList.findIndex(r => String(r.userId) === String(currentUserId));
+		const slots = prevMatchmaking?.slotsNeeded || 1;
 		
 		if (idx > -1) {
 			rsvpList.splice(idx, 1);
 		} else {
+			const confirmedCount = rsvpList.filter(r => r.status === "confirmed").length;
+			const status = confirmedCount < slots ? "confirmed" : "waitlist";
 			rsvpList.push({
 				userId: String(currentUserId),
 				userName: currentUser.name || "Player",
 				avatarUrl: currentUser.avatarUrl || currentUser.profilePic || "",
-				status: "confirmed"
+				status
 			});
 		}
 
-		const slots = prevMatchmaking?.slotsNeeded || 1;
 		const isFilled = rsvpList.filter(r => r.status === "confirmed").length >= slots;
 		const optimisticMatchmaking = {
 			...prevMatchmaking,
@@ -231,8 +233,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 			const res = await apiFetch(`/api/forum/${localPost._id}/rsvp`, { method: "POST" });
 			if (res && res.ok) {
 				const data = await res.json();
-				setLocalPost(prev => ({ ...prev, playerMatchmaking: data.playerMatchmaking }));
-				toast.success(idx > -1 ? "Left the rally." : "You're in! RSVP confirmed.");
+				setLocalPost(prev => ({ ...prev, playerMatchmaking: data.playerMatchmaking, rsvp: data.rsvp }));
+				const isNowWaitlisted = data.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId) && r.status === 'waitlist');
+				toast.success(idx > -1 ? "Left the rally." : (isNowWaitlisted ? "Added to waitlist." : "You're in! RSVP confirmed."));
 			} else {
 				setLocalPost(prev => ({ ...prev, playerMatchmaking: prevMatchmaking }));
 				toast.error("Failed to update RSVP.");
@@ -1229,62 +1232,103 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								</Box>
 
 								{/* RSVPs & 1-Tap Join Action */}
-								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1.5, pt: 1, borderTop: "1px dashed", borderColor: "divider", flexWrap: "wrap", gap: 1 }}>
-									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-										<Typography variant="caption" sx={{ fontWeight: "bold", color: "text.secondary" }}>
-											Attendees ({localPost.playerMatchmaking?.rsvpList?.length || 0}):
-										</Typography>
-										{localPost.playerMatchmaking?.rsvpList?.length > 0 ? (
-											<AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.7rem' } }}>
-												{localPost.playerMatchmaking.rsvpList.map((r, i) => (
-													<Tooltip key={i} title={`${r.userName} (${r.status})`}>
-														<Avatar src={r.avatarUrl} alt={r.userName}>{r.userName?.charAt(0)}</Avatar>
-													</Tooltip>
-												))}
-											</AvatarGroup>
-										) : (
-											<Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
-												Be the first to join!
-											</Typography>
-										)}
-									</Box>
+								{(() => {
+									const rList = Array.isArray(localPost.playerMatchmaking?.rsvpList) ? localPost.playerMatchmaking.rsvpList : [];
+									const confirmedAttendees = rList.filter(r => r.status === "confirmed");
+									const waitlistedAttendees = rList.filter(r => r.status === "waitlist");
+									const slots = localPost.playerMatchmaking?.slotsNeeded || 1;
+									const isUserConfirmed = confirmedAttendees.some(r => String(r.userId) === String(currentUserId));
+									const isUserWaitlisted = waitlistedAttendees.some(r => String(r.userId) === String(currentUserId));
+									const userWaitlistIndex = waitlistedAttendees.findIndex(r => String(r.userId) === String(currentUserId));
 
-									{currentUser && !isAuthor && (
-										<Button
-											size="small"
-											variant={localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) ? "outlined" : "contained"}
-											color={localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) ? "inherit" : "primary"}
-											onClick={handleToggleRsvp}
-											disabled={isRsvping}
-											sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
-										>
-											{localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId))
-												? "✓ You're In (Leave)"
-												: "+ Join Rally (RSVP)"}
-										</Button>
-									)}
-									{isAuthor && localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) && (
-										<Button
-											size="small"
-											variant="outlined"
-											color="warning"
-											onClick={handleToggleRsvp}
-											disabled={isRsvping}
-											sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
-										>
-											Leave Rally (Host)
-										</Button>
-									)}
-									{isAuthor && !localPost.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId)) && (
-										<Chip
-											label="👑 Host"
-											size="small"
-											color="primary"
-											variant="outlined"
-											sx={{ fontWeight: "bold", fontSize: "0.75rem", height: 24 }}
-										/>
-									)}
-								</Box>
+									return (
+										<Box sx={{ mt: 1.5, pt: 1, borderTop: "1px dashed", borderColor: "divider" }}>
+											<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+												<Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+													<Typography variant="caption" sx={{ fontWeight: "bold", color: "text.secondary" }}>
+														Attendees ({confirmedAttendees.length}/{slots}):
+													</Typography>
+													{confirmedAttendees.length > 0 ? (
+														<AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.7rem' } }}>
+															{confirmedAttendees.map((r, i) => (
+																<Tooltip key={i} title={`${r.userName} (Confirmed)`}>
+																	<Avatar src={r.avatarUrl} alt={r.userName}>{r.userName?.charAt(0)}</Avatar>
+																</Tooltip>
+															))}
+														</AvatarGroup>
+													) : (
+														<Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+															Be the first to join!
+														</Typography>
+													)}
+
+													{waitlistedAttendees.length > 0 && (
+														<Chip
+															data-testid="waitlist-roster-chip"
+															label={`Waitlist (${waitlistedAttendees.length})`}
+															size="small"
+															variant="outlined"
+															color="warning"
+															sx={{ height: 20, fontSize: "0.68rem", fontWeight: "bold" }}
+														/>
+													)}
+
+													{isUserWaitlisted && (
+														<Chip
+															data-testid="user-waitlist-status"
+															label={`In Waitlist (Position #${userWaitlistIndex + 1})`}
+															size="small"
+															color="warning"
+															sx={{ height: 20, fontSize: "0.68rem", fontWeight: "bold" }}
+														/>
+													)}
+												</Box>
+
+												<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+													{currentUser && !isAuthor && (
+														<Button
+															size="small"
+															variant={isUserConfirmed || isUserWaitlisted ? "outlined" : "contained"}
+															color={isUserConfirmed ? "inherit" : isUserWaitlisted ? "warning" : "primary"}
+															onClick={handleToggleRsvp}
+															disabled={isRsvping}
+															sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
+														>
+															{isUserConfirmed
+																? "✓ You're In (Leave)"
+																: isUserWaitlisted
+																? "Leave Waitlist"
+																: confirmedAttendees.length >= slots
+																? "⏳ Join Waitlist"
+																: "+ Join Rally (RSVP)"}
+														</Button>
+													)}
+													{isAuthor && isUserConfirmed && (
+														<Button
+															size="small"
+															variant="outlined"
+															color="warning"
+															onClick={handleToggleRsvp}
+															disabled={isRsvping}
+															sx={{ borderRadius: 2, fontWeight: "bold", textTransform: "none", fontSize: "0.8rem", px: 2 }}
+														>
+															Leave Rally (Host)
+														</Button>
+													)}
+													{isAuthor && !isUserConfirmed && (
+														<Chip
+															label="👑 Host"
+															size="small"
+															color="primary"
+															variant="outlined"
+															sx={{ fontWeight: "bold", fontSize: "0.75rem", height: 24 }}
+														/>
+													)}
+												</Box>
+											</Box>
+										</Box>
+									);
+								})()}
 							</Paper>
 						)}
 
@@ -1315,12 +1359,31 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 											<Chip label={localPost.challengeMatch.gameFormat} size="small" variant="outlined" sx={{ fontSize: "0.7rem", height: 20 }} />
 										)}
 									</Box>
-									<Chip
-										label={localPost.challengeMatch?.matchStatus === 'accepted' ? 'Accepted' : 'Open Challenge'}
-										size="small"
-										color={localPost.challengeMatch?.matchStatus === 'accepted' ? 'success' : 'warning'}
-										sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22 }}
-									/>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+										{localPost.challengeMatch?.matchStatus === 'accepted' ? (
+											<Chip
+												data-testid="scheduled-match-badge"
+												label="🏸 Scheduled Match"
+												color="primary"
+												size="small"
+												clickable={Boolean(localPost.challengeMatch?.linkedMatchId)}
+												onClick={(e) => {
+													e.stopPropagation();
+													if (localPost.challengeMatch?.linkedMatchId) {
+														navigate(`/tournaments?matchId=${localPost.challengeMatch.linkedMatchId}`);
+													}
+												}}
+												sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22, cursor: "pointer" }}
+											/>
+										) : (
+											<Chip
+												label="Open Challenge"
+												size="small"
+												color="warning"
+												sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22 }}
+											/>
+										)}
+									</Box>
 								</Box>
 
 								{localPost.challengeMatch?.stipulations && (
@@ -1330,11 +1393,26 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								)}
 
 								<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1.5, pt: 1, borderTop: "1px dashed", borderColor: "divider", flexWrap: "wrap", gap: 1 }}>
-									<Typography variant="caption" color="text.secondary">
-										{localPost.challengeMatch?.matchStatus === 'accepted'
-											? `Accepted by ${localPost.challengeMatch?.acceptedBy?.map(a => a.userName).join(', ') || 'an opponent'}`
-											: "Awaiting challenger response"}
-									</Typography>
+									<Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+										<Typography variant="caption" color="text.secondary">
+											{localPost.challengeMatch?.matchStatus === 'accepted'
+												? `Accepted by ${localPost.challengeMatch?.acceptedBy?.map(a => a.userName).join(', ') || 'an opponent'}`
+												: "Awaiting challenger response"}
+										</Typography>
+										{localPost.challengeMatch?.linkedMatchId && (
+											<Typography
+												variant="caption"
+												data-testid="linked-match-link"
+												onClick={(e) => {
+													e.stopPropagation();
+													navigate(`/tournaments?matchId=${localPost.challengeMatch.linkedMatchId}`);
+												}}
+												sx={{ color: "primary.main", fontWeight: "bold", cursor: "pointer", textDecoration: "underline" }}
+											>
+												View Scheduled Match #{String(localPost.challengeMatch.linkedMatchId).slice(-6)}
+											</Typography>
+										)}
+									</Box>
 
 									{currentUser && String(localPost.authorId) !== String(currentUserId) && localPost.challengeMatch?.matchStatus === 'open' && (
 										<Button
