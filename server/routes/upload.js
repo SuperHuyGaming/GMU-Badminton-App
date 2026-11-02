@@ -1,3 +1,4 @@
+/* global jest -- guarded test-only hook: typeof jest is checked before use */
 // server/routes/upload.js
 const express = require("express");
 const os = require("os");
