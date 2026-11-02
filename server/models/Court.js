@@ -68,7 +68,18 @@ const courtSchema = new mongoose.Schema({
     pacingSecondsPerPoint: { type: Number, default: 28 },
     lastActivityAt: { type: Date, default: Date.now },
     isStalled: { type: Boolean, default: false },
-    stallReason: { type: String, default: null },
+    recreationalOccupancy: {
+        isCheckedIn: { type: Boolean, default: false },
+        checkedInUsers: [{
+            userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            userName: { type: String, default: "" },
+            avatarUrl: { type: String, default: "" },
+            checkInTime: { type: Date, default: Date.now },
+            expiresAt: { type: Date }
+        }],
+        queueCount: { type: Number, default: 0 },
+        estimatedWaitMinutes: { type: Number, default: 0 }
+    },
     updatedAt: {
         type: Date,
         default: Date.now

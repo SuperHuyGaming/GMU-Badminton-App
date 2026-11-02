@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { MoreVertIcon } from "../Icons";
 import apiFetch from "../../utils/api";
 import { toast } from "react-hot-toast";
+import MemberHoverCard from "../MemberHoverCard";
 
 export default function CommentBubble({
 	comment,
@@ -66,6 +67,7 @@ export default function CommentBubble({
 
 	return (
 		<Box sx={{ display: "flex", gap: 1 }}>
+			<MemberHoverCard userId={comment.authorId || ''} user={{ _id: comment.authorId, name: comment.authorName, profilePic: comment.authorPic }}>
 			<Avatar
 				src={comment.authorPic}
 				alt={comment.authorName || "Comment author"}
@@ -88,6 +90,7 @@ export default function CommentBubble({
 			>
 				{!comment.authorPic && comment.authorName?.charAt(0)}
 			</Avatar>
+			</MemberHoverCard>
 
 			<Box sx={{ flexGrow: 1, minWidth: 0 }}>
 				<Box

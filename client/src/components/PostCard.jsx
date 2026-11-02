@@ -56,6 +56,7 @@ import PostCommentsInline from "./PostCommentsInline";
 import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import MediaLightbox from "./MediaLightbox";
 import ShareModal from "./ShareModal";
+import MemberHoverCard from "./MemberHoverCard";
 
 // In-memory cache for fetched comments to ensure instant re-rendering and prevent vanishing on re-renders
 const postCommentsMemoryCache = new Map();
@@ -769,6 +770,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						mb: 2,
 					}}
 				>
+					<MemberHoverCard userId={localPost.authorId || ''} user={{ _id: localPost.authorId, name: localPost.authorName, profilePic: localPost.authorPic, isOnline: isAuthorOnline }}>
 					<Badge
 						overlap="circular"
 						anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
@@ -829,6 +831,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									: "?")}
 						</Avatar>
 					</Badge>
+					</MemberHoverCard>
 					<Box sx={{ flexGrow: 1 }}>
 						<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
 							{localPost.category && (

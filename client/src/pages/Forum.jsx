@@ -21,6 +21,8 @@ import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import PostCard from "../components/PostCard";
+import MemberHoverCard from "../components/MemberHoverCard";
+import CourtOccupancyCard from "../components/CourtOccupancyCard";
 import AdminModerationModal from "../components/AdminModerationModal";
 import socket from "../utils/socket";
 import { compressImage } from "../utils/imageUtils";
@@ -1525,6 +1527,9 @@ export default function Forum() {
 						</Box>
 					</Paper>
 
+					{/* RAC Physical Court Occupancy */}
+					<CourtOccupancyCard sx={{ mb: 2 }} />
+
 					{/* Badminton Buddies / Quick Chat */}
 					<Paper
 						elevation={0}
@@ -1556,6 +1561,7 @@ export default function Forum() {
 										'&:hover': { bgcolor: 'action.hover' }
 									}}
 								>
+									<MemberHoverCard userId={buddy._id} user={buddy}>
 									<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
 										<Badge
 											color="success"
@@ -1577,6 +1583,7 @@ export default function Forum() {
 											</Typography>
 										</Box>
 									</Box>
+									</MemberHoverCard>
 
 									<Button
 										size="small"
