@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const Post = require("./models/Post");
 const Match = require("./models/Match");
 const ActivityFeed = require("./models/ActivityFeed");
-const User = require("./models/User");
 
 async function seedFeed() {
     try {

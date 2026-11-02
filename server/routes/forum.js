@@ -59,7 +59,7 @@ const sanitizeLinkPreviews = (input) => {
 	return cleaned;
 };
 const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+const { JWT_SECRET } = require("../config/jwtSecret");
 
 const getOptionalUser = (req) => {
 	if (req.user) return req.user;
@@ -578,16 +578,48 @@ const canViewPost = async (post, user) => {
 		authorUser.friends.some(f => (f?._id || f).toString() === userId));
 };
 
-// Public posts broadcast to everyone; private posts only reach the author and the
-// involved users' personal rooms (clients join `userId` rooms via joinUserRoom).
-const emitForPost = (io, post, event, payload, involvedUserIds = []) => {
-	if (!io) return;
-	if (isPublicPost(post)) {
-		io.emit(event, payload);
-		return;
+// Personal rooms (clients join `userId` rooms via joinUserRoom) allowed to see a private post:
+// the author, the involved users, and for FRIENDS_ONLY posts the author's friends.
+const getPostAudienceRooms = async (post, involvedUserIds = []) => {
+	const ids = [post?.authorId, ...involvedUserIds];
+	if (post?.visibility === "FRIENDS_ONLY" && post.authorId) {
+		try {
+			let query = User.findById(post.authorId);
+			if (query && typeof query.select === "function") query = query.select("friends");
+			if (query && typeof query.lean === "function") query = query.lean();
+			const author = await query;
+			if (author && Array.isArray(author.friends)) {
+				ids.push(...author.friends.map(f => f?._id || f));
+			}
+		} catch (_) { /* fall back to author + involved users */ }
 	}
-	const rooms = [...new Set([post?.authorId, ...involvedUserIds].filter(Boolean).map(String))];
-	if (rooms.length > 0) io.to(rooms).emit(event, payload);
+	return [...new Set(ids.filter(Boolean).map(String))];
+};
+
+// Public posts broadcast to everyone; private posts only reach their audience rooms.
+const emitForPost = async (io, post, event, payload, involvedUserIds = []) => {
+	if (!io) return;
+	try {
+		if (isPublicPost(post)) {
+			io.emit(event, payload);
+			return;
+		}
+		const rooms = await getPostAudienceRooms(post, involvedUserIds);
+		if (rooms.length > 0) io.to(rooms).emit(event, payload);
+	} catch (error) {
+		console.error(`Error emitting ${event}:`, error);
+	}
+};
+
+// A post that just went private must disappear from every client outside its audience.
+const emitPostHiddenFromOthers = async (io, post, involvedUserIds = []) => {
+	if (!io || typeof io.except !== "function") return;
+	try {
+		const rooms = await getPostAudienceRooms(post, involvedUserIds);
+		io.except(rooms).emit("postDeleted", String(post._id));
+	} catch (error) {
+		console.error("Error emitting postDeleted:", error);
+	}
 };
 
 // ==========================================
@@ -744,6 +776,30 @@ const parseChallengeMatch = (cm, authorInfo) => {
 	};
 };
 
+// Status, opponents, and the linked match are owned by the accept/sync flow, never the client.
+const parseNewChallengeMatch = (cm, authorInfo) => {
+	const parsed = parseChallengeMatch(cm, authorInfo);
+	if (!parsed) return undefined;
+	return { ...parsed, matchStatus: 'open', acceptedBy: [], linkedMatchId: '' };
+};
+
+// Edits may only touch the descriptive fields; the challenger team is frozen once accepted.
+const applyChallengeMatchEdit = (post, cm, authorInfo) => {
+	const parsed = parseChallengeMatch(cm, authorInfo);
+	if (!parsed) return;
+	if (!post.challengeMatch || !post.challengeMatch.challengerTeam?.length) {
+		post.challengeMatch = { isEnabled: Boolean(post.challengeMatch?.isEnabled), ...parseNewChallengeMatch(cm, authorInfo) };
+		return;
+	}
+	post.challengeMatch.matchType = parsed.matchType;
+	post.challengeMatch.gameFormat = parsed.gameFormat;
+	post.challengeMatch.stipulations = parsed.stipulations;
+	const status = post.challengeMatch.matchStatus || 'open';
+	if (status === 'open' && Array.isArray(cm.challengerTeam) && cm.challengerTeam.length > 0) {
+		post.challengeMatch.challengerTeam = parsed.challengerTeam;
+	}
+};
+
 const parseQaDetails = (qa) => {
 	if (!qa || typeof qa !== 'object') return undefined;
 	return {
@@ -756,6 +812,13 @@ const parseQaDetails = (qa) => {
 			at: qa.acceptedBy.at ? new Date(qa.acceptedBy.at) : new Date()
 		} : undefined
 	};
+};
+
+// Resolution state is owned by the accept-answer route.
+const parseNewQaDetails = (qa) => {
+	const parsed = parseQaDetails(qa);
+	if (!parsed) return undefined;
+	return { ...parsed, isResolved: false, acceptedCommentId: '', acceptedBy: undefined };
 };
 
 const parseGearDetails = (gd) => {
@@ -1015,8 +1078,8 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 
 		const authorInfo = { userId: authorId, userName: authorName, avatarUrl: req.user.profilePic || "" };
 		const cleanPlayerMatchmaking = (cleanCategory === 'find_partner' || cleanCategory === 'meetup_rally') ? parsePlayerMatchmaking(playerMatchmaking) : undefined;
-		const cleanChallengeMatch = cleanCategory === 'challenge_match' ? parseChallengeMatch(challengeMatch, authorInfo) : undefined;
-		const cleanQaDetails = cleanCategory === 'qa_forum' ? parseQaDetails(qaDetails) : undefined;
+		const cleanChallengeMatch = cleanCategory === 'challenge_match' ? parseNewChallengeMatch(challengeMatch, authorInfo) : undefined;
+		const cleanQaDetails = cleanCategory === 'qa_forum' ? parseNewQaDetails(qaDetails) : undefined;
 		const cleanGearDetails = (cleanCategory === 'gear_exchange' || cleanCategory === 'gear_review') ? parseGearDetails(gearDetails) : undefined;
 
 		let cleanOriginalPostId = null;
@@ -1135,7 +1198,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		}
 
 		const hydratedPost = await hydrateWithPictures(newPost.toObject());
-		if (req.io) req.io.emit("postCreated", hydratedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postCreated", hydratedPost);
 		res.status(201).json(hydratedPost);
 	} catch (error) {
 		console.error("Error creating post:", error);
@@ -1292,6 +1355,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			post.category = category;
 		}
 
+		const wasPublic = isPublicPost(post);
 		const targetVis = visibility || req.body.privacy;
 		if (targetVis) {
 			if (!["PUBLIC", "FRIENDS_ONLY", "ONLY_ME"].includes(targetVis)) {
@@ -1327,10 +1391,15 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			rallyCapacityChanged = getRallyCapacity(post) !== previousCapacity;
 		}
 		if (challengeMatch && typeof challengeMatch === "object") {
-			post.challengeMatch = parseChallengeMatch(challengeMatch, { userId: currentUserId, userName: req.user.name, avatarUrl: req.user.profilePic });
+			applyChallengeMatchEdit(post, challengeMatch, { userId: currentUserId, userName: req.user.name, avatarUrl: req.user.profilePic });
 		}
 		if (qaDetails && typeof qaDetails === "object") {
-			post.qaDetails = parseQaDetails(qaDetails);
+			const parsedQa = parseQaDetails(qaDetails);
+			if (post.qaDetails && parsedQa) {
+				post.qaDetails.subtopic = parsedQa.subtopic;
+			} else {
+				post.qaDetails = parseNewQaDetails(qaDetails);
+			}
 		}
 		if (gearDetails && typeof gearDetails === "object") {
 			post.gearDetails = parseGearDetails(gearDetails);
@@ -1393,7 +1462,10 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 		feedCache.invalidateFeed();
 
 		const hydratedPost = await hydrateWithPictures(responsePost);
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (req.io) {
+			if (wasPublic && !isPublicPost(hydratedPost)) await emitPostHiddenFromOthers(req.io, hydratedPost);
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+		}
 		res.json(hydratedPost);
 	} catch (error) {
 		res.status(500).json({ message: "Error updating post" });
@@ -1465,7 +1537,7 @@ router.put("/reports/:postId/resolve", authMiddleware, adminMiddleware, async (r
 			await post.save();
 			feedCache.invalidateFeed();
 			const hydrated = await hydrateWithPictures(post.toObject());
-			if (req.io) req.io.emit("postCreated", hydrated);
+			if (req.io) await emitForPost(req.io, hydrated, "postCreated", hydrated);
 			return res.json({ message: "Post approved and reinstated.", post: hydrated });
 		}
 
@@ -1776,7 +1848,7 @@ router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) =
 		const hydratedPost = await hydrateWithPictures(updatedPost);
 
 		if (req.io) {
-			req.io.emit("postUpdated", hydratedPost);
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 			if (post.authorId?.toString() !== authorId.toString()) {
 				const newComment =
 					updatedPost.comments[updatedPost.comments.length - 1];
@@ -1845,7 +1917,7 @@ router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
 		comment.editedAt = new Date();
 		await post.save();
 		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 		res.json(hydratedPost);
 	} catch (error) {
 		res.status(500).json({ message: "Error updating comment" });
@@ -1872,7 +1944,7 @@ router.delete("/:postId/comments/:commentId", authMiddleware, async (req, res) =
 		comment.deleteOne();
 		await post.save();
 		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 		res.json(hydratedPost);
 	} catch (error) {
 		res.status(500).json({ message: "Error deleting comment" });
@@ -1919,7 +1991,7 @@ router.post(
 			const hydratedPost = await hydrateWithPictures(updatedPost);
 
 			if (req.io) {
-				req.io.emit("postUpdated", hydratedPost);
+				await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 				const commentToReply = Array.isArray(updatedPost?.comments)
 					? updatedPost.comments.find(
 							(c) => c && c._id && c._id.toString() === req.params.commentId,
@@ -1986,7 +2058,7 @@ router.put(
 			reply.editedAt = new Date();
 			await post.save();
 			const hydratedPost = await hydrateWithPictures(post.toObject());
-			if (req.io) req.io.emit("postUpdated", hydratedPost);
+			if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 			res.json(hydratedPost);
 		} catch (error) {
 			res.status(500).json({ message: "Error updating reply" });
@@ -2019,7 +2091,7 @@ router.delete(
 			reply.deleteOne();
 			await post.save();
 			const hydratedPost = await hydrateWithPictures(post.toObject());
-			if (req.io) req.io.emit("postUpdated", hydratedPost);
+			if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 			res.json(hydratedPost);
 		} catch (error) {
 			res.status(500).json({ message: "Error deleting reply" });
@@ -2075,7 +2147,7 @@ router.post("/:postId/comments/:commentId/report", authMiddleware, async (req, r
 
 		const updatedPost = await Post.findById(req.params.postId).lean();
 		const hydratedPost = await hydrateWithPictures(updatedPost);
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 
 		return res.status(200).json({
 			success: true,
@@ -2142,7 +2214,7 @@ router.post("/:postId/comments/:commentId/replies/:replyId/report", authMiddlewa
 
 		const updatedPost = await Post.findById(req.params.postId).lean();
 		const hydratedPost = await hydrateWithPictures(updatedPost);
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 
 		return res.status(200).json({
 			success: true,
@@ -2272,7 +2344,7 @@ router.put("/:postId/like", authMiddleware, async (req, res) => {
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
-			req.io.emit("postUpdated", hydratedPost);
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 			if (!hasLiked && post.authorId?.toString() !== userId.toString()) {
 				await sendNotification(
 					req.io,
@@ -2316,7 +2388,7 @@ router.put("/:postId/comments/:commentId/like", authMiddleware, async (req, res)
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
-			req.io.emit("postUpdated", hydratedPost);
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 			if (
 				!hasLiked &&
 				comment.authorId?.toString() !== userId.toString()
@@ -2367,7 +2439,7 @@ router.put(
 
 			const hydratedPost = await hydrateWithPictures(post.toObject());
 			if (req.io) {
-				req.io.emit("postUpdated", hydratedPost);
+				await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 				if (
 					!hasLiked &&
 					reply.authorId?.toString() !== userId.toString()
@@ -2409,7 +2481,7 @@ router.put("/:postId/pin", authMiddleware, async (req, res) => {
 		await post.save();
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 
 		res.json({
 			success: true,
@@ -2576,8 +2648,8 @@ const handleReactionRoute = async (req, res) => {
 
 		const hydratedPost = await hydrateWithPictures(post.toObject());
 		if (req.io) {
-			req.io.emit("postUpdated", hydratedPost);
-			req.io.emit("reactionUpdated", {
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			await emitForPost(req.io, hydratedPost, "reactionUpdated", {
 				postId: post._id.toString(),
 				reactions: hydratedPost.reactions || [],
 				action,
@@ -2987,7 +3059,7 @@ router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (
 
 		await post.save();
 		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
 		res.json(hydratedPost);
 	} catch (error) {
 		console.error("Error marking accepted answer:", error);
@@ -3123,8 +3195,8 @@ const handleCommentReaction = async (req, res) => {
 
 		const hydratedPost = await hydrateWithPictures(freshPost);
 		if (req.io) {
-			req.io.emit("postUpdated", hydratedPost);
-			req.io.emit("commentReactionUpdated", {
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			await emitForPost(req.io, hydratedPost, "commentReactionUpdated", {
 				postId: postObjectId.toString(),
 				commentId: String(commentId),
 				reactions,

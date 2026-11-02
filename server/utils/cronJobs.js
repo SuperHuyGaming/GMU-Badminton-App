@@ -86,7 +86,7 @@ async function createMatchOfTheWeek() {
 
 const cron = require('node-cron');
 const { runInstagramScraper } = require('./instagramScraper');
-const { huntGoogleForTournaments, processDiscoveryQueue, runFullAutonomousHunt, ensureGuaranteedTournaments } = require('./autonomousHunter');
+const { processDiscoveryQueue, runFullAutonomousHunt } = require('./autonomousHunter');
 const Tournament = require('../models/Tournament');
 const { sendPushToAllUsers } = require('./pushNotifications');
 const redis = require('./redis');

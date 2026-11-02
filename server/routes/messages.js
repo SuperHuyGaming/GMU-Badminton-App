@@ -4,7 +4,6 @@ const router = express.Router();
 const Message = require("../models/Message");
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
-const Notification = require("../models/Notification");
 const { analyzeContent } = require("../utils/aiModeration");
 
 // GET: all recent conversations (latest message per friend)

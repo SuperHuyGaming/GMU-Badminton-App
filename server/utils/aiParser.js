@@ -12,9 +12,6 @@ const EXPLICIT_TOURNAMENT_ANNOUNCEMENT_PATTERNS = [
     /\b(register\s*(?:now|here|at|via)|registration\s*(?:link|open|form|deadline)|sign\s*up\s*(?:link|deadline|here|now)|entry\s*fee|deadline\s*to\s*register|flights?\s*[a-d]|singles|doubles|mixed\s*doubles)\b/i
 ];
 
-const PURE_UI_JUNK_PATTERNS = [
-    /^(menu|home|login|log\s*in|sign\s*in|sign\s*up(?:\s*now)?|training(?:\s*packages?)?|drop-in(?:\s*booking)?|court\s*rental|hours|schedule|about(?:\s*us)?|contact(?:\s*us)?|news|events?|badminton|court|rac|skip\s*to\s*content)$/i
-];
 
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "dummy_key_to_prevent_crash_on_import" });

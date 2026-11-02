@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const router = express.Router();
 const Match = require("../models/Match");
 const User = require("../models/User");
-const { calculateElo } = require("../utils/elo");
 const { calculateMatchGlicko2, applyInactivityDecay } = require("../utils/glicko2");
 const { authMiddleware } = require("../middleware/auth");
 
