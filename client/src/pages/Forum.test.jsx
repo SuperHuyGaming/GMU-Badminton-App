@@ -1017,8 +1017,9 @@ describe('Forum Page Component (Community Hub)', () => {
             expect(apiFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
         });
 
+        // The refresh clears and refills the feed; wait for it to settle instead of racing it.
+        expect(await screen.findByText('Feed Item 2')).toBeInTheDocument();
         expect(screen.queryByText(/No activity found/i)).not.toBeInTheDocument();
-        expect(screen.getByText('Feed Item 2')).toBeInTheDocument();
     });
 
     it('R4: resets pagination and feed when pressing Enter on search input', async () => {

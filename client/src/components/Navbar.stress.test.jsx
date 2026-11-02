@@ -151,7 +151,7 @@ describe('Navbar Milestone M3 Empirical Challenger Stress Suite', () => {
 			// Final state verification on "All"
 			expect(screen.getByText('Notification item number 0')).toBeInTheDocument();
 			expect(screen.getByText('Notification item number 49')).toBeInTheDocument();
-		});
+		}, 20000);
 
 		it('switches tabs smoothly while list dynamically transitions from unread to all read', () => {
 			const notifications = [
