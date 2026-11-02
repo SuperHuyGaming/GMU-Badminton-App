@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const Court = require('../models/Court');
 const TournamentMatch = require('../models/TournamentMatch');
 const bwfRules = require('../utils/bwfRules');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const User = require('../models/User');
 
 const RAC_COORDINATES = { latitude: 38.8315, longitude: -77.3075 };
@@ -242,7 +242,7 @@ router.get('/', async (req, res) => {
  * POST /api/courts/initialize
  * Ensures all RAC Courts 1 to 6 exist in database.
  */
-router.post('/initialize', async (req, res) => {
+router.post('/initialize', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const courts = await ensureRACCourtsInitialized();
         return res.status(200).json({
@@ -326,7 +326,7 @@ router.get('/deadlocks', async (req, res) => {
  * POST /api/courts/rebalance-queues
  * Shifts queued matches from congested or stalled courts to available RAC courts.
  */
-router.post('/rebalance-queues', async (req, res) => {
+router.post('/rebalance-queues', authMiddleware, adminMiddleware, async (req, res) => {
     try {
         const courts = await Court.find({ courtNumber: { $gte: 1, $lte: 6 } }).sort({ courtNumber: 1 });
         const availableCourts = courts.filter(c => c.status === 'AVAILABLE' && (!c.queue || c.queue.length === 0));
@@ -670,7 +670,7 @@ router.get('/:courtNumber', async (req, res) => {
  * POST /api/courts/:courtNumber/assign
  * Assigns a match to a court, switches court status to WARMUP, and emits courtStatusUpdate.
  */
-router.post('/:courtNumber/assign', async (req, res) => {
+router.post('/:courtNumber/assign', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
@@ -754,7 +754,7 @@ router.post('/:courtNumber/assign', async (req, res) => {
  * Awards point to team1 or team2, calculates BWF score and serving court,
  * updates pointHistory, and emits liveScoreUpdate and courtStatusUpdate.
  */
-router.post('/:courtNumber/score/point', async (req, res) => {
+router.post('/:courtNumber/score/point', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
@@ -885,7 +885,7 @@ router.post('/:courtNumber/score/point', async (req, res) => {
  * POST /api/courts/:courtNumber/score/undo
  * Reverts the last scored point from history and emits real-time updates.
  */
-router.post('/:courtNumber/score/undo', async (req, res) => {
+router.post('/:courtNumber/score/undo', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
@@ -974,7 +974,7 @@ router.post('/:courtNumber/score/undo', async (req, res) => {
  * POST /api/courts/:courtNumber/status
  * Updates court status (AVAILABLE, WARMUP, MATCH_IN_PROGRESS, MAINTENANCE) and emits courtStatusUpdate.
  */
-router.post('/:courtNumber/status', async (req, res) => {
+router.post('/:courtNumber/status', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
@@ -1031,7 +1031,7 @@ router.post('/:courtNumber/status', async (req, res) => {
  * POST /api/courts/:courtNumber/queue
  * Adds a match to the court waiting queue.
  */
-router.post('/:courtNumber/queue', async (req, res) => {
+router.post('/:courtNumber/queue', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         const { matchId } = req.body;
@@ -1066,7 +1066,7 @@ router.post('/:courtNumber/queue', async (req, res) => {
  * POST /api/courts/:courtNumber/walkover/start
  * Starts a 10-minute forfeit countdown timer for an un-reported team/player.
  */
-router.post('/:courtNumber/walkover/start', async (req, res) => {
+router.post('/:courtNumber/walkover/start', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         if (isNaN(courtNumber) || courtNumber < 1 || courtNumber > 6) {
@@ -1117,7 +1117,7 @@ router.post('/:courtNumber/walkover/start', async (req, res) => {
  * POST /api/courts/:courtNumber/walkover/cancel
  * Cancels an active walkover forfeit timer.
  */
-router.post('/:courtNumber/walkover/cancel', async (req, res) => {
+router.post('/:courtNumber/walkover/cancel', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         const court = await Court.findOne({ courtNumber });
@@ -1155,7 +1155,7 @@ router.post('/:courtNumber/walkover/cancel', async (req, res) => {
  * POST /api/courts/:courtNumber/walkover/forfeit
  * Finalizes walkover forfeiture: awards victory to opponent, closes match, and auto-advances the court.
  */
-router.post('/:courtNumber/walkover/forfeit', async (req, res) => {
+router.post('/:courtNumber/walkover/forfeit', authMiddleware, async (req, res) => {
     try {
         const courtNumber = parseInt(req.params.courtNumber, 10);
         const court = await Court.findOne({ courtNumber });

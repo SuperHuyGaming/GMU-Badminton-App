@@ -1013,7 +1013,7 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 		res.status(201).json(hydratedPost);
 	} catch (error) {
 		console.error("Error creating post:", error);
-		res.status(500).json({ message: "Error creating post", error: error.message });
+		res.status(500).json({ message: "Error creating post" });
 	}
 });
 
@@ -2153,7 +2153,7 @@ router.put("/:postId/like", authMiddleware, async (req, res) => {
 		res.json(hydratedPost);
 	} catch (error) {
 		console.error("Error toggling like:", error);
-		res.status(500).json({ message: "Error toggling like", error: error.message });
+		res.status(500).json({ message: "Error toggling like" });
 	}
 });
 
@@ -2324,7 +2324,7 @@ const REACTION_TYPE_TO_EMOJI = {
 
 const ALLOWED_EMOJIS = [
 	"👍", "❤️", "🏸", "😮", "😂", "😢", "💥", "🧊", "⚡",
-	"🔥", "💯", "👏", "😡"
+	"🔥", "💯", "👏", "😡", "🎉"
 ];
 
 const ALLOWED_REACTION_TYPES = new Set([
@@ -2491,7 +2491,7 @@ const handleReactionRoute = async (req, res) => {
 		res.json(responseData);
 	} catch (error) {
 		console.error("Error handling reaction:", error);
-		res.status(500).json({ message: "Error updating reaction.", error: error.message });
+		res.status(500).json({ message: "Error updating reaction." });
 	}
 };
 
@@ -3014,7 +3014,7 @@ const handleCommentReaction = async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Error handling comment reaction:", error);
-		return res.status(500).json({ message: "Error updating comment reaction.", error: error.message });
+		return res.status(500).json({ message: "Error updating comment reaction." });
 	}
 };
 
