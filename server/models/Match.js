@@ -71,6 +71,12 @@ const matchSchema = new mongoose.Schema({
 	date: { type: Date, default: Date.now }
 });
 
+// At most one Match per community challenge post (guards against double-accept races)
+matchSchema.index(
+	{ communityPostId: 1 },
+	{ unique: true, partialFilterExpression: { communityPostId: { $type: "objectId" } } }
+);
+
 matchSchema.pre('validate', function(next) {
 	if (!this.type && this.matchType) {
 		const mt = String(this.matchType).toLowerCase();

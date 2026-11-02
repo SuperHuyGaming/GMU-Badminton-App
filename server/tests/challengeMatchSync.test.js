@@ -5,7 +5,12 @@ const mongoose = require('mongoose');
 
 const forumRoutes = require('../routes/forum');
 const Post = require('../models/Post');
+const { installPostStore, resetPostStore } = require('./helpers/inMemoryPostStore');
 const Match = require('../models/Match');
+
+afterEach(() => resetPostStore(Post));
+// Scheduled matches are persisted without a live DB: resolve save() with the document itself
+jest.spyOn(Match.prototype, 'save').mockImplementation(function () { return Promise.resolve(this); });
 const User = require('../models/User');
 const { sendPushToUser } = require('../utils/pushNotifications');
 
@@ -140,7 +145,7 @@ describe('Challenge Match Acceptance & Downstream Match Creation Suite', () => {
 				}
 			};
 
-			Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+			installPostStore(Post, mockPost);
 
 			const res = await request(app)
 				.put(`/api/forum/${postId}/accept-challenge`)
@@ -170,7 +175,7 @@ describe('Challenge Match Acceptance & Downstream Match Creation Suite', () => {
 				toObject: function () { return { ...this }; }
 			};
 
-			Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+			installPostStore(Post, mockPost);
 
 			const res = await request(app)
 				.put(`/api/forum/${postId}/accept-challenge`)
@@ -183,7 +188,7 @@ describe('Challenge Match Acceptance & Downstream Match Creation Suite', () => {
 			expect(mockPost.challengeMatch.acceptedBy[0].userId).toBe(opponentId);
 			expect(mockPost.challengeMatch.linkedMatchId).toBeDefined();
 			expect(mockPost.challengeMatch.linkedMatchId).not.toBe('');
-			expect(mockPost.save).toHaveBeenCalled();
+			expect(Post.findOneAndUpdate).toHaveBeenCalled();
 
 			// Verify push notification to challenger
 			expect(sendPushToUser).toHaveBeenCalledWith(
@@ -224,7 +229,7 @@ describe('Challenge Match Acceptance & Downstream Match Creation Suite', () => {
 				}
 			};
 
-			Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+			installPostStore(Post, mockPost);
 
 			const res = await request(app)
 				.put(`/api/forum/${postId}/accept-challenge`)

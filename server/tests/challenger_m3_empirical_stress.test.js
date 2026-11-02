@@ -12,6 +12,11 @@ const TournamentMatch = require("../models/TournamentMatch");
 const Court = require("../models/Court");
 const tournamentsRouter = require("../routes/tournaments");
 const courtRoutes = require("../routes/courts");
+// Court management routes require auth; this suite exercises engine logic as an authenticated admin.
+jest.mock("../middleware/auth", () => ({
+    authMiddleware: (req, res, next) => { req.user = req.user || { userId: "test-admin", id: "test-admin", role: "admin" }; next(); },
+    adminMiddleware: (req, res, next) => next(),
+}));
 const BracketLockCoordinator = require("../utils/bracketLockCoordinator");
 const bwfRules = require("../utils/bwfRules");
 const glicko2 = require("../utils/glicko2");

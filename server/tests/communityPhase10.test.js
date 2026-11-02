@@ -4,6 +4,12 @@ const jwt = require('jsonwebtoken');
 
 const forumRoutes = require('../routes/forum');
 const Post = require('../models/Post');
+const { installPostStore, resetPostStore } = require('./helpers/inMemoryPostStore');
+const Match = require('../models/Match');
+
+afterEach(() => resetPostStore(Post));
+// Scheduled matches are persisted without a live DB: resolve save() with the document itself
+jest.spyOn(Match.prototype, 'save').mockImplementation(function () { return Promise.resolve(this); });
 const ActivityFeed = require('../models/ActivityFeed');
 const User = require('../models/User');
 const feedCache = require('../utils/feedCache');
@@ -297,7 +303,7 @@ describe('Community Hub Phase 10: Master End-to-End Regression & Quality Gate Su
 				}
 			};
 
-			Post.findById.mockImplementation((id) => (id === validPostId ? mockPost : null));
+			installPostStore(Post, mockPost);
 			ActivityFeed.findById.mockResolvedValue(null);
 			ActivityFeed.updateOne.mockResolvedValue({ modifiedCount: 1 });
 
@@ -307,7 +313,7 @@ describe('Community Hub Phase 10: Master End-to-End Regression & Quality Gate Su
 				.send({});
 
 			expect(res.status).toBe(200);
-			expect(mockPost.save).toHaveBeenCalled();
+			expect(Post.findOneAndUpdate).toHaveBeenCalled();
 			expect(mockPost.playerMatchmaking.rsvpList).toContainEqual(
 				expect.objectContaining({ userId: regularUserId, status: 'confirmed' })
 			);
@@ -333,7 +339,7 @@ describe('Community Hub Phase 10: Master End-to-End Regression & Quality Gate Su
 				}
 			};
 
-			Post.findById.mockImplementation((id) => (id === validPostId ? mockPost : null));
+			installPostStore(Post, mockPost);
 
 			// secondUser accepts the challenge
 			const res = await request(app)
@@ -346,7 +352,7 @@ describe('Community Hub Phase 10: Master End-to-End Regression & Quality Gate Su
 			expect(mockPost.challengeMatch.acceptedBy).toContainEqual(
 				expect.objectContaining({ userId: secondUserId })
 			);
-			expect(mockPost.save).toHaveBeenCalled();
+			expect(Post.findOneAndUpdate).toHaveBeenCalled();
 		});
 	});
 

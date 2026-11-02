@@ -147,6 +147,13 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
 	const isAuthor = Boolean(localPost?.authorId && currentUserId && String(localPost.authorId) === String(currentUserId));
+	// Scheduled challenge matches appear as "Upcoming" in the participants' Dashboard match list
+	const canViewScheduledMatch = Boolean(
+		localPost?.challengeMatch?.linkedMatchId && currentUserId && (
+			isAuthor ||
+			(localPost.challengeMatch.acceptedBy || []).some(a => String(a.userId) === String(currentUserId))
+		)
+	);
 
 	const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
 	const [reportReason, setReportReason] = useState("spam_advertising");
@@ -1384,14 +1391,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												label="🏸 Scheduled Match"
 												color="primary"
 												size="small"
-												clickable={Boolean(localPost.challengeMatch?.linkedMatchId)}
+												clickable={canViewScheduledMatch}
 												onClick={(e) => {
 													e.stopPropagation();
-													if (localPost.challengeMatch?.linkedMatchId) {
-														navigate(`/tournaments?matchId=${localPost.challengeMatch.linkedMatchId}`);
+													if (canViewScheduledMatch) {
+														navigate("/");
 													}
 												}}
-												sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22, cursor: "pointer" }}
+												sx={{ fontWeight: "bold", fontSize: "0.72rem", height: 22, cursor: canViewScheduledMatch ? "pointer" : "default" }}
 											/>
 										) : (
 											<Chip
@@ -1417,13 +1424,13 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 												? `Accepted by ${localPost.challengeMatch?.acceptedBy?.map(a => a.userName).join(', ') || 'an opponent'}`
 												: "Awaiting challenger response"}
 										</Typography>
-										{localPost.challengeMatch?.linkedMatchId && (
+										{canViewScheduledMatch && (
 											<Typography
 												variant="caption"
 												data-testid="linked-match-link"
 												onClick={(e) => {
 													e.stopPropagation();
-													navigate(`/tournaments?matchId=${localPost.challengeMatch.linkedMatchId}`);
+													navigate("/");
 												}}
 												sx={{ color: "primary.main", fontWeight: "bold", cursor: "pointer", textDecoration: "underline" }}
 											>

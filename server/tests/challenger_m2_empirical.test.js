@@ -55,6 +55,30 @@ const userBId = '660000000000000000000002';
 const tokenUserA = jwt.sign({ userId: userAId, id: userAId }, JWT_SECRET);
 const tokenUserB = jwt.sign({ userId: userBId, id: userBId }, JWT_SECRET);
 
+// In-memory emulation of the atomic $pull / $push / $set updates the
+// check-in route issues against Court.recreationalOccupancy.checkedInUsers.
+const applyOccupancyUpdate = (court, update) => {
+	if (!court.recreationalOccupancy) {
+		court.recreationalOccupancy = { isCheckedIn: false, checkedInUsers: [] };
+	}
+	const occ = court.recreationalOccupancy;
+	const pull = update.$pull && update.$pull['recreationalOccupancy.checkedInUsers'];
+	if (pull) {
+		const conds = pull.$or || [pull];
+		occ.checkedInUsers = (occ.checkedInUsers || []).filter((u) => !conds.some((c) => {
+			if (c.userId) return (u.userId?._id || u.userId)?.toString() === c.userId.toString();
+			if (c.expiresAt && c.expiresAt.$lte) return Boolean(u.expiresAt) && new Date(u.expiresAt) <= c.expiresAt.$lte;
+			return false;
+		}));
+	}
+	const push = update.$push && update.$push['recreationalOccupancy.checkedInUsers'];
+	if (push) occ.checkedInUsers = [...(occ.checkedInUsers || []), push];
+	if (update.$set && update.$set['recreationalOccupancy.isCheckedIn'] !== undefined) {
+		occ.isCheckedIn = update.$set['recreationalOccupancy.isCheckedIn'];
+	}
+	return court;
+};
+
 describe('Challenger M2 Empirical Verification Suite', () => {
 	let app;
 	let onlineUsersMap;
@@ -142,6 +166,19 @@ describe('Challenger M2 Empirical Verification Suite', () => {
 				sort: jest.fn().mockResolvedValue(result),
 				then: (resolve) => resolve(result),
 			};
+		});
+
+		const findCourt = (filter) => mockCourts.find((c) => (
+			filter._id ? c._id.toString() === filter._id.toString() : c.courtNumber === filter.courtNumber
+		));
+		Court.findOneAndUpdate = jest.fn().mockImplementation((filter, update) => {
+			const court = findCourt(filter);
+			return Promise.resolve(court ? applyOccupancyUpdate(court, update) : null);
+		});
+		Court.updateOne = jest.fn().mockImplementation((filter, update) => {
+			const court = findCourt(filter);
+			if (court) applyOccupancyUpdate(court, update);
+			return Promise.resolve({ acknowledged: true });
 		});
 
 		Court.create = jest.fn().mockImplementation((doc) => {
@@ -399,7 +436,7 @@ describe('Challenger M2 Empirical Verification Suite', () => {
 		test('Challenge 2.1: Target user in onlineUsers Map hydrates isOnline: true', async () => {
 			onlineUsersMap.set(userAId, new Set(['socket_tab_1']));
 
-			const res = await request(app).get(`/api/forum/members/${userAId}/card`);
+			const res = await request(app).get(`/api/forum/members/${userAId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.status).toBe(200);
 			expect(res.body.user).toBeDefined();
 			expect(res.body.user.isOnline).toBe(true);
@@ -408,7 +445,7 @@ describe('Challenger M2 Empirical Verification Suite', () => {
 		test('Challenge 2.2: Target user absent from onlineUsers Map hydrates isOnline: false', async () => {
 			expect(onlineUsersMap.has(userAId)).toBe(false);
 
-			const res = await request(app).get(`/api/forum/members/${userAId}/card`);
+			const res = await request(app).get(`/api/forum/members/${userAId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.status).toBe(200);
 			expect(res.body.user.isOnline).toBe(false);
 		});
@@ -416,18 +453,18 @@ describe('Challenger M2 Empirical Verification Suite', () => {
 		test('Challenge 2.3: Multi-tab presence lifecycle transitions cleanly', async () => {
 			// Tab 1 connects
 			onlineUsersMap.set(userAId, new Set(['socket_tab_1']));
-			let res = await request(app).get(`/api/forum/members/${userAId}/card`);
+			let res = await request(app).get(`/api/forum/members/${userAId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.body.user.isOnline).toBe(true);
 
 			// Tab 2 connects
 			onlineUsersMap.get(userAId).add('socket_tab_2');
-			res = await request(app).get(`/api/forum/members/${userAId}/card`);
+			res = await request(app).get(`/api/forum/members/${userAId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.body.user.isOnline).toBe(true);
 
 			// Tab 1 closes (user still online on Tab 2)
 			onlineUsersMap.get(userAId).delete('socket_tab_1');
 			expect(onlineUsersMap.get(userAId).size).toBe(1);
-			res = await request(app).get(`/api/forum/members/${userAId}/card`);
+			res = await request(app).get(`/api/forum/members/${userAId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.body.user.isOnline).toBe(true);
 
 			// Tab 2 closes (onlineUsers removes user)
@@ -436,14 +473,14 @@ describe('Challenger M2 Empirical Verification Suite', () => {
 				onlineUsersMap.delete(userAId);
 			}
 			expect(onlineUsersMap.has(userAId)).toBe(false);
-			res = await request(app).get(`/api/forum/members/${userAId}/card`);
+			res = await request(app).get(`/api/forum/members/${userAId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.body.user.isOnline).toBe(false);
 		});
 
 		test('Challenge 2.4: Missing onlineUsers map in app gracefully defaults to isOnline: false', async () => {
 			app.set('onlineUsers', undefined);
 
-			const res = await request(app).get(`/api/forum/members/${userAId}/card`);
+			const res = await request(app).get(`/api/forum/members/${userAId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.status).toBe(200);
 			expect(res.body.user.isOnline).toBe(false);
 		});
@@ -458,7 +495,7 @@ describe('Challenger M2 Empirical Verification Suite', () => {
 			};
 			onlineUsersMap.set(tuPhamId, new Set(['socket_active']));
 
-			const res = await request(app).get(`/api/forum/members/${tuPhamId}/card`);
+			const res = await request(app).get(`/api/forum/members/${tuPhamId}/card`).set('Authorization', `Bearer ${tokenUserB}`);
 			expect(res.status).toBe(404);
 			expect(res.body.message).toMatch(/member not found/i);
 		});

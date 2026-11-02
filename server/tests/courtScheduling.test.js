@@ -6,6 +6,12 @@ const courtRoutes = require('../routes/courts');
 const Court = require('../models/Court');
 const TournamentMatch = require('../models/TournamentMatch');
 
+// Court management routes require auth; these suites exercise engine logic as an authenticated admin.
+jest.mock('../middleware/auth', () => ({
+    authMiddleware: (req, res, next) => { req.user = req.user || { userId: 'test-admin', id: 'test-admin', role: 'admin' }; next(); },
+    adminMiddleware: (req, res, next) => next(),
+}));
+
 describe("R3 Backend: Court Scheduling Engine & Umpire Digital Pad Suite", () => {
     let app;
     let mockIo;

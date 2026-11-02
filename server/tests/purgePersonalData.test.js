@@ -38,18 +38,11 @@ describe('Personal Data Purge & Member Exclusion Defense-in-Depth Suite', () => 
 	});
 
 	describe('1. Member Search API Defense-in-Depth (GET /api/forum/members)', () => {
-		it('applies $nor exclusion filter for target personal records', async () => {
-			const mockUsers = [
-				{ _id: new mongoose.Types.ObjectId(), name: 'Alex Chen', role: 'user', skillLevel: 'Intermediate', badges: [] },
-				{ _id: new mongoose.Types.ObjectId(), name: 'Tu Pham', role: 'user', skillLevel: 'Advanced', badges: [] },
-				{ _id: new mongoose.Types.ObjectId(), name: 'Nhat Quang', role: 'user', skillLevel: 'Beginner', badges: [] },
-				{ _id: new mongoose.Types.ObjectId(), name: 'David Kim', role: 'user', skillLevel: 'Intermediate', badges: [] },
-			];
-
+		it('applies $nor exclusion filter for target personal records in the database query', async () => {
 			User.find.mockReturnValue({
 				select: jest.fn().mockReturnValue({
 					limit: jest.fn().mockReturnValue({
-						lean: jest.fn().mockResolvedValue(mockUsers),
+						lean: jest.fn().mockResolvedValue([]),
 					}),
 				}),
 			});
@@ -58,42 +51,33 @@ describe('Personal Data Purge & Member Exclusion Defense-in-Depth Suite', () => 
 			expect(res.status).toBe(200);
 			expect(res.body.users).toBeDefined();
 
-			// Confirm $nor filter was passed to User.find
 			const findCall = User.find.mock.calls[0][0];
-			expect(findCall.$nor).toBeDefined();
 			expect(findCall.$nor).toEqual([
 				{ name: /tu\s+pham/i },
 				{ name: /nhat\s+quang/i },
 			]);
-
-			// Confirm in-memory defense-in-depth filter completely stripped target names
-			const returnedNames = res.body.users.map((u) => u.name);
-			expect(returnedNames).toContain('Alex Chen');
-			expect(returnedNames).toContain('David Kim');
-			expect(returnedNames).not.toContain('Tu Pham');
-			expect(returnedNames).not.toContain('Nhat Quang');
-			expect(res.body.users.length).toBe(2);
+			expect(findCall.hideFromSearch).toEqual({ $ne: true });
 		});
 
-		it('strips case-insensitive variations and extra whitespace of target names', async () => {
-			const mockUsersWithVariations = [
-				{ _id: new mongoose.Types.ObjectId(), name: 'tu   pham', role: 'user', skillLevel: 'Intermediate', badges: [] },
-				{ _id: new mongoose.Types.ObjectId(), name: 'NHAT   QUANG', role: 'user', skillLevel: 'Intermediate', badges: [] },
-				{ _id: new mongoose.Types.ObjectId(), name: 'Sarah Connor', role: 'user', skillLevel: 'Advanced', badges: [] },
-			];
-
+		it('returns a full page of results (no post-limit filtering shortens the page)', async () => {
+			const mockUsers = Array.from({ length: 3 }, (_, i) => ({
+				_id: new mongoose.Types.ObjectId(),
+				name: `Member ${i}`,
+				role: 'user',
+				skillLevel: 'Intermediate',
+				badges: [],
+			}));
+			const limitMock = jest.fn().mockReturnValue({
+				lean: jest.fn().mockResolvedValue(mockUsers),
+			});
 			User.find.mockReturnValue({
-				select: jest.fn().mockReturnValue({
-					limit: jest.fn().mockReturnValue({
-						lean: jest.fn().mockResolvedValue(mockUsersWithVariations),
-					}),
-				}),
+				select: jest.fn().mockReturnValue({ limit: limitMock }),
 			});
 
-			const res = await request(app).get('/api/forum/members');
+			const res = await request(app).get('/api/forum/members?limit=3');
 			expect(res.status).toBe(200);
-			expect(res.body.users).toHaveLength(1);
-			expect(res.body.users[0].name).toBe('Sarah Connor');
+			expect(limitMock).toHaveBeenCalledWith(3);
+			expect(res.body.users).toHaveLength(3);
 		});
 	});
 
@@ -109,6 +93,17 @@ describe('Personal Data Purge & Member Exclusion Defense-in-Depth Suite', () => 
 			expect(summary.isDryRun).toBe(true);
 			expect(summary.success).toBe(false);
 			expect(summary.error).toBeDefined();
+		}, 10000);
+
+		it('defaults to a dry run unless --confirm is passed', async () => {
+			expect(process.argv).not.toContain('--confirm');
+			const summary = await runPurge({
+				mongoUri: 'mongodb://127.0.0.1:29999/non_existent_db_for_test',
+				timeoutMs: 1000,
+			});
+
+			expect(summary.isDryRun).toBe(true);
+			expect(summary.usersDeleted).toBe(0);
 		}, 10000);
 	});
 });

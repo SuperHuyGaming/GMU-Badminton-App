@@ -5,6 +5,12 @@ const mongoose = require('mongoose');
 
 const forumRoutes = require('../routes/forum');
 const Post = require('../models/Post');
+const { installPostStore, resetPostStore } = require('./helpers/inMemoryPostStore');
+const Match = require('../models/Match');
+
+afterEach(() => resetPostStore(Post));
+// Scheduled matches are persisted without a live DB: resolve save() with the document itself
+jest.spyOn(Match.prototype, 'save').mockImplementation(function () { return Promise.resolve(this); });
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 
@@ -151,7 +157,7 @@ describe('Phase 2: Specialized Post Workflows (Matchmaking, Challenges, Q&A, Gea
 				save: jest.fn().mockResolvedValue(),
 				toObject: function () { return { ...this }; }
 			};
-			Post.findById.mockResolvedValue(postInstance);
+			installPostStore(Post, postInstance);
 
 			const res = await request(app)
 				.post(`/api/forum/${postId}/rsvp`)
@@ -159,7 +165,7 @@ describe('Phase 2: Specialized Post Workflows (Matchmaking, Challenges, Q&A, Gea
 				.send();
 
 			expect(res.status).toBe(200);
-			expect(postInstance.save).toHaveBeenCalled();
+			expect(Post.findOneAndUpdate).toHaveBeenCalled();
 			expect(postInstance.playerMatchmaking.rsvpList).toHaveLength(1);
 			expect(postInstance.playerMatchmaking.rsvpList[0].userId).toBe(playerId);
 			expect(postInstance.playerMatchmaking.rsvpList[0].status).toBe('confirmed');
@@ -181,7 +187,7 @@ describe('Phase 2: Specialized Post Workflows (Matchmaking, Challenges, Q&A, Gea
 				save: jest.fn().mockResolvedValue(),
 				toObject: function () { return { ...this }; }
 			};
-			Post.findById.mockResolvedValue(postInstance);
+			installPostStore(Post, postInstance);
 
 			const res = await request(app)
 				.post(`/api/forum/${postId}/rsvp`)
@@ -240,7 +246,7 @@ describe('Phase 2: Specialized Post Workflows (Matchmaking, Challenges, Q&A, Gea
 				save: jest.fn().mockResolvedValue(),
 				toObject: function () { return { ...this }; }
 			};
-			Post.findById.mockResolvedValue(postInstance);
+			installPostStore(Post, postInstance);
 
 			const res = await request(app)
 				.put(`/api/forum/${postId}/accept-challenge`)
@@ -261,7 +267,7 @@ describe('Phase 2: Specialized Post Workflows (Matchmaking, Challenges, Q&A, Gea
 				category: 'challenge_match',
 				challengeMatch: { matchStatus: 'open', acceptedBy: [] }
 			};
-			Post.findById.mockResolvedValue(postInstance);
+			installPostStore(Post, postInstance);
 
 			const res = await request(app)
 				.put(`/api/forum/${postId}/accept-challenge`)

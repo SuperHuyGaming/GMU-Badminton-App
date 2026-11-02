@@ -2,11 +2,14 @@
 /**
  * server/scripts/purgePersonalData.js
  *
- * Standalone, idempotent Node script to completely purge target personal names
- * ("Tu Pham" and "Nhat Quang") and all associated records from MongoDB.
+ * Standalone, idempotent Node script to purge the accounts of target personal
+ * names ("Tu Pham" and "Nhat Quang") and the records they own from MongoDB.
+ *
+ * Runs as a DRY RUN by default. Nothing is written unless --confirm is passed.
  *
  * Usage:
- *   node server/scripts/purgePersonalData.js [--dry-run]
+ *   node server/scripts/purgePersonalData.js            # dry run (report only)
+ *   node server/scripts/purgePersonalData.js --confirm  # live purge
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
@@ -19,17 +22,32 @@ const TARGET_REGEXES = [
 	/quang\s+nhat/i,
 ];
 
+// Fields that tie a document in an arbitrary collection to its owning user.
+const OWNER_FIELDS = [
+	'userId',
+	'authorId',
+	'sender',
+	'senderId',
+	'recipient',
+	'recipientId',
+	'receiverId',
+	'actorId',
+	'ownerId',
+	'createdBy',
+	'user',
+];
+
 const DEFAULT_MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/gmu_social_db';
 
 /**
  * Execute purge across MongoDB collections.
  * @param {Object} options
- * @param {boolean} [options.isDryRun]
+ * @param {boolean} [options.isDryRun] Defaults to true unless --confirm is passed on the CLI.
  * @param {string} [options.mongoUri]
  * @returns {Promise<Object>} Summary of purge operations
  */
 async function runPurge(options = {}) {
-	const isDryRun = options.isDryRun !== undefined ? options.isDryRun : process.argv.includes('--dry-run');
+	const isDryRun = options.isDryRun !== undefined ? options.isDryRun : !process.argv.includes('--confirm');
 	const mongoUri = options.mongoUri || DEFAULT_MONGO_URI;
 	const timeoutMs = options.timeoutMs || 2500;
 
@@ -51,7 +69,7 @@ async function runPurge(options = {}) {
 	};
 
 	console.log('====================================================');
-	console.log(`🛡️  Target Personal Data Purge Script ${isDryRun ? '[DRY RUN]' : '[LIVE PURGE]'}`);
+	console.log(`🛡️  Target Personal Data Purge Script ${isDryRun ? '[DRY RUN - pass --confirm to write]' : '[LIVE PURGE]'}`);
 	console.log(`   Connecting to: ${mongoUri.replace(/:([^:@]+)@/, ':****@')}`);
 	console.log('====================================================');
 
@@ -63,16 +81,12 @@ async function runPurge(options = {}) {
 
 		const db = mongoose.connection.db;
 
-		// 1. Find matching users in User collection
-		const User = mongoose.model('UserPurge', new mongoose.Schema({}, { strict: false }), 'users');
+		// 1. Find matching users in User collection (identity fields only)
+		const User = mongoose.models.UserPurge || mongoose.model('UserPurge', new mongoose.Schema({}, { strict: false }), 'users');
 		const userQuery = {
 			$or: TARGET_REGEXES.flatMap((regex) => [
 				{ name: regex },
-				{ firstName: regex },
-				{ lastName: regex },
 				{ email: regex },
-				{ bio: regex },
-				{ username: regex },
 			]),
 		};
 
@@ -80,37 +94,20 @@ async function runPurge(options = {}) {
 		summary.usersFound = matchingUsers.length;
 		const matchingUserIds = matchingUsers.map((u) => u._id);
 		const matchingUserIdStrings = matchingUserIds.map((id) => id.toString());
+		const ownedByTarget = { $in: [...matchingUserIds, ...matchingUserIdStrings] };
 
 		console.log(`🔍 [Users] Found ${matchingUsers.length} user record(s) matching target names:`);
 		matchingUsers.forEach((u) => console.log(`   - ID: ${u._id} | Name: "${u.name}" | Email: "${u.email}"`));
 
-		if (!isDryRun && matchingUsers.length > 0) {
-			const delUsers = await User.deleteMany({ _id: { $in: matchingUserIds } });
-			summary.usersDeleted = delUsers.deletedCount;
-			console.log(`   🗑️  Deleted ${delUsers.deletedCount} user document(s).`);
-
-			const friendUpdate = await User.updateMany(
-				{},
-				{
-					$pull: {
-						friends: { $in: matchingUserIds },
-						friendRequests: { $in: matchingUserIds },
-						sentFriendRequests: { $in: matchingUserIds },
-					},
-				}
-			);
-			summary.friendReferencesCleaned = friendUpdate.modifiedCount;
-			console.log(`   🔄 Cleaned friend references across ${friendUpdate.modifiedCount} user(s).`);
+		if (matchingUsers.length === 0) {
+			summary.success = true;
+			console.log('\nNothing to purge.');
+			return summary;
 		}
 
 		// 2. Cascade cleanup in Posts
-		const Post = mongoose.model('PostPurge', new mongoose.Schema({}, { strict: false }), 'posts');
-		const postAuthorQuery = {
-			$or: [
-				{ authorId: { $in: [...matchingUserIds, ...matchingUserIdStrings] } },
-				...TARGET_REGEXES.map((regex) => ({ authorName: regex })),
-			],
-		};
+		const Post = mongoose.models.PostPurge || mongoose.model('PostPurge', new mongoose.Schema({}, { strict: false }), 'posts');
+		const postAuthorQuery = { authorId: ownedByTarget };
 
 		const matchingPosts = await Post.find(postAuthorQuery).lean();
 		summary.postsFound = matchingPosts.length;
@@ -126,15 +123,8 @@ async function runPurge(options = {}) {
 				{},
 				{
 					$pull: {
-						comments: {
-							$or: [
-								{ authorId: { $in: [...matchingUserIds, ...matchingUserIdStrings] } },
-								...TARGET_REGEXES.map((regex) => ({ authorName: regex })),
-							],
-						},
-						'playerMatchmaking.rsvpList': {
-							userId: { $in: [...matchingUserIds, ...matchingUserIdStrings] },
-						},
+						comments: { authorId: ownedByTarget },
+						'playerMatchmaking.rsvpList': { userId: ownedByTarget },
 					},
 				}
 			);
@@ -143,13 +133,12 @@ async function runPurge(options = {}) {
 		}
 
 		// 3. Cascade cleanup in ActivityFeed
-		const ActivityFeed = mongoose.model('ActivityFeedPurge', new mongoose.Schema({}, { strict: false }), 'activityfeeds');
+		const ActivityFeed = mongoose.models.ActivityFeedPurge || mongoose.model('ActivityFeedPurge', new mongoose.Schema({}, { strict: false }), 'activityfeeds');
 		const feedQuery = {
 			$or: [
-				{ authorId: { $in: [...matchingUserIds, ...matchingUserIdStrings] } },
-				...TARGET_REGEXES.map((regex) => ({ authorName: regex })),
-				...TARGET_REGEXES.map((regex) => ({ actorName: regex })),
-				...TARGET_REGEXES.map((regex) => ({ targetName: regex })),
+				{ authorId: ownedByTarget },
+				{ actorId: ownedByTarget },
+				{ userId: ownedByTarget },
 			],
 		};
 		const matchingFeeds = await ActivityFeed.find(feedQuery).lean();
@@ -162,11 +151,11 @@ async function runPurge(options = {}) {
 		}
 
 		// 4. Cascade cleanup in Messages
-		const Message = mongoose.model('MessagePurge', new mongoose.Schema({}, { strict: false }), 'messages');
+		const Message = mongoose.models.MessagePurge || mongoose.model('MessagePurge', new mongoose.Schema({}, { strict: false }), 'messages');
 		const msgQuery = {
 			$or: [
-				{ senderId: { $in: [...matchingUserIds, ...matchingUserIdStrings] } },
-				{ receiverId: { $in: [...matchingUserIds, ...matchingUserIdStrings] } },
+				{ senderId: ownedByTarget },
+				{ receiverId: ownedByTarget },
 			],
 		};
 		const matchingMsgs = await Message.find(msgQuery).lean();
@@ -188,15 +177,10 @@ async function runPurge(options = {}) {
 			summary.otherCollectionsScanned++;
 
 			const rawCol = db.collection(col.name);
+			// Only documents owned by / belonging to the target accounts; never
+			// delete a document merely because its text mentions a name.
 			const rawQuery = {
-				$or: TARGET_REGEXES.flatMap((regex) => [
-					{ name: regex },
-					{ authorName: regex },
-					{ userName: regex },
-					{ email: regex },
-					{ content: regex },
-					{ title: regex },
-				]),
+				$or: OWNER_FIELDS.map((field) => ({ [field]: ownedByTarget })),
 			};
 
 			const count = await rawCol.countDocuments(rawQuery);
@@ -210,14 +194,33 @@ async function runPurge(options = {}) {
 			}
 		}
 
+		// 6. Users last, so a re-run after a partial failure still finds the IDs above
+		if (!isDryRun) {
+			const friendUpdate = await User.updateMany(
+				{},
+				{
+					$pull: {
+						friends: { $in: matchingUserIds },
+						friendRequests: { $in: matchingUserIds },
+						sentFriendRequests: { $in: matchingUserIds },
+					},
+				}
+			);
+			summary.friendReferencesCleaned = friendUpdate.modifiedCount;
+			console.log(`\n   🔄 Cleaned friend references across ${friendUpdate.modifiedCount} user(s).`);
+
+			const delUsers = await User.deleteMany({ _id: { $in: matchingUserIds } });
+			summary.usersDeleted = delUsers.deletedCount;
+			console.log(`   🗑️  Deleted ${delUsers.deletedCount} user document(s).`);
+		}
+
 		summary.success = true;
 		console.log('\n====================================================');
 		console.log('🎉 Target Personal Data Purge Completed Successfully!');
 		console.log('====================================================');
 		return summary;
 	} catch (err) {
-		console.warn(`⚠️ Purge script notice: Could not connect to MongoDB at ${mongoUri}: ${err.message}`);
-		console.warn('   (If running in a local environment without active MongoDB service, in-app filter guards in server/routes/forum.js maintain 100% data privacy).');
+		console.error(`❌ Purge failed: ${err.message}`);
 		summary.error = err.message;
 		return summary;
 	} finally {
@@ -229,8 +232,8 @@ async function runPurge(options = {}) {
 }
 
 if (require.main === module) {
-	runPurge().then(() => {
-		process.exit(0);
+	runPurge().then((summary) => {
+		process.exit(summary.success ? 0 : 1);
 	}).catch((err) => {
 		console.error('Fatal execution error:', err);
 		process.exit(1);

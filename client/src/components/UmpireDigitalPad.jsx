@@ -14,6 +14,7 @@ import WifiIcon from '@mui/icons-material/Wifi';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
 import SyncIcon from '@mui/icons-material/Sync';
 import TimerIcon from '@mui/icons-material/Timer';
+import apiFetch from '../utils/api';
 import socket from '../utils/socket';
 import offlineScoreLedger from '../utils/offlineScoreLedger';
 import {
@@ -93,10 +94,9 @@ export default function UmpireDigitalPad({
 
             for (const mutation of pending) {
                 try {
-                    if (typeof fetch !== 'undefined') {
-                        await fetch(`/api/courts/${courtNumber}/score/point`, {
+                    {
+                        await apiFetch(`/api/courts/${courtNumber}/score/point`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 scoringTeam: mutation.payload?.team === 1 ? 'team1' : 'team2',
                                 idempotencyKey: mutation.idempotencyKey

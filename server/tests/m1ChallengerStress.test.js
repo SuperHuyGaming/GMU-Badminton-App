@@ -2,6 +2,12 @@ const request = require('supertest');
 const express = require('express');
 const mongoose = require('mongoose');
 
+// Court management routes require auth; these suites exercise engine logic as an authenticated admin.
+jest.mock('../middleware/auth', () => ({
+    authMiddleware: (req, res, next) => { req.user = req.user || { userId: 'test-admin', id: 'test-admin', role: 'admin' }; next(); },
+    adminMiddleware: (req, res, next) => next(),
+}));
+
 jest.mock('../utils/redis', () => ({
     keys: jest.fn().mockResolvedValue(['tournaments:cache_1', 'tournaments:cache_2']),
     del: jest.fn().mockResolvedValue(2),

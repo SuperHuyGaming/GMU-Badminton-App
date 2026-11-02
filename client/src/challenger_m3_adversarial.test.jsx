@@ -139,10 +139,9 @@ describe('CHALLENGER EMPIRICAL ADVERSARIAL STRESS SUITE (M3)', () => {
 
             await offlineScoreLedger.clearMutations(2);
 
-            // Mock fetch to simulate flaky network: fail first 2 requests, succeed next 3
+            // Mock the authenticated API client to simulate flaky network: fail first 2 requests, succeed next 3
             let fetchCallCount = 0;
-            const originalFetch = globalThis.fetch;
-            globalThis.fetch = vi.fn().mockImplementation(() => {
+            apiFetch.mockImplementation(() => {
                 fetchCallCount++;
                 if (fetchCallCount <= 2) {
                     return Promise.reject(new Error("Flaky Wi-Fi drop: ECONNRESET"));
@@ -179,10 +178,12 @@ describe('CHALLENGER EMPIRICAL ADVERSARIAL STRESS SUITE (M3)', () => {
             });
 
             await waitFor(() => {
-                expect(globalThis.fetch).toHaveBeenCalled();
+                expect(apiFetch).toHaveBeenCalledWith(
+                    '/api/courts/2/score/point',
+                    expect.objectContaining({ method: 'POST' })
+                );
             });
 
-            globalThis.fetch = originalFetch;
             Object.defineProperty(navigator, 'onLine', { value: originalOnLine, configurable: true, writable: true });
         });
 

@@ -31,7 +31,22 @@ export const useNotifications = () => {
 
 		let isCancelled = false;
 
-		socket.emit("joinUserRoom", userId);
+		// Join the private room with the current access token; rejoin after reconnects (rooms are
+		// dropped server-side) and retry once if the token was rejected (apiFetch may have refreshed it).
+		const joinRoom = () => {
+			const freshToken = localStorage.getItem("accessToken") || localStorage.getItem("token");
+			if (freshToken) socket.emit("joinUserRoom", { userId, token: freshToken });
+		};
+		let joinRetryTimer = null;
+		let joinRetried = false;
+		const handleJoinError = () => {
+			if (joinRetried || isCancelled) return;
+			joinRetried = true;
+			joinRetryTimer = setTimeout(joinRoom, 3000);
+		};
+		joinRoom();
+		socket.on("connect", joinRoom);
+		socket.on("joinUserRoomError", handleJoinError);
 		setLoading(true);
 
 		const fetchUnread = () => {
@@ -128,6 +143,9 @@ export const useNotifications = () => {
 		
 		return () => {
 			isCancelled = true;
+			clearTimeout(joinRetryTimer);
+			socket.off("connect", joinRoom);
+			socket.off("joinUserRoomError", handleJoinError);
 			socket.off("newNotification", handleNewNotification);
 			socket.off("notificationsMarkedRead", handleNotificationsMarkedRead);
 			socket.off("notificationsCleared", handleNotificationsCleared);

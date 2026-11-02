@@ -13,6 +13,18 @@ if (publicVapidKey && privateVapidKey) {
 }
 
 /**
+ * Atomically removes expired subscriptions by endpoint. Uses $pull instead of
+ * a whole-document save so concurrent profile/subscription writes are not lost.
+ */
+async function pruneDeadSubscriptions(userId, deadEndpoints) {
+    if (!userId || !Array.isArray(deadEndpoints) || deadEndpoints.length === 0) return;
+    await User.updateOne(
+        { _id: userId },
+        { $pull: { pushSubscriptions: { endpoint: { $in: deadEndpoints } } } }
+    );
+}
+
+/**
  * Sends a push notification to all users who have active push subscriptions
  * @param {string} title 
  * @param {string} body 
@@ -30,28 +42,24 @@ async function sendPushToAllUsers(title, body, url = "/") {
 
         let sendCount = 0;
         for (const user of users) {
-            const validSubscriptions = [];
+            const deadEndpoints = [];
             for (const sub of user.pushSubscriptions) {
                 try {
                     await webpush.sendNotification(sub, payload);
-                    validSubscriptions.push(sub);
                     sendCount++;
                 } catch (err) {
                     if (err.statusCode === 404 || err.statusCode === 410) {
                         // Subscription has expired or is no longer valid
                         console.log(`[Push] Removing expired subscription for user ${user._id}`);
+                        if (sub?.endpoint) deadEndpoints.push(sub.endpoint);
                     } else {
                         console.error("[Push] Failed to send to a subscription:", err.message);
-                        validSubscriptions.push(sub); // Keep it if it wasn't a 404/410
                     }
                 }
             }
-            
-            // Clean up invalid subscriptions
-            if (validSubscriptions.length !== user.pushSubscriptions.length) {
-                user.pushSubscriptions = validSubscriptions;
-                await user.save();
-            }
+
+            // Clean up invalid subscriptions atomically
+            await pruneDeadSubscriptions(user._id, deadEndpoints);
         }
         console.log(`[Push] Successfully sent ${sendCount} notifications to all users.`);
     } catch (err) {
@@ -114,26 +122,22 @@ async function sendPushToUser(userId, payload, bodyArg, urlArg = "/") {
         }
 
         let sentCount = 0;
-        const validSubscriptions = [];
+        const deadEndpoints = [];
         for (const sub of user.pushSubscriptions) {
             try {
                 await webpush.sendNotification(sub, stringPayload);
-                validSubscriptions.push(sub);
                 sentCount++;
             } catch (err) {
                 if (err.statusCode === 404 || err.statusCode === 410) {
                     console.log(`[Push] Removing expired subscription for user ${normalizedUserId}`);
+                    if (sub?.endpoint) deadEndpoints.push(sub.endpoint);
                 } else {
                     console.error("[Push] Failed to deliver push to subscription:", err.message);
-                    validSubscriptions.push(sub);
                 }
             }
         }
 
-        if (validSubscriptions.length !== user.pushSubscriptions.length) {
-            user.pushSubscriptions = validSubscriptions;
-            await user.save();
-        }
+        await pruneDeadSubscriptions(user._id || normalizedUserId, deadEndpoints);
 
         return { success: sentCount > 0, sentCount };
     } catch (err) {

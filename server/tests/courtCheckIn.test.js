@@ -142,9 +142,19 @@ describe('RAC Physical Court Check-in API Suite', () => {
 				},
 				save: jest.fn().mockResolvedValue(true)
 			};
+			const updatedCourt1 = {
+				courtNumber: 1,
+				recreationalOccupancy: {
+					isCheckedIn: true,
+					checkedInUsers: [{ userId: testUserId, userName: 'Court Tester' }]
+				}
+			};
 
 			Court.findOne = jest.fn().mockResolvedValue(mockCourt1);
 			Court.find = jest.fn().mockResolvedValue([]);
+			Court.findOneAndUpdate = jest.fn()
+				.mockResolvedValueOnce(mockCourt1)
+				.mockResolvedValueOnce(updatedCourt1);
 
 			// Coordinates exactly at RAC: 38.8315, -77.3075
 			const res = await request(app)
@@ -156,8 +166,16 @@ describe('RAC Physical Court Check-in API Suite', () => {
 			expect(res.body.success).toBe(true);
 			expect(res.body.courtNumber).toBe(1);
 			expect(res.body.checkIn.expiresAt).toBeDefined();
-			expect(mockCourt1.recreationalOccupancy.isCheckedIn).toBe(true);
-			expect(mockCourt1.recreationalOccupancy.checkedInUsers).toHaveLength(1);
+			// Whole-array read-modify-save is never used for the court document
+			expect(mockCourt1.save).not.toHaveBeenCalled();
+			expect(Court.findOneAndUpdate).toHaveBeenCalledTimes(2);
+			const [pullFilter, pullUpdate] = Court.findOneAndUpdate.mock.calls[0];
+			expect(pullFilter).toEqual({ courtNumber: 1 });
+			expect(pullUpdate.$pull['recreationalOccupancy.checkedInUsers']).toBeDefined();
+			const [pushFilter, pushUpdate] = Court.findOneAndUpdate.mock.calls[1];
+			expect(pushFilter).toEqual({ courtNumber: 1 });
+			expect(pushUpdate.$push['recreationalOccupancy.checkedInUsers'].userName).toBe('Court Tester');
+			expect(pushUpdate.$set['recreationalOccupancy.isCheckedIn']).toBe(true);
 			expect(mockUser.currentCourtCheckIn.courtNumber).toBe(1);
 			expect(mockUser.checkInLocation).toBe('RAC');
 			expect(mockIo.emit).toHaveBeenCalledWith('courtOccupancyUpdated', expect.anything());
@@ -185,7 +203,7 @@ describe('RAC Physical Court Check-in API Suite', () => {
 			expect(resLon.body.message).toMatch(/valid gps coordinates required/i);
 		});
 
-		test('allows bypass check-in with isTestCheckIn: true', async () => {
+		test('allows bypass check-in with isTestCheckIn: true in the test environment', async () => {
 			const mockUser = {
 				_id: testUserId,
 				name: 'Test Runner',
@@ -202,6 +220,10 @@ describe('RAC Physical Court Check-in API Suite', () => {
 
 			Court.findOne = jest.fn().mockResolvedValue(mockCourt);
 			Court.find = jest.fn().mockResolvedValue([]);
+			Court.findOneAndUpdate = jest.fn().mockResolvedValue({
+				...mockCourt,
+				recreationalOccupancy: { isCheckedIn: true, checkedInUsers: [{ userId: testUserId }] }
+			});
 
 			const res = await request(app)
 				.post('/api/courts/3/check-in')
@@ -210,7 +232,64 @@ describe('RAC Physical Court Check-in API Suite', () => {
 
 			expect(res.status).toBe(200);
 			expect(res.body.courtNumber).toBe(3);
-			expect(mockCourt.recreationalOccupancy.isCheckedIn).toBe(true);
+			expect(Court.findOneAndUpdate).toHaveBeenCalled();
+		});
+
+		test('ignores isTestCheckIn outside the test environment and enforces the GPS geofence', async () => {
+			const originalEnv = process.env.NODE_ENV;
+			process.env.NODE_ENV = 'production';
+			try {
+				User.findById = jest.fn().mockResolvedValue({
+					_id: testUserId,
+					name: 'Spoofer',
+					save: jest.fn().mockResolvedValue(true)
+				});
+				Court.findOneAndUpdate = jest.fn();
+
+				const res = await request(app)
+					.post('/api/courts/3/check-in')
+					.set('Authorization', `Bearer ${testToken}`)
+					.send({ isTestCheckIn: true });
+
+				expect(res.status).toBe(403);
+				expect(res.body.message).toMatch(/valid gps coordinates required/i);
+				expect(Court.findOneAndUpdate).not.toHaveBeenCalled();
+			} finally {
+				process.env.NODE_ENV = originalEnv;
+			}
+		});
+
+		test('removes the user from other courts atomically via $pull', async () => {
+			const mockUser = { _id: testUserId, name: 'Mover', save: jest.fn().mockResolvedValue(true) };
+			User.findById = jest.fn().mockResolvedValue(mockUser);
+			const otherCourtId = new mongoose.Types.ObjectId();
+			const otherCourt = { _id: otherCourtId, courtNumber: 5, save: jest.fn() };
+			Court.findOne = jest.fn().mockResolvedValue({ courtNumber: 2, save: jest.fn() });
+			Court.find = jest.fn().mockResolvedValue([otherCourt]);
+			Court.updateOne = jest.fn().mockResolvedValue({});
+			Court.findOneAndUpdate = jest.fn().mockImplementation((filter) => {
+				if (filter._id) {
+					return Promise.resolve({ _id: otherCourtId, recreationalOccupancy: { checkedInUsers: [] } });
+				}
+				return Promise.resolve({ courtNumber: 2, recreationalOccupancy: { isCheckedIn: true, checkedInUsers: [] } });
+			});
+
+			const res = await request(app)
+				.post('/api/courts/2/check-in')
+				.set('Authorization', `Bearer ${testToken}`)
+				.send({ latitude: 38.8315, longitude: -77.3075 });
+
+			expect(res.status).toBe(200);
+			expect(otherCourt.save).not.toHaveBeenCalled();
+			expect(Court.findOneAndUpdate).toHaveBeenCalledWith(
+				{ _id: otherCourtId },
+				{ $pull: { 'recreationalOccupancy.checkedInUsers': { userId: testUserId } } },
+				{ new: true }
+			);
+			expect(Court.updateOne).toHaveBeenCalledWith(
+				{ _id: otherCourtId },
+				{ $set: { 'recreationalOccupancy.isCheckedIn': false } }
+			);
 		});
 	});
 
@@ -248,7 +327,40 @@ describe('RAC Physical Court Check-in API Suite', () => {
 			expect(mockIo.emit).toHaveBeenCalledWith('courtOccupancyUpdated', expect.anything());
 		});
 
+		test('succeeds and clears the user record when the court entry has already expired/been pruned', async () => {
+			const mockUser = {
+				_id: testUserId,
+				currentCourtCheckIn: { courtNumber: 2, expiresAt: new Date(Date.now() - 60000) },
+				checkInLocation: 'RAC',
+				save: jest.fn().mockResolvedValue(true)
+			};
+			User.findById = jest.fn().mockResolvedValue(mockUser);
+
+			const mockCourt = {
+				courtNumber: 2,
+				recreationalOccupancy: { isCheckedIn: false, checkedInUsers: [] },
+				save: jest.fn().mockResolvedValue(true)
+			};
+			Court.findOne = jest.fn().mockResolvedValue(mockCourt);
+
+			const res = await request(app)
+				.post('/api/courts/2/check-out')
+				.set('Authorization', `Bearer ${testToken}`);
+
+			expect(res.status).toBe(200);
+			expect(res.body.success).toBe(true);
+			expect(mockUser.currentCourtCheckIn).toBeUndefined();
+			expect(mockUser.checkInLocation).toBe('None');
+			expect(mockUser.save).toHaveBeenCalled();
+			expect(mockCourt.save).not.toHaveBeenCalled();
+		});
+
 		test('returns 400 Bad Request when user attempts check-out while not checked in at all', async () => {
+			User.findById = jest.fn().mockResolvedValue({
+				_id: testUserId,
+				currentCourtCheckIn: {},
+				save: jest.fn().mockResolvedValue(true)
+			});
 			const mockCourt = {
 				courtNumber: 2,
 				courtName: 'RAC Court 2',
@@ -272,6 +384,11 @@ describe('RAC Physical Court Check-in API Suite', () => {
 
 		test('returns 400 Bad Request when checking out of a court the user is not checked into (cross-court check-out prevention)', async () => {
 			const otherUserId = '660000000000000000000099';
+			User.findById = jest.fn().mockResolvedValue({
+				_id: testUserId,
+				currentCourtCheckIn: {},
+				save: jest.fn().mockResolvedValue(true)
+			});
 			const mockCourt = {
 				courtNumber: 3,
 				courtName: 'RAC Court 3',

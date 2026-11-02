@@ -68,6 +68,7 @@ const courtSchema = new mongoose.Schema({
     pacingSecondsPerPoint: { type: Number, default: 28 },
     lastActivityAt: { type: Date, default: Date.now },
     isStalled: { type: Boolean, default: false },
+    stallReason: { type: String, default: null },
     recreationalOccupancy: {
         isCheckedIn: { type: Boolean, default: false },
         checkedInUsers: [{

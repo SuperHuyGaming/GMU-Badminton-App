@@ -97,7 +97,7 @@ describe('useNotifications hook', () => {
 			expect(result.current.loading).toBe(false);
 		});
 
-		expect(mockSocketInstance.emit).toHaveBeenCalledWith('joinUserRoom', 'user_123');
+		expect(mockSocketInstance.emit).toHaveBeenCalledWith('joinUserRoom', { userId: 'user_123', token: 'mock-token' });
 		expect(result.current.notifications).toHaveLength(3);
 		expect(result.current.unreadCount).toBe(2);
 		expect(result.current.unreadMessages).toBe(3);

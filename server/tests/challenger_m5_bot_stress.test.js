@@ -795,7 +795,7 @@ describe("Challenger M5 Empirical Adversarial Bot Stress Suite", () => {
 				save: jest.fn().mockResolvedValue(true)
 			}));
 
-			const res = await request(app).post("/api/courts/rebalance-queues");
+			const res = await request(app).post("/api/courts/rebalance-queues").set("Authorization", `Bearer ${createToken("admin-bot", "admin", "Admin Bot")}`);
 
 			expect(res.status).toBe(200);
 			expect(res.body.success).toBe(true);
@@ -818,7 +818,7 @@ describe("Challenger M5 Empirical Adversarial Bot Stress Suite", () => {
 				sort: jest.fn().mockResolvedValue(balancedCourts)
 			});
 
-			const res = await request(app).post("/api/courts/rebalance-queues");
+			const res = await request(app).post("/api/courts/rebalance-queues").set("Authorization", `Bearer ${createToken("admin-bot", "admin", "Admin Bot")}`);
 			expect(res.status).toBe(200);
 			expect(res.body.rebalancedCount).toBe(0);
 		});

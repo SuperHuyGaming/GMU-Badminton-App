@@ -15,6 +15,30 @@ const JWT_SECRET = process.env.JWT_SECRET || 'gmu_badminton_super_secret_key_202
 const testUserId = '660000000000000000000099';
 const testToken = jwt.sign({ userId: testUserId, id: testUserId }, JWT_SECRET);
 
+// In-memory emulation of the atomic $pull / $push / $set updates the
+// check-in route issues against Court.recreationalOccupancy.checkedInUsers.
+const applyOccupancyUpdate = (court, update) => {
+	if (!court.recreationalOccupancy) {
+		court.recreationalOccupancy = { isCheckedIn: false, checkedInUsers: [] };
+	}
+	const occ = court.recreationalOccupancy;
+	const pull = update.$pull && update.$pull['recreationalOccupancy.checkedInUsers'];
+	if (pull) {
+		const conds = pull.$or || [pull];
+		occ.checkedInUsers = (occ.checkedInUsers || []).filter((u) => !conds.some((c) => {
+			if (c.userId) return (u.userId?._id || u.userId)?.toString() === c.userId.toString();
+			if (c.expiresAt && c.expiresAt.$lte) return Boolean(u.expiresAt) && new Date(u.expiresAt) <= c.expiresAt.$lte;
+			return false;
+		}));
+	}
+	const push = update.$push && update.$push['recreationalOccupancy.checkedInUsers'];
+	if (push) occ.checkedInUsers = [...(occ.checkedInUsers || []), push];
+	if (update.$set && update.$set['recreationalOccupancy.isCheckedIn'] !== undefined) {
+		occ.isCheckedIn = update.$set['recreationalOccupancy.isCheckedIn'];
+	}
+	return court;
+};
+
 describe('Challenger 1 Empirical Stress Suite: RAC Court Check-In & Haversine Boundaries', () => {
 	let app;
 	let mockIo;
@@ -55,6 +79,10 @@ describe('Challenger 1 Empirical Stress Suite: RAC Court Check-In & Haversine Bo
 			save: jest.fn().mockResolvedValue(true),
 		};
 		Court.findOne = jest.fn().mockResolvedValue(mockCourt);
+		Court.findOneAndUpdate = jest.fn().mockImplementation((filter, update) => (
+			Promise.resolve(applyOccupancyUpdate(mockCourt, update))
+		));
+		Court.updateOne = jest.fn().mockResolvedValue({ acknowledged: true });
 		Court.find = jest.fn().mockImplementation(() => {
 			const p = Promise.resolve([]);
 			p.sort = jest.fn().mockResolvedValue([mockCourt]);

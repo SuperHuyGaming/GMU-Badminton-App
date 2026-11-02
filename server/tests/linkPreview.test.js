@@ -16,6 +16,9 @@ const {
 	validateUrl,
 	isPrivateOrBlockedIp,
 	verifyDnsResolution,
+	ssrfSafeLookup,
+	ssrfHttpAgent,
+	ssrfHttpsAgent,
 	previewCache,
 } = require("../utils/linkPreviewScraper");
 
@@ -121,6 +124,74 @@ describe("SSRF-Safe Link Preview Scraper Service & API", () => {
 			expect(isPrivateOrBlockedIp("8.8.8.8")).toBe(false);
 			expect(isPrivateOrBlockedIp("1.1.1.1")).toBe(false);
 			expect(isPrivateOrBlockedIp("129.174.1.1")).toBe(false); // GMU domain IP
+			expect(isPrivateOrBlockedIp("::ffff:8.8.8.8")).toBe(false);
+			expect(isPrivateOrBlockedIp("2606:4700:4700::1111")).toBe(false);
+		});
+
+		it("blocks IPv6 transition ranges that can tunnel to internal IPv4 (NAT64, 6to4, IPv4-compatible)", () => {
+			expect(isPrivateOrBlockedIp("64:ff9b::7f00:1")).toBe(true);
+			expect(isPrivateOrBlockedIp("64:ff9b::169.254.169.254")).toBe(true);
+			expect(isPrivateOrBlockedIp("2002:7f00:1::1")).toBe(true);
+			expect(isPrivateOrBlockedIp("::127.0.0.1")).toBe(true);
+			expect(isPrivateOrBlockedIp("::ffff:7f00:1")).toBe(true);
+		});
+
+		it("blocks 192.0.0.0/24 and 198.18.0.0/15 special-purpose IPv4 ranges", () => {
+			expect(isPrivateOrBlockedIp("192.0.0.1")).toBe(true);
+			expect(isPrivateOrBlockedIp("198.18.0.1")).toBe(true);
+			expect(isPrivateOrBlockedIp("198.19.255.254")).toBe(true);
+			expect(isPrivateOrBlockedIp("198.20.0.1")).toBe(false);
+		});
+	});
+
+	describe("Unit: ssrfSafeLookup (connect-time DNS rebinding protection)", () => {
+		it("rejects when the connect-time resolution returns a private IP", (done) => {
+			jest.spyOn(dns, "lookup").mockImplementationOnce((host, opts, cb) =>
+				cb(null, [{ address: "10.0.0.5", family: 4 }])
+			);
+
+			ssrfSafeLookup("rebind.example.com", {}, (err) => {
+				expect(err).toBeTruthy();
+				expect(err.message).toContain("SSRF Protection");
+				done();
+			});
+		});
+
+		it("rejects when ANY address in a multi-record answer is private", (done) => {
+			jest.spyOn(dns, "lookup").mockImplementationOnce((host, opts, cb) =>
+				cb(null, [
+					{ address: "93.184.216.34", family: 4 },
+					{ address: "::1", family: 6 },
+				])
+			);
+
+			ssrfSafeLookup("dual.example.com", { all: true }, (err) => {
+				expect(err.code).toBe("ESSRFBLOCKED");
+				done();
+			});
+		});
+
+		it("returns a single address or the full list (options.all) for public IPs", (done) => {
+			const records = [{ address: "93.184.216.34", family: 4 }];
+			jest.spyOn(dns, "lookup").mockImplementation((host, opts, cb) => cb(null, records));
+
+			ssrfSafeLookup("example.com", {}, (err, address, family) => {
+				expect(err).toBeNull();
+				expect(address).toBe("93.184.216.34");
+				expect(family).toBe(4);
+
+				ssrfSafeLookup("example.com", { all: true }, (err2, list) => {
+					expect(err2).toBeNull();
+					expect(list).toEqual(records);
+					dns.lookup.mockRestore();
+					done();
+				});
+			});
+		});
+
+		it("is wired into the HTTP and HTTPS agents used by the scraper", () => {
+			expect(ssrfHttpAgent.options.lookup).toBe(ssrfSafeLookup);
+			expect(ssrfHttpsAgent.options.lookup).toBe(ssrfSafeLookup);
 		});
 	});
 
@@ -272,6 +343,61 @@ describe("SSRF-Safe Link Preview Scraper Service & API", () => {
 			expect(axiosSpy).toHaveBeenCalledTimes(1); // Not called again!
 		});
 
+		it("sends requests through the SSRF-safe agents with an overall abort signal", async () => {
+			jest.spyOn(dns.promises, "lookup").mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+			]);
+			const axiosSpy = jest.spyOn(axios, "get").mockResolvedValueOnce({
+				status: 200,
+				data: "<html><head><title>Agent Check</title></head></html>",
+				headers: { "content-type": "text/html" },
+			});
+
+			await scrapeLinkPreview("https://example.com/agent-check");
+			const config = axiosSpy.mock.calls[0][1];
+			expect(config.httpAgent).toBe(ssrfHttpAgent);
+			expect(config.httpsAgent).toBe(ssrfHttpsAgent);
+			expect(config.proxy).toBe(false);
+			expect(config.signal).toBeInstanceOf(AbortSignal);
+		});
+
+		it("rejects non-HTML content types", async () => {
+			jest.spyOn(dns.promises, "lookup").mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+			]);
+			jest.spyOn(axios, "get").mockResolvedValueOnce({
+				status: 200,
+				data: "{}",
+				headers: { "content-type": "application/json" },
+			});
+
+			await expect(scrapeLinkPreview("https://example.com/api.json")).rejects.toThrow("Unsupported content type");
+		});
+
+		it("drops non-http(s) and oversized og:image URLs", async () => {
+			jest.spyOn(dns.promises, "lookup").mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+			]);
+			jest.spyOn(axios, "get")
+				.mockResolvedValueOnce({
+					status: 200,
+					data: '<html><head><meta property="og:title" content="X" /><meta property="og:image" content="javascript:alert(1)" /></head></html>',
+					headers: { "content-type": "text/html" },
+				})
+				.mockResolvedValueOnce({
+					status: 200,
+					data: `<html><head><meta property="og:title" content="Y" /><meta property="og:image" content="https://cdn.example.com/${"a".repeat(2100)}.png" /></head></html>`,
+					headers: { "content-type": "text/html" },
+				});
+
+			const jsImage = await scrapeLinkPreview("https://example.com/js-image");
+			expect(jsImage.image).toBe("");
+			expect(jsImage.imageUrl).toBe("");
+
+			const longImage = await scrapeLinkPreview("https://example.com/long-image");
+			expect(longImage.image).toBe("");
+		});
+
 		it("blocks attempts to scrape cloud metadata URL", async () => {
 			await expect(scrapeLinkPreview("http://169.254.169.254/latest/meta-data")).rejects.toThrow(
 				"SSRF Protection"
@@ -280,8 +406,18 @@ describe("SSRF-Safe Link Preview Scraper Service & API", () => {
 	});
 
 	describe("Integration: POST /api/forum/link-preview Endpoint", () => {
+		it("returns 401 when no auth token is provided", async () => {
+			const axiosSpy = jest.spyOn(axios, "get");
+			const res = await request(app)
+				.post("/api/forum/link-preview")
+				.send({ url: "https://example.com/page" });
+
+			expect(res.status).toBe(401);
+			expect(axiosSpy).not.toHaveBeenCalled();
+		});
+
 		it("returns 400 if url is missing from request body", async () => {
-			const res = await request(app).post("/api/forum/link-preview").send({});
+			const res = await request(app).post("/api/forum/link-preview").set("Authorization", `Bearer ${testUserToken}`).send({});
 			expect(res.status).toBe(400);
 			expect(res.body.message).toContain("URL is required");
 		});
@@ -289,6 +425,7 @@ describe("SSRF-Safe Link Preview Scraper Service & API", () => {
 		it("returns 400 if url violates SSRF security policy (loopback)", async () => {
 			const res = await request(app)
 				.post("/api/forum/link-preview")
+				.set("Authorization", `Bearer ${testUserToken}`)
 				.send({ url: "http://127.0.0.1:80/admin" });
 
 			expect(res.status).toBe(400);
@@ -298,6 +435,7 @@ describe("SSRF-Safe Link Preview Scraper Service & API", () => {
 		it("returns 400 if url requests a forbidden port (e.g. 8080)", async () => {
 			const res = await request(app)
 				.post("/api/forum/link-preview")
+				.set("Authorization", `Bearer ${testUserToken}`)
 				.send({ url: "http://example.com:8080/page" });
 
 			expect(res.status).toBe(400);
@@ -328,6 +466,7 @@ describe("SSRF-Safe Link Preview Scraper Service & API", () => {
 
 			const res = await request(app)
 				.post("/api/forum/link-preview")
+				.set("Authorization", `Bearer ${testUserToken}`)
 				.send({ url: "https://nvbadminton.com/tournaments/spring" });
 
 			expect(res.status).toBe(200);
