@@ -133,7 +133,6 @@ const renderPrivacyIcon = (visibility) => {
 	}
 };
 
-// eslint-disable-next-line no-unused-vars
 export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false, isAuthorOnline = false }) {
 	const navigate = useNavigate();
 	const currentUser = propUser || (typeof window !== "undefined" && localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null);
@@ -632,19 +631,25 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 		}
 	};
 
-	// eslint-disable-next-line no-unused-vars
 	const toggleBookmark = async () => {
+		if (!currentUserId) {
+			toast.error("Log in to save posts.");
+			return;
+		}
 		try {
 			const res = await apiFetch(`/api/forum/${localPost._id}/bookmark`, {
 				method: "PUT",
-				body: JSON.stringify({ userId: currentUserId }),
 			});
 			if (res && res.ok) {
 				const data = await res.json();
 				if (onBookmarkToggle) onBookmarkToggle(data.isBookmarked);
+				toast.success(data.isBookmarked ? "Post saved. Find it under Saved Posts." : "Removed from Saved Posts.");
+			} else {
+				toast.error("Couldn't update saved posts. Please try again.");
 			}
 		} catch (err) {
 			console.error(err);
+			toast.error("Network error updating saved posts.");
 		}
 	};
 
@@ -689,7 +694,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				handleLike();
 			}
 		} else if (info.offset.x < -threshold) {
-			if (onBookmarkToggle) onBookmarkToggle();
+			toggleBookmark();
 		}
 		controls.start({ x: 0 });
 	};
@@ -1066,6 +1071,17 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										}}
 									>
 										🗑 Delete Post
+									</MenuItem>
+								)}
+								{currentUserId && (
+									<MenuItem
+										onClick={() => {
+											toggleBookmark();
+											setAnchorEl(null);
+										}}
+										sx={{ fontWeight: "bold", fontSize: "0.9rem" }}
+									>
+										{isBookmarked ? "🔖 Unsave Post" : "🔖 Save Post"}
 									</MenuItem>
 								)}
 								<MenuItem

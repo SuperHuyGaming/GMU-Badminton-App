@@ -1983,6 +1983,8 @@ const handleBookmarkToggle = async (req, res) => {
 		}
 
 		await user.save();
+		// Saved-tab feed responses are cached per user; drop them so the change shows up immediately.
+		feedCache.invalidateFeed();
 		res.json({
 			bookmarkedPosts: user.bookmarkedPosts,
 			savedPosts: user.savedPosts,
