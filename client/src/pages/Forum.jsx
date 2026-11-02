@@ -22,18 +22,11 @@ import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import PostCard from "../components/PostCard";
 import MemberHoverCard from "../components/MemberHoverCard";
-import CourtOccupancyCard from "../components/CourtOccupancyCard";
 import AdminModerationModal from "../components/AdminModerationModal";
 import socket from "../utils/socket";
 import { compressImage } from "../utils/imageUtils";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useMentionAutocomplete, renderContentWithMentions } from "../hooks/useMentionAutocomplete";
-
-const DEFAULT_BUDDIES = [
-	{ _id: '65f01a1b2c3d4e5f6a7b8c91', name: 'Alex Chen', role: 'Advanced Singles', skillLevel: 'Advanced', online: true },
-	{ _id: '65f01a1b2c3d4e5f6a7b8c92', name: 'David Kim', role: 'Intermediate Doubles', skillLevel: 'Intermediate', online: true },
-	{ _id: '65f01a1b2c3d4e5f6a7b8c93', name: 'Mason Shuttle Club', role: 'Club Organizer', skillLevel: 'Club Admin', online: false }
-];
 
 const DEFAULT_UPCOMING_TOURNAMENTS = [
 	{
@@ -144,23 +137,33 @@ export default function Forum() {
 		return () => { isMounted = false; };
 	}, []);
  // "foryou", "top", "latest"
-	const [communityMembers, setCommunityMembers] = useState([]);
+	// Buddy recommendations only exist once the user has real play data; otherwise we show an empty state.
+	const [buddyRecommendations, setBuddyRecommendations] = useState([]);
 	const [upcomingTournaments, setUpcomingTournaments] = useState([]);
 
 	useEffect(() => {
 		let isCancelled = false;
 		const fetchSidebarData = async () => {
 			try {
-				const memRes = await apiFetch("/api/forum/members?limit=8");
-				if (!isCancelled && memRes && memRes.ok) {
-					const memData = await memRes.json();
-					if (Array.isArray(memData?.users) && memData.users.length > 0) {
-						const currentId = currentUser?._id || currentUser?.id;
-						setCommunityMembers(memData.users.filter(u => String(u._id || u.id) !== String(currentId)));
+				setBuddyRecommendations([]);
+				if (currentUser) {
+					const profileRes = await apiFetch("/api/profile");
+					const profile = profileRes && profileRes.ok ? await profileRes.json() : null;
+					const hasPlayData = (profile?.stats?.totalMatches || 0) > 0;
+					if (!isCancelled && hasPlayData) {
+						const recRes = await apiFetch("/api/matchmaking/discover");
+						if (!isCancelled && recRes && recRes.ok) {
+							const recData = await recRes.json();
+							const currentId = currentUser?._id || currentUser?.id;
+							const recommended = Array.isArray(recData?.recommended) ? recData.recommended : [];
+							setBuddyRecommendations(
+								recommended.filter(u => u?._id && u?.name && String(u._id) !== String(currentId))
+							);
+						}
 					}
 				}
 			} catch (err) {
-				console.warn("Failed to load community members for sidebar:", err);
+				console.warn("Failed to load buddy recommendations for sidebar:", err);
 			}
 
 			try {
@@ -764,12 +767,7 @@ export default function Forum() {
 		}
 	};
 
-	const displayBuddies = useMemo(() => {
-		if (communityMembers.length > 0) {
-			return communityMembers.slice(0, 4);
-		}
-		return DEFAULT_BUDDIES;
-	}, [communityMembers]);
+	const displayBuddies = useMemo(() => buddyRecommendations.slice(0, 4), [buddyRecommendations]);
 
 	const displayTournaments = useMemo(() => {
 		if (upcomingTournaments.length > 0) {
@@ -1527,9 +1525,6 @@ export default function Forum() {
 						</Box>
 					</Paper>
 
-					{/* RAC Physical Court Occupancy */}
-					<CourtOccupancyCard sx={{ mb: 2 }} />
-
 					{/* Badminton Buddies / Quick Chat */}
 					<Paper
 						elevation={0}
@@ -1547,6 +1542,16 @@ export default function Forum() {
 							</Typography>
 						</Box>
 
+						{displayBuddies.length === 0 ? (
+							<Typography
+								data-testid="buddies-empty-state"
+								variant="body2"
+								color="text.secondary"
+								sx={{ fontSize: '0.82rem', py: 1, textAlign: 'center' }}
+							>
+								Play some matches to get buddy recommendations!
+							</Typography>
+						) : (
 						<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
 							{displayBuddies.map(buddy => (
 								<Box
@@ -1571,7 +1576,7 @@ export default function Forum() {
 											anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 										>
 											<Avatar src={buddy.profilePic} sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'primary.light' }}>
-												{buddy.name.charAt(0)}
+												{buddy.name?.charAt(0)}
 											</Avatar>
 										</Badge>
 										<Box sx={{ minWidth: 0 }}>
@@ -1605,6 +1610,7 @@ export default function Forum() {
 								</Box>
 							))}
 						</Box>
+						)}
 					</Paper>
 				</Box>
 			</Box>

@@ -240,7 +240,8 @@ export default function FloatingChatDock() {
                     position: 'fixed',
                     bottom: 24,
                     right: 24,
-                    zIndex: 1200
+                    // Sit on MUI's speed-dial layer (1050) so menus/popovers (1300+) always render above the launcher.
+                    zIndex: (theme) => theme.zIndex.speedDial
                 }}
             >
                 <Tooltip title={isMinimized && activeRecipient ? `Chat with ${activeRecipient.name}` : "Open Messenger Chat"}>

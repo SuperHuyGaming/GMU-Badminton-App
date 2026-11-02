@@ -415,6 +415,49 @@ describe('PostCard Component QA Tests', () => {
         });
     });
 
+    it('lets any logged-in user save a post from the 3-dots menu', async () => {
+        const viewerUser = { id: 'viewer-456', name: 'Other Member' };
+        const onBookmarkToggle = vi.fn();
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ isBookmarked: true, bookmarkedPosts: [mockPost._id] })
+        });
+
+        renderWithContext(mockPost, viewerUser, { isBookmarked: false, onBookmarkToggle });
+
+        fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Save Post/i }));
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                `/api/forum/${mockPost._id}/bookmark`,
+                expect.objectContaining({ method: 'PUT' })
+            );
+            expect(onBookmarkToggle).toHaveBeenCalledWith(true);
+        });
+    });
+
+    it('shows Unsave Post for an already-saved post and un-saves it', async () => {
+        const onBookmarkToggle = vi.fn();
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ isBookmarked: false, bookmarkedPosts: [] })
+        });
+
+        renderWithContext(mockPost, mockUser, { isBookmarked: true, onBookmarkToggle });
+
+        fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Unsave Post/i }));
+
+        await waitFor(() => expect(onBookmarkToggle).toHaveBeenCalledWith(false));
+    });
+
+    it('does not offer post actions (incl. Save Post) to logged-out visitors', () => {
+        renderWithContext(mockPost, null);
+        expect(screen.queryByRole('button', { name: /more options/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('menuitem', { name: /Save Post/i })).not.toBeInTheDocument();
+    });
+
     it('supports compact feed density mode and renders with post-card-compact testid', () => {
         renderWithContext(mockPost, mockUser, { compact: true });
         expect(screen.getByTestId('post-card-compact')).toBeInTheDocument();
