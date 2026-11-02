@@ -1,12 +1,40 @@
 const mongoose = require("mongoose");
 
+const unwrapUser = (val) => {
+	if (val && typeof val === "object" && val.user) {
+		return val.user;
+	}
+	return val;
+};
+
 const matchSchema = new mongoose.Schema({
-	type: { type: String, enum: ["singles", "doubles"], required: true },
-	team1: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }],
-	team2: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }],
-	team1Score: { type: Number, required: true },
-	team2Score: { type: Number, required: true },
-	winner: { type: String, enum: ["team1", "team2"], required: true },
+	type: { type: String, enum: ["singles", "doubles"], default: "singles" },
+	matchType: { type: String, default: "singles" },
+	team1: [{
+		type: mongoose.Schema.Types.ObjectId,
+		ref: "User",
+		required: true,
+		set: unwrapUser
+	}],
+	team2: [{
+		type: mongoose.Schema.Types.ObjectId,
+		ref: "User",
+		required: true,
+		set: unwrapUser
+	}],
+	team1Score: {
+		type: Number,
+		required: function() { return this.status !== "scheduled"; }
+	},
+	team2Score: {
+		type: Number,
+		required: function() { return this.status !== "scheduled"; }
+	},
+	winner: {
+		type: String,
+		enum: ["team1", "team2"],
+		required: function() { return this.status !== "scheduled"; }
+	},
 	
 	// Elo tracking (how much they gained/lost)
 	eloChanges: [{
@@ -15,10 +43,52 @@ const matchSchema = new mongoose.Schema({
 	}],
 
 	// To prevent abuse, a match must be confirmed by at least one member of the opposing team
-	status: { type: String, enum: ["pending", "confirmed", "rejected"], default: "pending" },
-	submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+	status: {
+		type: String,
+		enum: ["scheduled", "pending", "confirmed", "rejected"],
+		default: "pending"
+	},
+	submittedBy: {
+		type: mongoose.Schema.Types.ObjectId,
+		ref: "User",
+		required: function() { return this.status !== "scheduled"; }
+	},
+
+	// Challenge Metadata & Community Match Integration
+	challengeMetadata: {
+		postId: { type: mongoose.Schema.Types.ObjectId, ref: "Post" },
+		acceptedAt: { type: Date, default: Date.now }
+	},
+	source: {
+		type: String,
+		enum: ["manual", "community_challenge", "tournament"],
+		default: "manual"
+	},
+	communityPostId: { type: mongoose.Schema.Types.ObjectId, ref: "Post" },
+	stipulations: { type: String, default: "" },
+	scheduledAt: { type: Date },
 	
 	date: { type: Date, default: Date.now }
+});
+
+matchSchema.pre('validate', function(next) {
+	if (!this.type && this.matchType) {
+		const mt = String(this.matchType).toLowerCase();
+		this.type = mt.includes("double") ? "doubles" : "singles";
+	}
+	if (!this.matchType && this.type) {
+		this.matchType = this.type;
+	}
+	if (!this.type) {
+		this.type = "singles";
+	}
+	if (Array.isArray(this.team1)) {
+		this.team1 = this.team1.map(t => (t && typeof t === 'object' && t.user ? t.user : t));
+	}
+	if (Array.isArray(this.team2)) {
+		this.team2 = this.team2.map(t => (t && typeof t === 'object' && t.user ? t.user : t));
+	}
+	if (typeof next === 'function') next();
 });
 
 matchSchema.post('save', async function(doc) {

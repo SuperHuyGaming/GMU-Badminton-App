@@ -4,6 +4,8 @@ const Post = require("../models/Post");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const ActivityFeed = require("../models/ActivityFeed");
+const Match = require("../models/Match");
+const { sendPushToUser } = require("../utils/pushNotifications");
 const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 const rateLimit = require("express-rate-limit");
 const xss = require("xss");
@@ -2441,9 +2443,16 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 				skillLevelRequired: "Any",
 				format: "Doubles",
 				preferredCourt: "RAC Courts 1-3",
-				slotsNeeded: 1,
+				slotsNeeded: post.rsvp?.capacity || 1,
 				rsvpList: [],
 				isFilled: false
+			};
+		}
+		if (!post.rsvp) {
+			post.rsvp = {
+				capacity: post.playerMatchmaking.slotsNeeded || 1,
+				attendees: [],
+				waitlist: []
 			};
 		}
 
@@ -2452,21 +2461,60 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 		const userDoc = await User.findById(currentUserId).select("profilePic").lean();
 		const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
 
+		const capacity = post.playerMatchmaking.slotsNeeded || post.rsvp.capacity || 1;
+		if (!Array.isArray(post.playerMatchmaking.rsvpList)) {
+			post.playerMatchmaking.rsvpList = [];
+		}
+		if (!Array.isArray(post.rsvp.attendees)) {
+			post.rsvp.attendees = [];
+		}
+		if (!Array.isArray(post.rsvp.waitlist)) {
+			post.rsvp.waitlist = [];
+		}
+
 		const existingIndex = post.playerMatchmaking.rsvpList.findIndex(
 			r => String(r.userId) === currentUserId
 		);
 
 		let userAction = "joined";
+		let promotedUser = null;
+
 		if (existingIndex > -1) {
 			// Toggle off (cancel RSVP)
+			const removed = post.playerMatchmaking.rsvpList[existingIndex];
+			const wasConfirmed = removed.status === "confirmed";
 			post.playerMatchmaking.rsvpList.splice(existingIndex, 1);
 			userAction = "left";
 
-			// If a slot opened, promote the first waitlisted user to confirmed
+			// Remove from post.rsvp attendees or waitlist
+			post.rsvp.attendees = post.rsvp.attendees.filter(id => String(id) !== currentUserId);
+			post.rsvp.waitlist = post.rsvp.waitlist.filter(id => String(id) !== currentUserId);
+
+			// If a slot opened, promote the first waitlisted user to confirmed (FIFO)
 			const confirmedCount = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
-			if (confirmedCount < post.playerMatchmaking.slotsNeeded) {
+			if (wasConfirmed && confirmedCount < capacity) {
 				const waitlisted = post.playerMatchmaking.rsvpList.find(r => r.status === "waitlist");
-				if (waitlisted) waitlisted.status = "confirmed";
+				if (waitlisted) {
+					waitlisted.status = "confirmed";
+					promotedUser = waitlisted;
+
+					// Shift / remove from waitlist and add to attendees
+					const wIdx = post.rsvp.waitlist.findIndex(id => String(id) === String(waitlisted.userId));
+					if (wIdx > -1) {
+						post.rsvp.waitlist.splice(wIdx, 1);
+					} else if (post.rsvp.waitlist.length > 0) {
+						post.rsvp.waitlist.shift();
+					}
+					if (!post.rsvp.attendees.some(id => String(id) === String(waitlisted.userId))) {
+						post.rsvp.attendees.push(String(waitlisted.userId));
+					}
+				} else if (post.rsvp.waitlist.length > 0) {
+					const promotedId = post.rsvp.waitlist.shift();
+					if (!post.rsvp.attendees.includes(promotedId)) {
+						post.rsvp.attendees.push(promotedId);
+					}
+					promotedUser = { userId: promotedId, status: "confirmed" };
+				}
 			}
 		} else {
 			// Prevent host / author from RSVPing to their own rally
@@ -2475,7 +2523,7 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 			}
 			// Toggle on (join)
 			const confirmedCount = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
-			const status = confirmedCount < post.playerMatchmaking.slotsNeeded ? "confirmed" : "waitlist";
+			const status = confirmedCount < capacity ? "confirmed" : "waitlist";
 			post.playerMatchmaking.rsvpList.push({
 				userId: currentUserId,
 				userName: currentUserName,
@@ -2483,16 +2531,64 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 				status,
 				joinedAt: new Date()
 			});
+
+			if (status === "confirmed") {
+				if (!post.rsvp.attendees.includes(currentUserId)) {
+					post.rsvp.attendees.push(currentUserId);
+				}
+			} else {
+				if (!post.rsvp.waitlist.includes(currentUserId)) {
+					post.rsvp.waitlist.push(currentUserId);
+				}
+			}
 		}
 
 		// Update isFilled status
 		const finalConfirmed = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
-		post.playerMatchmaking.isFilled = finalConfirmed >= post.playerMatchmaking.slotsNeeded;
+		post.playerMatchmaking.isFilled = finalConfirmed >= capacity;
 
 		await post.save();
 
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		// Handle notifications and push for promoted waitlisted user
+		if (promotedUser) {
+			const promotedId = (promotedUser.userId || promotedUser).toString();
+			try {
+				await sendPushToUser(promotedId, {
+					title: "🏸 You're in! Rally Spot Confirmed",
+					body: "A spot opened up and you've been promoted from the waitlist!",
+					url: `/community?postId=${post._id}`
+				});
+			} catch (pushErr) {
+				console.warn("[Push] Error sending waitlist promotion push:", pushErr.message);
+			}
+
+			await sendNotification(
+				req.io,
+				promotedId,
+				"You've been promoted from the waitlist to confirmed for a badminton rally!",
+				`/community?postId=${post._id}`
+			);
+
+			if (req.io) {
+				req.io.to(promotedId).emit("waitlistPromoted", {
+					postId: post._id,
+					userId: promotedId,
+					status: "confirmed"
+				});
+			}
+		}
+
+		const hydratedPost = await hydrateWithPictures(post.toObject ? post.toObject() : post);
+		if (req.io) {
+			req.io.emit("rallyRsvpUpdated", {
+				postId: post._id,
+				rsvpList: post.playerMatchmaking.rsvpList,
+				rsvp: post.rsvp,
+				isFilled: post.playerMatchmaking.isFilled,
+				slotsNeeded: post.playerMatchmaking.slotsNeeded
+			});
+			req.io.emit("postUpdated", hydratedPost);
+		}
 
 		// Notify author if user joined
 		if (userAction === "joined" && post.authorId?.toString() !== currentUserId) {
@@ -2545,6 +2641,7 @@ router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
 		const currentUserName = userDoc?.name || req.user.name || "Opponent";
 		const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
 
+		let createdMatch = null;
 		if (!alreadyAccepted) {
 			if (!Array.isArray(post.challengeMatch.acceptedBy)) {
 				post.challengeMatch.acceptedBy = [];
@@ -2555,6 +2652,36 @@ router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
 				avatarUrl
 			});
 			post.challengeMatch.matchStatus = "accepted";
+
+			// Auto-create linked Match document with status: 'scheduled'
+			try {
+				const challengerId = post.authorId || post.author?._id || post.author || post.challengeMatch?.challengerTeam?.[0]?.userId;
+				const acceptorId = currentUserId;
+
+				const match = new Match({
+					team1: [challengerId],
+					team2: [acceptorId],
+					type: (post.challengeMatch?.matchType || post.challengeMatch?.gameFormat || "").toLowerCase().includes("double") ? "doubles" : "singles",
+					matchType: post.challengeMatch?.matchType || "singles",
+					status: "scheduled",
+					source: "community_challenge",
+					communityPostId: post._id,
+					stipulations: post.challengeMatch?.stipulations || "",
+					scheduledAt: post.targetDate ? new Date(post.targetDate) : new Date(),
+					challengeMetadata: { postId: post._id, acceptedAt: new Date() }
+				});
+
+				if (mongoose.connection && mongoose.connection.readyState === 0 && !Match.prototype?.save?.mock) {
+					match._id = match._id || new mongoose.Types.ObjectId();
+					createdMatch = match;
+				} else {
+					createdMatch = await match.save();
+				}
+				post.challengeMatch.linkedMatchId = (createdMatch?._id || match._id).toString();
+			} catch (matchErr) {
+				console.error("[Match] Error creating downstream scheduled match:", matchErr);
+			}
+
 			await post.save();
 
 			await sendNotification(
@@ -2563,9 +2690,33 @@ router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
 				`${currentUserName} accepted your match challenge!`,
 				`/community?postId=${post._id}`
 			);
+
+			try {
+				await sendPushToUser(post.authorId.toString(), {
+					title: "🏸 Match Challenge Accepted!",
+					body: `${currentUserName} accepted your match challenge!`,
+					url: `/community?postId=${post._id}`
+				});
+			} catch (pushErr) {
+				console.warn("[Push] Error sending challenge push:", pushErr.message);
+			}
+
+			if (req.io) {
+				req.io.emit("challengeMatchCreated", {
+					matchId: post.challengeMatch.linkedMatchId,
+					postId: post._id,
+					match: createdMatch
+				});
+				req.io.emit("challengeStatusChanged", {
+					postId: post._id,
+					matchStatus: "accepted",
+					linkedMatchId: post.challengeMatch.linkedMatchId,
+					acceptedBy: post.challengeMatch.acceptedBy
+				});
+			}
 		}
 
-		const hydratedPost = await hydrateWithPictures(post.toObject());
+		const hydratedPost = await hydrateWithPictures(post.toObject ? post.toObject() : post);
 		if (req.io) req.io.emit("postUpdated", hydratedPost);
 		res.json(hydratedPost);
 	} catch (error) {

@@ -752,4 +752,110 @@ describe('PostCard Component QA Tests', () => {
             );
         });
     });
+
+    // ── Milestone 4: Community Matchmaking, RSVP Waitlists & Scheduled Matches ──
+
+    it('renders RSVP waitlist roster chip and user waitlist position', () => {
+        const waitlistPost = {
+            ...mockPost,
+            authorId: 'host-user',
+            category: 'meetup_rally',
+            playerMatchmaking: {
+                format: 'Doubles',
+                slotsNeeded: 1,
+                rsvpList: [
+                    { userId: 'player-1', userName: 'Player 1', status: 'confirmed' },
+                    { userId: mockUser.id, userName: mockUser.name, status: 'waitlist' },
+                    { userId: 'player-3', userName: 'Player 3', status: 'waitlist' }
+                ],
+                isFilled: true
+            }
+        };
+
+        renderWithContext(waitlistPost, mockUser);
+        expect(screen.getByTestId('waitlist-roster-chip')).toHaveTextContent('Waitlist (2)');
+        expect(screen.getByTestId('user-waitlist-status')).toHaveTextContent('In Waitlist (Position #1)');
+        expect(screen.getByRole('button', { name: /Leave Waitlist/i })).toBeInTheDocument();
+    });
+
+    it('renders Join Waitlist button when confirmed slots are filled', () => {
+        const fullPost = {
+            ...mockPost,
+            authorId: 'host-user',
+            category: 'meetup_rally',
+            playerMatchmaking: {
+                format: 'Singles',
+                slotsNeeded: 1,
+                rsvpList: [
+                    { userId: 'player-1', userName: 'Player 1', status: 'confirmed' }
+                ],
+                isFilled: true
+            }
+        };
+
+        const spectatorUser = { id: 'spectator-999', name: 'New Spectator' };
+        renderWithContext(fullPost, spectatorUser);
+        expect(screen.getByRole('button', { name: /⏳ Join Waitlist/i })).toBeInTheDocument();
+    });
+
+    it('renders Scheduled Match badge and linked match link when challenge is accepted', () => {
+        const scheduledPost = {
+            ...mockPost,
+            authorId: 'host-user',
+            category: 'challenge_match',
+            challengeMatch: {
+                matchType: 'Competitive Ranked',
+                gameFormat: 'Best of 3 to 21',
+                matchStatus: 'accepted',
+                linkedMatchId: '660000000000000000000999',
+                challengerTeam: [{ userId: 'host-user', userName: 'Host' }],
+                acceptedBy: [{ userId: mockUser.id, userName: mockUser.name }]
+            }
+        };
+
+        renderWithContext(scheduledPost, mockUser);
+        const badge = screen.getByTestId('scheduled-match-badge');
+        expect(badge).toBeInTheDocument();
+        expect(badge).toHaveTextContent('🏸 Scheduled Match');
+
+        const matchLink = screen.getByTestId('linked-match-link');
+        expect(matchLink).toBeInTheDocument();
+        expect(matchLink).toHaveTextContent(/View Scheduled Match #000999/i);
+
+        fireEvent.click(matchLink);
+        expect(mockNavigate).toHaveBeenCalledWith('/tournaments?matchId=660000000000000000000999');
+    });
+
+    it('preserves populated comments in memory cache across re-render updates', () => {
+        const populatedPost = {
+            ...mockPost,
+            comments: [
+                { _id: 'comment-1', content: 'Preserved comment', text: 'Preserved comment', authorName: 'Alice' }
+            ]
+        };
+
+        const { rerender } = renderWithContext(populatedPost, mockUser);
+
+        // Expand comments
+        const commentBtn = screen.getByRole('button', { name: /^Comment/i });
+        fireEvent.click(commentBtn);
+        expect(screen.getByText('Preserved comment')).toBeInTheDocument();
+
+        // Rerender with empty comments array (simulating feed summary re-render)
+        const emptyStubPost = {
+            ...mockPost,
+            comments: []
+        };
+
+        rerender(
+            <AuthContext.Provider value={{ user: mockUser, token: 'fake-token' }}>
+                <BrowserRouter>
+                    <PostCard post={emptyStubPost} currentUser={mockUser} onLike={vi.fn()} onComment={vi.fn()} />
+                </BrowserRouter>
+            </AuthContext.Provider>
+        );
+
+        // Comment should remain preserved from cache
+        expect(screen.getByText('Preserved comment')).toBeInTheDocument();
+    });
 });
