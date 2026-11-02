@@ -163,6 +163,28 @@ describe('RAC Physical Court Check-in API Suite', () => {
 			expect(mockIo.emit).toHaveBeenCalledWith('courtOccupancyUpdated', expect.anything());
 		});
 
+		test('returns 403 when latitude or longitude is out of [-90, 90] / [-180, 180] range', async () => {
+			User.findById = jest.fn().mockResolvedValue({
+				_id: testUserId,
+				name: 'Test Player',
+				save: jest.fn().mockResolvedValue(true)
+			});
+
+			const resLat = await request(app)
+				.post('/api/courts/1/check-in')
+				.set('Authorization', `Bearer ${testToken}`)
+				.send({ latitude: 95.0, longitude: -77.3075 });
+			expect(resLat.status).toBe(403);
+			expect(resLat.body.message).toMatch(/valid gps coordinates required/i);
+
+			const resLon = await request(app)
+				.post('/api/courts/1/check-in')
+				.set('Authorization', `Bearer ${testToken}`)
+				.send({ latitude: 38.8315, longitude: 185.0 });
+			expect(resLon.status).toBe(403);
+			expect(resLon.body.message).toMatch(/valid gps coordinates required/i);
+		});
+
 		test('allows bypass check-in with isTestCheckIn: true', async () => {
 			const mockUser = {
 				_id: testUserId,
@@ -224,6 +246,52 @@ describe('RAC Physical Court Check-in API Suite', () => {
 			expect(mockUser.currentCourtCheckIn).toBeUndefined();
 			expect(mockUser.checkInLocation).toBe('None');
 			expect(mockIo.emit).toHaveBeenCalledWith('courtOccupancyUpdated', expect.anything());
+		});
+
+		test('returns 400 Bad Request when user attempts check-out while not checked in at all', async () => {
+			const mockCourt = {
+				courtNumber: 2,
+				courtName: 'RAC Court 2',
+				recreationalOccupancy: {
+					isCheckedIn: false,
+					checkedInUsers: []
+				},
+				save: jest.fn().mockResolvedValue(true)
+			};
+			Court.findOne = jest.fn().mockResolvedValue(mockCourt);
+
+			const res = await request(app)
+				.post('/api/courts/2/check-out')
+				.set('Authorization', `Bearer ${testToken}`);
+
+			expect(res.status).toBe(400);
+			expect(res.body.success).toBe(false);
+			expect(res.body.message).toMatch(/not checked into this court/i);
+			expect(mockIo.emit).not.toHaveBeenCalled();
+		});
+
+		test('returns 400 Bad Request when checking out of a court the user is not checked into (cross-court check-out prevention)', async () => {
+			const otherUserId = '660000000000000000000099';
+			const mockCourt = {
+				courtNumber: 3,
+				courtName: 'RAC Court 3',
+				recreationalOccupancy: {
+					isCheckedIn: true,
+					checkedInUsers: [{ userId: otherUserId, userName: 'Other User' }]
+				},
+				save: jest.fn().mockResolvedValue(true)
+			};
+			Court.findOne = jest.fn().mockResolvedValue(mockCourt);
+
+			const res = await request(app)
+				.post('/api/courts/3/check-out')
+				.set('Authorization', `Bearer ${testToken}`);
+
+			expect(res.status).toBe(400);
+			expect(res.body.success).toBe(false);
+			expect(res.body.message).toMatch(/not checked into this court/i);
+			expect(mockCourt.recreationalOccupancy.checkedInUsers).toHaveLength(1);
+			expect(mockIo.emit).not.toHaveBeenCalled();
 		});
 	});
 });

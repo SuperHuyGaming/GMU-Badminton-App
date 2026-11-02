@@ -439,10 +439,19 @@ router.post('/:courtNumber/check-in', authMiddleware, async (req, res) => {
         const { latitude, longitude, isTestCheckIn } = req.body || {};
 
         if (!isTestCheckIn) {
-            if (typeof latitude !== "number" || typeof longitude !== "number") {
+            if (
+                typeof latitude !== "number" ||
+                typeof longitude !== "number" ||
+                !Number.isFinite(latitude) ||
+                !Number.isFinite(longitude) ||
+                latitude < -90 ||
+                latitude > 90 ||
+                longitude < -180 ||
+                longitude > 180
+            ) {
                 return res.status(403).json({
                     success: false,
-                    message: "Valid GPS coordinates required. You must be physically at the RAC to check in."
+                    message: "Valid GPS coordinates required within [-90, 90] and [-180, 180]. You must be physically at the RAC to check in."
                 });
             }
 
@@ -549,13 +558,29 @@ router.post('/:courtNumber/check-out', authMiddleware, async (req, res) => {
 
         const userId = req.user.id || req.user.userId;
         const court = await Court.findOne({ courtNumber });
-        if (court && court.recreationalOccupancy) {
-            court.recreationalOccupancy.checkedInUsers = (court.recreationalOccupancy.checkedInUsers || []).filter(
-                u => u.userId?.toString() !== userId.toString()
-            );
-            court.recreationalOccupancy.isCheckedIn = court.recreationalOccupancy.checkedInUsers.length > 0;
-            await court.save();
+        if (!court) {
+            return res.status(404).json({ success: false, message: `Court ${courtNumber} not found` });
         }
+
+        const checkedInUsers = court.recreationalOccupancy?.checkedInUsers || [];
+        const isUserCheckedIn = checkedInUsers.some(u => {
+            const uid = u.userId?._id || u.userId || u.user?._id || u.user;
+            return uid && uid.toString() === userId.toString();
+        });
+
+        if (!isUserCheckedIn) {
+            return res.status(400).json({
+                success: false,
+                message: "You are not checked into this court"
+            });
+        }
+
+        court.recreationalOccupancy.checkedInUsers = checkedInUsers.filter(u => {
+            const uid = u.userId?._id || u.userId || u.user?._id || u.user;
+            return uid?.toString() !== userId.toString();
+        });
+        court.recreationalOccupancy.isCheckedIn = court.recreationalOccupancy.checkedInUsers.length > 0;
+        await court.save();
 
         const user = await User.findById(userId);
         if (user) {
@@ -567,7 +592,7 @@ router.post('/:courtNumber/check-out', authMiddleware, async (req, res) => {
         }
 
         const io = req.io || req.app?.get('io');
-        if (io && court) {
+        if (io) {
             io.emit('courtOccupancyUpdated', {
                 courtNumber,
                 recreationalOccupancy: court.recreationalOccupancy
