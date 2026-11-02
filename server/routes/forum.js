@@ -1334,17 +1334,15 @@ router.get("/members", async (req, res) => {
 			.limit(limit)
 			.lean();
 
-		const formatted = users
-			.filter((u) => !/tu\s+pham|nhat\s+quang/i.test(u.name || ""))
-			.map((u) => ({
-				_id: u._id.toString(),
-				id: u._id.toString(),
-				name: u.name,
-				profilePic: u.profilePic || "",
-				role: u.role || "user",
-				skillLevel: u.skillLevel || "Intermediate",
-				badges: Array.isArray(u.badges) ? u.badges : [],
-			}));
+		const formatted = users.map((u) => ({
+			_id: u._id.toString(),
+			id: u._id.toString(),
+			name: u.name,
+			profilePic: u.profilePic || "",
+			role: u.role || "user",
+			skillLevel: u.skillLevel || "Intermediate",
+			badges: Array.isArray(u.badges) ? u.badges : [],
+		}));
 
 		res.json({ users: formatted });
 	} catch (err) {
@@ -1356,7 +1354,7 @@ router.get("/members", async (req, res) => {
 // ==========================================
 // MEMBER CARD / HOVER CARD HYDRATION
 // ==========================================
-router.get("/members/:userId/card", async (req, res) => {
+router.get("/members/:userId/card", authMiddleware, async (req, res) => {
 	try {
 		const { userId } = req.params;
 		if (!userId || !mongoose.isValidObjectId(userId)) {
@@ -1373,36 +1371,49 @@ router.get("/members/:userId/card", async (req, res) => {
 			return res.status(404).json({ message: "Member not found." });
 		}
 
+		const callerId = (req.user.id || req.user.userId || "").toString();
+		const isSelf = callerId === userId.toString();
+
+		// Respect "hide from search" privacy for everyone but the member themselves
+		if (targetUser.hideFromSearch === true && !isSelf) {
+			return res.status(404).json({ message: "Member not found." });
+		}
+
 		// Presence hydration
 		const onlineUsers = req.app?.get("onlineUsers");
 		const isOnline = onlineUsers ? onlineUsers.has(userId.toString()) : false;
 
-		// Friendship status relative to optional authenticated user
+		// Friendship status relative to the authenticated caller
 		let friendshipStatus = "none";
-		const caller = getOptionalUser(req);
-		if (caller) {
-			const callerId = (caller.id || caller.userId || "").toString();
-			if (callerId === userId.toString()) {
-				friendshipStatus = "self";
-			} else {
-				const callerUser = await User.findById(callerId)
-					.select("friends friendRequests sentFriendRequests")
-					.lean();
-				if (callerUser) {
-					const friendsList = (callerUser.friends || []).map((f) => (f?._id || f).toString());
-					const sentList = (callerUser.sentFriendRequests || []).map((f) => (f?._id || f).toString());
-					const receivedList = (callerUser.friendRequests || []).map((f) => (f?._id || f).toString());
+		if (isSelf) {
+			friendshipStatus = "self";
+		} else {
+			const callerUser = await User.findById(callerId)
+				.select("friends friendRequests sentFriendRequests")
+				.lean();
+			if (callerUser) {
+				const friendsList = (callerUser.friends || []).map((f) => (f?._id || f).toString());
+				const sentList = (callerUser.sentFriendRequests || []).map((f) => (f?._id || f).toString());
+				const receivedList = (callerUser.friendRequests || []).map((f) => (f?._id || f).toString());
 
-					if (friendsList.includes(userId.toString())) {
-						friendshipStatus = "friends";
-					} else if (sentList.includes(userId.toString())) {
-						friendshipStatus = "pending_sent";
-					} else if (receivedList.includes(userId.toString())) {
-						friendshipStatus = "pending_received";
-					}
+				if (friendsList.includes(userId.toString())) {
+					friendshipStatus = "friends";
+				} else if (sentList.includes(userId.toString())) {
+					friendshipStatus = "pending_sent";
+				} else if (receivedList.includes(userId.toString())) {
+					friendshipStatus = "pending_received";
 				}
 			}
 		}
+
+		// Court check-ins expire; never surface a stale one
+		const checkIn = targetUser.currentCourtCheckIn;
+		const hasActiveCheckIn = Boolean(
+			checkIn &&
+			checkIn.courtNumber &&
+			checkIn.expiresAt &&
+			new Date(checkIn.expiresAt).getTime() > Date.now()
+		);
 
 		const stats = targetUser.stats || {
 			totalMatches: 0,
@@ -1435,7 +1446,7 @@ router.get("/members/:userId/card", async (req, res) => {
 				},
 				isOnline,
 				friendshipStatus,
-				currentCourtCheckIn: targetUser.currentCourtCheckIn || null,
+				currentCourtCheckIn: hasActiveCheckIn ? checkIn : null,
 				checkInLocation: targetUser.checkInLocation || "None",
 				badges: Array.isArray(targetUser.badges) ? targetUser.badges : [],
 			},

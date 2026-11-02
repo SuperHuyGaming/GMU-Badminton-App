@@ -436,7 +436,9 @@ router.post('/:courtNumber/check-in', authMiddleware, async (req, res) => {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
-        const { latitude, longitude, isTestCheckIn } = req.body || {};
+        const { latitude, longitude } = req.body || {};
+        // The geofence bypass is only honoured inside the automated test environment.
+        const isTestCheckIn = process.env.NODE_ENV === 'test' && req.body?.isTestCheckIn === true;
 
         if (!isTestCheckIn) {
             if (
@@ -476,42 +478,59 @@ router.post('/:courtNumber/check-in', authMiddleware, async (req, res) => {
             return res.status(404).json({ success: false, message: `Court ${courtNumber} not found` });
         }
 
-        // Clean up prior check-ins from other courts
+        // Clean up prior check-ins from other courts (atomic per-court $pull)
         const otherCourts = await Court.find({
             courtNumber: { $ne: courtNumber },
             "recreationalOccupancy.checkedInUsers.userId": userId
         });
         for (const oc of otherCourts) {
-            if (oc.recreationalOccupancy && oc.recreationalOccupancy.checkedInUsers) {
-                oc.recreationalOccupancy.checkedInUsers = oc.recreationalOccupancy.checkedInUsers.filter(
-                    u => u.userId?.toString() !== userId.toString()
+            const updatedOther = await Court.findOneAndUpdate(
+                { _id: oc._id },
+                { $pull: { "recreationalOccupancy.checkedInUsers": { userId: user._id } } },
+                { new: true }
+            );
+            if (updatedOther) {
+                await Court.updateOne(
+                    { _id: oc._id },
+                    { $set: { "recreationalOccupancy.isCheckedIn": (updatedOther.recreationalOccupancy?.checkedInUsers || []).length > 0 } }
                 );
-                oc.recreationalOccupancy.isCheckedIn = oc.recreationalOccupancy.checkedInUsers.length > 0;
-                await oc.save();
             }
         }
 
         const now = new Date();
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
-        if (!court.recreationalOccupancy) {
-            court.recreationalOccupancy = { isCheckedIn: false, checkedInUsers: [], queueCount: 0, estimatedWaitMinutes: 0 };
-        }
 
-        const activeUsers = (court.recreationalOccupancy.checkedInUsers || []).filter(
-            u => u.expiresAt && new Date(u.expiresAt) > now && u.userId?.toString() !== userId.toString()
+        // Atomic updates instead of read-modify-save of the whole array, so
+        // concurrent check-ins by different users are never lost.
+        await Court.findOneAndUpdate(
+            { courtNumber },
+            {
+                $pull: {
+                    "recreationalOccupancy.checkedInUsers": {
+                        $or: [{ userId: user._id }, { expiresAt: { $lte: now } }]
+                    }
+                }
+            }
         );
-
-        activeUsers.push({
-            userId: user._id,
-            userName: user.name,
-            avatarUrl: user.profilePic || "",
-            checkInTime: now,
-            expiresAt
-        });
-
-        court.recreationalOccupancy.checkedInUsers = activeUsers;
-        court.recreationalOccupancy.isCheckedIn = true;
-        await court.save();
+        court = await Court.findOneAndUpdate(
+            { courtNumber },
+            {
+                $push: {
+                    "recreationalOccupancy.checkedInUsers": {
+                        userId: user._id,
+                        userName: user.name,
+                        avatarUrl: user.profilePic || "",
+                        checkInTime: now,
+                        expiresAt
+                    }
+                },
+                $set: { "recreationalOccupancy.isCheckedIn": true }
+            },
+            { new: true }
+        );
+        if (!court) {
+            return res.status(404).json({ success: false, message: `Court ${courtNumber} not found` });
+        }
 
         user.currentCourtCheckIn = {
             courtNumber,
@@ -568,21 +587,30 @@ router.post('/:courtNumber/check-out', authMiddleware, async (req, res) => {
             return uid && uid.toString() === userId.toString();
         });
 
-        if (!isUserCheckedIn) {
+        const user = await User.findById(userId);
+        // The court entry may already be gone (expired and pruned) while the user
+        // record still points at this court; treat that as a successful check-out.
+        const hasStaleUserCheckIn = Boolean(
+            user?.currentCourtCheckIn &&
+            Number(user.currentCourtCheckIn.courtNumber) === courtNumber
+        );
+
+        if (!isUserCheckedIn && !hasStaleUserCheckIn) {
             return res.status(400).json({
                 success: false,
                 message: "You are not checked into this court"
             });
         }
 
-        court.recreationalOccupancy.checkedInUsers = checkedInUsers.filter(u => {
-            const uid = u.userId?._id || u.userId || u.user?._id || u.user;
-            return uid?.toString() !== userId.toString();
-        });
-        court.recreationalOccupancy.isCheckedIn = court.recreationalOccupancy.checkedInUsers.length > 0;
-        await court.save();
+        if (isUserCheckedIn) {
+            court.recreationalOccupancy.checkedInUsers = checkedInUsers.filter(u => {
+                const uid = u.userId?._id || u.userId || u.user?._id || u.user;
+                return uid?.toString() !== userId.toString();
+            });
+            court.recreationalOccupancy.isCheckedIn = court.recreationalOccupancy.checkedInUsers.length > 0;
+            await court.save();
+        }
 
-        const user = await User.findById(userId);
         if (user) {
             user.currentCourtCheckIn = undefined;
             if (user.checkInLocation === "RAC") {
@@ -592,7 +620,7 @@ router.post('/:courtNumber/check-out', authMiddleware, async (req, res) => {
         }
 
         const io = req.io || req.app?.get('io');
-        if (io) {
+        if (io && isUserCheckedIn) {
             io.emit('courtOccupancyUpdated', {
                 courtNumber,
                 recreationalOccupancy: court.recreationalOccupancy

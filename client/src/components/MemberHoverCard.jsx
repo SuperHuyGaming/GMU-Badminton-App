@@ -18,8 +18,52 @@ import WhatshotIcon from '@mui/icons-material/Whatshot';
 import apiFetch from '../utils/api';
 import FriendActionButton from './FriendActionButton';
 
-// Client-side cache to guarantee instant (0ms) re-render without memory bloat
+// Short-lived client-side cache so re-hovering a member renders instantly.
+// Entries are scoped to the signed-in viewer (friendship status and privacy are
+// viewer-specific) and expire so presence / check-in data does not go stale.
+const MEMBER_CARD_CACHE_TTL_MS = 60 * 1000;
 const memberCardCache = new Map();
+
+function getViewerId() {
+  try {
+    const stored = JSON.parse(localStorage.getItem('user') || 'null');
+    return String(stored?._id || stored?.id || 'anonymous');
+  } catch {
+    return 'anonymous';
+  }
+}
+
+function getCacheKey(memberId) {
+  return `${getViewerId()}:${memberId}`;
+}
+
+function readCachedCard(memberId) {
+  if (!memberId) return null;
+  const key = getCacheKey(memberId);
+  const entry = memberCardCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > MEMBER_CARD_CACHE_TTL_MS) {
+    memberCardCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function writeCachedCard(memberId, data) {
+  memberCardCache.set(getCacheKey(memberId), { data, cachedAt: Date.now() });
+}
+
+function isActiveCheckIn(checkIn) {
+  if (!checkIn?.courtNumber) return false;
+  if (!checkIn.expiresAt) return true;
+  return new Date(checkIn.expiresAt).getTime() > Date.now();
+}
+
+// Props supplied by the parent (e.g. live presence) win over cached/fetched data.
+function withoutUndefined(obj) {
+  if (!obj) return {};
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
 
 export default function MemberHoverCard({
   userId,
@@ -29,12 +73,7 @@ export default function MemberHoverCard({
   placement = 'bottom',
 }) {
   const [anchorEl, setAnchorEl] = useState(null);
-  const [userData, setUserData] = useState(() => {
-    if (userId && memberCardCache.has(String(userId))) {
-      return memberCardCache.get(String(userId));
-    }
-    return initialUser;
-  });
+  const [fetchedUser, setFetchedUser] = useState(() => readCachedCard(userId));
   const [isLoading, setIsLoading] = useState(false);
 
   const hoverTimerRef = useRef(null);
@@ -50,18 +89,11 @@ export default function MemberHoverCard({
     };
   }, []);
 
-  useEffect(() => {
-    if (initialUser && !memberCardCache.has(String(userId))) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setUserData((prev) => ({ ...initialUser, ...prev }));
-    }
-  }, [initialUser, userId]);
-
   const fetchMemberCard = useCallback(async () => {
-    if (!userId || memberCardCache.has(String(userId))) {
-      if (userId && memberCardCache.has(String(userId))) {
-        setUserData(memberCardCache.get(String(userId)));
-      }
+    if (!userId) return;
+    const cached = readCachedCard(userId);
+    if (cached) {
+      setFetchedUser(cached);
       return;
     }
 
@@ -71,8 +103,8 @@ export default function MemberHoverCard({
       if (res && res.ok) {
         const data = await res.json();
         if (data?.user && isMountedRef.current) {
-          memberCardCache.set(String(userId), data.user);
-          setUserData(data.user);
+          writeCachedCard(userId, data.user);
+          setFetchedUser(data.user);
         }
       }
     } catch {
@@ -142,15 +174,21 @@ export default function MemberHoverCard({
     );
   };
 
+  const userData = fetchedUser || initialUser
+    ? { ...(fetchedUser || {}), ...withoutUndefined(initialUser) }
+    : null;
+  const propOnline = initialUser?.isOnline ?? initialUser?.online;
   const isOpen = Boolean(anchorEl);
-  const isOnline = Boolean(userData?.isOnline || userData?.online);
+  const isOnline = Boolean(propOnline ?? (userData?.isOnline || userData?.online));
   const displayName = userData?.name || 'Club Member';
   const roleLabel = userData?.role === 'admin' ? 'Club Exec' : (userData?.role || 'Member');
   const skillLabel = userData?.skillLevel || 'Intermediate';
   const singlesElo = userData?.singlesElo || 1200;
   const doublesElo = userData?.doublesElo || 1200;
   const bio = userData?.bio || 'Ready to play!';
-  const courtCheckIn = userData?.currentCourtCheckIn;
+  const courtCheckIn = isActiveCheckIn(userData?.currentCourtCheckIn)
+    ? userData.currentCourtCheckIn
+    : null;
 
   return (
     <>
@@ -182,11 +220,14 @@ export default function MemberHoverCard({
         disableRestoreFocus
         disableAutoFocus
         disableEnforceFocus
+        disableScrollLock
+        sx={{ pointerEvents: 'none' }}
         slotProps={{
           paper: {
             onMouseEnter: handlePopoverMouseEnter,
             onMouseLeave: handlePopoverMouseLeave,
             sx: {
+              pointerEvents: 'auto',
               p: 2.25,
               width: 310,
               maxWidth: '90vw',
@@ -416,6 +457,7 @@ MemberHoverCard.propTypes = {
     friendshipStatus: PropTypes.string,
     currentCourtCheckIn: PropTypes.shape({
       courtNumber: PropTypes.number,
+      expiresAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
     }),
     stats: PropTypes.shape({
       winStreak: PropTypes.number,

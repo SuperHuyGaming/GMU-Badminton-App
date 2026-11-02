@@ -148,4 +148,137 @@ describe('MemberHoverCard Component', () => {
       expect(apiFetch).toHaveBeenCalledWith('/api/forum/members/user_fetched_99/card');
     });
   });
+  describe('hover popover is non-modal', () => {
+    it('lets pointer events pass through the popover root while keeping the card interactive', () => {
+      render(
+        <MemberHoverCard userId="user_hover_1" user={mockUser}>
+          <span>User</span>
+        </MemberHoverCard>
+      );
+
+      act(() => {
+        fireEvent.mouseEnter(screen.getByTestId('member-hover-card-trigger'));
+        vi.advanceTimersByTime(300);
+      });
+
+      const root = document.querySelector('.MuiPopover-root');
+      const paper = document.querySelector('.MuiPopover-paper');
+      expect(root).not.toBeNull();
+      expect(window.getComputedStyle(root).pointerEvents).toBe('none');
+      expect(window.getComputedStyle(paper).pointerEvents).toBe('auto');
+      // No scroll lock on the page while hovering
+      expect(document.body.style.overflow).not.toBe('hidden');
+    });
+  });
+
+  describe('court check-in expiry', () => {
+    it('does not show a check-in whose expiresAt is in the past', () => {
+      render(
+        <MemberHoverCard
+          userId="user_expired_checkin"
+          user={{
+            ...mockUser,
+            _id: 'user_expired_checkin',
+            currentCourtCheckIn: { courtNumber: 5, expiresAt: new Date(Date.now() - 60000).toISOString() },
+          }}
+        >
+          <span>User</span>
+        </MemberHoverCard>
+      );
+
+      act(() => {
+        fireEvent.mouseEnter(screen.getByTestId('member-hover-card-trigger'));
+        vi.advanceTimersByTime(300);
+      });
+
+      expect(screen.getByText('Sarah Connor')).toBeInTheDocument();
+      expect(screen.queryByText(/Checked in at RAC Court/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('member card cache', () => {
+    const cardResponse = (overrides = {}) => ({
+      ok: true,
+      json: async () => ({ user: { _id: 'm', name: 'Cached Member', isOnline: true, ...overrides } }),
+    });
+
+    const hoverAndSettle = async () => {
+      const trigger = screen.getByTestId('member-hover-card-trigger');
+      await act(async () => {
+        fireEvent.mouseEnter(trigger);
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      await act(async () => {
+        fireEvent.mouseLeave(trigger);
+        await vi.advanceTimersByTimeAsync(300);
+      });
+    };
+
+    afterEach(() => {
+      localStorage.removeItem('user');
+    });
+
+    it('reuses a cached card within the TTL and refetches after it expires', async () => {
+      localStorage.setItem('user', JSON.stringify({ _id: 'viewer_ttl' }));
+      apiFetch.mockResolvedValue(cardResponse());
+
+      render(
+        <MemberHoverCard userId="cache_ttl_member">
+          <span>Member</span>
+        </MemberHoverCard>
+      );
+
+      await hoverAndSettle();
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+
+      await hoverAndSettle();
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(61 * 1000);
+      });
+      await hoverAndSettle();
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not share cached cards between different signed-in viewers', async () => {
+      localStorage.setItem('user', JSON.stringify({ _id: 'viewer_one' }));
+      apiFetch.mockResolvedValue(cardResponse());
+
+      render(
+        <MemberHoverCard userId="cache_viewer_member">
+          <span>Member</span>
+        </MemberHoverCard>
+      );
+
+      await hoverAndSettle();
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+
+      localStorage.setItem('user', JSON.stringify({ _id: 'viewer_two' }));
+      await hoverAndSettle();
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('lets fresh isOnline props win over cached presence', async () => {
+      localStorage.setItem('user', JSON.stringify({ _id: 'viewer_presence' }));
+      apiFetch.mockResolvedValue(cardResponse({ isOnline: true }));
+
+      render(
+        <MemberHoverCard userId="cache_presence_member" user={{ _id: 'cache_presence_member', name: 'Presence Member', isOnline: false }}>
+          <span>Member</span>
+        </MemberHoverCard>
+      );
+
+      const trigger = screen.getByTestId('member-hover-card-trigger');
+      await act(async () => {
+        fireEvent.mouseEnter(trigger);
+        await vi.advanceTimersByTimeAsync(300);
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Presence Member')).toBeInTheDocument();
+      const popover = screen.getByTestId('member-hover-card-popover');
+      expect(popover.querySelector('.MuiBadge-colorSuccess')).toBeNull();
+    });
+  });
 });
