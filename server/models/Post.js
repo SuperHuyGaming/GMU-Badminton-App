@@ -118,6 +118,24 @@ likedBy: { type: [String], default: [] },
 	shareCount: { type: Number, default: 0 }, // NEW: Repost count tracking
 	imageUrl: { type: String, default: "" }, // Legacy
 	imageUrls: { type: [String], default: [] }, // NEW: Multiple images
+	videoUrl: { type: String, default: "" }, // M3: Video media upload
+	videoThumbnail: { type: String, default: "" },
+	videoDuration: { type: Number, default: 0 },
+	videoWidth: { type: Number, default: 0 },
+	videoHeight: { type: Number, default: 0 },
+	audioUrl: { type: String, default: "" }, // M3: Audio media upload
+	audioDuration: { type: Number, default: 0 },
+	linkPreviews: [
+		{
+			url: { type: String },
+			title: { type: String, default: "" },
+			description: { type: String, default: "" },
+			image: { type: String, default: "" },
+			imageUrl: { type: String, default: "" },
+			siteName: { type: String, default: "" },
+			domain: { type: String, default: "" },
+		}
+	],
 	tags: { type: [String], default: [] }, // NEW: Post categorization tags
 	isPinned: { type: Boolean, default: false }, // NEW: Pinned megathread by admins
 	reactions: [
@@ -136,6 +154,15 @@ likedBy: { type: [String], default: [] },
 			content: String,
 			timestamp: { type: Date, default: Date.now },
 			likedBy: { type: [String], default: [] },
+			reactions: [
+				{
+					userId: { type: String, required: true },
+					userName: { type: String, default: "Player" },
+					emoji: { type: String, required: true },
+					reactionType: { type: String },
+					createdAt: { type: Date, default: Date.now },
+				},
+			],
 			isEdited: { type: Boolean, default: false }, // NEW: Track comment edits
 			editedAt: { type: Date }, // NEW: Comment edit timestamp
 			isFlagged: { type: Boolean, default: false },
@@ -155,6 +182,15 @@ likedBy: { type: [String], default: [] },
 					content: String,
 					timestamp: { type: Date, default: Date.now },
 					likedBy: { type: [String], default: [] },
+					reactions: [
+						{
+							userId: { type: String, required: true },
+							userName: { type: String, default: "Player" },
+							emoji: { type: String, required: true },
+							reactionType: { type: String },
+							createdAt: { type: Date, default: Date.now },
+						},
+					],
 					isEdited: { type: Boolean, default: false }, // NEW: Track reply edits
 					editedAt: { type: Date }, // NEW: Reply edit timestamp
 					isFlagged: { type: Boolean, default: false },
@@ -268,6 +304,10 @@ PostSchema.post('save', async function(doc) {
 				content: doc.content,
 				image: doc.imageUrl,
 				images: doc.imageUrls || [],
+				videoUrl: doc.videoUrl || "",
+				videoThumbnail: doc.videoThumbnail || "",
+				audioUrl: doc.audioUrl || "",
+				linkPreviews: doc.linkPreviews || [],
 				tags: doc.tags || [],
 				isPinned: doc.isPinned || false,
 				category: doc.category || 'general',

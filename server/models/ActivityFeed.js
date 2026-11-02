@@ -16,6 +16,20 @@ const activityFeedSchema = new mongoose.Schema({
     content: { type: String },
     image: { type: String },
     images: { type: [String], default: [] },
+    videoUrl: { type: String, default: "" },
+    videoThumbnail: { type: String, default: "" },
+    audioUrl: { type: String, default: "" },
+    linkPreviews: [
+        {
+            url: { type: String },
+            title: { type: String, default: "" },
+            description: { type: String, default: "" },
+            image: { type: String, default: "" },
+            imageUrl: { type: String, default: "" },
+            siteName: { type: String, default: "" },
+            domain: { type: String, default: "" },
+        }
+    ],
     tags: { type: [String], default: [] },
     category: { type: String, default: "general" },
     matchDetails: { type: mongoose.Schema.Types.Mixed },
