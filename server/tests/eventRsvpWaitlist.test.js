@@ -4,6 +4,12 @@ const jwt = require('jsonwebtoken');
 
 const forumRoutes = require('../routes/forum');
 const Post = require('../models/Post');
+const { installPostStore, resetPostStore } = require('./helpers/inMemoryPostStore');
+const Match = require('../models/Match');
+
+afterEach(() => resetPostStore(Post));
+// Scheduled matches are persisted without a live DB: resolve save() with the document itself
+jest.spyOn(Match.prototype, 'save').mockImplementation(function () { return Promise.resolve(this); });
 const ActivityFeed = require('../models/ActivityFeed');
 const User = require('../models/User');
 const { sendPushToUser } = require('../utils/pushNotifications');
@@ -100,7 +106,7 @@ describe('Event RSVP & FIFO Waitlist Auto-Promotion Suite', () => {
 			}
 		};
 
-		Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+		installPostStore(Post, mockPost);
 		ActivityFeed.findById.mockResolvedValue(null);
 
 		const res = await request(app)
@@ -109,7 +115,7 @@ describe('Event RSVP & FIFO Waitlist Auto-Promotion Suite', () => {
 			.send({});
 
 		expect(res.status).toBe(200);
-		expect(mockPost.save).toHaveBeenCalled();
+		expect(Post.findOneAndUpdate).toHaveBeenCalled();
 		expect(mockPost.playerMatchmaking.rsvpList).toHaveLength(1);
 		expect(mockPost.playerMatchmaking.rsvpList[0].status).toBe('confirmed');
 		expect(mockPost.playerMatchmaking.rsvpList[0].userId).toBe(player1Id);
@@ -139,7 +145,7 @@ describe('Event RSVP & FIFO Waitlist Auto-Promotion Suite', () => {
 			}
 		};
 
-		Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+		installPostStore(Post, mockPost);
 
 		const res = await request(app)
 			.post(`/api/forum/${postId}/rsvp`)
@@ -179,7 +185,7 @@ describe('Event RSVP & FIFO Waitlist Auto-Promotion Suite', () => {
 			}
 		};
 
-		Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+		installPostStore(Post, mockPost);
 
 		// Player 1 cancels their confirmed RSVP
 		const res = await request(app)
@@ -188,7 +194,7 @@ describe('Event RSVP & FIFO Waitlist Auto-Promotion Suite', () => {
 			.send({});
 
 		expect(res.status).toBe(200);
-		expect(mockPost.save).toHaveBeenCalled();
+		expect(Post.findOneAndUpdate).toHaveBeenCalled();
 
 		// Player 1 should be gone
 		expect(mockPost.playerMatchmaking.rsvpList.find(r => r.userId === player1Id)).toBeUndefined();
@@ -241,7 +247,7 @@ describe('Event RSVP & FIFO Waitlist Auto-Promotion Suite', () => {
 			toObject: function () { return { ...this }; }
 		};
 
-		Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+		installPostStore(Post, mockPost);
 
 		const res = await request(app)
 			.post(`/api/forum/${postId}/rsvp`)
@@ -263,7 +269,7 @@ describe('Event RSVP & FIFO Waitlist Auto-Promotion Suite', () => {
 			playerMatchmaking: { slotsNeeded: 2, rsvpList: [] }
 		};
 
-		Post.findById.mockImplementation((id) => (id === postId ? mockPost : null));
+		installPostStore(Post, mockPost);
 
 		const res = await request(app)
 			.post(`/api/forum/${postId}/rsvp`)

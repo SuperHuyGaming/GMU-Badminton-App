@@ -113,8 +113,11 @@ describe('Targeted Web Push Notifications Suite (sendPushToUser)', () => {
 		const result = await sendPushToUser(mockUserId, { title: 'Update', body: 'Hi' });
 		expect(result.success).toBe(true);
 		expect(result.sentCount).toBe(1);
-		expect(mockUser.save).toHaveBeenCalled();
-		expect(mockUser.pushSubscriptions).toHaveLength(1);
-		expect(mockUser.pushSubscriptions[0].endpoint).toContain('valid');
+		// Cleanup must be an atomic $pull, never a whole-document save
+		expect(mockUser.save).not.toHaveBeenCalled();
+		expect(User.updateOne).toHaveBeenCalledWith(
+			{ _id: mockUserId },
+			{ $pull: { pushSubscriptions: { endpoint: { $in: ['https://push.service.com/expired'] } } } }
+		);
 	});
 });

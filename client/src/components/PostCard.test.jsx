@@ -866,7 +866,26 @@ describe('PostCard Component QA Tests', () => {
         expect(matchLink).toHaveTextContent(/View Scheduled Match #000999/i);
 
         fireEvent.click(matchLink);
-        expect(mockNavigate).toHaveBeenCalledWith('/tournaments?matchId=660000000000000000000999');
+        // Scheduled matches are listed as "Upcoming" on the participant's Dashboard
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
+    it('hides the scheduled match link from non-participants', () => {
+        const scheduledPost = {
+            ...mockPost,
+            authorId: 'host-user',
+            category: 'challenge_match',
+            challengeMatch: {
+                matchStatus: 'accepted',
+                linkedMatchId: '660000000000000000000999',
+                challengerTeam: [{ userId: 'host-user', userName: 'Host' }],
+                acceptedBy: [{ userId: 'someone-else', userName: 'Other' }]
+            }
+        };
+
+        renderWithContext(scheduledPost, { id: 'spectator-999', name: 'Spectator' });
+        expect(screen.getByTestId('scheduled-match-badge')).toBeInTheDocument();
+        expect(screen.queryByTestId('linked-match-link')).not.toBeInTheDocument();
     });
 
     it('preserves populated comments in memory cache across re-render updates', () => {

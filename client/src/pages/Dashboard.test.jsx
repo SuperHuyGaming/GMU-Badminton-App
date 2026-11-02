@@ -172,6 +172,42 @@ describe('Personal Dashboard Page Component (Phase 1)', () => {
         });
     });
 
+    it('5b. Renders scheduled challenge matches as UPCOMING without a score or DEFEAT chip', async () => {
+        const baseImpl = apiFetch.getMockImplementation();
+        apiFetch.mockImplementation(async (url) => {
+            if (url.startsWith('/api/matches/user/')) {
+                return {
+                    ok: true,
+                    json: async () => [
+                        {
+                            _id: 'match-scheduled-1',
+                            type: 'singles',
+                            status: 'scheduled',
+                            team1: [{ _id: 'user-123', name: 'Patriot Player' }],
+                            team2: [{ _id: 'opp-2', name: 'Future Rival' }],
+                            scheduledAt: new Date().toISOString(),
+                            date: new Date().toISOString()
+                        }
+                    ]
+                };
+            }
+            return baseImpl(url);
+        });
+
+        render(
+            <BrowserRouter>
+                <Dashboard />
+            </BrowserRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText(/vs Future Rival/i)).toBeInTheDocument();
+            expect(screen.getByText('UPCOMING')).toBeInTheDocument();
+        });
+        expect(screen.queryByText('DEFEAT')).not.toBeInTheDocument();
+        expect(screen.queryByText(/undefined - undefined/)).not.toBeInTheDocument();
+    });
+
     it('6. Renders club announcements and allows admin to publish updates', async () => {
         render(
             <BrowserRouter>

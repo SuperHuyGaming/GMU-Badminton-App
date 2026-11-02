@@ -734,7 +734,9 @@ export default function Dashboard() {
 							<Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
 								{userMatches.slice(0, 5).map((m) => {
 									const isTeam1 = (m.team1 || []).some(p => (p._id || p) === (currentUser.id || currentUser._id));
-									const isWinner = (isTeam1 && m.winner === "team1") || (!isTeam1 && m.winner === "team2");
+									// Scheduled (not yet played) matches have no score/winner: show them as upcoming
+									const isUpcoming = m.status === "scheduled" || !m.winner;
+									const isWinner = !isUpcoming && ((isTeam1 && m.winner === "team1") || (!isTeam1 && m.winner === "team2"));
 									const opponentTeam = isTeam1 ? m.team2 : m.team1;
 									const opponentNames = (opponentTeam || []).map(p => p.name || "Opponent").join(" & ");
 
@@ -754,9 +756,9 @@ export default function Dashboard() {
 										>
 											<Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
 												<Chip
-													label={isWinner ? "VICTORY" : "DEFEAT"}
+													label={isUpcoming ? "UPCOMING" : isWinner ? "VICTORY" : "DEFEAT"}
 													size="small"
-													color={isWinner ? "success" : "error"}
+													color={isUpcoming ? "info" : isWinner ? "success" : "error"}
 													sx={{ fontWeight: "bold", borderRadius: 1.5 }}
 												/>
 												<Box>
@@ -764,14 +766,16 @@ export default function Dashboard() {
 														vs {opponentNames}
 													</Typography>
 													<Typography variant="caption" color="text.secondary">
-														{m.type === "singles" ? "Singles" : "Doubles"} • {formatTime(m.date)}
+														{m.type === "singles" ? "Singles" : "Doubles"} • {formatTime(isUpcoming ? (m.scheduledAt || m.date) : m.date)}
 													</Typography>
 												</Box>
 											</Box>
 
-											<Typography variant="h6" fontWeight="900" sx={{ color: isWinner ? "success.main" : "text.secondary" }}>
-												{m.team1Score} - {m.team2Score}
-											</Typography>
+											{!isUpcoming && (
+												<Typography variant="h6" fontWeight="900" sx={{ color: isWinner ? "success.main" : "text.secondary" }}>
+													{m.team1Score} - {m.team2Score}
+												</Typography>
+											)}
 										</Box>
 									);
 								})}

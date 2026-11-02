@@ -558,6 +558,134 @@ const sendNotification = async (io, targetUserId, message, link) => {
 };
 
 // ==========================================
+// POST VISIBILITY & SCOPED REAL-TIME HELPERS
+// ==========================================
+const isPublicPost = (post) => !post?.visibility || post.visibility === "PUBLIC";
+
+// Mirrors the privacy rules of GET /:postId. Returns true when `user` may view `post`.
+const canViewPost = async (post, user) => {
+	if (!post) return false;
+	if (post.visibility !== "ONLY_ME" && post.visibility !== "FRIENDS_ONLY") return true;
+
+	const userId = user ? String(user.id || user.userId || user._id || "") : "";
+	const isAuthor = Boolean(userId && post.authorId && String(post.authorId) === userId);
+	const isAdmin = Boolean(user && user.role === "admin");
+	if (isAuthor || isAdmin) return true;
+	if (post.visibility === "ONLY_ME" || !userId) return false;
+
+	const authorUser = await User.findById(post.authorId).select("friends").lean();
+	return Boolean(authorUser && Array.isArray(authorUser.friends) &&
+		authorUser.friends.some(f => (f?._id || f).toString() === userId));
+};
+
+// Public posts broadcast to everyone; private posts only reach the author and the
+// involved users' personal rooms (clients join `userId` rooms via joinUserRoom).
+const emitForPost = (io, post, event, payload, involvedUserIds = []) => {
+	if (!io) return;
+	if (isPublicPost(post)) {
+		io.emit(event, payload);
+		return;
+	}
+	const rooms = [...new Set([post?.authorId, ...involvedUserIds].filter(Boolean).map(String))];
+	if (rooms.length > 0) io.to(rooms).emit(event, payload);
+};
+
+// ==========================================
+// RALLY RSVP ATOMIC HELPERS
+// ==========================================
+const getRallyCapacity = (post) => post?.playerMatchmaking?.slotsNeeded || post?.rsvp?.capacity || 1;
+
+// Aggregation expression: number of confirmed entries in playerMatchmaking.rsvpList
+const confirmedRsvpCountExpr = {
+	$size: {
+		$filter: {
+			input: { $ifNull: ["$playerMatchmaking.rsvpList", []] },
+			as: "r",
+			cond: { $eq: ["$$r.status", "confirmed"] }
+		}
+	}
+};
+
+const loadPostLean = async (postId) => {
+	let query = Post.findById(postId);
+	if (query && typeof query.lean === "function") query = query.lean();
+	return query;
+};
+
+// Promotes waitlisted RSVPs in FIFO order while confirmed slots are free.
+// Each promotion is a conditional positional update guarded by the confirmed count,
+// so concurrent cancellations/joins can never push the rally over capacity.
+const promoteWaitlistedRsvps = async (postId, capacity) => {
+	const promoted = [];
+	let current = await loadPostLean(postId);
+	for (let attempt = 0; attempt < 50 && current; attempt++) {
+		const list = Array.isArray(current.playerMatchmaking?.rsvpList) ? current.playerMatchmaking.rsvpList : [];
+		const confirmedCount = list.filter(r => r.status === "confirmed").length;
+		if (confirmedCount >= capacity) break;
+		const next = list.find(r => r.status === "waitlist");
+		if (!next) break;
+		const nextUserId = String(next.userId);
+
+		const updated = await Post.findOneAndUpdate(
+			{
+				_id: postId,
+				"playerMatchmaking.rsvpList": { $elemMatch: { userId: nextUserId, status: "waitlist" } },
+				$expr: { $lt: [confirmedRsvpCountExpr, capacity] }
+			},
+			{
+				$set: { "playerMatchmaking.rsvpList.$.status": "confirmed" },
+				$pull: { "rsvp.waitlist": nextUserId },
+				$addToSet: { "rsvp.attendees": nextUserId }
+			},
+			{ returnDocument: "after", lean: true }
+		);
+
+		if (updated) {
+			promoted.push({ ...next, userId: nextUserId, status: "confirmed" });
+			current = updated;
+		} else {
+			// Lost a race (entry changed or slot taken): re-read and re-evaluate
+			current = await loadPostLean(postId);
+		}
+	}
+	return promoted;
+};
+
+// Recomputes isFilled from the stored list in a single pipeline update and returns the fresh post.
+const syncRallyFilledFlag = (postId, capacity) => Post.findOneAndUpdate(
+	{ _id: postId },
+	[{ $set: { "playerMatchmaking.isFilled": { $gte: [confirmedRsvpCountExpr, capacity] } } }],
+	{ returnDocument: "after", lean: true, updatePipeline: true }
+);
+
+const notifyPromotedRsvps = (req, post, promoted) => {
+	for (const entry of promoted || []) {
+		const promotedId = String(entry.userId);
+		// Fire-and-forget: never block the response on push delivery
+		Promise.resolve().then(() => sendPushToUser(promotedId, {
+			title: "🏸 You're in! Rally Spot Confirmed",
+			body: "A spot opened up and you've been promoted from the waitlist!",
+			url: `/community?postId=${post._id}`
+		})).catch(err => console.error("[Push] Error sending waitlist promotion push:", err?.message || err));
+
+		Promise.resolve().then(() => sendNotification(
+			req.io,
+			promotedId,
+			"You've been promoted from the waitlist to confirmed for a badminton rally!",
+			`/community?postId=${post._id}`
+		)).catch(err => console.error("[Notify] Error sending waitlist promotion notification:", err?.message || err));
+
+		if (req.io) {
+			req.io.to(promotedId).emit("waitlistPromoted", {
+				postId: post._id,
+				userId: promotedId,
+				status: "confirmed"
+			});
+		}
+	}
+};
+
+// ==========================================
 // POSTS (FETCH & CREATE)
 // ==========================================
 const ALLOWED_CATEGORIES = [
@@ -581,17 +709,15 @@ const parsePlayerMatchmaking = (pm) => {
 		rallyDate: pm.rallyDate ? new Date(pm.rallyDate) : undefined,
 		timeWindow: pm.timeWindow ? xss(String(pm.timeWindow).trim()).slice(0, 50) : '',
 		slotsNeeded: typeof pm.slotsNeeded === 'number' && pm.slotsNeeded > 0 ? Math.min(10, pm.slotsNeeded) : 1,
-		rsvpList: Array.isArray(pm.rsvpList) ? pm.rsvpList.map(r => ({
-			userId: String(r.userId || ''),
-			userName: xss(String(r.userName || 'Player')).slice(0, 60),
-			avatarUrl: r.avatarUrl ? xss(String(r.avatarUrl).trim()) : '',
-			status: r.status === 'waitlist' ? 'waitlist' : 'confirmed',
-			joinedAt: r.joinedAt ? new Date(r.joinedAt) : new Date()
-		})) : [],
-		isFilled: Boolean(pm.isFilled),
+		// rsvpList / isFilled are server-owned: only the RSVP endpoint may change them
+		rsvpList: [],
+		isFilled: false,
 		isEnabled: Boolean(pm.isEnabled)
 	};
 };
+
+// Author-editable playerMatchmaking fields (everything except the server-owned RSVP state)
+const EDITABLE_MATCHMAKING_FIELDS = ['skillLevelRequired', 'format', 'preferredCourt', 'rallyDate', 'timeWindow', 'slotsNeeded', 'isEnabled'];
 
 const parseChallengeMatch = (cm, authorInfo) => {
 	if (!cm || typeof cm !== 'object') return undefined;
@@ -1186,8 +1312,19 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			};
 		}
 
+		let rallyCapacityChanged = false;
 		if (playerMatchmaking && typeof playerMatchmaking === "object") {
-			post.playerMatchmaking = parsePlayerMatchmaking(playerMatchmaking);
+			const parsedMatchmaking = parsePlayerMatchmaking(playerMatchmaking);
+			const previousCapacity = getRallyCapacity(post);
+			if (post.playerMatchmaking) {
+				// Assign leaf paths only so the save never rewrites the server-owned rsvpList / isFilled
+				for (const field of EDITABLE_MATCHMAKING_FIELDS) {
+					post.playerMatchmaking[field] = parsedMatchmaking[field];
+				}
+			} else {
+				post.playerMatchmaking = parsedMatchmaking;
+			}
+			rallyCapacityChanged = getRallyCapacity(post) !== previousCapacity;
 		}
 		if (challengeMatch && typeof challengeMatch === "object") {
 			post.challengeMatch = parseChallengeMatch(challengeMatch, { userId: currentUserId, userName: req.user.name, avatarUrl: req.user.profilePic });
@@ -1234,6 +1371,16 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 		post.lastActivityAt = new Date();
 		await post.save();
 
+		// Capacity changed: promote waitlisted players FIFO into any new slots and refresh isFilled
+		let responsePost = post.toObject ? post.toObject() : post;
+		if (rallyCapacityChanged) {
+			const newCapacity = getRallyCapacity(post);
+			const promoted = await promoteWaitlistedRsvps(post._id, newCapacity);
+			const refreshed = await syncRallyFilledFlag(post._id, newCapacity);
+			if (refreshed) responsePost = refreshed.toObject ? refreshed.toObject() : refreshed;
+			notifyPromotedRsvps(req, post, promoted);
+		}
+
 			try {
 			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
 				const p = ActivityFeed.updateOne(
@@ -1245,7 +1392,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 		} catch (_) {}
 		feedCache.invalidateFeed();
 
-		const hydratedPost = await hydrateWithPictures(post.toObject());
+		const hydratedPost = await hydrateWithPictures(responsePost);
 		if (req.io) req.io.emit("postUpdated", hydratedPost);
 		res.json(hydratedPost);
 	} catch (error) {
@@ -1535,27 +1682,12 @@ router.get("/:postId", async (req, res) => {
 
 		// Privacy Check
 		const currentUser = getOptionalUser(req);
-		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : null;
-		const postAuthorId = post.authorId ? post.authorId.toString() : null;
-		const isAuthor = Boolean(currentUserId && postAuthorId && currentUserId === postAuthorId);
-		const isAdmin = Boolean(currentUser && currentUser.role === "admin");
-
-		if (post.visibility === "ONLY_ME") {
-			if (!isAuthor && !isAdmin) {
-				return res.status(403).json({ message: "This post is private." });
-			}
-		} else if (post.visibility === "FRIENDS_ONLY") {
-			if (!isAuthor && !isAdmin) {
-				if (!currentUserId) {
-					return res.status(403).json({ message: "This post is only visible to friends of the author." });
-				}
-				const authorUser = await User.findById(post.authorId).select("friends").lean();
-				const isFriend = authorUser && Array.isArray(authorUser.friends) &&
-					authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
-				if (!isFriend) {
-					return res.status(403).json({ message: "This post is only visible to friends of the author." });
-				}
-			}
+		if (!(await canViewPost(post, currentUser))) {
+			return res.status(403).json({
+				message: post.visibility === "ONLY_ME"
+					? "This post is private."
+					: "This post is only visible to friends of the author."
+			});
 		}
 
 		const hydratedPost = await hydrateWithPictures(post);
@@ -2508,105 +2640,61 @@ router.post("/:id/react", authMiddleware, handleReactionRoute);
 // ==========================================
 
 // 1. Toggle RSVP for Player Matchmaking / Meetup Rally
+// All rsvpList mutations are single atomic conditional updates so concurrent
+// RSVPs can never overbook, duplicate an entry, or skip a waitlist promotion.
 router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 	try {
 		if (!mongoose.isValidObjectId(req.params.postId)) {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
 		if (!post) return res.status(404).json({ message: "Post not found." });
+		if (!(await canViewPost(post, req.user))) {
+			return res.status(404).json({ message: "Post not found." });
+		}
 		if (post.isFlagged || post.status === "quarantined" || post.status === "deleted") {
 			return res.status(403).json({ message: "Cannot RSVP to this post." });
 		}
 
-		if (!post.playerMatchmaking) {
-			post.playerMatchmaking = {
-				skillLevelRequired: "Any",
-				format: "Doubles",
-				preferredCourt: "RAC Courts 1-3",
-				slotsNeeded: post.rsvp?.capacity || 1,
-				rsvpList: [],
-				isFilled: false
-			};
-		}
-		if (!post.rsvp) {
-			post.rsvp = {
-				capacity: post.playerMatchmaking.slotsNeeded || 1,
-				attendees: [],
-				waitlist: []
-			};
-		}
-
+		const postObjectId = post._id;
 		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
 		const currentUserName = req.user.name || "Player";
-		const userDoc = await User.findById(currentUserId).select("profilePic").lean();
-		const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
-
-		const capacity = post.playerMatchmaking.slotsNeeded || post.rsvp.capacity || 1;
-		if (!Array.isArray(post.playerMatchmaking.rsvpList)) {
-			post.playerMatchmaking.rsvpList = [];
-		}
-		if (!Array.isArray(post.rsvp.attendees)) {
-			post.rsvp.attendees = [];
-		}
-		if (!Array.isArray(post.rsvp.waitlist)) {
-			post.rsvp.waitlist = [];
-		}
-
-		const existingIndex = post.playerMatchmaking.rsvpList.findIndex(
-			r => String(r.userId) === currentUserId
-		);
+		const capacity = getRallyCapacity(post);
+		const rsvpList = Array.isArray(post.playerMatchmaking?.rsvpList) ? post.playerMatchmaking.rsvpList : [];
+		const isMember = rsvpList.some(r => String(r.userId) === currentUserId);
 
 		let userAction = "joined";
-		let promotedUser = null;
+		let promoted = [];
 
-		if (existingIndex > -1) {
-			// Toggle off (cancel RSVP)
-			const removed = post.playerMatchmaking.rsvpList[existingIndex];
-			const wasConfirmed = removed.status === "confirmed";
-			post.playerMatchmaking.rsvpList.splice(existingIndex, 1);
+		if (isMember) {
+			// Toggle off (cancel RSVP): remove the user everywhere in one atomic op
 			userAction = "left";
-
-			// Remove from post.rsvp attendees or waitlist
-			post.rsvp.attendees = post.rsvp.attendees.filter(id => String(id) !== currentUserId);
-			post.rsvp.waitlist = post.rsvp.waitlist.filter(id => String(id) !== currentUserId);
-
-			// If a slot opened, promote the first waitlisted user to confirmed (FIFO)
-			const confirmedCount = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
-			if (wasConfirmed && confirmedCount < capacity) {
-				const waitlisted = post.playerMatchmaking.rsvpList.find(r => r.status === "waitlist");
-				if (waitlisted) {
-					waitlisted.status = "confirmed";
-					promotedUser = waitlisted;
-
-					// Shift / remove from waitlist and add to attendees
-					const wIdx = post.rsvp.waitlist.findIndex(id => String(id) === String(waitlisted.userId));
-					if (wIdx > -1) {
-						post.rsvp.waitlist.splice(wIdx, 1);
-					} else if (post.rsvp.waitlist.length > 0) {
-						post.rsvp.waitlist.shift();
+			const before = await Post.findOneAndUpdate(
+				{ _id: postObjectId, "playerMatchmaking.rsvpList.userId": currentUserId },
+				{
+					$pull: {
+						"playerMatchmaking.rsvpList": { userId: currentUserId },
+						"rsvp.attendees": currentUserId,
+						"rsvp.waitlist": currentUserId
 					}
-					if (!post.rsvp.attendees.some(id => String(id) === String(waitlisted.userId))) {
-						post.rsvp.attendees.push(String(waitlisted.userId));
-					}
-				} else if (post.rsvp.waitlist.length > 0) {
-					const promotedId = post.rsvp.waitlist.shift();
-					if (!post.rsvp.attendees.includes(promotedId)) {
-						post.rsvp.attendees.push(promotedId);
-					}
-					promotedUser = { userId: promotedId, status: "confirmed" };
-				}
+				},
+				{ returnDocument: "before", lean: true }
+			);
+			const removed = before?.playerMatchmaking?.rsvpList?.find(r => String(r.userId) === currentUserId);
+			if (removed && removed.status === "confirmed") {
+				// A confirmed slot opened up: promote the oldest waitlisted player(s) (FIFO)
+				promoted = await promoteWaitlistedRsvps(postObjectId, capacity);
 			}
 		} else {
 			// Prevent host / author from RSVPing to their own rally
 			if (String(post.authorId) === currentUserId) {
 				return res.status(400).json({ message: "You are the host of this rally and cannot RSVP to your own post." });
 			}
-			// Toggle on (join)
-			const confirmedCount = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
-			const status = confirmedCount < capacity ? "confirmed" : "waitlist";
-			post.playerMatchmaking.rsvpList.push({
+
+			const userDoc = await User.findById(currentUserId).select("profilePic").lean();
+			const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
+			const buildEntry = (status) => ({
 				userId: currentUserId,
 				userName: currentUserName,
 				avatarUrl,
@@ -2614,66 +2702,51 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 				joinedAt: new Date()
 			});
 
-			if (status === "confirmed") {
-				if (!post.rsvp.attendees.includes(currentUserId)) {
-					post.rsvp.attendees.push(currentUserId);
-				}
-			} else {
-				if (!post.rsvp.waitlist.includes(currentUserId)) {
-					post.rsvp.waitlist.push(currentUserId);
-				}
-			}
-		}
-
-		// Update isFilled status
-		const finalConfirmed = post.playerMatchmaking.rsvpList.filter(r => r.status === "confirmed").length;
-		post.playerMatchmaking.isFilled = finalConfirmed >= capacity;
-
-		await post.save();
-
-		// Handle notifications and push for promoted waitlisted user
-		if (promotedUser) {
-			const promotedId = (promotedUser.userId || promotedUser).toString();
-			try {
-				await sendPushToUser(promotedId, {
-					title: "🏸 You're in! Rally Spot Confirmed",
-					body: "A spot opened up and you've been promoted from the waitlist!",
-					url: `/community?postId=${post._id}`
-				});
-			} catch (pushErr) {
-				console.warn("[Push] Error sending waitlist promotion push:", pushErr.message);
-			}
-
-			await sendNotification(
-				req.io,
-				promotedId,
-				"You've been promoted from the waitlist to confirmed for a badminton rally!",
-				`/community?postId=${post._id}`
+			// Join as confirmed only if not already present AND a confirmed slot is free
+			const joinedConfirmed = await Post.findOneAndUpdate(
+				{
+					_id: postObjectId,
+					"playerMatchmaking.rsvpList.userId": { $ne: currentUserId },
+					$expr: { $lt: [confirmedRsvpCountExpr, capacity] }
+				},
+				{
+					$push: { "playerMatchmaking.rsvpList": buildEntry("confirmed") },
+					$addToSet: { "rsvp.attendees": currentUserId }
+				},
+				{ returnDocument: "after", lean: true }
 			);
 
-			if (req.io) {
-				req.io.to(promotedId).emit("waitlistPromoted", {
-					postId: post._id,
-					userId: promotedId,
-					status: "confirmed"
-				});
+			if (!joinedConfirmed) {
+				// Rally is full (or user was added concurrently): join the waitlist if still absent
+				await Post.findOneAndUpdate(
+					{ _id: postObjectId, "playerMatchmaking.rsvpList.userId": { $ne: currentUserId } },
+					{
+						$push: { "playerMatchmaking.rsvpList": buildEntry("waitlist") },
+						$addToSet: { "rsvp.waitlist": currentUserId }
+					},
+					{ returnDocument: "after", lean: true }
+				);
 			}
 		}
 
-		const hydratedPost = await hydrateWithPictures(post.toObject ? post.toObject() : post);
-		if (req.io) {
-			req.io.emit("rallyRsvpUpdated", {
-				postId: post._id,
-				rsvpList: post.playerMatchmaking.rsvpList,
-				rsvp: post.rsvp,
-				isFilled: post.playerMatchmaking.isFilled,
-				slotsNeeded: post.playerMatchmaking.slotsNeeded
-			});
-			req.io.emit("postUpdated", hydratedPost);
-		}
+		// Recompute isFilled atomically from the authoritative list
+		const finalPost = (await syncRallyFilledFlag(postObjectId, capacity)) || post;
+
+		notifyPromotedRsvps(req, finalPost, promoted);
+
+		const hydratedPost = await hydrateWithPictures(finalPost.toObject ? finalPost.toObject() : finalPost);
+		const involvedUserIds = (finalPost.playerMatchmaking?.rsvpList || []).map(r => r.userId).concat(currentUserId);
+		emitForPost(req.io, finalPost, "rallyRsvpUpdated", {
+			postId: finalPost._id,
+			rsvpList: finalPost.playerMatchmaking?.rsvpList || [],
+			rsvp: finalPost.rsvp,
+			isFilled: Boolean(finalPost.playerMatchmaking?.isFilled),
+			slotsNeeded: finalPost.playerMatchmaking?.slotsNeeded
+		}, involvedUserIds);
+		emitForPost(req.io, finalPost, "postUpdated", hydratedPost, involvedUserIds);
 
 		// Notify author if user joined
-		if (userAction === "joined" && post.authorId?.toString() !== currentUserId) {
+		if (userAction === "joined" && post.authorId && post.authorId.toString() !== currentUserId) {
 			await sendNotification(
 				req.io,
 				post.authorId.toString(),
@@ -2689,6 +2762,36 @@ router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
 	}
 });
 
+const buildChallengeMatchDoc = (post, acceptorId) => {
+	const challengerId = post.authorId || post.challengeMatch?.challengerTeam?.[0]?.userId;
+	return new Match({
+		team1: [challengerId],
+		team2: [acceptorId],
+		type: (post.challengeMatch?.matchType || post.challengeMatch?.gameFormat || "").toLowerCase().includes("double") ? "doubles" : "singles",
+		matchType: post.challengeMatch?.matchType || "singles",
+		status: "scheduled",
+		source: "community_challenge",
+		communityPostId: post._id,
+		stipulations: post.challengeMatch?.stipulations || "",
+		scheduledAt: post.targetDate ? new Date(post.targetDate) : new Date(),
+		challengeMetadata: { postId: post._id, acceptedAt: new Date() }
+	});
+};
+
+// Creates the scheduled Match for a claimed challenge. If a Match already exists
+// for this post (unique index on communityPostId), the existing one is reused.
+const createOrFindChallengeMatch = async (post, acceptorId) => {
+	try {
+		return await buildChallengeMatchDoc(post, acceptorId).save();
+	} catch (err) {
+		if (err && err.code === 11000) {
+			const existing = await Match.findOne({ communityPostId: post._id });
+			if (existing) return existing;
+		}
+		throw err;
+	}
+};
+
 // 2. Accept Scrimmage / Match Challenge
 router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
 	try {
@@ -2696,110 +2799,135 @@ router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
 		if (!post) return res.status(404).json({ message: "Post not found." });
+		if (!(await canViewPost(post, req.user))) {
+			return res.status(404).json({ message: "Post not found." });
+		}
 
 		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
 		if (post.authorId?.toString() === currentUserId) {
 			return res.status(400).json({ message: "You cannot accept your own challenge." });
 		}
 
-		if (!post.challengeMatch) {
-			post.challengeMatch = {
-				matchType: "Friendly Scrimmage",
-				gameFormat: "Best of 3 to 21",
-				matchStatus: "open",
-				challengerTeam: [{ userId: post.authorId, userName: post.authorName, avatarUrl: "" }],
-				acceptedBy: []
-			};
-		}
+		const postObjectId = post._id;
+		const isAcceptor = (p) => Array.isArray(p?.challengeMatch?.acceptedBy) &&
+			p.challengeMatch.acceptedBy.some(a => String(a.userId) === currentUserId);
 
-		const alreadyAccepted = post.challengeMatch.acceptedBy?.some(a => String(a.userId) === currentUserId);
-		if (post.challengeMatch.matchStatus === "accepted" && !alreadyAccepted) {
-			return res.status(400).json({ message: "This challenge has already been accepted." });
-		}
-
-		const userDoc = await User.findById(currentUserId).select("name profilePic").lean();
-		const currentUserName = userDoc?.name || req.user.name || "Opponent";
-		const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
-
+		let currentPost = post;
 		let createdMatch = null;
-		if (!alreadyAccepted) {
-			if (!Array.isArray(post.challengeMatch.acceptedBy)) {
-				post.challengeMatch.acceptedBy = [];
+		let claimedNow = false;
+
+		if (!isAcceptor(post)) {
+			const status = post.challengeMatch?.matchStatus || "open";
+			if (status !== "open") {
+				return res.status(400).json({ message: "This challenge has already been accepted." });
 			}
-			post.challengeMatch.acceptedBy.push({
-				userId: currentUserId,
-				userName: currentUserName,
-				avatarUrl
-			});
-			post.challengeMatch.matchStatus = "accepted";
 
-			// Auto-create linked Match document with status: 'scheduled'
-			try {
-				const challengerId = post.authorId || post.author?._id || post.author || post.challengeMatch?.challengerTeam?.[0]?.userId;
-				const acceptorId = currentUserId;
+			const userDoc = await User.findById(currentUserId).select("name profilePic").lean();
+			const currentUserName = userDoc?.name || req.user.name || "Opponent";
+			const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
 
-				const match = new Match({
-					team1: [challengerId],
-					team2: [acceptorId],
-					type: (post.challengeMatch?.matchType || post.challengeMatch?.gameFormat || "").toLowerCase().includes("double") ? "doubles" : "singles",
-					matchType: post.challengeMatch?.matchType || "singles",
-					status: "scheduled",
-					source: "community_challenge",
-					communityPostId: post._id,
-					stipulations: post.challengeMatch?.stipulations || "",
-					scheduledAt: post.targetDate ? new Date(post.targetDate) : new Date(),
-					challengeMetadata: { postId: post._id, acceptedAt: new Date() }
-				});
+			const claimSet = { "challengeMatch.matchStatus": "accepted" };
+			if (!post.challengeMatch) {
+				claimSet["challengeMatch.matchType"] = "Friendly Scrimmage";
+				claimSet["challengeMatch.gameFormat"] = "Best of 3 to 21";
+				claimSet["challengeMatch.challengerTeam"] = [{ userId: String(post.authorId), userName: post.authorName || "Challenger", avatarUrl: "" }];
+			}
 
-				if (mongoose.connection && mongoose.connection.readyState === 0 && !Match.prototype?.save?.mock) {
-					match._id = match._id || new mongoose.Types.ObjectId();
-					createdMatch = match;
-				} else {
-					createdMatch = await match.save();
+			// Atomic claim: only one acceptor can flip an open challenge to accepted
+			const claimed = await Post.findOneAndUpdate(
+				{ _id: postObjectId, "challengeMatch.matchStatus": { $in: ["open", null] } },
+				{
+					$set: claimSet,
+					$push: { "challengeMatch.acceptedBy": { userId: currentUserId, userName: currentUserName, avatarUrl } }
+				},
+				{ returnDocument: "after", lean: true }
+			);
+
+			if (!claimed) {
+				const latest = await findPostByIdOrActivityFeed(postObjectId, { lean: true });
+				if (!isAcceptor(latest)) {
+					return res.status(400).json({ message: "This challenge has already been accepted." });
 				}
-				post.challengeMatch.linkedMatchId = (createdMatch?._id || match._id).toString();
-			} catch (matchErr) {
-				console.error("[Match] Error creating downstream scheduled match:", matchErr);
+				// Duplicate request from the same acceptor: fall through as idempotent
+				currentPost = latest;
+			} else {
+				currentPost = claimed;
+				claimedNow = true;
+				try {
+					createdMatch = await createOrFindChallengeMatch(claimed, currentUserId);
+				} catch (matchErr) {
+					console.error("[Match] Error creating downstream scheduled match:", matchErr);
+					// Roll back the claim so the challenge stays open instead of half-accepted
+					await Post.updateOne(
+						{ _id: postObjectId, "challengeMatch.acceptedBy.userId": currentUserId },
+						{
+							$set: { "challengeMatch.matchStatus": "open" },
+							$pull: { "challengeMatch.acceptedBy": { userId: currentUserId } }
+						}
+					);
+					return res.status(500).json({ message: "Error accepting challenge." });
+				}
 			}
+		}
 
-			await post.save();
+		// Legacy repair: accepted by this user but the Match was never linked
+		if (!createdMatch && !currentPost.challengeMatch?.linkedMatchId && isAcceptor(currentPost)) {
+			createdMatch = await createOrFindChallengeMatch(currentPost, currentUserId);
+		}
+
+		if (createdMatch && createdMatch._id) {
+			const linked = await Post.findOneAndUpdate(
+				{ _id: postObjectId },
+				{ $set: { "challengeMatch.linkedMatchId": createdMatch._id.toString() } },
+				{ returnDocument: "after", lean: true }
+			);
+			if (linked) currentPost = linked;
+		}
+
+		const involvedUserIds = [
+			currentPost.authorId,
+			...(currentPost.challengeMatch?.challengerTeam || []).map(c => c.userId),
+			...(currentPost.challengeMatch?.acceptedBy || []).map(a => a.userId)
+		];
+
+		if (claimedNow) {
+			const acceptorName = currentPost.challengeMatch?.acceptedBy?.find(a => String(a.userId) === currentUserId)?.userName || req.user.name || "Opponent";
 
 			await sendNotification(
 				req.io,
-				post.authorId.toString(),
-				`${currentUserName} accepted your match challenge!`,
-				`/community?postId=${post._id}`
+				currentPost.authorId.toString(),
+				`${acceptorName} accepted your match challenge!`,
+				`/community?postId=${currentPost._id}`
 			);
 
-			try {
-				await sendPushToUser(post.authorId.toString(), {
-					title: "🏸 Match Challenge Accepted!",
-					body: `${currentUserName} accepted your match challenge!`,
-					url: `/community?postId=${post._id}`
-				});
-			} catch (pushErr) {
-				console.warn("[Push] Error sending challenge push:", pushErr.message);
-			}
-
-			if (req.io) {
-				req.io.emit("challengeMatchCreated", {
-					matchId: post.challengeMatch.linkedMatchId,
-					postId: post._id,
-					match: createdMatch
-				});
-				req.io.emit("challengeStatusChanged", {
-					postId: post._id,
-					matchStatus: "accepted",
-					linkedMatchId: post.challengeMatch.linkedMatchId,
-					acceptedBy: post.challengeMatch.acceptedBy
-				});
-			}
+			// Fire-and-forget: never block the response on push delivery
+			Promise.resolve().then(() => sendPushToUser(currentPost.authorId.toString(), {
+				title: "🏸 Match Challenge Accepted!",
+				body: `${acceptorName} accepted your match challenge!`,
+				url: `/community?postId=${currentPost._id}`
+			})).catch(err => console.error("[Push] Error sending challenge push:", err?.message || err));
 		}
 
-		const hydratedPost = await hydrateWithPictures(post.toObject ? post.toObject() : post);
-		if (req.io) req.io.emit("postUpdated", hydratedPost);
+		if (createdMatch) {
+			emitForPost(req.io, currentPost, "challengeMatchCreated", {
+				matchId: currentPost.challengeMatch?.linkedMatchId,
+				postId: currentPost._id,
+				match: createdMatch
+			}, involvedUserIds);
+		}
+		if (claimedNow) {
+			emitForPost(req.io, currentPost, "challengeStatusChanged", {
+				postId: currentPost._id,
+				matchStatus: "accepted",
+				linkedMatchId: currentPost.challengeMatch?.linkedMatchId,
+				acceptedBy: currentPost.challengeMatch?.acceptedBy
+			}, involvedUserIds);
+		}
+
+		const hydratedPost = await hydrateWithPictures(currentPost.toObject ? currentPost.toObject() : currentPost);
+		emitForPost(req.io, currentPost, "postUpdated", hydratedPost, involvedUserIds);
 		res.json(hydratedPost);
 	} catch (error) {
 		console.error("Error accepting challenge:", error);
