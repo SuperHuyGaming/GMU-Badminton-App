@@ -274,7 +274,7 @@ router.post(
 			});
 		} catch (error) {
 			console.error("VIDEO UPLOAD ERROR:", error);
-			return res.status(500).json({ message: "Server error during video upload", error: error.message });
+			return res.status(500).json({ message: "Server error during video upload" });
 		} finally {
 			if (filePath) {
 				await fs.promises.unlink(filePath).catch(() => {});
@@ -323,7 +323,7 @@ router.post(
 			});
 		} catch (error) {
 			console.error("AUDIO UPLOAD ERROR:", error);
-			return res.status(500).json({ message: "Server error during audio upload", error: error.message });
+			return res.status(500).json({ message: "Server error during audio upload" });
 		} finally {
 			if (filePath) {
 				await fs.promises.unlink(filePath).catch(() => {});

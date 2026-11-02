@@ -1,5 +1,5 @@
 // client/src/components/ReactionDock.jsx
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
 import { Box, Paper, IconButton, Tooltip, Typography } from "@mui/material";
 import { motion } from "framer-motion";
@@ -26,6 +26,10 @@ export default function ReactionDock({
 	...rest
 }) {
 	const [activeEmoji, setActiveEmoji] = useState(null);
+	const activeTimerRef = useRef(null);
+
+	// Clear any pending pop-animation reset when the dock unmounts
+	useEffect(() => () => clearTimeout(activeTimerRef.current), []);
 
 	// Calculate counts per emoji
 	const counts = useMemo(() => {
@@ -54,7 +58,8 @@ export default function ReactionDock({
 
 	const handleEmojiClick = (emoji) => {
 		setActiveEmoji(emoji);
-		setTimeout(() => setActiveEmoji(null), 300);
+		clearTimeout(activeTimerRef.current);
+		activeTimerRef.current = setTimeout(() => setActiveEmoji(null), 300);
 		if (onReact) {
 			onReact(emoji);
 		}

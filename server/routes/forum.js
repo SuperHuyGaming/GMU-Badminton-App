@@ -13,8 +13,51 @@ const { analyzeContent } = require("../utils/aiModeration");
 const { evaluateSpamHeuristics } = require("../utils/spamDetector");
 const { parseDateRange } = require("../utils/dateRange");
 const feedCache = require("../utils/feedCache");
-const { scrapeLinkPreview } = require("../utils/linkPreviewScraper");
+const { scrapeLinkPreview, sanitizeHttpUrl } = require("../utils/linkPreviewScraper");
 const router = express.Router();
+
+// ==========================================
+// MEDIA & LINK PREVIEW SANITIZATION (M3)
+// ==========================================
+const CLOUDINARY_MEDIA_PREFIX = "https://res.cloudinary.com/";
+const MAX_LINK_PREVIEWS = 3;
+
+// Accept only HTTPS Cloudinary delivery URLs for uploaded video/audio; anything else yields "".
+const sanitizeCloudinaryMediaUrl = (value) => {
+	const url = sanitizeHttpUrl(value);
+	return url.startsWith(CLOUDINARY_MEDIA_PREFIX) ? url : "";
+};
+
+const sanitizePreviewText = (value, maxLength) =>
+	typeof value === "string" ? xss(value.trim()).slice(0, maxLength) : "";
+
+const sanitizeLinkPreviews = (input) => {
+	if (!Array.isArray(input)) return [];
+	const cleaned = [];
+	for (const preview of input) {
+		if (cleaned.length >= MAX_LINK_PREVIEWS) break;
+		if (!preview || typeof preview !== "object") continue;
+		const url = sanitizeHttpUrl(preview.url);
+		if (!url) continue;
+		const image = sanitizeHttpUrl(preview.image) || sanitizeHttpUrl(preview.imageUrl);
+		let domain = "";
+		try {
+			domain = new URL(url).hostname;
+		} catch {
+			domain = "";
+		}
+		cleaned.push({
+			url,
+			title: sanitizePreviewText(preview.title, 300),
+			description: sanitizePreviewText(preview.description, 500),
+			image,
+			imageUrl: image,
+			siteName: sanitizePreviewText(preview.siteName, 100),
+			domain,
+		});
+	}
+	return cleaned;
+};
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
 
@@ -790,7 +833,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", authMiddleware, postLimiter, async (req, res) => {
 	try {
-		const { title, content, imageUrl, imageUrls, targetDate, tags, visibility, isPinned, category, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
+		const { title, content, imageUrl, imageUrls, videoUrl, audioUrl, linkPreviews, targetDate, tags, visibility, isPinned, category, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
 
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
@@ -889,6 +932,9 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 			gearDetails: cleanGearDetails,
 			imageUrl: cleanImageUrl,
 			imageUrls: cleanImageUrls,
+			videoUrl: sanitizeCloudinaryMediaUrl(videoUrl),
+			audioUrl: sanitizeCloudinaryMediaUrl(audioUrl),
+			linkPreviews: sanitizeLinkPreviews(linkPreviews),
 			tags: cleanTags,
 			isPinned: req.user.role === "admin" && Boolean(isPinned),
 			visibility: visibility || 'PUBLIC',
@@ -923,6 +969,9 @@ router.post("/", authMiddleware, postLimiter, async (req, res) => {
 					content: newPost.content,
 					image: newPost.imageUrl,
 					images: newPost.imageUrls || [],
+					videoUrl: newPost.videoUrl || "",
+					audioUrl: newPost.audioUrl || "",
+					linkPreviews: newPost.linkPreviews || [],
 					tags: newPost.tags || [],
 					isPinned: newPost.isPinned || false,
 					category: newPost.category || "general",
@@ -1091,7 +1140,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			return res.status(400).json({ message: "Invalid post ID format." });
 		}
 
-		const { title, content, category, visibility, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
+		const { title, content, category, visibility, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails, videoUrl, audioUrl, linkPreviews } = req.body;
 		if (!title || typeof title !== "string" || !title.trim()) {
 			return res.status(400).json({ message: "Post title is required." });
 		}
@@ -1150,6 +1199,21 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			post.gearDetails = parseGearDetails(gearDetails);
 		}
 
+		// Media: an explicit empty value clears it; a non-Cloudinary URL is ignored.
+		if (videoUrl === "" || videoUrl === null) {
+			post.videoUrl = "";
+		} else if (sanitizeCloudinaryMediaUrl(videoUrl)) {
+			post.videoUrl = sanitizeCloudinaryMediaUrl(videoUrl);
+		}
+		if (audioUrl === "" || audioUrl === null) {
+			post.audioUrl = "";
+		} else if (sanitizeCloudinaryMediaUrl(audioUrl)) {
+			post.audioUrl = sanitizeCloudinaryMediaUrl(audioUrl);
+		}
+		if (Array.isArray(linkPreviews)) {
+			post.linkPreviews = sanitizeLinkPreviews(linkPreviews);
+		}
+
 		const cleanTitle = xss(title.trim());
 		const cleanContent = xss(content.trim());
 
@@ -1174,7 +1238,7 @@ router.put("/:postId", authMiddleware, async (req, res) => {
 			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
 				const p = ActivityFeed.updateOne(
 					{ referenceId: post._id },
-					{ $set: { title: post.title, content: post.content, category: post.category, visibility: post.visibility, isEdited: true, editedAt: post.editedAt, reactions: post.reactions, likes: post.likedBy?.length || 0 } }
+					{ $set: { title: post.title, content: post.content, category: post.category, visibility: post.visibility, isEdited: true, editedAt: post.editedAt, reactions: post.reactions, likes: post.likedBy?.length || 0, videoUrl: post.videoUrl || "", audioUrl: post.audioUrl || "", linkPreviews: post.linkPreviews || [] } }
 				);
 				if (p && typeof p.catch === 'function') p.catch(() => {});
 			}
@@ -2263,6 +2327,11 @@ const ALLOWED_EMOJIS = [
 	"🔥", "💯", "👏", "😡"
 ];
 
+const ALLOWED_REACTION_TYPES = new Set([
+	...Object.values(BADMINTON_REACTIONS_MAP).map((r) => r.reactionType),
+	"custom",
+]);
+
 const handleReactionRoute = async (req, res) => {
 	try {
 		const targetPostId = req.params.postId || req.params.id;
@@ -2806,7 +2875,7 @@ const linkPreviewLimiter = rateLimit({
 	message: { message: "Too many link preview requests, please try again later." },
 });
 
-router.post("/link-preview", linkPreviewLimiter, async (req, res) => {
+router.post("/link-preview", authMiddleware, linkPreviewLimiter, async (req, res) => {
 	try {
 		const { url } = req.body;
 		if (!url || typeof url !== "string") {
@@ -2836,57 +2905,101 @@ const handleCommentReaction = async (req, res) => {
 			return res.status(400).json({ message: "Invalid post or comment ID format." });
 		}
 
-		const post = await findPostByIdOrActivityFeed(postId);
+		let { emoji, reactionType } = req.body || {};
+		if (emoji === undefined && typeof reactionType === "string" && REACTION_TYPE_TO_EMOJI[reactionType]) {
+			emoji = REACTION_TYPE_TO_EMOJI[reactionType];
+		}
+		if (emoji === undefined) emoji = "👍";
+		if (typeof emoji !== "string" || !ALLOWED_EMOJIS.includes(emoji)) {
+			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
+		}
+		const resolvedReactionType = (typeof reactionType === "string" && ALLOWED_REACTION_TYPES.has(reactionType))
+			? reactionType
+			: (BADMINTON_REACTIONS_MAP[emoji]?.reactionType || "custom");
+
+		const post = await findPostByIdOrActivityFeed(postId, { lean: true });
 		if (!post) return res.status(404).json({ message: "Post not found." });
 
-		const comment = post.comments.id(commentId);
-		if (!comment) return res.status(404).json({ message: "Comment not found." });
+		const commentExists = Array.isArray(post.comments) &&
+			post.comments.some((c) => c && String(c._id) === String(commentId));
+		if (!commentExists) return res.status(404).json({ message: "Comment not found." });
 
 		const userId = (req.user.id || req.user.userId || req.user._id).toString();
 		const userName = req.user.name || "Player";
-		const { emoji = "👍", reactionType } = req.body;
+		const postObjectId = post._id;
+		const commentObjectId = new mongoose.Types.ObjectId(commentId);
+		const commentFilter = { "c._id": commentObjectId };
 
-		if (!Array.isArray(comment.reactions)) {
-			comment.reactions = [];
-		}
-
-		const existingIndex = comment.reactions.findIndex(
-			(r) => String(r.userId) === userId
-		);
-
-		let action = "added";
-		if (existingIndex > -1) {
-			if (comment.reactions[existingIndex].emoji === emoji) {
-				// Toggle off
-				comment.reactions.splice(existingIndex, 1);
+		// Atomic, query-guarded toggle: each step only applies if the comment is still in the
+		// expected state, so concurrent double-taps can never leave two reactions for one user.
+		let action = null;
+		for (let attempt = 0; attempt < 3 && !action; attempt += 1) {
+			// 1) Same emoji already present -> toggle off
+			const removed = await Post.updateOne(
+				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, reactions: { $elemMatch: { userId, emoji } } } } },
+				{ $pull: { "comments.$[c].reactions": { userId } } },
+				{ arrayFilters: [commentFilter] }
+			);
+			if (removed?.modifiedCount) {
 				action = "removed";
-			} else {
-				// Switch emoji
-				comment.reactions[existingIndex].emoji = emoji;
-				comment.reactions[existingIndex].reactionType = reactionType || "custom";
-				comment.reactions[existingIndex].createdAt = new Date();
-				action = "changed";
+				break;
 			}
-		} else {
-			comment.reactions.push({
-				userId,
-				userName,
-				emoji,
-				reactionType: reactionType || "custom",
-				createdAt: new Date(),
-			});
+
+			// 2) Different emoji present -> switch it in place
+			const changed = await Post.updateOne(
+				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, reactions: { $elemMatch: { userId, emoji: { $ne: emoji } } } } } },
+				{
+					$set: {
+						"comments.$[c].reactions.$[r].emoji": emoji,
+						"comments.$[c].reactions.$[r].reactionType": resolvedReactionType,
+						"comments.$[c].reactions.$[r].createdAt": new Date(),
+					},
+				},
+				{ arrayFilters: [commentFilter, { "r.userId": userId }] }
+			);
+			if (changed?.modifiedCount) {
+				action = "changed";
+				break;
+			}
+
+			// 3) No reaction from this user yet -> push (guarded so it cannot double-insert)
+			const added = await Post.updateOne(
+				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, "reactions.userId": { $ne: userId } } } },
+				{
+					$push: {
+						"comments.$[c].reactions": {
+							userId,
+							userName,
+							emoji,
+							reactionType: resolvedReactionType,
+							createdAt: new Date(),
+						},
+					},
+				},
+				{ arrayFilters: [commentFilter] }
+			);
+			if (added?.modifiedCount) {
+				action = "added";
+			}
 		}
 
-		await post.save();
+		if (!action) {
+			return res.status(409).json({ message: "Comment reaction changed concurrently. Please retry." });
+		}
 		feedCache.invalidateFeed();
 
-		const hydratedPost = await hydrateWithPictures(post.toObject());
+		const freshPost = await Post.findById(postObjectId).lean();
+		if (!freshPost) return res.status(404).json({ message: "Post not found." });
+		const freshComment = (freshPost.comments || []).find((c) => c && String(c._id) === String(commentId));
+		const reactions = freshComment?.reactions || [];
+
+		const hydratedPost = await hydrateWithPictures(freshPost);
 		if (req.io) {
 			req.io.emit("postUpdated", hydratedPost);
 			req.io.emit("commentReactionUpdated", {
-				postId: post._id.toString(),
-				commentId: comment._id.toString(),
-				reactions: comment.reactions,
+				postId: postObjectId.toString(),
+				commentId: String(commentId),
+				reactions,
 				action,
 				userId,
 			});
@@ -2896,7 +3009,7 @@ const handleCommentReaction = async (req, res) => {
 			success: true,
 			message: "Comment reaction updated successfully",
 			action,
-			reactions: comment.reactions,
+			reactions,
 			post: hydratedPost,
 		});
 	} catch (error) {
