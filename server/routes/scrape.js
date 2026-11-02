@@ -3,7 +3,6 @@ const router = express.Router();
 const { ApifyClient } = require("apify-client");
 const { parseInstagramPost } = require("../utils/aiParser");
 const { authMiddleware } = require("../middleware/auth");
-const Tournament = require("../models/Tournament");
 const ProposedTournament = require("../models/ProposedTournament");
 const rateLimit = require("express-rate-limit");
 const xss = require("xss");
@@ -112,7 +111,6 @@ router.post("/submit-pending", authMiddleware, scrapeLimiter, async (req, res, n
         const {
             tournamentName,
             startDate,
-            endDate,
             registrationDeadline,
             skillLevels,
             flyerImageUrl,

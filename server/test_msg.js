@@ -1,4 +1,3 @@
-const express = require('express');
 const mongoose = require('mongoose');
 
 async function test() {
@@ -23,7 +22,7 @@ async function test() {
     
     console.log("Finding message...");
     try {
-        const found = await Message.findById(msg._id);
+        await Message.findById(msg._id);
         console.log("Found successfully!");
     } catch (err) {
         console.error("Error finding:", err.message);

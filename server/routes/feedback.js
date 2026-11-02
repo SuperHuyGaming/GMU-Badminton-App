@@ -10,7 +10,7 @@ const { authMiddleware, adminMiddleware } = require("../middleware/auth");
 const { cloudinary } = require("../config/cloudinary");
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+const { JWT_SECRET } = require("../config/jwtSecret");
 
 // Rate limiter for feedback submissions to prevent spam attacks
 const feedbackSubmitLimiter = rateLimit({

@@ -746,7 +746,6 @@ function deduplicateTournament(candidate, existingTournaments = [], options = {}
     }
 
     const candidateTitle = candidate.tournamentName || candidate.name || '';
-    const candidateDate = candidate.startDate || candidate.date;
 
     let bestMatch = null;
     let maxScore = 0;
@@ -754,7 +753,6 @@ function deduplicateTournament(candidate, existingTournaments = [], options = {}
     for (const existing of existingTournaments) {
         if (!existing || typeof existing !== 'object') continue;
         const existingTitle = existing.tournamentName || existing.name || '';
-        const existingDate = existing.startDate || existing.date;
 
         // ML Pruning Gate: Temporal, Entity Conflict, Length Ratio, and Token Inverted Index Filter
         const pruneCheck = shouldPruneCandidate(candidate, existing, { windowHours });

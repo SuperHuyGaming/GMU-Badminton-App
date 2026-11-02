@@ -232,7 +232,7 @@ const onlineUsers = new Map();
 app.set("onlineUsers", onlineUsers);
 
 const jwt = require("jsonwebtoken");
-const SOCKET_JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+const { JWT_SECRET: SOCKET_JWT_SECRET } = require("./config/jwtSecret");
 
 io.on("connection", (socket) => {
 	console.log("New socket connection:", socket.id);

@@ -31,10 +31,12 @@ module.exports = [
 			"no-unsafe-finally": "error",
 			"valid-typeof": "error",
 			"use-isnan": "error",
+			"no-unused-vars": ["error", { args: "none", caughtErrors: "none" }],
 		},
 	},
 	{
 		files: ["tests/**/*.js", "**/*.test.js"],
 		languageOptions: { globals: { ...nodeGlobals, ...jestGlobals } },
+		rules: { "no-unused-vars": "off" },
 	},
 ];

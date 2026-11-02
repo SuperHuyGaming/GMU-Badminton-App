@@ -15,8 +15,7 @@ const authLimiter = rateLimit({
 	message: { message: "Too many attempts from this IP, please try again after 15 minutes." },
 });
 
-const JWT_SECRET =
-	process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+const { JWT_SECRET } = require("../config/jwtSecret");
 
 // Helper to generate access token
 const generateAccessToken = (user) => {
