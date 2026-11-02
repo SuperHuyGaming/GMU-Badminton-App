@@ -231,14 +231,35 @@ app.set("io", io);
 const onlineUsers = new Map();
 app.set("onlineUsers", onlineUsers);
 
+const jwt = require("jsonwebtoken");
+const SOCKET_JWT_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+
 io.on("connection", (socket) => {
 	console.log("New socket connection:", socket.id);
 	
-	socket.on("joinUserRoom", async (userId) => {
-		if (!userId || typeof userId !== "string" || !userId.trim()) {
+	socket.on("joinUserRoom", async (payload) => {
+		// The personal room carries private events (DMs, notifications), so the joiner must prove
+		// who they are with their access token. Accepts { userId, token } or a token in the handshake.
+		const token = (payload && typeof payload === "object" && typeof payload.token === "string" && payload.token)
+			|| (typeof socket.handshake?.auth?.token === "string" && socket.handshake.auth.token)
+			|| null;
+		if (!token) {
+			socket.emit("joinUserRoomError", { message: "Authentication required" });
 			return;
 		}
-		userId = userId.trim();
+		let userId;
+		try {
+			const decoded = jwt.verify(token, SOCKET_JWT_SECRET);
+			userId = String(decoded.id || decoded.userId || "").trim();
+		} catch {
+			socket.emit("joinUserRoomError", { message: "Invalid or expired token" });
+			return;
+		}
+		const requestedId = payload && typeof payload === "object" ? payload.userId : null;
+		if (!userId || (requestedId && String(requestedId) !== userId)) {
+			socket.emit("joinUserRoomError", { message: "Token does not match user" });
+			return;
+		}
 
 		// If socket previously joined under a different userId, clean up previous association
 		if (socket.userId && socket.userId !== userId && onlineUsers.has(socket.userId)) {

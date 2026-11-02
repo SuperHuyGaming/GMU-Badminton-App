@@ -761,7 +761,7 @@ describe('CHALLENGER EMPIRICAL ADVERSARIAL STRESS SUITE (M2)', () => {
 
             // Initial mount should emit joinUserRoom once
             expect(socket.emit).toHaveBeenCalledTimes(1);
-            expect(socket.emit).toHaveBeenCalledWith('joinUserRoom', 'user-alan');
+            expect(socket.emit).toHaveBeenCalledWith('joinUserRoom', expect.objectContaining({ userId: 'user-alan', token: expect.any(String) }));
             expect(socket.on).toHaveBeenCalledWith('newNotification', expect.any(Function));
             expect(socket.on).toHaveBeenCalledWith('privateMessage', expect.any(Function));
 

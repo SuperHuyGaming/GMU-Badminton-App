@@ -38,6 +38,9 @@ jest.mock('../services/scraper', () => ({
 
 const request = require("supertest");
 const ioClient = require("socket.io-client");
+const jwt = require("jsonwebtoken");
+const SOCKET_TEST_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+const joinAs = (userId) => ({ userId, token: jwt.sign({ id: userId, userId }, SOCKET_TEST_SECRET) });
 const { app, server, isOriginAllowed, onlineUsers } = require("../server");
 
 describe("ADVERSARIAL SUITE 1: Burst OPTIONS Preflight Across Real Server Routes", () => {
@@ -177,7 +180,7 @@ describe("ADVERSARIAL SUITE 3: Real Socket.io Multi-Tab Lifecycle & State Retent
             reconnection: false
         });
         await new Promise((resolve) => socket1.on("connect", resolve));
-        socket1.emit("joinUserRoom", userId);
+        socket1.emit("joinUserRoom", joinAs(userId));
         await new Promise((r) => setTimeout(r, 80));
 
         expect(onlineUsers.has(userId)).toBe(true);
@@ -191,7 +194,7 @@ describe("ADVERSARIAL SUITE 3: Real Socket.io Multi-Tab Lifecycle & State Retent
             reconnection: false
         });
         await new Promise((resolve) => socket2.on("connect", resolve));
-        socket2.emit("joinUserRoom", userId);
+        socket2.emit("joinUserRoom", joinAs(userId));
         await new Promise((r) => setTimeout(r, 80));
 
         expect(onlineUsers.has(userId)).toBe(true);
@@ -234,14 +237,29 @@ describe("ADVERSARIAL SUITE 3: Real Socket.io Multi-Tab Lifecycle & State Retent
             await new Promise((r) => setTimeout(r, 50));
             expect(onlineUsers.size).toBe(0);
 
-            // When a client sends a valid userId, it is accepted
+            // A bare userId without a token must be rejected (room hijack protection)
             socketAnon.emit("joinUserRoom", "user_first");
+            await new Promise((r) => setTimeout(r, 50));
+            expect(onlineUsers.size).toBe(0);
+
+            // A valid token for one user cannot be used to join another user's room
+            socketAnon.emit("joinUserRoom", { userId: "victim_user", token: joinAs("attacker_user").token });
+            await new Promise((r) => setTimeout(r, 50));
+            expect(onlineUsers.has("victim_user")).toBe(false);
+
+            // A forged token is rejected
+            socketAnon.emit("joinUserRoom", { userId: "victim_user", token: jwt.sign({ id: "victim_user" }, "wrong-secret") });
+            await new Promise((r) => setTimeout(r, 50));
+            expect(onlineUsers.has("victim_user")).toBe(false);
+
+            // When a client sends a valid token, it is accepted
+            socketAnon.emit("joinUserRoom", joinAs("user_first"));
             await new Promise((r) => setTimeout(r, 50));
             expect(onlineUsers.has("user_first")).toBe(true);
             expect(onlineUsers.get("user_first").has(socketAnon.id)).toBe(true);
 
             // When socket joins under a different userId, clean up previous association
-            socketAnon.emit("joinUserRoom", "user_second");
+            socketAnon.emit("joinUserRoom", joinAs("user_second"));
             await new Promise((r) => setTimeout(r, 50));
             expect(onlineUsers.has("user_first")).toBe(false);
             expect(onlineUsers.has("user_second")).toBe(true);
@@ -308,7 +326,7 @@ describe("ADVERSARIAL SUITE 3: Real Socket.io Multi-Tab Lifecycle & State Retent
             expect(receivedBroadcasts.length).toBe(0);
 
             // Now send a legitimate join event
-            attackerSocket.emit("joinUserRoom", "legitimate_fuzzer_verified_user");
+            attackerSocket.emit("joinUserRoom", joinAs("legitimate_fuzzer_verified_user"));
             await new Promise((r) => setTimeout(r, 60));
 
             // Verify observer received exactly one broadcast with legitimate user
@@ -343,8 +361,8 @@ describe("ADVERSARIAL SUITE 3: Real Socket.io Multi-Tab Lifecycle & State Retent
 
         try {
             // Both tabs join user_shared
-            socketTabA1.emit("joinUserRoom", "user_shared");
-            socketTabA2.emit("joinUserRoom", "user_shared");
+            socketTabA1.emit("joinUserRoom", joinAs("user_shared"));
+            socketTabA2.emit("joinUserRoom", joinAs("user_shared"));
             await new Promise((r) => setTimeout(r, 60));
 
             expect(onlineUsers.get("user_shared").size).toBe(2);
@@ -352,7 +370,7 @@ describe("ADVERSARIAL SUITE 3: Real Socket.io Multi-Tab Lifecycle & State Retent
             expect(onlineUsers.get("user_shared").has(socketTabA2.id)).toBe(true);
 
             // Now Tab A1 switches to user_separate
-            socketTabA1.emit("joinUserRoom", "user_separate");
+            socketTabA1.emit("joinUserRoom", joinAs("user_separate"));
             await new Promise((r) => setTimeout(r, 60));
 
             // user_shared must still exist with Tab A2 only
