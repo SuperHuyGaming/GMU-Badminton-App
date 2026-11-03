@@ -987,9 +987,9 @@ describe('Forum Page Component (Community Hub)', () => {
             expect(apiFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
         });
 
-        // Should NOT show "No activity found."
+        // The re-fetch clears and refills the feed; wait for it to settle instead of racing it.
+        expect(await screen.findByText('Feed Item 1')).toBeInTheDocument();
         expect(screen.queryByText(/No activity found/i)).not.toBeInTheDocument();
-        expect(screen.getByText('Feed Item 1')).toBeInTheDocument();
     });
 
     it('R4: re-fetches feed cleanly on mobile pull-to-refresh on page 1', async () => {
