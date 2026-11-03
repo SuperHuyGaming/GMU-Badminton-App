@@ -1,35 +1,45 @@
 import { test, expect } from '@playwright/test';
+import { stubApi, signInAs, PLAYER } from './helpers.js';
 
 test.describe('Authentication & Core Flow', () => {
-    test('Should display Landing page for unauthenticated users', async ({ page }) => {
-        // Go to root
-        await page.goto('http://localhost:5173');
+  test('shows the Landing page to signed-out visitors', async ({ page }) => {
+    await stubApi(page);
+    await page.goto('/');
 
-        // Check if hero banner text is visible
-        await expect(page.locator('text=GMU Badminton Hub')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Mason Badminton Connect' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /join the club/i })).toBeVisible();
+  });
 
-        // Check for the "Join the Club" CTA button
-        await expect(page.getByRole('button', { name: /join the club/i })).toBeVisible();
-    });
+  test('sends signed-out visitors from /community to the login page', async ({ page }) => {
+    await stubApi(page);
+    await page.goto('/community');
 
-    test('Should display Forum after bypassing auth', async ({ page }) => {
-        // Mock the user auth state by setting a fake token in localStorage
-        await page.goto('http://localhost:5173');
-        await page.evaluate(() => {
-            localStorage.setItem('user', JSON.stringify({ id: 'test', name: 'Playwright Tester' }));
-            localStorage.setItem('accessToken', 'fake-token');
-        });
-        
-        // Reload to let React pick up the token
-        await page.reload();
+    await expect(page).toHaveURL(/\/auth$/);
+    await expect(page.getByRole('heading', { name: 'Welcome Back' })).toBeVisible();
+  });
 
-        // Ensure user lands on Dashboard
-        await expect(page).toHaveURL(/.*\/dashboard/);
+  test('lets a signed-in player open the Community page from the navbar', async ({ page }) => {
+    await stubApi(page);
+    await signInAs(page, PLAYER);
+    await page.goto('/');
 
-        // Click the Forum tab
-        await page.getByRole('link', { name: /forum/i }).click();
+    // Signed-in users see the Dashboard at "/", not the Landing page.
+    await expect(page.getByRole('heading', { name: 'Mason Badminton Connect' })).toHaveCount(0);
 
-        // Ensure the forum header is visible
-        await expect(page.getByText('Discussion Board')).toBeVisible();
-    });
+    await page.getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('link', { name: 'Community' })
+      .click();
+
+    await expect(page).toHaveURL(/\/community$/);
+    // Still signed in: the navbar no longer offers a Login link.
+    await expect(page.getByRole('link', { name: 'Login' })).toHaveCount(0);
+  });
+
+  test('redirects the legacy /forum URL to /community', async ({ page }) => {
+    await stubApi(page);
+    await signInAs(page, PLAYER);
+    await page.goto('/forum');
+
+    await expect(page).toHaveURL(/\/community$/);
+  });
 });
