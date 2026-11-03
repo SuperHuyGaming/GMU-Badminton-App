@@ -33,6 +33,9 @@ jobs:
 
     - name: Install API Test Dependencies
       working-directory: ./test-automation
+      env:
+        # mongodb-memory-server is only for the local two-bot run; skip its MongoDB download in CI.
+        MONGOMS_DISABLE_POSTINSTALL: "1"
       run: npm ci
 
     - name: Run API Tests (test-automation)
