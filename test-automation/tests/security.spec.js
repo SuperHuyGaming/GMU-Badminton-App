@@ -13,6 +13,11 @@ test.describe('security headers', () => {
     expect(h['x-powered-by']).toBeUndefined();
   });
 
+  test('server metrics are not exposed publicly', async ({ request }) => {
+    const res = await request.get('/metrics');
+    expect(res.status()).toBe(404);
+  });
+
   test('API responses advertise the rate limit', async ({ request }) => {
     const res = await request.get('/api/status');
     const h = res.headers();
