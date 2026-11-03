@@ -184,7 +184,7 @@ describe('SearchResults Page Component', () => {
         expect(screen.getByRole('complementary', { name: 'Search filters' })).toBeInTheDocument();
 
         // Verify main landmark for results
-        expect(screen.getByRole('main', { name: 'Search results list' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Search results list' })).toBeInTheDocument();
 
         await waitFor(() => {
             expect(apiFetch).toHaveBeenCalled();

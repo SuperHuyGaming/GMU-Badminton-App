@@ -40,9 +40,11 @@ export default function CommentThread({
 			setIsExpanded(true);
 	}, [highlightId, comment.replies]);
 
-	const handleSubmitNestedReply = () => {
-		if (!nestedReplyText.trim() || !currentUser) return;
-		apiCall(
+	const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+	const handleSubmitNestedReply = async () => {
+		if (!nestedReplyText.trim() || !currentUser || isSubmittingReply) return;
+		setIsSubmittingReply(true);
+		const res = await apiCall(
 			`/api/forum/${localPost._id}/comments/${comment._id}/replies`,
 			"POST",
 			{
@@ -50,7 +52,12 @@ export default function CommentThread({
 				authorName: currentUser.name,
 				content: nestedReplyText.trim(),
 			},
+			false,
+			"Couldn't post your reply. Please try again.",
 		);
+		setIsSubmittingReply(false);
+		// apiCall already showed the error; keep the typed reply so it isn't lost.
+		if (!res) return;
 		setNestedReplyText("");
 		setIsReplying(false);
 		setIsExpanded(true);
@@ -61,7 +68,13 @@ export default function CommentThread({
 		let endpoint = `/api/forum/${localPost._id}/comments/${comment._id}`;
 		if (deleteTarget.isReply)
 			endpoint += `/replies/${deleteTarget.replyId}`;
-		await apiCall(endpoint, "DELETE", { userId: currentUser.id });
+		await apiCall(
+			endpoint,
+			"DELETE",
+			{ userId: currentUser.id },
+			false,
+			deleteTarget.isReply ? "Couldn't delete the reply." : "Couldn't delete the comment.",
+		);
 		setDeleteTarget(null);
 	};
 
@@ -194,6 +207,7 @@ export default function CommentThread({
 							}
 						}}
 						sx={{
+							minWidth: 0,
 							"& .MuiOutlinedInput-root": {
 								borderRadius: 5,
 								bgcolor: "action.hover",
@@ -215,7 +229,7 @@ export default function CommentThread({
 						size="small"
 						variant="contained"
 						onClick={handleSubmitNestedReply}
-						disabled={!nestedReplyText.trim()}
+						disabled={!nestedReplyText.trim() || isSubmittingReply}
 						sx={{
 							borderRadius: 5,
 							minWidth: "60px",

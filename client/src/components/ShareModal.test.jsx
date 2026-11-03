@@ -115,7 +115,7 @@ describe("ShareModal Component Tests", () => {
 		fireEvent.click(copyBtn);
 
 		await waitFor(() => {
-			expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining("/community#post-post-987"));
+			expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining("/post/post-987"));
 			expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("copied to clipboard"));
 			expect(onClose).toHaveBeenCalled();
 		});
@@ -143,7 +143,7 @@ describe("ShareModal Component Tests", () => {
 		fireEvent.click(sendDmBtn);
 
 		await waitFor(() => {
-			expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining("/community#post-post-987"));
+			expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining("/post/post-987"));
 			expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("Direct Message"));
 			expect(onClose).toHaveBeenCalled();
 		});
@@ -167,5 +167,31 @@ describe("ShareModal Component Tests", () => {
 		const cancelBtn = screen.getByRole("button", { name: "Cancel" });
 		fireEvent.click(cancelBtn);
 		expect(onClose).toHaveBeenCalledTimes(2);
+	});
+
+	it("copies the canonical /post/:id link (not /community#post-...)", async () => {
+		const writeTextMock = vi.fn().mockResolvedValue();
+		Object.assign(navigator, { clipboard: { writeText: writeTextMock } });
+		render(<ShareModal open={true} onClose={vi.fn()} post={mockPost} currentUser={mockUser} />);
+
+		fireEvent.click(screen.getByTestId("copy-link-btn"));
+
+		await waitFor(() => {
+			expect(writeTextMock).toHaveBeenCalledWith(`${window.location.origin}/post/post-987`);
+		});
+		expect(writeTextMock.mock.calls[0][0]).not.toContain("#post-");
+	});
+
+	it("shows the server's message and stays open when sharing to the feed fails", async () => {
+		const onClose = vi.fn();
+		apiFetch.mockRejectedValueOnce(new Error("You can't repost a private post."));
+		render(<ShareModal open={true} onClose={onClose} post={mockPost} currentUser={mockUser} />);
+
+		fireEvent.click(screen.getByTestId("share-to-feed-btn"));
+
+		await waitFor(() => {
+			expect(toast.error).toHaveBeenCalledWith("You can't repost a private post.");
+		});
+		expect(onClose).not.toHaveBeenCalled();
 	});
 });

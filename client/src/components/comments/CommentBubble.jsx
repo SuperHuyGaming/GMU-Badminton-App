@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { MoreVertIcon } from "../Icons";
 import apiFetch from "../../utils/api";
 import { toast } from "react-hot-toast";
+import { ensureOk, errorMessage } from "../postRequest";
 import MemberHoverCard from "../MemberHoverCard";
 
 export default function CommentBubble({
@@ -54,15 +55,15 @@ export default function CommentBubble({
 				},
 			);
 
-			if (res.ok) {
-				const data = await res.json();
-				if (!data.title && !data._id)
-					toast("Your edit has been sent for review.", { icon: "ℹ️" });
-			}
+			await ensureOk(res, "Couldn't save your edit. Please try again.");
+			const data = await res.json();
+			if (!data.title && !data._id)
+				toast("Your edit has been sent for review.", { icon: "ℹ️" });
+			setIsEditing(false);
 		} catch (err) {
-			console.error("Error saving comment edit:", err);
+			// Keep the editor open with the typed text so nothing is lost.
+			toast.error(errorMessage(err, "Couldn't save your edit. Please try again."));
 		}
-		setIsEditing(false);
 	};
 
 	return (
@@ -364,14 +365,10 @@ export default function CommentBubble({
 										method: "POST",
 										body: JSON.stringify({ reason: "Inappropriate or Offensive" }),
 									});
-									const data = await res?.json().catch(() => ({}));
-									if (res && res.ok) {
-										toast.success("Comment reported. Thank you for keeping our community safe.");
-									} else {
-										toast.error(data?.message || "Failed to report comment.");
-									}
-								} catch {
-									toast.error("Network error reporting comment.");
+									await ensureOk(res, "Failed to report comment.");
+									toast.success("Comment reported. Thank you for keeping our community safe.");
+								} catch (err) {
+									toast.error(errorMessage(err, "Failed to report comment."));
 								}
 							}}
 							sx={{

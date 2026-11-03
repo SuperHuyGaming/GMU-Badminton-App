@@ -1,10 +1,11 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PostCard from './PostCard';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import apiFetch from '../utils/api';
 import socket from '../utils/socket';
+import { toast } from 'react-hot-toast';
 
 // Mock the API calls and navigate
 const mockNavigate = vi.fn();
@@ -21,6 +22,13 @@ vi.mock('../utils/api', () => ({
         ok: true,
         json: async () => ({ reactions: [] })
     })
+}));
+
+vi.mock('react-hot-toast', () => ({
+    toast: Object.assign(vi.fn(), {
+        success: vi.fn(),
+        error: vi.fn(),
+    }),
 }));
 
 describe('PostCard Component QA Tests', () => {
@@ -352,7 +360,7 @@ describe('PostCard Component QA Tests', () => {
         expect(screen.getByText('String: BG80 @ 27 lbs')).toBeInTheDocument();
     });
 
-    it('handles 1-tap post sharing using clipboard copy fallback with toast confirmation', async () => {
+    it('one tap on Share opens the share modal only; Copy Direct Link copies the canonical /post/:id link', async () => {
         const writeTextMock = vi.fn().mockResolvedValue();
         Object.assign(navigator, {
             clipboard: {
@@ -361,10 +369,18 @@ describe('PostCard Component QA Tests', () => {
         });
 
         renderWithContext(mockPost, mockUser);
-        const shareBtn = screen.getByRole('button', { name: /share/i });
+        const shareBtn = screen.getByRole('button', { name: /^share$/i });
         fireEvent.click(shareBtn);
 
-        expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining(`/community#post-${mockPost._id}`));
+        // Opening the modal must not copy anything by itself.
+        expect(screen.getByTestId('share-modal')).toBeInTheDocument();
+        expect(writeTextMock).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByTestId('copy-link-btn'));
+        await waitFor(() => {
+            expect(writeTextMock).toHaveBeenCalledWith(`${window.location.origin}/post/${mockPost._id}`);
+        });
+        expect(writeTextMock).toHaveBeenCalledTimes(1);
     });
 
     it('renders Club Exec badge and active win streak chip on author header', () => {
@@ -919,5 +935,155 @@ describe('PostCard Component QA Tests', () => {
 
         // Comment should remain preserved from cache
         expect(screen.getByText('Preserved comment')).toBeInTheDocument();
+    });
+
+    // ── Community audit fixes: delete contract, server error toasts, edit rule, a11y ──
+    describe('community audit fixes', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        const openDeleteDialogAndConfirm = () => {
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Delete Post/i }));
+            fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }));
+        };
+
+        it('calls onDelete(postId) and shows a success toast only after the server confirms the delete', async () => {
+            const onDelete = vi.fn();
+            apiFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Post deleted' }) });
+            renderWithContext(mockPost, mockUser, { onDelete });
+
+            openDeleteDialogAndConfirm();
+
+            await waitFor(() => expect(onDelete).toHaveBeenCalledWith(mockPost._id));
+            expect(apiFetch).toHaveBeenCalledWith(
+                `/api/forum/${mockPost._id}`,
+                expect.objectContaining({ method: 'DELETE' })
+            );
+            expect(toast.success).toHaveBeenCalledWith('Post deleted');
+            expect(toast.error).not.toHaveBeenCalled();
+        });
+
+        it('keeps the post, does not call onDelete and shows the server message when the delete fails', async () => {
+            const onDelete = vi.fn();
+            apiFetch.mockRejectedValueOnce(new Error('You can only delete your own posts.'));
+            renderWithContext(mockPost, mockUser, { onDelete });
+
+            openDeleteDialogAndConfirm();
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('You can only delete your own posts.'));
+            expect(onDelete).not.toHaveBeenCalled();
+            expect(toast.success).not.toHaveBeenCalled();
+            expect(screen.getByText('This is a test post content')).toBeInTheDocument();
+        });
+
+        it('treats an offline { ok: false } response as a failed delete', async () => {
+            const onDelete = vi.fn();
+            apiFetch.mockResolvedValueOnce({ ok: false, status: 0, json: async () => ({ message: 'Network offline' }) });
+            renderWithContext(mockPost, mockUser, { onDelete });
+
+            openDeleteDialogAndConfirm();
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Network offline'));
+            expect(onDelete).not.toHaveBeenCalled();
+        });
+
+        it('disables Save with helper text when both title and body are empty, and allows a body-only edit', async () => {
+            apiFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ ...mockPost, title: 'Only body now', content: 'Only body now' }),
+            });
+            renderWithContext(mockPost, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByText(/edit post/i));
+
+            const titleInput = screen.getByLabelText(/edit title/i);
+            const bodyInput = screen.getByLabelText(/edit details/i);
+            const saveBtn = screen.getByRole('button', { name: /save changes/i });
+
+            fireEvent.change(titleInput, { target: { value: '   ' } });
+            fireEvent.change(bodyInput, { target: { value: '  ' } });
+            expect(saveBtn).toBeDisabled();
+            expect(screen.getByText(/Add a title or some details before saving/i)).toBeInTheDocument();
+
+            // Title is optional, like when creating a post.
+            fireEvent.change(bodyInput, { target: { value: 'Only body now' } });
+            expect(saveBtn).not.toBeDisabled();
+            expect(screen.queryByText(/Add a title or some details before saving/i)).not.toBeInTheDocument();
+
+            fireEvent.click(saveBtn);
+            await waitFor(() => {
+                expect(apiFetch).toHaveBeenCalledWith(
+                    `/api/forum/${mockPost._id}`,
+                    expect.objectContaining({ method: 'PUT' })
+                );
+            });
+            const body = JSON.parse(apiFetch.mock.calls[0][1].body);
+            // The server needs a title, so it is filled from the body's first line (same as the composer).
+            expect(body.title).toBe('Only body now');
+            expect(body.content).toBe('Only body now');
+            await waitFor(() => expect(screen.queryByLabelText(/edit title/i)).not.toBeInTheDocument());
+        });
+
+        it('keeps the editor open and shows the server message when saving an edit fails', async () => {
+            apiFetch.mockRejectedValueOnce(new Error('Post title cannot exceed 200 characters.'));
+            renderWithContext(mockPost, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByText(/edit post/i));
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Post title cannot exceed 200 characters.'));
+            expect(screen.getByLabelText(/edit title/i)).toBeInTheDocument();
+        });
+
+        it("shows the server's reason when a report is rejected", async () => {
+            apiFetch.mockRejectedValueOnce(new Error('You have already reported this post.'));
+            renderWithContext(mockPost, { id: 'viewer-456', name: 'Other Member' });
+
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Report Post/i }));
+            fireEvent.click(screen.getByRole('button', { name: /Submit Report/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('You have already reported this post.'));
+            expect(toast.error).not.toHaveBeenCalledWith(expect.stringMatching(/Network error/i));
+        });
+
+        it("shows the server's reason and rolls back when an RSVP is rejected", async () => {
+            const rallyPost = {
+                ...mockPost,
+                category: 'meetup_rally',
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [], isFilled: false },
+            };
+            apiFetch.mockRejectedValueOnce(new Error('This rally has already started.'));
+            renderWithContext(rallyPost, { id: 'viewer-456', name: 'Other Member' });
+
+            fireEvent.click(screen.getByRole('button', { name: /Join Rally/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('This rally has already started.'));
+            expect(screen.getByRole('button', { name: /Join Rally/i })).toBeInTheDocument();
+        });
+
+        it("shows the server's reason and reverts the optimistic reaction when reacting fails", async () => {
+            apiFetch.mockRejectedValueOnce(new Error('Too many reactions, slow down.'));
+            renderWithContext({ ...mockPost, reactions: [] }, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /React to post/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Too many reactions, slow down.'));
+            expect(screen.queryByTestId('view-reactions-btn')).not.toBeInTheDocument();
+        });
+
+        it('exposes the audience icon as an image with an accessible name', () => {
+            renderWithContext({ ...mockPost, visibility: 'FRIENDS_ONLY' }, mockUser);
+            expect(screen.getByRole('img', { name: 'Privacy: Friends Only' })).toBeInTheDocument();
+        });
+
+        it('renders the post title as an h3 heading', () => {
+            renderWithContext(mockPost, mockUser);
+            expect(screen.getByRole('heading', { level: 3, name: 'Test Post Title' })).toBeInTheDocument();
+        });
     });
 });

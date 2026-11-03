@@ -407,7 +407,9 @@ function App() {
 					root: {
 						backdropFilter: "blur(20px)",
 						WebkitBackdropFilter: "blur(20px)",
-						backgroundColor: mode === "light" ? "rgba(0, 102, 51, 0.85)" : "rgba(2, 18, 10, 0.85)",
+						// Light mode: deeper, more opaque brand green so the yellow "GMU Badminton" logo keeps ~6:1 contrast
+						// even when light page content scrolls under the blurred bar (0.85 alpha dropped it to ~4.5:1).
+						backgroundColor: mode === "light" ? "rgba(0, 92, 46, 0.94)" : "rgba(2, 18, 10, 0.85)",
 						backgroundImage: "none",
 					}
 				}
@@ -536,8 +538,11 @@ function App() {
 						}}
 					/>
 
-					<Container 
-						maxWidth="lg" 
+					{/* The page's single <main> landmark; pages render inside it. */}
+					<Container
+						component="main"
+						id="main-content"
+						maxWidth="lg"
 						sx={{ 
 							mt: { xs: 2, sm: 3, md: 4 }, 
 							mb: { xs: 4, sm: 6, md: 8 },

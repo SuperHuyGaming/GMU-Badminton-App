@@ -395,7 +395,9 @@ describe('Milestone 2 Adversarial Stress Suite (challenger_2_m2_14)', () => {
 					authorId: mockCurrentUser.id,
 					authorName: mockCurrentUser.name,
 					content: '@Master Shuttle 27 lbs feels great on racket!',
-				}
+				},
+				false,
+				expect.any(String)
 			);
 		});
 
