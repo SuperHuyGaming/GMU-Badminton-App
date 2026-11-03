@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import SearchResults from './SearchResults';
 import apiFetch from '../utils/api';
-import posthog from 'posthog-js';
+import analytics from '../utils/analytics';
 import { useAuth } from '../context/AuthContext';
 
 // Mock API fetch
@@ -11,8 +11,8 @@ vi.mock('../utils/api', () => ({
     default: vi.fn(),
 }));
 
-// Mock PostHog
-vi.mock('posthog-js', () => ({
+// Mock the analytics wrapper (it lazy-loads PostHog)
+vi.mock('../utils/analytics', () => ({
     default: {
         capture: vi.fn(),
     },
@@ -87,7 +87,7 @@ describe('SearchResults Page Component', () => {
         });
 
         renderSearchResults('Alice');
-        expect(posthog.capture).toHaveBeenCalledWith('search_executed', {
+        expect(analytics.capture).toHaveBeenCalledWith('search_executed', {
             query: 'Alice',
             type: 'players',
         });

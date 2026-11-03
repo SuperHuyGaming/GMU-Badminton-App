@@ -31,6 +31,14 @@ jobs:
       working-directory: ./server
       run: npm test
 
+    - name: Install API Test Dependencies
+      working-directory: ./test-automation
+      run: npm ci
+
+    - name: Run API Tests (test-automation)
+      working-directory: ./test-automation
+      run: npm test
+
     - name: Install Frontend Dependencies
       working-directory: ./client
       run: npm install

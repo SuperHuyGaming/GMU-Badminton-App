@@ -65,7 +65,29 @@ export default defineConfig({
     })
   ],
   build: {
-    modulePreload: false
+    modulePreload: false,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          // Split long-lived libraries every page needs at startup into their own
+          // chunks, so they stay cached when app code changes. MUI is NOT grouped:
+          // a single MUI chunk would pull components only lazy pages use into the
+          // first download.
+          groups: [
+            {
+              name: 'react-vendor',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/,
+              priority: 20,
+            },
+            {
+              name: 'realtime-vendor',
+              test: /[\\/]node_modules[\\/](socket\.io-client|socket\.io-parser|engine\.io-client|engine\.io-parser|@socket\.io)[\\/]/,
+              priority: 10,
+            },
+          ],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

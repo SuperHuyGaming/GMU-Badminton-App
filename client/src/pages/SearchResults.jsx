@@ -20,7 +20,7 @@ import {
     InputAdornment
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import posthog from 'posthog-js';
+import analytics from '../utils/analytics';
 import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
 import { useAuth } from '../context/AuthContext';
@@ -79,7 +79,7 @@ export default function SearchResults() {
     // Track search execution when query or type changes
     useEffect(() => {
         if (searchQuery) {
-            posthog.capture("search_executed", { query: searchQuery, type: searchType });
+            analytics.capture("search_executed", { query: searchQuery, type: searchType });
         }
     }, [searchQuery, searchType]);
 

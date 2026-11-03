@@ -1,18 +1,16 @@
 {
   "name": "test-automation",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "description": "API-level test automation for the GMU Badminton server (Playwright request tests, no browser).",
   "scripts": {
-    "test": "echo \"No tests yet\"",
-    "lint": "echo \"No linting\""
+    "test": "playwright test",
+    "test:smoke": "playwright test",
+    "report": "playwright show-report"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "dependencies": {
-    "@playwright/test": "^1.63.0",
-    "playwright": "^1.63.0"
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
   }
 }
