@@ -23,6 +23,10 @@ jobs:
       working-directory: ./server
       run: npm install
 
+    - name: Lint Backend
+      working-directory: ./server
+      run: npx eslint . --max-warnings 0
+
     - name: Run Backend Tests
       working-directory: ./server
       run: npm test
@@ -31,6 +35,10 @@ jobs:
       working-directory: ./client
       run: npm install
 
+    - name: Lint Frontend
+      working-directory: ./client
+      run: npm run lint
+
     - name: Run Frontend Tests
       working-directory: ./client
       run: npm test
@@ -38,3 +46,11 @@ jobs:
     - name: Verify Frontend Build
       working-directory: ./client
       run: npm run build
+
+    - name: Install Playwright Browser
+      working-directory: ./client
+      run: npx playwright install --with-deps chromium
+
+    - name: Run E2E Tests
+      working-directory: ./client
+      run: npm run test:e2e

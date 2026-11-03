@@ -9,7 +9,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   // eslint-disable-next-line no-undef
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  // eslint-disable-next-line no-undef
+  reporter: process.env.CI ? 'list' : 'html',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
@@ -30,7 +31,8 @@ export default defineConfig({
     },
     {
       command: 'npm run start',
-      url: 'http://localhost:5005',
+      // The API has no route at "/" (returns 404, which Playwright treats as not ready).
+      url: 'http://localhost:5005/api/status',
       // eslint-disable-next-line no-undef
       reuseExistingServer: !process.env.CI,
       cwd: '../server',
