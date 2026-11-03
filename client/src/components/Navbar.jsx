@@ -1038,10 +1038,10 @@ export default function Navbar() {
 										}}
 									>
 										<ListItemText
-											primaryTypographyProps={{
+											slotProps={{ primary: { sx: {
 												fontWeight: "bold",
 												color: "#ffffff",
-											}}
+											} } }}
 											primary={item.label}
 										/>
 									</ListItemButton>
@@ -1064,10 +1064,10 @@ export default function Navbar() {
 								}}
 							>
 								<ListItemText
-									primaryTypographyProps={{
+									slotProps={{ primary: { sx: {
 										fontWeight: "bold",
 										color: "#FFCC33",
-									}}
+									} } }}
 									primary="Feedback & Report Bug"
 								/>
 							</ListItemButton>
@@ -1089,10 +1089,10 @@ export default function Navbar() {
 										}}
 									>
 										<ListItemText
-											primaryTypographyProps={{
+											slotProps={{ primary: { sx: {
 												fontWeight: "bold",
 												color: "#ffffff",
-											}}
+											} } }}
 											primary="Admin Panel"
 										/>
 									</ListItemButton>
@@ -1113,10 +1113,10 @@ export default function Navbar() {
 										}}
 									>
 										<ListItemText
-											primaryTypographyProps={{
+											slotProps={{ primary: { sx: {
 												fontWeight: "bold",
 												color: "#ffffff",
-											}}
+											} } }}
 											primary="Tournament Approvals"
 										/>
 									</ListItemButton>

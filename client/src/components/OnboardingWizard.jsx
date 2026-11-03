@@ -40,13 +40,16 @@ export default function OnboardingWizard({ onComplete }) {
 	const [activeStep, setActiveStep] = useState(0);
 	const [direction, setDirection] = useState(1);
 	const [saving, setSaving] = useState(false);
-	const [formData, setFormData] = useState({
+	// Start from the user's current profile (e.g. the skill level picked at sign-up) instead of
+	// hard-coded defaults, and remember it so only fields the user changes are saved.
+	const [initialData] = useState(() => ({
 		name: user?.name || "",
-		skillLevel: "D Level",
-		preferredPlay: "Any",
-		racket: "",
-		bio: "",
-	});
+		skillLevel: skillLevels.includes(user?.skillLevel) ? user.skillLevel : "",
+		preferredPlay: playStyles.includes(user?.preferredPlay) ? user.preferredPlay : "Any",
+		racket: user?.racket || "",
+		bio: user?.bio || "",
+	}));
+	const [formData, setFormData] = useState(initialData);
 
 	const handleChange = (e) =>
 		setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -63,10 +66,17 @@ export default function OnboardingWizard({ onComplete }) {
 
 	const handleFinish = async () => {
 		setSaving(true);
+		// Only send what the user actually changed so untouched fields (skill level, name, ...)
+		// keep their saved values.
+		const changes = Object.fromEntries(
+			Object.entries(formData).filter(([key, value]) => value !== initialData[key])
+		);
+		// A blanked-out display name is never a valid change.
+		if (typeof changes.name === "string" && !changes.name.trim()) delete changes.name;
 		try {
 			const res = await apiFetch("/api/profile", {
 				method: "PUT",
-				body: JSON.stringify({ ...formData, onboardingComplete: true }),
+				body: JSON.stringify({ ...changes, onboardingComplete: true }),
 			});
 			if (res.ok) {
 				const updatedUser = await res.json();
@@ -191,7 +201,7 @@ export default function OnboardingWizard({ onComplete }) {
 							You&apos;re all set, {formData.name || "Player"}!
 						</Typography>
 						<Typography color="text.primary">
-							Skill: {formData.skillLevel} · Plays: {formData.preferredPlay}
+							Skill: {formData.skillLevel || "Not set"}· Plays: {formData.preferredPlay}
 						</Typography>
 						{formData.racket && (
 							<Typography color="text.primary" sx={{ mt: 0.5 }}>

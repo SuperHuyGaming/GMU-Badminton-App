@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Routes, Route } from 'react-router-dom';
 import Forum from './Forum';
 import apiFetch from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
@@ -53,11 +53,19 @@ vi.mock('@mui/lab/Masonry', () => ({
 }));
 
 // Mock PostCard to prevent full deep rendering
+// (exposes onDelete so tests can simulate a server-confirmed delete)
 vi.mock('../components/PostCard', () => ({
-    default: ({ post }) => (
+    default: ({ post, onDelete }) => (
         <div data-testid={`post-card-${post._id}`}>
             <h3>{post.title}</h3>
             <p>{post.content}</p>
+            <span data-testid={`post-likers-${post._id}`}>{JSON.stringify(post.likedBy)}</span>
+            <span data-testid={`post-visibility-${post._id}`}>{post.visibility}</span>
+            <span data-testid={`post-reactions-${post._id}`}>{(post.reactions || []).length}</span>
+            <span data-testid={`post-rsvps-${post._id}`}>{(post.playerMatchmaking?.rsvpList || []).length}</span>
+            <button type="button" data-testid={`mock-delete-${post._id}`} onClick={() => onDelete && onDelete(post._id)}>
+                mock delete
+            </button>
         </div>
     )
 }));
@@ -1171,7 +1179,7 @@ describe('Forum Page Component (Community Hub)', () => {
                 return { ok: true, json: async () => ({}) };
             });
 
-            renderWithProviders();
+            const { container } = renderWithProviders();
             await waitFor(() => expect(screen.getByText('Page 1 Post')).toBeInTheDocument());
 
             // Simulate window scroll reaching 80% of document height
@@ -1186,10 +1194,432 @@ describe('Forum Page Component (Community Hub)', () => {
                 fireEvent.scroll(window);
             });
 
-            // Wait for throttle timeout and next page fetch
-            await waitFor(() => {
-                expect(callCount).toBeGreaterThan(1);
+            await waitFor(() => expect(screen.getByText('Page 2 Post')).toBeInTheDocument());
+            expect(callCount).toBe(2);
+            const feedCalls = apiFetch.mock.calls.map(c => c[0]).filter(u => u.startsWith('/api/feed?'));
+            expect(feedCalls[1]).toContain('cursor=cursor-1');
+            // Page 1 stays visible while appending; no skeleton flash
+            expect(screen.getByText('Page 1 Post')).toBeInTheDocument();
+            expect(container.querySelectorAll('.MuiSkeleton-root').length).toBe(0);
+
+            // Page 2 said hasMore: false, so further scrolling requests nothing
+            await new Promise(r => setTimeout(r, 120));
+            await act(async () => {
+                fireEvent.scroll(window);
             });
+            await new Promise(r => setTimeout(r, 50));
+            expect(callCount).toBe(2);
+        });
+    });
+
+    describe('Community audit fixes', () => {
+        const feedUrl = (u) => typeof u === 'string' && (u.startsWith('/api/feed?') || u === '/api/feed');
+        const feedCalls = () => apiFetch.mock.calls.map(c => c[0]).filter(feedUrl);
+
+        it('removes a post from the feed after PostCard reports a confirmed delete', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    feed: [
+                        { _id: 'af1', type: 'post', referenceId: 'p-del', title: 'Delete me', content: 'bye', authorId: 'user1', createdAt: new Date().toISOString() },
+                        { _id: 'af2', type: 'post', referenceId: 'p-keep', title: 'Keep me', content: 'hi', authorId: 'user2', createdAt: new Date().toISOString() }
+                    ],
+                    hasMore: false
+                })
+            });
+
+            renderWithProviders();
+            await waitFor(() => expect(screen.getByText('Delete me')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByTestId('mock-delete-p-del'));
+
+            await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument());
+            expect(screen.getByText('Keep me')).toBeInTheDocument();
+        });
+
+        it('removes a post live when the server emits postDeleted, and stops listening on unmount', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    feed: [{ _id: 'af1', type: 'post', referenceId: 'p-live', title: 'Live post', content: 'x', createdAt: new Date().toISOString() }],
+                    hasMore: false
+                })
+            });
+
+            const { unmount } = renderWithProviders();
+            await waitFor(() => expect(screen.getByText('Live post')).toBeInTheDocument());
+            expect(typeof socketHandlers.postDeleted).toBe('function');
+
+            await act(async () => {
+                socketHandlers.postDeleted('p-live');
+            });
+            await waitFor(() => expect(screen.queryByText('Live post')).not.toBeInTheDocument());
+
+            unmount();
+            expect(socketHandlers.postDeleted).toBeUndefined();
+        });
+
+        it('shows an error with "Try again" when the feed fails to load, and recovers on retry', async () => {
+            let feedAttempts = 0;
+            apiFetch.mockImplementation(async (url) => {
+                if (feedUrl(url)) {
+                    feedAttempts++;
+                    if (feedAttempts === 1) throw new Error('Request failed with status 500');
+                    return { ok: true, json: async () => ({ feed: [{ _id: 'ok1', title: 'Recovered post', content: 'y', createdAt: new Date().toISOString() }], hasMore: false }) };
+                }
+                return { ok: true, json: async () => ({}) };
+            });
+
+            renderWithProviders();
+            expect(await screen.findByText("Couldn't load posts.")).toBeInTheDocument();
+            expect(screen.queryByText(/No activity found/i)).not.toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+            expect(await screen.findByText('Recovered post')).toBeInTheDocument();
+            expect(screen.queryByText("Couldn't load posts.")).not.toBeInTheDocument();
+            expect(feedAttempts).toBe(2);
+        });
+
+        it('still shows the normal empty state for a real empty result', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            renderWithProviders();
+            expect(await screen.findByText(/No activity found/i)).toBeInTheDocument();
+            expect(screen.queryByText("Couldn't load posts.")).not.toBeInTheDocument();
+        });
+
+        it.each([
+            ['feed is an object', { feed: { not: 'an array' }, nextCursor: 'c1', hasMore: true }],
+            ['feed is missing', { message: 'weird' }],
+            ['body is null', null],
+            ['feed has junk entries', { feed: [null, 'x', 42], hasMore: false }]
+        ])('does not crash on a malformed /api/feed response (%s)', async (_label, body) => {
+            apiFetch.mockImplementation(async (url) => {
+                if (feedUrl(url)) return { ok: true, json: async () => body };
+                return { ok: true, json: async () => ({}) };
+            });
+            renderWithProviders();
+            expect(await screen.findByText(/No activity found/i)).toBeInTheDocument();
+            expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument();
+        });
+
+        it('clicking "All" clears a selected #tag and refetches page 1 without it', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            renderWithProviders();
+            await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
+
+            const allChip = () => screen.getByText('All').closest('[role="button"]');
+            const tagChip = () => screen.getByText('#Stringing').closest('[role="button"]');
+            expect(allChip()).toHaveAttribute('aria-pressed', 'true');
+
+            fireEvent.click(tagChip());
+            await waitFor(() => expect(feedCalls().at(-1)).toContain('tag=Stringing'));
+            expect(tagChip()).toHaveAttribute('aria-pressed', 'true');
+            // A tag is filtering, so "All" must not look selected
+            expect(allChip()).toHaveAttribute('aria-pressed', 'false');
+
+            const callsBefore = feedCalls().length;
+            fireEvent.click(allChip());
+            await waitFor(() => expect(feedCalls().length).toBeGreaterThan(callsBefore));
+            const last = feedCalls().at(-1);
+            expect(last).not.toContain('tag=');
+            expect(last).not.toContain('category=');
+            expect(last).not.toContain('cursor=');
+            expect(allChip()).toHaveAttribute('aria-pressed', 'true');
+            expect(tagChip()).toHaveAttribute('aria-pressed', 'false');
+        });
+
+        it('shows a clear message for /post/<missing id> with a way back to the feed', async () => {
+            apiFetch.mockImplementation(async (url) => {
+                if (url === '/api/forum/missing-post-1') throw new Error('Post not found');
+                if (feedUrl(url)) return { ok: true, json: async () => ({ feed: [{ _id: 'f1', title: 'Normal feed post', content: 'z', createdAt: new Date().toISOString() }], hasMore: false }) };
+                return { ok: true, json: async () => ({}) };
+            });
+
+            render(
+                <AuthContext.Provider value={{ user: mockUser, token: 'fake-token' }}>
+                    <MemoryRouter initialEntries={['/post/missing-post-1']}>
+                        <Routes>
+                            <Route path="/post/:postId" element={<Forum />} />
+                            <Route path="/community" element={<Forum />} />
+                        </Routes>
+                    </MemoryRouter>
+                </AuthContext.Provider>
+            );
+
+            expect(await screen.findByText('This post was deleted or is no longer available.')).toBeInTheDocument();
+            // Fetched once, not on every feed change
+            expect(apiFetch.mock.calls.filter(c => c[0] === '/api/forum/missing-post-1').length).toBe(1);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Back to feed' }));
+            await waitFor(() => expect(screen.queryByText('This post was deleted or is no longer available.')).not.toBeInTheDocument());
+            expect(await screen.findByText('Normal feed post')).toBeInTheDocument();
+        });
+
+        it('shows the missing-post message when the server answers without a post', async () => {
+            window.history.pushState({}, 'Test', '/community?postId=gone-2');
+            apiFetch.mockImplementation(async (url) => {
+                if (url === '/api/forum/gone-2') return { ok: true, json: async () => ({}) };
+                return { ok: true, json: async () => ({ feed: [], hasMore: false }) };
+            });
+            renderWithProviders('/community?postId=gone-2');
+            expect(await screen.findByTestId('missing-post-banner')).toHaveTextContent('This post was deleted or is no longer available.');
+        });
+
+        it('shows no fake tournaments: empty state with a link when there are none', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            renderWithProviders();
+            expect(await screen.findByText('No upcoming tournaments')).toBeInTheDocument();
+            expect(screen.queryByText(/Mason Fall Open/i)).not.toBeInTheDocument();
+            expect(screen.queryByText(/Capital Fall Classic/i)).not.toBeInTheDocument();
+            expect(screen.queryByText('Open Registration')).not.toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Browse tournaments' })).toBeInTheDocument();
+            expect(apiFetch).toHaveBeenCalledWith('/api/tournaments?upcoming=true');
+        });
+
+        it('lists only real upcoming tournaments and hides past ones', async () => {
+            const day = 24 * 60 * 60 * 1000;
+            apiFetch.mockImplementation(async (url) => {
+                if (url.startsWith('/api/tournaments')) {
+                    return {
+                        ok: true,
+                        json: async () => ({
+                            tournaments: [
+                                { _id: 't-past', tournamentName: 'Old Past Open', status: 'active', startDate: new Date(Date.now() - 20 * day).toISOString(), endDate: new Date(Date.now() - 19 * day).toISOString(), registrationDeadline: new Date(Date.now() - 25 * day).toISOString() },
+                                { _id: 't-next', tournamentName: 'Future Spring Cup', eventLocation: 'RAC', status: 'active', startDate: new Date(Date.now() + 10 * day).toISOString(), registrationDeadline: new Date(Date.now() + 5 * day).toISOString() }
+                            ]
+                        })
+                    };
+                }
+                return { ok: true, json: async () => ({ feed: [], hasMore: false }) };
+            });
+            renderWithProviders();
+            expect(await screen.findByText('Future Spring Cup')).toBeInTheDocument();
+            expect(screen.queryByText('Old Past Open')).not.toBeInTheDocument();
+            expect(screen.getByText('Open Registration')).toBeInTheDocument();
+            expect(screen.queryByText('No upcoming tournaments')).not.toBeInTheDocument();
+        });
+
+        it('does not invent a skill level for users without one', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            renderWithProviders();
+            expect(await screen.findByText('Set your level')).toBeInTheDocument();
+            expect(screen.queryByText('Intermediate')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('profile-skill-level')).not.toBeInTheDocument();
+        });
+
+        it('shows the real skill level when the user has one', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            render(
+                <AuthContext.Provider value={{ user: { ...mockUser, skillLevel: 'Advanced' }, token: 'fake-token' }}>
+                    <BrowserRouter>
+                        <Forum />
+                    </BrowserRouter>
+                </AuthContext.Provider>
+            );
+            expect(await screen.findByTestId('profile-skill-level')).toHaveTextContent('Advanced');
+            expect(screen.queryByText('Set your level')).not.toBeInTheDocument();
+        });
+
+        it('uses hasMore from the server to stop paging (no wasted request at the end)', async () => {
+            apiFetch.mockImplementation(async (url) => {
+                if (feedUrl(url)) {
+                    // Server still sends a cursor on the last page; hasMore is the source of truth
+                    return { ok: true, json: async () => ({ feed: [{ _id: 'last1', title: 'Only page post', content: 'q', createdAt: new Date().toISOString() }], nextCursor: 'cursor-x', hasMore: false }) };
+                }
+                return { ok: true, json: async () => ({}) };
+            });
+
+            renderWithProviders();
+            expect(await screen.findByText('Only page post')).toBeInTheDocument();
+            expect(await screen.findByText(/You're all caught up/i)).toBeInTheDocument();
+
+            // Scroll to the very bottom: no next page may be requested
+            Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: 2000 });
+            window.innerHeight = 800;
+            window.scrollY = 1200;
+            await act(async () => {
+                fireEvent.scroll(window);
+            });
+            await new Promise(r => setTimeout(r, 50));
+            expect(feedCalls().length).toBe(1);
+        });
+
+        it('pauses paging after a failed next page and retries the same cursor on "Try again"', async () => {
+            let feedAttempts = 0;
+            apiFetch.mockImplementation(async (url) => {
+                if (feedUrl(url)) {
+                    feedAttempts++;
+                    if (feedAttempts === 1) return { ok: true, json: async () => ({ feed: [{ _id: 'pg1', title: 'First page', content: 'a', createdAt: new Date().toISOString() }], nextCursor: 'cur-1', hasMore: true }) };
+                    if (feedAttempts === 2) throw new Error('Request failed with status 500');
+                    return { ok: true, json: async () => ({ feed: [{ _id: 'pg2', title: 'Second page', content: 'b', createdAt: new Date().toISOString() }], nextCursor: null, hasMore: false }) };
+                }
+                return { ok: true, json: async () => ({}) };
+            });
+
+            renderWithProviders();
+            expect(await screen.findByText('First page')).toBeInTheDocument();
+
+            Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: 2000 });
+            window.innerHeight = 800;
+            window.scrollY = 1200;
+            await act(async () => {
+                fireEvent.scroll(window);
+            });
+
+            expect(await screen.findByText("Couldn't load more posts.")).toBeInTheDocument();
+            // First page is kept, and further scrolling does not hammer the server
+            expect(screen.getByText('First page')).toBeInTheDocument();
+            await new Promise(r => setTimeout(r, 120));
+            await act(async () => {
+                fireEvent.scroll(window);
+            });
+            expect(feedAttempts).toBe(2);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+            expect(await screen.findByText('Second page')).toBeInTheDocument();
+            expect(feedCalls().at(-1)).toContain('cursor=cur-1');
+            expect(screen.getByText('First page')).toBeInTheDocument();
+        });
+
+        it('passes the feed item audience through to the card (not always Public)', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    feed: [
+                        { _id: 'af-v1', type: 'post', referenceId: 'p-friends', title: 'Friends post', content: 'c', visibility: 'FRIENDS_ONLY', createdAt: new Date().toISOString() },
+                        { _id: 'af-v2', type: 'post', referenceId: 'p-me', title: 'Private post', content: 'c', post: { visibility: 'ONLY_ME' }, createdAt: new Date().toISOString() },
+                        { _id: 'af-v3', type: 'post', referenceId: 'p-pub', title: 'Old post', content: 'c', createdAt: new Date().toISOString() },
+                    ],
+                    hasMore: false
+                })
+            });
+            renderWithProviders();
+            expect(await screen.findByTestId('post-visibility-p-friends')).toHaveTextContent('FRIENDS_ONLY');
+            expect(screen.getByTestId('post-visibility-p-me')).toHaveTextContent('ONLY_ME');
+            expect(screen.getByTestId('post-visibility-p-pub')).toHaveTextContent('PUBLIC');
+        });
+
+        it('applies live RSVP and reaction updates by referenceId, and a partial reaction payload keeps the count', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    feed: [{
+                        _id: 'af-rally', type: 'post', referenceId: 'p-rally', title: 'Rally', content: 'c', category: 'meetup_rally',
+                        playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [] },
+                        reactions: [{ userId: 'user1', emoji: '👍' }],
+                        createdAt: new Date().toISOString()
+                    }],
+                    hasMore: false
+                })
+            });
+            renderWithProviders();
+            expect(await screen.findByTestId('post-rsvps-p-rally')).toHaveTextContent('0');
+
+            await act(async () => {
+                socketHandlers.rallyRsvpUpdated({ postId: 'p-rally', rsvpList: [{ userId: 'bob', status: 'confirmed' }], isFilled: false, slotsNeeded: 2 });
+            });
+            expect(screen.getByTestId('post-rsvps-p-rally')).toHaveTextContent('1');
+
+            // postUpdated without a reactions list must not wipe the count.
+            await act(async () => {
+                socketHandlers.postUpdated({ _id: 'p-rally', title: 'Rally' });
+            });
+            expect(screen.getByTestId('post-reactions-p-rally')).toHaveTextContent('1');
+            expect(screen.getByTestId('post-rsvps-p-rally')).toHaveTextContent('1');
+
+            await act(async () => {
+                socketHandlers.reactionUpdated({ postId: 'p-rally', action: 'added' });
+            });
+            expect(screen.getByTestId('post-reactions-p-rally')).toHaveTextContent('1');
+
+            await act(async () => {
+                socketHandlers.reactionUpdated({ postId: 'p-rally', reactions: [{ userId: 'user1', emoji: '👍' }, { userId: 'bob', emoji: '❤️' }] });
+            });
+            expect(screen.getByTestId('post-reactions-p-rally')).toHaveTextContent('2');
+        });
+
+        const submitComposer = async (content) => {
+            await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+            fireEvent.click(screen.getByTestId('facebook-composer-card'));
+            const dialog = await screen.findByRole('dialog');
+            fireEvent.change(within(dialog).getByLabelText(/What's on your mind\?/i), { target: { value: content } });
+            fireEvent.click(within(dialog).getByRole('button', { name: /^Post$/i }));
+        };
+
+        it('keeps live updates flowing to a post the author just created (no `type` on the response)', async () => {
+            apiFetch.mockImplementation((url, opts) => {
+                if (opts && opts.method === 'POST' && url === '/api/forum') {
+                    return Promise.resolve({
+                        ok: true,
+                        json: async () => ({ _id: 'p-new', title: 'Fresh', content: 'Fresh', authorId: 'user1', visibility: 'FRIENDS_ONLY', reactions: [], createdAt: new Date().toISOString() })
+                    });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            });
+            renderWithProviders();
+            await submitComposer('Fresh');
+
+            expect(await screen.findByTestId('post-visibility-p-new')).toHaveTextContent('FRIENDS_ONLY');
+            expect(toast.success).toHaveBeenCalledWith('Post created successfully!');
+
+            await act(async () => {
+                socketHandlers.postUpdated({ _id: 'p-new', reactions: [{ userId: 'user1', emoji: '👍' }, { userId: 'bob', emoji: '❤️' }] });
+            });
+            expect(screen.getByTestId('post-reactions-p-new')).toHaveTextContent('2');
+            expect(screen.getByTestId('post-visibility-p-new')).toHaveTextContent('FRIENDS_ONLY');
+        });
+
+        it.each([
+            ['the current server shape', { message: 'Post submitted for review.', post: { _id: 'p-q', status: 'quarantined', isFlagged: true } }],
+            ['a quarantined flag', { _id: 'p-q', quarantined: true }],
+            ['status pending', { _id: 'p-q', status: 'pending' }],
+        ])('tells the author their post is under review for %s', async (_label, response) => {
+            apiFetch.mockImplementation((url, opts) => {
+                if (opts && opts.method === 'POST' && url === '/api/forum') {
+                    return Promise.resolve({ ok: true, status: 201, json: async () => response });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            });
+            renderWithProviders();
+            await submitComposer('Fourth post this minute');
+
+            await waitFor(() => expect(toast).toHaveBeenCalledWith(
+                'Your post is being reviewed and will appear once approved.',
+                expect.any(Object)
+            ));
+            expect(toast.success).not.toHaveBeenCalledWith('Post created successfully!');
+            expect(screen.queryByTestId('post-card-undefined')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('post-card-p-q')).not.toBeInTheDocument();
+        });
+
+        it('passes real likers only (no placeholder ids) when the feed has just a like count', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({ feed: [{ _id: 'af-l', type: 'post', referenceId: 'p-likes', title: 'Liked post', content: 'c', likes: 3, createdAt: new Date().toISOString() }], hasMore: false })
+            });
+            renderWithProviders();
+            expect(await screen.findByTestId('post-likers-p-likes')).toHaveTextContent('[]');
+            expect(screen.getByTestId('post-likers-p-likes')).not.toHaveTextContent('mock_id');
+        });
+
+        it('returns keyboard focus to the composer card when the composer is cancelled', async () => {
+            vi.useFakeTimers({ shouldAdvanceTime: true });
+            try {
+                apiFetch.mockResolvedValue({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+                renderWithProviders();
+                await waitFor(() => expect(screen.getByText('Community Hub')).toBeInTheDocument());
+
+                const composerCard = screen.getByTestId('facebook-composer-card');
+                fireEvent.click(composerCard);
+                const dialog = await screen.findByRole('dialog');
+                fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+                await act(async () => { vi.runOnlyPendingTimers(); });
+                await waitFor(() => expect(document.activeElement).toBe(composerCard));
+            } finally {
+                vi.useRealTimers();
+            }
         });
     });
 });

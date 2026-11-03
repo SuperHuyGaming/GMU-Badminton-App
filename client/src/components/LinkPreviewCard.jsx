@@ -53,6 +53,8 @@ export default function LinkPreviewCard({
 			sx={{
 				position: "relative",
 				display: "flex",
+				minWidth: 0,
+				maxWidth: "100%",
 				flexDirection: { xs: "column", sm: compact ? "column" : "row" },
 				borderRadius: 2.5,
 				overflow: "hidden",
@@ -138,13 +140,14 @@ export default function LinkPreviewCard({
 				}}
 			>
 				{/* Domain & Source badge */}
-				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+				<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, minWidth: 0, flexWrap: "wrap" }}>
 					{domain && (
 						<Chip
 							label={domain}
 							size="small"
 							data-testid="link-preview-domain"
 							sx={{
+								maxWidth: "100%",
 								height: 20,
 								fontSize: "0.7rem",
 								fontWeight: 700,
@@ -172,6 +175,8 @@ export default function LinkPreviewCard({
 						lineHeight: 1.3,
 						mb: 0.5,
 						color: "text.primary",
+						overflowWrap: "anywhere",
+						wordBreak: "break-word",
 						display: "-webkit-box",
 						WebkitLineClamp: 2,
 						WebkitBoxOrient: "vertical",
@@ -191,6 +196,8 @@ export default function LinkPreviewCard({
 						sx={{
 							fontSize: "0.82rem",
 							lineHeight: 1.4,
+							overflowWrap: "anywhere",
+							wordBreak: "break-word",
 							display: "-webkit-box",
 							WebkitLineClamp: 2,
 							WebkitBoxOrient: "vertical",

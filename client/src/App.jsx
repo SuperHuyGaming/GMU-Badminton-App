@@ -72,6 +72,24 @@ export const ForumRedirect = () => {
 	return <Navigate to={`/community${location.search}${location.hash}`} replace />;
 };
 
+const isMessagesRoute = (pathname = "") => pathname === "/messages" || pathname.startsWith("/messages/");
+
+// The floating Messenger duplicates the /messages page and sat on top of its Send button on
+// phones, so it is not mounted there.
+export const RouteAwareChatDock = () => {
+	const { user } = useAuth();
+	const { pathname } = useLocation();
+	if (!user || isMessagesRoute(pathname)) return null;
+	return <FloatingChatDock />;
+};
+
+// On /messages the chat input runs along the bottom of small screens, so the feedback FAB
+// is hidden there below the md breakpoint; everywhere else it stays bottom-left.
+export const RouteAwareFeedbackFAB = () => {
+	const { pathname } = useLocation();
+	return <FeedbackFAB hideOnSmallScreens={isMessagesRoute(pathname)} />;
+};
+
 const AnimatedRoutes = () => {
 	const location = useLocation();
 	const { user } = useAuth();
@@ -407,7 +425,9 @@ function App() {
 					root: {
 						backdropFilter: "blur(20px)",
 						WebkitBackdropFilter: "blur(20px)",
-						backgroundColor: mode === "light" ? "rgba(0, 102, 51, 0.85)" : "rgba(2, 18, 10, 0.85)",
+						// Light mode: deeper, more opaque brand green so the yellow "GMU Badminton" logo keeps ~6:1 contrast
+						// even when light page content scrolls under the blurred bar (0.85 alpha dropped it to ~4.5:1).
+						backgroundColor: mode === "light" ? "rgba(0, 92, 46, 0.94)" : "rgba(2, 18, 10, 0.85)",
 						backgroundImage: "none",
 					}
 				}
@@ -518,7 +538,7 @@ function App() {
 				<BrowserRouter>
 					<FeedbackProvider>
 						<FeedbackModal />
-						<FeedbackFAB />
+						<RouteAwareFeedbackFAB />
 					<Navbar />
 
 					<Toaster 
@@ -536,8 +556,11 @@ function App() {
 						}}
 					/>
 
-					<Container 
-						maxWidth="lg" 
+					{/* The page's single <main> landmark; pages render inside it. */}
+					<Container
+						component="main"
+						id="main-content"
+						maxWidth="lg"
 						sx={{ 
 							mt: { xs: 2, sm: 3, md: 4 }, 
 							mb: { xs: 4, sm: 6, md: 8 },
@@ -550,7 +573,7 @@ function App() {
 						</ErrorBoundary>
 						{user && <PushNotificationPrompt />}
 						<PWAInstallPrompt />
-						{user && <FloatingChatDock />}
+						<RouteAwareChatDock />
 					</Container>
 					</FeedbackProvider>
 				</BrowserRouter>

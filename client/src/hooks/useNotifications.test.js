@@ -4,6 +4,7 @@ import { render, renderHook, act, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useNotifications } from './useNotifications';
 import { ForumRedirect } from '../App';
+import { markChatVisible } from '../utils/chatState';
 
 // Hoisted socket mock
 const { mockSocketListeners, mockSocketInstance } = vi.hoisted(() => {
@@ -315,6 +316,63 @@ describe('useNotifications hook', () => {
 		expect(apiFetch).not.toHaveBeenCalled();
 		expect(result.current.notifications).toEqual([]);
 		expect(result.current.unreadCount).toBe(0);
+	});
+
+	describe('unread messages badge clears when a conversation is read', () => {
+		it('optimistic chatRead clears only that partner immediately without re-fetching', async () => {
+			const { result } = renderHook(() => useNotifications());
+			await waitFor(() => expect(result.current.unreadMessages).toBe(3));
+			const recentCalls = () => apiFetch.mock.calls.filter(([url]) => url === '/api/messages/recent/user_123').length;
+			const before = recentCalls();
+
+			act(() => {
+				window.dispatchEvent(new CustomEvent('chatRead', { detail: { partnerId: 'u2', optimistic: true } }));
+			});
+
+			expect(result.current.unreadMessages).toBe(1); // Dave's 1 remains
+			expect(recentCalls()).toBe(before);
+		});
+
+		it('confirmed chatRead re-syncs the count from the server', async () => {
+			const { result } = renderHook(() => useNotifications());
+			await waitFor(() => expect(result.current.unreadMessages).toBe(3));
+
+			apiFetch.mockImplementation(async (url) => {
+				if (url === '/api/messages/recent/user_123') {
+					return { ok: true, json: async () => [{ friend: { _id: 'u2' }, unreadCount: 0 }, { friend: { _id: 'u3' }, unreadCount: 0 }] };
+				}
+				return { ok: true, json: async () => ({}) };
+			});
+			act(() => {
+				window.dispatchEvent(new CustomEvent('chatRead', { detail: { partnerId: 'u3' } }));
+			});
+			await waitFor(() => expect(result.current.unreadMessages).toBe(0));
+		});
+
+		it('does not count a message in the conversation currently on screen', async () => {
+			const { result } = renderHook(() => useNotifications());
+			await waitFor(() => expect(result.current.unreadMessages).toBe(3));
+
+			const release = markChatVisible('u9');
+			act(() => {
+				mockSocketListeners['privateMessage']({
+					_id: 'live-1', receiver: { _id: 'user_123' }, sender: { _id: 'u9', name: 'Bob' },
+				});
+			});
+			release();
+
+			expect(result.current.unreadMessages).toBe(3);
+			expect(toast).not.toHaveBeenCalled();
+		});
+
+		it('counts the same message only once', async () => {
+			const { result } = renderHook(() => useNotifications());
+			await waitFor(() => expect(result.current.unreadMessages).toBe(3));
+			const msg = { _id: 'live-2', receiver: { _id: 'user_123' }, sender: { _id: 'u9', name: 'Bob' } };
+			act(() => { mockSocketListeners['privateMessage'](msg); });
+			act(() => { mockSocketListeners['privateMessage'](msg); });
+			expect(result.current.unreadMessages).toBe(4);
+		});
 	});
 });
 

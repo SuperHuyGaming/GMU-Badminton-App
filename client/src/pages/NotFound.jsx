@@ -152,8 +152,6 @@ export default function NotFound() {
 
     return (
         <Box 
-            component="main"
-            role="main"
             sx={{ 
                 display: 'flex', 
                 flexDirection: 'column', 

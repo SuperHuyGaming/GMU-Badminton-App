@@ -1,10 +1,11 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PostCard from './PostCard';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import apiFetch from '../utils/api';
 import socket from '../utils/socket';
+import { toast } from 'react-hot-toast';
 
 // Mock the API calls and navigate
 const mockNavigate = vi.fn();
@@ -21,6 +22,13 @@ vi.mock('../utils/api', () => ({
         ok: true,
         json: async () => ({ reactions: [] })
     })
+}));
+
+vi.mock('react-hot-toast', () => ({
+    toast: Object.assign(vi.fn(), {
+        success: vi.fn(),
+        error: vi.fn(),
+    }),
 }));
 
 describe('PostCard Component QA Tests', () => {
@@ -352,7 +360,7 @@ describe('PostCard Component QA Tests', () => {
         expect(screen.getByText('String: BG80 @ 27 lbs')).toBeInTheDocument();
     });
 
-    it('handles 1-tap post sharing using clipboard copy fallback with toast confirmation', async () => {
+    it('one tap on Share opens the share modal only; Copy Direct Link copies the canonical /post/:id link', async () => {
         const writeTextMock = vi.fn().mockResolvedValue();
         Object.assign(navigator, {
             clipboard: {
@@ -361,10 +369,18 @@ describe('PostCard Component QA Tests', () => {
         });
 
         renderWithContext(mockPost, mockUser);
-        const shareBtn = screen.getByRole('button', { name: /share/i });
+        const shareBtn = screen.getByRole('button', { name: /^share$/i });
         fireEvent.click(shareBtn);
 
-        expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining(`/community#post-${mockPost._id}`));
+        // Opening the modal must not copy anything by itself.
+        expect(screen.getByTestId('share-modal')).toBeInTheDocument();
+        expect(writeTextMock).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByTestId('copy-link-btn'));
+        await waitFor(() => {
+            expect(writeTextMock).toHaveBeenCalledWith(`${window.location.origin}/post/${mockPost._id}`);
+        });
+        expect(writeTextMock).toHaveBeenCalledTimes(1);
     });
 
     it('renders Club Exec badge and active win streak chip on author header', () => {
@@ -919,5 +935,317 @@ describe('PostCard Component QA Tests', () => {
 
         // Comment should remain preserved from cache
         expect(screen.getByText('Preserved comment')).toBeInTheDocument();
+    });
+
+    // ── Community audit fixes: delete contract, server error toasts, edit rule, a11y ──
+    describe('community audit fixes', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        const openDeleteDialogAndConfirm = () => {
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Delete Post/i }));
+            fireEvent.click(screen.getByRole('button', { name: /^Delete$/ }));
+        };
+
+        it('calls onDelete(postId) and shows a success toast only after the server confirms the delete', async () => {
+            const onDelete = vi.fn();
+            apiFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ message: 'Post deleted' }) });
+            renderWithContext(mockPost, mockUser, { onDelete });
+
+            openDeleteDialogAndConfirm();
+
+            await waitFor(() => expect(onDelete).toHaveBeenCalledWith(mockPost._id));
+            expect(apiFetch).toHaveBeenCalledWith(
+                `/api/forum/${mockPost._id}`,
+                expect.objectContaining({ method: 'DELETE' })
+            );
+            expect(toast.success).toHaveBeenCalledWith('Post deleted');
+            expect(toast.error).not.toHaveBeenCalled();
+        });
+
+        it('keeps the post, does not call onDelete and shows the server message when the delete fails', async () => {
+            const onDelete = vi.fn();
+            apiFetch.mockRejectedValueOnce(new Error('You can only delete your own posts.'));
+            renderWithContext(mockPost, mockUser, { onDelete });
+
+            openDeleteDialogAndConfirm();
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('You can only delete your own posts.'));
+            expect(onDelete).not.toHaveBeenCalled();
+            expect(toast.success).not.toHaveBeenCalled();
+            expect(screen.getByText('This is a test post content')).toBeInTheDocument();
+        });
+
+        it('treats an offline { ok: false } response as a failed delete', async () => {
+            const onDelete = vi.fn();
+            apiFetch.mockResolvedValueOnce({ ok: false, status: 0, json: async () => ({ message: 'Network offline' }) });
+            renderWithContext(mockPost, mockUser, { onDelete });
+
+            openDeleteDialogAndConfirm();
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Network offline'));
+            expect(onDelete).not.toHaveBeenCalled();
+        });
+
+        it('disables Save with helper text when both title and body are empty, and allows a body-only edit', async () => {
+            apiFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ ...mockPost, title: 'Only body now', content: 'Only body now' }),
+            });
+            renderWithContext(mockPost, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByText(/edit post/i));
+
+            const titleInput = screen.getByLabelText(/edit title/i);
+            const bodyInput = screen.getByLabelText(/edit details/i);
+            const saveBtn = screen.getByRole('button', { name: /save changes/i });
+
+            fireEvent.change(titleInput, { target: { value: '   ' } });
+            fireEvent.change(bodyInput, { target: { value: '  ' } });
+            expect(saveBtn).toBeDisabled();
+            expect(screen.getByText(/Add a title or some details before saving/i)).toBeInTheDocument();
+
+            // Title is optional, like when creating a post.
+            fireEvent.change(bodyInput, { target: { value: 'Only body now' } });
+            expect(saveBtn).not.toBeDisabled();
+            expect(screen.queryByText(/Add a title or some details before saving/i)).not.toBeInTheDocument();
+
+            fireEvent.click(saveBtn);
+            await waitFor(() => {
+                expect(apiFetch).toHaveBeenCalledWith(
+                    `/api/forum/${mockPost._id}`,
+                    expect.objectContaining({ method: 'PUT' })
+                );
+            });
+            const body = JSON.parse(apiFetch.mock.calls[0][1].body);
+            // The server needs a title, so it is filled from the body's first line (same as the composer).
+            expect(body.title).toBe('Only body now');
+            expect(body.content).toBe('Only body now');
+            await waitFor(() => expect(screen.queryByLabelText(/edit title/i)).not.toBeInTheDocument());
+        });
+
+        it('keeps the editor open and shows the server message when saving an edit fails', async () => {
+            apiFetch.mockRejectedValueOnce(new Error('Post title cannot exceed 200 characters.'));
+            renderWithContext(mockPost, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByText(/edit post/i));
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Post title cannot exceed 200 characters.'));
+            expect(screen.getByLabelText(/edit title/i)).toBeInTheDocument();
+        });
+
+        it("shows the server's reason when a report is rejected", async () => {
+            apiFetch.mockRejectedValueOnce(new Error('You have already reported this post.'));
+            renderWithContext(mockPost, { id: 'viewer-456', name: 'Other Member' });
+
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Report Post/i }));
+            fireEvent.click(screen.getByRole('button', { name: /Submit Report/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('You have already reported this post.'));
+            expect(toast.error).not.toHaveBeenCalledWith(expect.stringMatching(/Network error/i));
+        });
+
+        it("shows the server's reason and rolls back when an RSVP is rejected", async () => {
+            const rallyPost = {
+                ...mockPost,
+                category: 'meetup_rally',
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [], isFilled: false },
+            };
+            apiFetch.mockRejectedValueOnce(new Error('This rally has already started.'));
+            renderWithContext(rallyPost, { id: 'viewer-456', name: 'Other Member' });
+
+            fireEvent.click(screen.getByRole('button', { name: /Join Rally/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('This rally has already started.'));
+            expect(screen.getByRole('button', { name: /Join Rally/i })).toBeInTheDocument();
+        });
+
+        it("shows the server's reason and reverts the optimistic reaction when reacting fails", async () => {
+            apiFetch.mockRejectedValueOnce(new Error('Too many reactions, slow down.'));
+            renderWithContext({ ...mockPost, reactions: [] }, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /React to post/i }));
+
+            await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Too many reactions, slow down.'));
+            expect(screen.queryByTestId('view-reactions-btn')).not.toBeInTheDocument();
+        });
+
+        it('exposes the audience icon as an image with an accessible name', () => {
+            renderWithContext({ ...mockPost, visibility: 'FRIENDS_ONLY' }, mockUser);
+            expect(screen.getByRole('img', { name: 'Privacy: Friends Only' })).toBeInTheDocument();
+        });
+
+        it('renders the post title as an h3 heading', () => {
+            renderWithContext(mockPost, mockUser);
+            expect(screen.getByRole('heading', { level: 3, name: 'Test Post Title' })).toBeInTheDocument();
+        });
+    });
+
+    // ── Two-user live test fixes: edit reset, live RSVP, reaction wipe, privacy, auto-title ──
+    describe('two-user live update fixes', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        // Calls every PostCard listener registered for a socket event, inside act().
+        const fireSocket = async (event, payload) => {
+            const listeners = socket.listeners(event);
+            expect(listeners.length).toBeGreaterThan(0);
+            await act(async () => {
+                listeners.forEach(fn => fn(payload));
+            });
+        };
+
+        const tree = (post, user) => (
+            <AuthContext.Provider value={{ user, token: 'fake-token' }}>
+                <BrowserRouter>
+                    <PostCard post={post} currentUser={user} />
+                </BrowserRouter>
+            </AuthContext.Provider>
+        );
+
+        const openEditor = () => {
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByText(/edit post/i));
+        };
+
+        it('keeps what the author is typing when the post updates live, and saves the typed text', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ ...mockPost, content: 'My new text', isEdited: true }) });
+            const { rerender } = render(tree(mockPost, mockUser));
+            openEditor();
+
+            fireEvent.change(screen.getByLabelText(/edit details/i), { target: { value: 'My new text' } });
+
+            // Another user reacts: socket event plus the parent re-rendering with a fresh post object.
+            await fireSocket('postUpdated', {
+                ...mockPost,
+                reactions: [{ userId: 'bob', emoji: '❤️' }],
+            });
+            rerender(tree({ ...mockPost, reactions: [{ userId: 'bob', emoji: '❤️' }] }, mockUser));
+
+            expect(screen.getByLabelText(/edit details/i)).toHaveValue('My new text');
+            expect(screen.getByLabelText(/edit title/i)).toHaveValue('Test Post Title');
+
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+            await waitFor(() => {
+                const putCall = apiFetch.mock.calls.find(c => c[1]?.method === 'PUT');
+                expect(putCall).toBeTruthy();
+                expect(JSON.parse(putCall[1].body).content).toBe('My new text');
+            });
+        });
+
+        it('refreshes a stale auto-title from the new body when editing', async () => {
+            const untitled = { ...mockPost, title: 'Old first line', content: 'Old first line\nmore details' };
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ ...untitled }) });
+            render(tree(untitled, mockUser));
+            openEditor();
+
+            fireEvent.change(screen.getByLabelText(/edit details/i), { target: { value: 'Brand new opening\nrest' } });
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => {
+                const putCall = apiFetch.mock.calls.find(c => c[1]?.method === 'PUT');
+                expect(putCall).toBeTruthy();
+                expect(JSON.parse(putCall[1].body).title).toBe('Brand new opening');
+            });
+        });
+
+        it('keeps a hand-written title when only the body changes', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ ...mockPost }) });
+            render(tree(mockPost, mockUser));
+            openEditor();
+
+            fireEvent.change(screen.getByLabelText(/edit details/i), { target: { value: 'Different body' } });
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => {
+                const putCall = apiFetch.mock.calls.find(c => c[1]?.method === 'PUT');
+                expect(putCall).toBeTruthy();
+                expect(JSON.parse(putCall[1].body).title).toBe('Test Post Title');
+            });
+        });
+
+        it("shows another player's RSVP live on the host's card when the feed item id differs from the Post id", async () => {
+            const rally = {
+                _id: 'post-rally-1',
+                referenceId: 'post-rally-1',
+                authorId: mockUser.id,
+                authorName: mockUser.name,
+                title: 'Rally tonight',
+                content: 'Doubles at RAC',
+                category: 'meetup_rally',
+                createdAt: new Date().toISOString(),
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [], isFilled: false },
+                comments: [],
+            };
+            render(tree(rally, mockUser));
+            expect(screen.getByText('Attendees (0/2):')).toBeInTheDocument();
+
+            await fireSocket('rallyRsvpUpdated', {
+                postId: 'post-rally-1',
+                rsvpList: [{ userId: 'bob', userName: 'Bob', status: 'confirmed' }],
+                isFilled: false,
+                slotsNeeded: 2,
+            });
+            expect(screen.getByText('Attendees (1/2):')).toBeInTheDocument();
+        });
+
+        it('matches a postUpdated payload to a card keyed by its ActivityFeed id via referenceId', async () => {
+            const feedCard = {
+                _id: 'feed-item-1',
+                referenceId: 'post-rally-2',
+                authorId: mockUser.id,
+                title: 'Rally',
+                content: 'x',
+                category: 'meetup_rally',
+                createdAt: new Date().toISOString(),
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [] },
+                comments: [],
+            };
+            render(tree(feedCard, mockUser));
+            await fireSocket('postUpdated', {
+                _id: 'post-rally-2',
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [{ userId: 'bob', userName: 'Bob', status: 'confirmed' }] },
+            });
+            expect(screen.getByText('Attendees (1/2):')).toBeInTheDocument();
+        });
+
+        it('never wipes the reaction count with a partial payload or a re-render of the same post', async () => {
+            const withReaction = { ...mockPost, reactions: [{ userId: mockUser.id, emoji: '👍' }] };
+            const { rerender } = render(tree(withReaction, mockUser));
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('1');
+
+            // postUpdated without reactions (e.g. a comment update) keeps the count.
+            await fireSocket('postUpdated', { _id: mockPost._id, title: mockPost.title });
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('1');
+
+            // reactionUpdated without a list keeps the count.
+            await fireSocket('reactionUpdated', { postId: mockPost._id, action: 'added' });
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('1');
+
+            // A real update shows both reactions...
+            const both = [{ userId: mockUser.id, emoji: '👍' }, { userId: 'bob', emoji: '❤️' }];
+            await fireSocket('reactionUpdated', { postId: mockPost._id, reactions: both });
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('2');
+
+            // ...and the parent re-rendering with an unchanged (stale) post object does not undo it.
+            rerender(tree({ ...withReaction }, mockUser));
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('2');
+        });
+
+        it('reads the audience from the feed item or its nested post', () => {
+            const { unmount } = render(tree({ ...mockPost, visibility: undefined, post: { _id: 'p', visibility: 'FRIENDS_ONLY' } }, mockUser));
+            expect(screen.getByRole('img', { name: 'Privacy: Friends Only' })).toBeInTheDocument();
+            unmount();
+
+            render(tree({ ...mockPost, visibility: undefined, referenceId: { _id: 'p', visibility: 'ONLY_ME' } }, mockUser));
+            expect(screen.getByRole('img', { name: 'Privacy: Only Me' })).toBeInTheDocument();
+        });
     });
 });

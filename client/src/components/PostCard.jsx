@@ -59,11 +59,27 @@ import ShareModal from "./ShareModal";
 import MemberHoverCard from "./MemberHoverCard";
 import ReactionDock from "./ReactionDock";
 import LinkPreviewCard from "./LinkPreviewCard";
+import { ensureOk, errorMessage } from "./postRequest";
 
 // In-memory cache for fetched comments to ensure instant re-rendering and prevent vanishing on re-renders
 const postCommentsMemoryCache = new Map();
-const hasPopulatedComments = (arr) =>
-	Array.isArray(arr) && arr.length > 0 && arr.some((c) => c && (c._id || c.text || c.content));
+import {
+	hasPopulatedComments,
+	isSamePost,
+	resolveVisibility,
+	autoTitleFrom,
+	mergePostData,
+} from "./postLiveSync";
+
+// Stable fingerprint of the `post` prop. Parents (e.g. Forum) rebuild the prop
+// object on every render, so syncing on identity would reset live state.
+const postSignature = (p) => {
+	try {
+		return JSON.stringify(p);
+	} catch {
+		return null;
+	}
+};
 import {
 	ThumbUpOutline,
 	ThumbUpFilled,
@@ -83,6 +99,7 @@ const renderPrivacyIcon = (visibility) => {
 				<Tooltip title="Only Me" arrow placement="top">
 					<Box
 						component="span"
+						role="img"
 						data-testid="post-privacy-icon"
 						aria-label="Privacy: Only Me"
 						sx={{ display: "inline-flex", alignItems: "center", ml: 0.75, color: "text.secondary", verticalAlign: "middle" }}
@@ -99,6 +116,7 @@ const renderPrivacyIcon = (visibility) => {
 				<Tooltip title="Friends Only" arrow placement="top">
 					<Box
 						component="span"
+						role="img"
 						data-testid="post-privacy-icon"
 						aria-label="Privacy: Friends Only"
 						sx={{ display: "inline-flex", alignItems: "center", ml: 0.75, color: "text.secondary", verticalAlign: "middle" }}
@@ -118,6 +136,7 @@ const renderPrivacyIcon = (visibility) => {
 				<Tooltip title="Public" arrow placement="top">
 					<Box
 						component="span"
+						role="img"
 						data-testid="post-privacy-icon"
 						aria-label="Privacy: Public"
 						sx={{ display: "inline-flex", alignItems: "center", ml: 0.75, color: "text.secondary", verticalAlign: "middle" }}
@@ -133,7 +152,7 @@ const renderPrivacyIcon = (visibility) => {
 	}
 };
 
-export default function PostCard({ post, isBookmarked, onBookmarkToggle, currentUser: propUser, compact = false, isAuthorOnline = false }) {
+export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelete, currentUser: propUser, compact = false, isAuthorOnline = false }) {
 	const navigate = useNavigate();
 	const currentUser = propUser || (typeof window !== "undefined" && localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null);
 	const currentUserId = currentUser?.id || currentUser?._id;
@@ -172,17 +191,13 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					details: reportDetails,
 				}),
 			});
-			const data = await res?.json().catch(() => ({}));
-			if (res && res.ok) {
-				toast.success("Report submitted. Thank you for keeping the community safe.");
-				setHasReportedPost(true);
-				setIsReportDialogOpen(false);
-				setReportDetails("");
-			} else {
-				toast.error(data?.message || "Failed to submit report.");
-			}
-		} catch {
-			toast.error("Network error submitting report.");
+			await ensureOk(res, "Failed to submit report.");
+			toast.success("Report submitted. Thank you for keeping the community safe.");
+			setHasReportedPost(true);
+			setIsReportDialogOpen(false);
+			setReportDetails("");
+		} catch (err) {
+			toast.error(errorMessage(err, "Failed to submit report."));
 		} finally {
 			setIsSubmittingReport(false);
 		}
@@ -237,18 +252,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 		try {
 			const res = await apiFetch(`/api/forum/${localPost._id}/rsvp`, { method: "POST" });
-			if (res && res.ok) {
-				const data = await res.json();
-				setLocalPost(prev => ({ ...prev, playerMatchmaking: data.playerMatchmaking, rsvp: data.rsvp }));
-				const isNowWaitlisted = data.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId) && r.status === 'waitlist');
-				toast.success(idx > -1 ? "Left the rally." : (isNowWaitlisted ? "Added to waitlist." : "You're in! RSVP confirmed."));
-			} else {
-				setLocalPost(prev => ({ ...prev, playerMatchmaking: prevMatchmaking }));
-				toast.error("Failed to update RSVP.");
-			}
-		} catch {
+			await ensureOk(res, "Failed to update RSVP.");
+			const data = await res.json();
+			setLocalPost(prev => ({ ...prev, playerMatchmaking: data.playerMatchmaking, rsvp: data.rsvp }));
+			const isNowWaitlisted = data.playerMatchmaking?.rsvpList?.some(r => String(r.userId) === String(currentUserId) && r.status === 'waitlist');
+			toast.success(idx > -1 ? "Left the rally." : (isNowWaitlisted ? "Added to waitlist." : "You're in! RSVP confirmed."));
+		} catch (err) {
 			setLocalPost(prev => ({ ...prev, playerMatchmaking: prevMatchmaking }));
-			toast.error("Network error updating RSVP.");
+			toast.error(errorMessage(err, "Failed to update RSVP."));
 		} finally {
 			setIsRsvping(false);
 		}
@@ -265,16 +276,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 		try {
 			const res = await apiFetch(`/api/forum/${localPost._id}/accept-challenge`, { method: "PUT" });
-			if (res && res.ok) {
-				const data = await res.json();
-				setLocalPost(prev => ({ ...prev, challengeMatch: data.challengeMatch }));
-				toast.success("Match challenge accepted! Prepare for the court.");
-			} else {
-				const errData = await res?.json().catch(() => ({}));
-				toast.error(errData?.message || "Failed to accept challenge.");
-			}
-		} catch {
-			toast.error("Error accepting challenge.");
+			await ensureOk(res, "Failed to accept challenge.");
+			const data = await res.json();
+			setLocalPost(prev => ({ ...prev, challengeMatch: data.challengeMatch }));
+			toast.success("Match challenge accepted! Prepare for the court.");
+		} catch (err) {
+			toast.error(errorMessage(err, "Failed to accept challenge."));
 		} finally {
 			setIsAcceptingChallenge(false);
 		}
@@ -284,7 +291,19 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const [isEditing, setIsEditing] = useState(false);
 	const [editTitle, setEditTitle] = useState(post.title);
 	const [editContent, setEditContent] = useState(post.content);
-	const [editVisibility, setEditVisibility] = useState(post.visibility || "PUBLIC");
+	const [editVisibility, setEditVisibility] = useState(resolveVisibility(post));
+	// The body as it was when the editor opened (used to refresh a stale auto-title).
+	const [editOriginalContent, setEditOriginalContent] = useState(post.content || "");
+
+	// Edit fields are filled only when the editor opens, so live updates to the
+	// post (reactions, comments, RSVPs) never overwrite what the author is typing.
+	const openEditor = () => {
+		setEditTitle(localPost.title || "");
+		setEditContent(localPost.content || "");
+		setEditOriginalContent(localPost.content || "");
+		setEditVisibility(resolveVisibility(localPost));
+		setIsEditing(true);
+	};
 
 	// Toggles the imported dialog component
 	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -301,6 +320,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const urlPostId = urlParams.get("postId") || routePostId;
 	const highlightHandledRef = useRef(null);
 
+	// Re-sync from the prop only when its content really changes (not on every
+	// parent render), and merge so a stale or partial prop never wipes newer live data.
+	const incomingSignature = postSignature(post);
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setLocalPost((prev) => {
@@ -308,68 +330,80 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 			const incomingReal = hasPopulatedComments(post?.comments);
 			const cached = postCommentsMemoryCache.get(post?._id);
 			const cachedReal = hasPopulatedComments(cached);
+			const samePost = Boolean(prev && String(prev._id) === String(post?._id));
 
 			let comments = post.comments;
 			if (incomingReal) {
 				comments = post.comments;
 				postCommentsMemoryCache.set(post._id, post.comments);
-			} else if (prevReal && prev?._id === post?._id) {
+			} else if (prevReal && samePost) {
 				comments = prev.comments;
 			} else if (cachedReal) {
 				comments = cached;
 			}
 
-			return {
-				...post,
-				comments,
-			};
+			if (!samePost) return { ...post, comments };
+			return { ...mergePostData(prev, post), comments: comments ?? prev.comments };
 		});
+		// `post` is read through its signature so a new-but-identical object is ignored.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [incomingSignature ?? post]);
+
+	// When a different post is shown in this card while the editor is closed,
+	// start the edit fields from that post.
+	useEffect(() => {
+		if (isEditing) return;
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setEditTitle(post.title);
 		setEditContent(post.content);
-		setEditVisibility(post.visibility || "PUBLIC");
-	}, [post]);
+		setEditVisibility(resolveVisibility(post));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [post?._id]);
 
 	// INSTANT COMMENT INJECTION & REAL-TIME SYNC
 	useEffect(() => {
+		const local = { _id: localPost._id, referenceId: localPost.referenceId, postId: localPost.postId };
+
 		const handlePostUpdated = (updatedPost) => {
-			if (updatedPost._id === localPost._id) {
-				setLocalPost(prev => ({
-					...prev,
-					comments: updatedPost.comments,
-					likedBy: updatedPost.likedBy,
-					likedByDetails: updatedPost.likedByDetails,
-					recentLikerAvatars: updatedPost.recentLikerAvatars,
-					title: updatedPost.title,
-					content: updatedPost.content,
-					isEdited: updatedPost.isEdited,
-					reactions: updatedPost.reactions || prev.reactions,
-					category: updatedPost.category || prev.category,
-					matchDetails: updatedPost.matchDetails || prev.matchDetails,
-					playerMatchmaking: updatedPost.playerMatchmaking || prev.playerMatchmaking,
-					challengeMatch: updatedPost.challengeMatch || prev.challengeMatch,
-					qaDetails: updatedPost.qaDetails || prev.qaDetails,
-					gearDetails: updatedPost.gearDetails || prev.gearDetails,
-				}));
+			if (!updatedPost || !isSamePost(updatedPost, local)) return;
+			setLocalPost(prev => mergePostData(prev, updatedPost));
+			if (hasPopulatedComments(updatedPost.comments)) {
+				postCommentsMemoryCache.set(localPost._id, updatedPost.comments);
 			}
 		};
 
 		const handleReactionUpdated = (payload) => {
-			const targetId = String(localPost._id || localPost.referenceId || "");
-			if (payload && targetId && String(payload.postId) === targetId) {
-				setLocalPost(prev => ({
+			if (!payload || !isSamePost({ postId: payload.postId }, local)) return;
+			// Only a real list replaces the reactions; a partial payload keeps the current count.
+			if (!Array.isArray(payload.reactions)) return;
+			setLocalPost(prev => ({ ...prev, reactions: payload.reactions }));
+		};
+
+		const handleRallyRsvpUpdated = (payload) => {
+			if (!payload || !isSamePost({ postId: payload.postId }, local)) return;
+			setLocalPost(prev => {
+				const prevMatchmaking = prev.playerMatchmaking || {};
+				const nextMatchmaking = { ...prevMatchmaking };
+				if (Array.isArray(payload.rsvpList)) nextMatchmaking.rsvpList = payload.rsvpList;
+				if (typeof payload.isFilled === "boolean") nextMatchmaking.isFilled = payload.isFilled;
+				if (payload.slotsNeeded != null) nextMatchmaking.slotsNeeded = payload.slotsNeeded;
+				return {
 					...prev,
-					reactions: payload.reactions || prev.reactions,
-				}));
-			}
+					playerMatchmaking: nextMatchmaking,
+					...(payload.rsvp ? { rsvp: payload.rsvp } : {}),
+				};
+			});
 		};
 
 		socket.on("postUpdated", handlePostUpdated);
 		socket.on("reactionUpdated", handleReactionUpdated);
+		socket.on("rallyRsvpUpdated", handleRallyRsvpUpdated);
 		return () => {
 			socket.off("postUpdated", handlePostUpdated);
 			socket.off("reactionUpdated", handleReactionUpdated);
+			socket.off("rallyRsvpUpdated", handleRallyRsvpUpdated);
 		};
-	}, [localPost._id, localPost.referenceId]);
+	}, [localPost._id, localPost.referenceId, localPost.postId]);
 
 	useEffect(() => {
 		const isTargetPost = urlPostId === localPost._id;
@@ -488,7 +522,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 	const handleLike = async () => {
 		const targetPostId = localPost._id || localPost.referenceId;
-		if (!currentUser) return alert("You must be logged in to like posts!");
+		if (!currentUser) {
+			toast.error("Log in to like posts.");
+			return;
+		}
 		if (isLiking) return;
 
 		setIsLiking(true);
@@ -500,12 +537,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 					userName: currentUser.name,
 				}),
 			});
-			if (res && res.ok) {
-				const updated = await res.json();
-				setLocalPost(prev => ({ ...prev, ...updated, _id: prev._id }));
-			}
+			await ensureOk(res, "Couldn't like this post. Please try again.");
+			const updated = await res.json();
+			setLocalPost(prev => mergePostData(prev, updated));
 		} catch (err) {
-			console.error(err);
+			toast.error(errorMessage(err, "Couldn't like this post. Please try again."));
 		} finally {
 			setIsLiking(false);
 		}
@@ -513,7 +549,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 	const handleReaction = async (emoji) => {
 		const targetPostId = localPost._id || localPost.referenceId;
-		if (!currentUser) return alert("You must be logged in to react to posts!");
+		if (!currentUser) {
+			toast.error("Log in to react to posts.");
+			return;
+		}
 		setShowReactions(false);
 
 		// Optimistic reaction update
@@ -552,23 +591,20 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				method: "POST",
 				body: JSON.stringify({ emoji }),
 			});
-			if (res && res.ok) {
-				const updated = await res.json();
-				if (updated) {
-					const reactionsList = updated.reactions || updated.post?.reactions;
-					setLocalPost(prev => ({
-						...prev,
-						...(updated.post || (updated._id ? updated : {})),
-						_id: prev._id,
-						reactions: reactionsList || prev.reactions
-					}));
-				}
-			} else {
-				setLocalPost((prev) => ({ ...prev, reactions: prevReactions }));
+			await ensureOk(res, "Couldn't save your reaction. Please try again.");
+			const updated = await res.json();
+			if (updated) {
+				const reactionsList = updated.reactions || updated.post?.reactions;
+				setLocalPost(prev => ({
+					...prev,
+					...(updated.post || (updated._id ? updated : {})),
+					_id: prev._id,
+					reactions: reactionsList || prev.reactions
+				}));
 			}
 		} catch (err) {
-			console.error("Error submitting reaction:", err);
 			setLocalPost((prev) => ({ ...prev, reactions: prevReactions }));
+			toast.error(errorMessage(err, "Couldn't save your reaction. Please try again."));
 		}
 	};
 
@@ -578,63 +614,93 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 			const res = await apiFetch(`/api/forum/${localPost._id}/pin`, {
 				method: "PUT",
 			});
-			if (res && res.ok) {
-				const data = await res.json();
-				setLocalPost((prev) => ({ ...prev, isPinned: data.isPinned }));
-				toast.success(data.message || "Post pin status updated!");
-			}
+			await ensureOk(res, "Couldn't update the pin. Please try again.");
+			const data = await res.json();
+			setLocalPost((prev) => ({ ...prev, isPinned: data.isPinned }));
+			toast.success(data.message || "Post pin status updated!");
 		} catch (err) {
-			console.error("Error toggling pin status:", err);
+			toast.error(errorMessage(err, "Couldn't update the pin. Please try again."));
 		}
 	};
 
 	const handleShare = (e) => {
 		e?.stopPropagation();
-		const shareUrl = `${window.location.origin}/community#post-${localPost._id}`;
-		if (navigator.clipboard?.writeText) {
-			navigator.clipboard.writeText(shareUrl).then(() => {
-				toast.success("Post link copied to clipboard! 📋");
-			}).catch(() => {});
-		}
+		// Open the share sheet only; it offers "Copy Direct Link" (/post/:id).
 		setIsShareModalOpen(true);
 	};
 
+	// Same rule as creating a post: the title is optional, but the post needs a
+	// title or a body. The server requires both, so fill in the missing one the
+	// same way the composer does (title from the body's first line, body from the title).
+	const trimmedEditTitle = (editTitle || "").trim();
+	const trimmedEditContent = (editContent || "").trim();
+	const canSaveEdit = Boolean(trimmedEditTitle || trimmedEditContent);
+	const [isSavingEdit, setIsSavingEdit] = useState(false);
+
 	const handleSaveEdit = async () => {
-		if (!editTitle.trim() || !editContent.trim()) return;
+		if (!canSaveEdit || isSavingEdit) return;
+		// A title that was auto-copied from the old body's first line would go stale
+		// once the body changes, so derive it again from the new body.
+		const oldAutoTitle = autoTitleFrom(editOriginalContent);
+		const titleIsStaleAutoTitle = Boolean(
+			trimmedEditTitle &&
+			oldAutoTitle &&
+			trimmedEditTitle === oldAutoTitle &&
+			trimmedEditContent &&
+			trimmedEditContent !== (editOriginalContent || "").trim()
+		);
+		const titleToSave = (titleIsStaleAutoTitle ? "" : trimmedEditTitle)
+			|| (autoTitleFrom(trimmedEditContent) || "Community Post");
+		const contentToSave = trimmedEditContent || titleToSave;
+		setIsSavingEdit(true);
 		try {
 			const res = await apiFetch(`/api/forum/${localPost._id}`, {
 				method: "PUT",
 				body: JSON.stringify({
 					userId: currentUserId,
-					title: editTitle,
-					content: editContent,
+					title: titleToSave,
+					content: contentToSave,
 					visibility: editVisibility,
 				}),
 			});
+			await ensureOk(res, "Failed to update post.");
 			const data = await res.json();
 
-			if (!res.ok) return alert(data.message || "Failed to update.");
-			if (data.message === "Post submitted for review.")
-				alert(
-					"Your edit has been sent for admin review due to our spam filters.",
-				);
-			else setLocalPost(data);
+			if (data.message === "Post submitted for review.") {
+				toast("Your edit has been sent for admin review due to our spam filters.", { icon: "ℹ️" });
+			} else {
+				setLocalPost(prev => ({ ...mergePostData(prev, data), visibility: data?.visibility ? resolveVisibility(data) : editVisibility }));
+				toast.success("Post updated");
+			}
 
 			setIsEditing(false);
 		} catch (err) {
-			console.error(err);
+			toast.error(errorMessage(err, "Failed to update post."));
+		} finally {
+			setIsSavingEdit(false);
 		}
 	};
 
+	const isDeletingRef = useRef(false);
 	const confirmDeletePost = async () => {
+		if (isDeletingRef.current) return;
+		isDeletingRef.current = true;
 		try {
-			await apiFetch(`/api/forum/${localPost._id}`, {
+			const res = await apiFetch(`/api/forum/${localPost._id}`, {
 				method: "DELETE",
 				body: JSON.stringify({ userId: currentUserId }),
 			});
+			await ensureOk(res, "Failed to delete post.");
+			setDeleteConfirmOpen(false);
 			setIsCommentModalOpen(false);
+			toast.success("Post deleted");
+			// Only tell the feed after the server confirmed the delete.
+			onDelete?.(localPost._id);
 		} catch (err) {
-			console.error(err);
+			setDeleteConfirmOpen(false);
+			toast.error(errorMessage(err, "Failed to delete post."));
+		} finally {
+			isDeletingRef.current = false;
 		}
 	};
 
@@ -647,16 +713,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 			const res = await apiFetch(`/api/forum/${localPost._id}/bookmark`, {
 				method: "PUT",
 			});
-			if (res && res.ok) {
-				const data = await res.json();
-				if (onBookmarkToggle) onBookmarkToggle(data.isBookmarked);
-				toast.success(data.isBookmarked ? "Post saved. Find it under Saved Posts." : "Removed from Saved Posts.");
-			} else {
-				toast.error("Couldn't update saved posts. Please try again.");
-			}
+			await ensureOk(res, "Couldn't update saved posts. Please try again.");
+			const data = await res.json();
+			if (onBookmarkToggle) onBookmarkToggle(data.isBookmarked);
+			toast.success(data.isBookmarked ? "Post saved. Find it under Saved Posts." : "Removed from Saved Posts.");
 		} catch (err) {
-			console.error(err);
-			toast.error("Network error updating saved posts.");
+			toast.error(errorMessage(err, "Couldn't update saved posts. Please try again."));
 		}
 	};
 
@@ -697,7 +759,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 	const handleDragEnd = (event, info) => {
 		const threshold = 100;
 		if (info.offset.x > threshold) {
-			if (!localPost.likedBy?.includes(currentUser.id)) {
+			if (currentUser && !localPost.likedBy?.includes(currentUserId)) {
 				handleLike();
 			}
 		} else if (info.offset.x < -threshold) {
@@ -740,8 +802,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				}
 				sx={{
 					width: "100%",
+					maxWidth: "100%",
+					minWidth: 0,
 					display: "block",
 					boxSizing: "border-box",
+					// Inherited by every text node in the card: long words/URLs wrap instead of widening the page.
+					overflowWrap: "anywhere",
 					p: compact ? { xs: 1.5, sm: 2 } : { xs: 2, sm: 2.75 },
 					border: localPost.isPinned ? "2px solid" : "1px solid",
 					borderColor: localPost.isPinned ? "warning.main" : "divider",
@@ -849,8 +915,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						</Avatar>
 					</Badge>
 					</MemberHoverCard>
-					<Box sx={{ flexGrow: 1 }}>
-						<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
+					<Box sx={{ flexGrow: 1, minWidth: 0 }}>
+						<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap", minWidth: 0 }}>
 							{localPost.category && (
 								<Chip
 									label={CATEGORY_CONFIG[localPost.category]?.label || localPost.category}
@@ -869,17 +935,22 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							)}
 							<Typography
 								variant={compact ? "subtitle1" : "h6"}
+								component="h3"
 								fontWeight="bold"
 								color="text.primary"
-								sx={{ 
+								sx={{
 									lineHeight: 1.25,
+									minWidth: 0,
+									maxWidth: "100%",
+									overflowWrap: "anywhere",
+									wordBreak: "break-word",
 									display: (localPost.title && localPost.content && localPost.title.trim().toLowerCase() === localPost.content.trim().toLowerCase()) ? 'none' : 'block'
 								}}
 							>
 								{localPost.title}
 							</Typography>
 						</Box>
-						<Typography variant="caption" color="text.primary">
+						<Typography variant="caption" color="text.primary" sx={{ display: "block", overflowWrap: "anywhere" }}>
 							<span
 								role="button"
 								tabIndex={0}
@@ -892,7 +963,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								onClick={() =>
 									localPost.authorId && navigate(`/profile/${localPost.authorId}`)
 								}
-								style={{ cursor: "pointer", display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 'bold' }}
+								style={{ cursor: "pointer", display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', fontWeight: 'bold', maxWidth: '100%', overflowWrap: 'anywhere' }}
 							>
 								{localPost.authorName || "Unknown"}
 								{localPost.authorRole === "admin" && (
@@ -989,7 +1060,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								*/}
 							</span>{" "}
 							• {formatTime(localPost.timestamp)}
-							{renderPrivacyIcon(localPost.visibility)}
+							{renderPrivacyIcon(resolveVisibility(localPost))}
 							{localPost.isEdited && (
 								<Tooltip
 									title={`Edited on ${formatTime(localPost.editedAt || localPost.updatedAt || localPost.timestamp)}`}
@@ -1014,12 +1085,12 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 
 					{/* 3 DOTS MENU */}
 					{Boolean(currentUser) && (
-						<Box>
+						<Box sx={{ flexShrink: 0 }}>
 							<IconButton
 								aria-label="More options"
 								onClick={(e) => setAnchorEl(e.currentTarget)}
 								size="small"
-								sx={{ color: "text.primary" }}
+								sx={{ color: "text.primary", minWidth: { xs: 40, sm: "auto" }, minHeight: { xs: 40, sm: "auto" } }}
 							>
 								<MoreVertIcon />
 							</IconButton>
@@ -1039,7 +1110,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								{String(currentUserId) === String(localPost.authorId) && (
 									<MenuItem
 										onClick={() => {
-											setIsEditing(true);
+											openEditor();
 											setAnchorEl(null);
 										}}
 										sx={{
@@ -1147,6 +1218,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							label="Edit Details"
 							value={editContent}
 							onChange={(e) => setEditContent(e.target.value)}
+							error={!canSaveEdit}
+							helperText={!canSaveEdit ? "Add a title or some details before saving." : undefined}
 							sx={{ mb: 2, bgcolor: "background.paper" }}
 						/>
 						<Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -1170,6 +1243,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								variant="contained"
 								color="primary"
 								onClick={handleSaveEdit}
+								disabled={!canSaveEdit || isSavingEdit}
 								sx={{
 									fontWeight: "bold",
 									borderRadius: 2,
@@ -1185,7 +1259,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 									setIsEditing(false);
 									setEditTitle(localPost.title);
 									setEditContent(localPost.content);
-									setEditVisibility(localPost.visibility || "PUBLIC");
+									setEditVisibility(resolveVisibility(localPost));
 								}}
 								sx={{
 									fontWeight: "bold",
@@ -1200,9 +1274,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 				) : (
 					<Box 
 						onDoubleClick={handleDoubleTap}
-						sx={{ 
-							position: 'relative', 
-							mb: 3, 
+						sx={{
+							position: 'relative',
+							mb: 3,
+							minWidth: 0,
 							cursor: 'pointer',
 							userSelect: 'none' // Prevent text selection on rapid double clicking
 						}}
@@ -1603,9 +1678,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 						<Typography
 							variant="body1"
 							color="text.primary"
-							sx={{ 
-								whiteSpace: "pre-wrap", 
-								pointerEvents: 'none', 
+							sx={{
+								whiteSpace: "pre-wrap",
+								overflowWrap: "anywhere",
+								wordBreak: "break-word",
+								pointerEvents: 'none',
 								lineHeight: 1.6,
 								fontSize: { xs: '0.92rem', sm: '1rem' },
 								mb: localPost.tags?.length ? 2 : 0, 
@@ -1678,7 +1755,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 								</Box>
 
 								{localPost.originalPost?.title && (
-									<Typography variant="body2" fontWeight="bold" sx={{ mb: 0.5, fontSize: "0.9rem" }}>
+									<Typography variant="body2" fontWeight="bold" sx={{ mb: 0.5, fontSize: "0.9rem", overflowWrap: "anywhere" }}>
 										{localPost.originalPost.title}
 									</Typography>
 								)}
@@ -1689,6 +1766,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 										color="text.secondary"
 										sx={{
 											flex: 1,
+											minWidth: 0,
+											overflowWrap: "anywhere",
 											display: "-webkit-box",
 											WebkitLineClamp: 3,
 											WebkitBoxOrient: "vertical",
@@ -1795,7 +1874,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, current
 							(Array.isArray(localPost.linkPreviews) && localPost.linkPreviews.length > 0) ||
 							localPost.linkPreview
 						) && (
-							<Box data-testid="post-link-previews" sx={{ mt: 2 }}>
+							<Box data-testid="post-link-previews" sx={{ mt: 2, minWidth: 0, maxWidth: "100%" }}>
 								{Array.isArray(localPost.linkPreviews) && localPost.linkPreviews.length > 0
 									? localPost.linkPreviews.map((lp, idx) => (
 											<LinkPreviewCard key={lp?.url || idx} preview={lp} sx={{ mb: 1 }} />

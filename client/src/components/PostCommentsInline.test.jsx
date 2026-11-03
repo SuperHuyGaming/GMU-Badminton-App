@@ -1,7 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PostCommentsInline from './PostCommentsInline';
 import { BrowserRouter } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import apiFetch from '../utils/api';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -11,6 +13,17 @@ vi.mock('react-router-dom', async () => {
 		useNavigate: () => mockNavigate,
 	};
 });
+
+vi.mock('../utils/api', () => ({
+	default: vi.fn(),
+}));
+
+vi.mock('react-hot-toast', () => ({
+	toast: Object.assign(vi.fn(), {
+		success: vi.fn(),
+		error: vi.fn(),
+	}),
+}));
 
 vi.mock('../utils/socket', () => ({
 	default: {
@@ -148,5 +161,88 @@ describe('PostCommentsInline Phase 8 QA Tests', () => {
 		fireEvent.click(mentionTag);
 
 		expect(mockNavigate).toHaveBeenCalledWith('/profile/author-1');
+	});
+
+	// ── Community audit fixes ──
+	const renderWithSetter = (user = mockUser) => {
+		const setLocalPost = vi.fn();
+		render(
+			<BrowserRouter>
+				<PostCommentsInline
+					localPost={mockPost}
+					setLocalPost={setLocalPost}
+					currentUser={user}
+					highlightId={null}
+					openLikes={vi.fn()}
+				/>
+			</BrowserRouter>
+		);
+		return { setLocalPost };
+	};
+
+	it('keeps the typed comment and shows the server message when posting fails', async () => {
+		apiFetch.mockRejectedValueOnce(new Error('You are commenting too fast. Please wait a moment.'));
+		const { setLocalPost } = renderWithSetter();
+
+		const input = screen.getByPlaceholderText(/Write a comment/i);
+		fireEvent.change(input, { target: { value: 'My important comment' } });
+		fireEvent.click(screen.getByRole('button', { name: /^Post$/ }));
+
+		await waitFor(() => {
+			expect(toast.error).toHaveBeenCalledWith('You are commenting too fast. Please wait a moment.');
+		});
+		expect(input.value).toBe('My important comment');
+		expect(setLocalPost).not.toHaveBeenCalled();
+	});
+
+	it('keeps the typed comment when the request comes back { ok: false } (offline)', async () => {
+		apiFetch.mockResolvedValueOnce({ ok: false, status: 0, json: async () => ({ message: 'Network offline' }) });
+		renderWithSetter();
+
+		const input = screen.getByPlaceholderText(/Write a comment/i);
+		fireEvent.change(input, { target: { value: 'Offline comment' } });
+		fireEvent.keyDown(input, { key: 'Enter', shiftKey: false });
+
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Network offline'));
+		expect(input.value).toBe('Offline comment');
+	});
+
+	it('clears the comment box only after the server accepted the comment', async () => {
+		const updatedPost = { ...mockPost, comments: [...mockPost.comments] };
+		apiFetch.mockResolvedValueOnce({ ok: true, json: async () => updatedPost });
+		const { setLocalPost } = renderWithSetter();
+
+		const input = screen.getByPlaceholderText(/Write a comment/i);
+		fireEvent.change(input, { target: { value: 'Accepted comment' } });
+		fireEvent.click(screen.getByRole('button', { name: /^Post$/ }));
+
+		await waitFor(() => expect(input.value).toBe(''));
+		expect(apiFetch).toHaveBeenCalledWith(
+			`/api/forum/${mockPost._id}/comments`,
+			expect.objectContaining({ method: 'POST', body: expect.stringContaining('Accepted comment') })
+		);
+		expect(setLocalPost).toHaveBeenCalledWith(updatedPost);
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it('shows the server message when liking a comment fails', async () => {
+		apiFetch.mockRejectedValueOnce(new Error('Comment not found'));
+		renderWithSetter();
+
+		fireEvent.click(screen.getAllByRole('button', { name: /^Like$/ })[0]);
+
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Comment not found'));
+	});
+
+	it('uses a toast (not a browser alert) when a signed-out visitor tries to like a comment', () => {
+		const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+		renderWithSetter(null);
+
+		fireEvent.click(screen.getAllByRole('button', { name: /^Like$/ })[0]);
+
+		expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/log in/i));
+		expect(alertSpy).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
+		alertSpy.mockRestore();
 	});
 });

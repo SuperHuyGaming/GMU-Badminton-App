@@ -18,6 +18,7 @@ import {
 import { toast } from "react-hot-toast";
 import apiFetch from "../utils/api";
 import { CloseIcon, ShareIcon } from "./Icons";
+import { ensureOk, errorMessage } from "./postRequest";
 
 export default function ShareModal({
 	open,
@@ -38,9 +39,10 @@ export default function ShareModal({
 			: (post.imageUrl ? [post.imageUrl] : []));
 	const thumbnail = postImages[0] || null;
 
+	// Canonical single-post link (served by the /post/:postId route).
 	const shareUrl = typeof window !== "undefined"
-		? `${window.location.origin}/community#post-${post._id}`
-		: `/community#post-${post._id}`;
+		? `${window.location.origin}/post/${post._id}`
+		: `/post/${post._id}`;
 
 	const handleShareToFeed = async () => {
 		if (!currentUser) {
@@ -60,19 +62,14 @@ export default function ShareModal({
 				}),
 			});
 
-			if (res && res.ok) {
-				const data = await res.json().catch(() => ({}));
-				toast.success("Post shared to your feed! 🏸");
-				setThoughts("");
-				if (onShareSuccess) onShareSuccess(data);
-				onClose();
-			} else {
-				const errData = await res?.json().catch(() => ({}));
-				toast.error(errData?.message || "Failed to share post.");
-			}
+			await ensureOk(res, "Failed to share post.");
+			const data = await res.json().catch(() => ({}));
+			toast.success("Post shared to your feed! 🏸");
+			setThoughts("");
+			if (onShareSuccess) onShareSuccess(data);
+			onClose();
 		} catch (err) {
-			console.error("Error sharing post:", err);
-			toast.error("Network error sharing post.");
+			toast.error(errorMessage(err, "Failed to share post."));
 		} finally {
 			setIsSharing(false);
 		}
@@ -213,7 +210,7 @@ export default function ShareModal({
 					</Box>
 
 					{post.title && (
-						<Typography variant="body1" fontWeight="bold" sx={{ mb: 0.5 }}>
+						<Typography variant="body1" fontWeight="bold" sx={{ mb: 0.5, overflowWrap: "anywhere" }}>
 							{post.title}
 						</Typography>
 					)}
@@ -224,6 +221,8 @@ export default function ShareModal({
 							color="text.secondary"
 							sx={{
 								flex: 1,
+								minWidth: 0,
+								overflowWrap: "anywhere",
 								display: "-webkit-box",
 								WebkitLineClamp: 3,
 								WebkitBoxOrient: "vertical",

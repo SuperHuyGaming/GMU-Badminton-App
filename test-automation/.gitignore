@@ -1,3 +1,7 @@
 node_modules/
 test-results/
 playwright-report/
+two-bots/shots/
+two-bots/logs/
+two-bots/results.json
+two-bots/mongo-uri.txt

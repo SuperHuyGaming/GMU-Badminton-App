@@ -1,3226 +1,3320 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const Post = require("../models/Post");
-const User = require("../models/User");
-const Notification = require("../models/Notification");
-const ActivityFeed = require("../models/ActivityFeed");
-const Match = require("../models/Match");
-const { sendPushToUser } = require("../utils/pushNotifications");
-const { authMiddleware, adminMiddleware } = require("../middleware/auth");
-const rateLimit = require("express-rate-limit");
-const xss = require("xss");
-const { analyzeContent } = require("../utils/aiModeration");
-const { evaluateSpamHeuristics } = require("../utils/spamDetector");
-const { parseDateRange } = require("../utils/dateRange");
-const feedCache = require("../utils/feedCache");
-const { scrapeLinkPreview, sanitizeHttpUrl } = require("../utils/linkPreviewScraper");
-const router = express.Router();
-
-// ==========================================
-// MEDIA & LINK PREVIEW SANITIZATION (M3)
-// ==========================================
-const CLOUDINARY_MEDIA_PREFIX = "https://res.cloudinary.com/";
-const MAX_LINK_PREVIEWS = 3;
-
-// Accept only HTTPS Cloudinary delivery URLs for uploaded video/audio; anything else yields "".
-const sanitizeCloudinaryMediaUrl = (value) => {
-	const url = sanitizeHttpUrl(value);
-	return url.startsWith(CLOUDINARY_MEDIA_PREFIX) ? url : "";
-};
-
-const sanitizePreviewText = (value, maxLength) =>
-	typeof value === "string" ? xss(value.trim()).slice(0, maxLength) : "";
-
-const sanitizeLinkPreviews = (input) => {
-	if (!Array.isArray(input)) return [];
-	const cleaned = [];
-	for (const preview of input) {
-		if (cleaned.length >= MAX_LINK_PREVIEWS) break;
-		if (!preview || typeof preview !== "object") continue;
-		const url = sanitizeHttpUrl(preview.url);
-		if (!url) continue;
-		const image = sanitizeHttpUrl(preview.image) || sanitizeHttpUrl(preview.imageUrl);
-		let domain = "";
-		try {
-			domain = new URL(url).hostname;
-		} catch {
-			domain = "";
-		}
-		cleaned.push({
-			url,
-			title: sanitizePreviewText(preview.title, 300),
-			description: sanitizePreviewText(preview.description, 500),
-			image,
-			imageUrl: image,
-			siteName: sanitizePreviewText(preview.siteName, 100),
-			domain,
-		});
-	}
-	return cleaned;
-};
-const jwt = require("jsonwebtoken");
-const { JWT_SECRET } = require("../config/jwtSecret");
-
-const getOptionalUser = (req) => {
-	if (req.user) return req.user;
-	const authHeader = req.header("Authorization");
-	if (!authHeader) return null;
-	try {
-		const token = authHeader.split(" ")[1];
-		if (!token) return null;
-		const decoded = jwt.verify(token, JWT_SECRET);
-		if (decoded) {
-			const normalizedId = (decoded.userId || decoded.id || "").toString();
-			decoded.id = normalizedId;
-			decoded.userId = normalizedId;
-			return decoded;
-		}
-	} catch (err) {
-		return null;
-	}
-	return null;
-};
-
-
-// Helper to look up post by either Post._id or ActivityFeed._id
-const findPostByIdOrActivityFeed = async (postId, options = {}) => {
-	if (!postId || !mongoose.isValidObjectId(postId)) return null;
-	let query = Post.findById(postId);
-	if (options.lean && query && typeof query.lean === 'function') {
-		query = query.lean();
-	}
-	let post = await query;
-	if (!post) {
-		const feedItem = await ActivityFeed.findById(postId);
-		if (feedItem?.referenceId && mongoose.isValidObjectId(feedItem.referenceId)) {
-			let refQuery = Post.findById(feedItem.referenceId);
-			if (options.lean && refQuery && typeof refQuery.lean === 'function') {
-				refQuery = refQuery.lean();
-			}
-			post = await refQuery;
-		}
-	}
-	return post;
-};
-
-const escapeHtml = (str) => {
-	if (!str || typeof str !== "string") return "";
-	return str
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#039;");
-};
-
-// Helper to shorten long comments in notifications
-const truncateText = (text, maxLength = 40) => {
-	if (!text) return "";
-	return text.length > maxLength
-		? text.substring(0, maxLength - 3) + "..."
-		: text;
-};
-
-// 1. RATE LIMITER
-const postLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000,
-	max: 10,
-	skip: (req) => req.method === "OPTIONS",
-	message: {
-		message: "You are posting too fast. Please wait a few minutes.",
-	},
-});
-
-
-// 2. THE UPGRADED AI SPAM ENGINE
-const checkSpam = async (text) => {
-	const result = await analyzeContent(text);
-	return result.isFlagged;
-};
-
-const hydrateWithPictures = async (data) => {
-	const posts = Array.isArray(data) ? data : (data ? [data] : []);
-	const userIds = new Set();
-	
-	posts.forEach(post => {
-		if (!post) return;
-		if (post.authorId) userIds.add(post.authorId.toString());
-		if (Array.isArray(post.likedBy)) post.likedBy.forEach(id => userIds.add(id.toString()));
-		if (Array.isArray(post.reactions)) {
-			post.reactions.forEach(r => {
-				if (r && r.userId) userIds.add(r.userId.toString());
-			});
-		}
-		
-		if (Array.isArray(post.comments)) {
-			post.comments.forEach(comment => {
-				if (!comment) return;
-				if (comment.authorId) userIds.add(comment.authorId.toString());
-				if (Array.isArray(comment.likedBy)) comment.likedBy.forEach(id => userIds.add(id.toString()));
-				
-				if (Array.isArray(comment.replies)) {
-					comment.replies.forEach(reply => {
-						if (!reply) return;
-						if (reply.authorId) userIds.add(reply.authorId.toString());
-						if (Array.isArray(reply.likedBy)) reply.likedBy.forEach(id => userIds.add(id.toString()));
-					});
-				}
-			});
-		}
-	});
-
-	const validUserIds = Array.from(userIds).filter((id) => id && mongoose.isValidObjectId(id));
-	const users = validUserIds.length > 0
-		? await User.find({ _id: { $in: validUserIds } }).select("_id name profilePic role badges stats").lean()
-		: [];
-	const userMap = {};
-	users.forEach(
-		(u) =>
-			(userMap[u._id.toString()] = {
-				name: u.name,
-				profilePic: u.profilePic,
-				role: u.role || "user",
-				badges: Array.isArray(u.badges) ? u.badges : [],
-				streak: u.stats?.winStreak || 0,
-			}),
-	);
-
-	const originalPostIds = posts
-		.map((p) => p && p.originalPostId)
-		.filter((id) => id && mongoose.isValidObjectId(id));
-	const originalPostMap = {};
-	if (originalPostIds.length > 0) {
-		try {
-			let origQuery = Post.find({ _id: { $in: originalPostIds } });
-			if (origQuery && typeof origQuery.select === "function") {
-				origQuery = origQuery.select("_id title content authorName authorId imageUrl imageUrls category createdAt tags");
-			}
-			if (origQuery && typeof origQuery.lean === "function") {
-				origQuery = origQuery.lean();
-			}
-			const originalPosts = (await origQuery) || [];
-			if (Array.isArray(originalPosts)) {
-				originalPosts.forEach((op) => {
-					if (op && op._id) originalPostMap[op._id.toString()] = op;
-				});
-			}
-		} catch (_) {}
-	}
-
-	const attach = (post) => {
-		if (!post) return post;
-		const authorInfo = userMap[post.authorId?.toString()];
-		post.authorPic = authorInfo?.profilePic || "";
-		post.authorRole = authorInfo?.role || "user";
-		post.authorBadges = authorInfo?.badges || [];
-		post.authorStreak = authorInfo?.streak || 0;
-		if (post.originalPostId && originalPostMap[post.originalPostId.toString()]) {
-			post.originalPost = originalPostMap[post.originalPostId.toString()];
-		}
-		post.likedByDetails = Array.isArray(post.likedBy)
-			? post.likedBy.map((id) => ({
-					id,
-					name: userMap[id.toString()]?.name || "Unknown",
-					profilePic: userMap[id.toString()]?.profilePic || "",
-				}))
-			: [];
-
-		if (Array.isArray(post.comments)) {
-			post.comments.forEach((comment) => {
-				if (!comment) return;
-				comment.authorPic =
-					userMap[comment.authorId?.toString()]?.profilePic || "";
-				comment.authorRole = userMap[comment.authorId?.toString()]?.role || "user";
-				comment.authorBadges = userMap[comment.authorId?.toString()]?.badges || [];
-				comment.authorStreak = userMap[comment.authorId?.toString()]?.streak || 0;
-				comment.likedByDetails = Array.isArray(comment.likedBy)
-					? comment.likedBy.map((id) => ({
-							id,
-							name: userMap[id.toString()]?.name || "Unknown",
-							profilePic: userMap[id.toString()]?.profilePic || "",
-						}))
-					: [];
-
-				if (Array.isArray(comment.replies)) {
-					comment.replies.forEach((reply) => {
-						if (!reply) return;
-						reply.authorPic =
-							userMap[reply.authorId?.toString()]?.profilePic || "";
-						reply.authorRole = userMap[reply.authorId?.toString()]?.role || "user";
-						reply.authorBadges = userMap[reply.authorId?.toString()]?.badges || [];
-						reply.authorStreak = userMap[reply.authorId?.toString()]?.streak || 0;
-						reply.likedByDetails = Array.isArray(reply.likedBy)
-							? reply.likedBy.map((id) => ({
-									id,
-									name: userMap[id.toString()]?.name || "Unknown",
-									profilePic:
-										userMap[id.toString()]?.profilePic || "",
-								}))
-							: [];
-					});
-				}
-			});
-		}
-		return post;
-	};
-
-	if (Array.isArray(data)) return data.map(attach);
-	return attach(data);
-};
-
-// ==========================================
-// NOTIFICATIONS
-// ==========================================
-
-// ==========================================
-
-// ==========================================
-// ACTIVE ONLINE USERS PRESENCE
-// ==========================================
-router.get("/online-users", (req, res) => {
-	const onlineUsersMap = req.app.get("onlineUsers");
-	const onlineUserIds = onlineUsersMap ? Array.from(onlineUsersMap.keys()) : [];
-	res.json({ onlineUserIds });
-});
-
-// ==========================================
-// MENTION SUGGESTIONS (Phase 8 Autocomplete)
-// ==========================================
-router.get("/mention-suggestions", authMiddleware, async (req, res) => {
-	try {
-		const query = (req.query.q || "").trim();
-		let filter = {};
-		if (query) {
-			filter = { name: { $regex: query, $options: "i" } };
-		}
-		const users = await User.find(filter)
-			.select("_id name profilePic role badges")
-			.limit(8)
-			.lean();
-
-		const formatted = users.map((u) => ({
-			id: u._id.toString(),
-			name: u.name,
-			profilePic: u.profilePic || "",
-			role: u.role || "user",
-			badges: Array.isArray(u.badges) ? u.badges : [],
-		}));
-
-		res.json({ users: formatted });
-	} catch (err) {
-		console.error("Error fetching mention suggestions:", err);
-		res.status(500).json({ message: "Failed to fetch suggestions" });
-	}
-});
-
-// TRENDING TAGS (Cached with 2-minute TTL)
-// ==========================================
-router.get("/trending-tags", async (req, res, next) => {
-	try {
-		const cached = feedCache.get("trending_tags");
-		if (cached) {
-			if (req.headers["if-none-match"] === cached.etag) {
-				return res.status(304).end();
-			}
-			res.setHeader("ETag", cached.etag);
-			res.setHeader("X-Feed-Cache", "HIT");
-			return res.json(cached.data);
-		}
-
-		const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-		let tagsAggregation = await Post.aggregate([
-			{
-				$match: {
-					status: { $nin: ["quarantined", "deleted"] },
-					isFlagged: { $ne: true },
-					createdAt: { $gte: twoDaysAgo },
-					tags: { $exists: true, $ne: [] }
-				}
-			},
-			{ $unwind: "$tags" },
-			{
-				$project: {
-					tag: { $trim: { input: { $toLower: "$tags" } } }
-				}
-			},
-			{ $match: { tag: { $ne: "" } } },
-			{
-				$group: {
-					_id: "$tag",
-					count: { $sum: 1 }
-				}
-			},
-			{ $sort: { count: -1, _id: 1 } },
-			{ $limit: 10 },
-			{
-				$project: {
-					_id: 0,
-					tag: "$_id",
-					count: 1
-				}
-			}
-		]);
-
-		if (tagsAggregation.length < 3) {
-			tagsAggregation = await Post.aggregate([
-				{
-					$match: {
-						status: { $nin: ["quarantined", "deleted"] },
-						isFlagged: { $ne: true },
-						tags: { $exists: true, $ne: [] }
-					}
-				},
-				{ $unwind: "$tags" },
-				{
-					$project: {
-						tag: { $trim: { input: { $toLower: "$tags" } } }
-					}
-				},
-				{ $match: { tag: { $ne: "" } } },
-				{
-					$group: {
-						_id: "$tag",
-						count: { $sum: 1 }
-					}
-				},
-				{ $sort: { count: -1, _id: 1 } },
-				{ $limit: 10 },
-				{
-					$project: {
-						_id: 0,
-						tag: "$_id",
-						count: 1
-					}
-				}
-			]);
-		}
-
-		const payload = { tags: tagsAggregation };
-		const etag = feedCache.set("trending_tags", payload, 120);
-		res.setHeader("ETag", etag);
-		res.setHeader("X-Feed-Cache", "MISS");
-		return res.json(payload);
-	} catch (err) {
-		next(err);
-	}
-});
-
-router.get("/share/:postId", async (req, res) => {
-    try {
-        if (!mongoose.isValidObjectId(req.params.postId)) {
-            return res.status(404).send("Post not found");
-        }
-
-        const post = await Post.findById(req.params.postId);
-        if (!post) return res.status(404).send("Post not found");
-        
-        const frontendUrl = (process.env.FRONTEND_URL || "https://gmu-badminton-app.onrender.com").replace(/\/+$/, "");
-        const rawTitle = post.authorName ? `${post.authorName} on GMU Badminton` : "GMU Badminton Post";
-        let rawDescription = post.content || "Check out this discussion on GMU Badminton!";
-        if (rawDescription.length > 150) rawDescription = rawDescription.substring(0, 150) + "...";
-        
-        const rawImageUrl = (post.imageUrls && post.imageUrls.length > 0) ? post.imageUrls[0] : (post.imageUrl || "https://res.cloudinary.com/dcb4ilgpy/image/upload/v1727221064/default-preview_h7xk6p.png");
-        const safePostId = encodeURIComponent(post._id.toString());
-        const targetUrl = `${frontendUrl}/post/${safePostId}`;
-
-        const safeTitle = escapeHtml(rawTitle);
-        const safeDescription = escapeHtml(rawDescription);
-        const safeImageUrl = escapeHtml(rawImageUrl);
-        const safeTargetUrl = escapeHtml(targetUrl);
-        const jsonTargetUrl = JSON.stringify(targetUrl);
-
-        const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta property="og:title" content="${safeTitle}" />
-    <meta property="og:description" content="${safeDescription}" />
-    <meta property="og:image" content="${safeImageUrl}" />
-    <meta property="og:url" content="${safeTargetUrl}" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <title>${safeTitle}</title>
-    <script>
-        // Redirect immediately to the frontend deep link
-        window.location.href = ${jsonTargetUrl};
-    </script>
-</head>
-<body style="background:#111; color:white; font-family:sans-serif; text-align:center; padding-top:20vh;">
-    <h2>Redirecting you to the post...</h2>
-    <p>If you are not redirected automatically, <a href="${safeTargetUrl}" style="color:#00BFFF;">click here</a>.</p>
-</body>
-</html>`;
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.send(html);
-    } catch (e) {
-        console.error("Error generating share link:", e);
-        res.status(500).send("Error generating preview");
-    }
-});
-router.get("/notifications/:userId", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
-			return res.status(403).json({ message: "Unauthorized to access these notifications." });
-		}
-
-		const notifs = await Notification.find({
-			targetUserId: req.params.userId,
-		})
-			.sort({ time: -1 })
-			.limit(30);
-		res.json(notifs);
-	} catch (error) {
-		res.status(500).json({ message: "Error fetching notifications" });
-	}
-});
-
-router.put("/notifications/:userId/read", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
-			return res.status(403).json({ message: "Unauthorized to update these notifications." });
-		}
-
-		const result = await Notification.updateMany(
-			{ targetUserId: req.params.userId, read: false },
-			{ read: true },
-		);
-
-		const io = req.io || req.app?.get("io");
-		if (io) io.to(req.params.userId).emit("notificationsMarkedRead", { userId: req.params.userId, unreadCount: 0 });
-
-		res.json({ success: true, markedReadCount: result.modifiedCount ?? 0, unreadCount: 0 });
-	} catch (error) {
-		res.status(500).json({ message: "Error updating notifications" });
-	}
-});
-
-router.delete("/notifications/:userId", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
-			return res.status(403).json({ message: "Unauthorized to clear these notifications." });
-		}
-
-		const result = await Notification.deleteMany({ targetUserId: req.params.userId });
-
-		const io = req.io || req.app?.get("io");
-		if (io) io.to(req.params.userId).emit("notificationsCleared", { userId: req.params.userId });
-
-		res.json({ success: true, message: "All notifications cleared.", deletedCount: result.deletedCount ?? 0 });
-	} catch (error) {
-		res.status(500).json({ message: "Error clearing notifications" });
-	}
-});
-
-router.put("/notifications/single/:notifId/read", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.notifId)) {
-			return res.status(400).json({ message: "Invalid notification ID format." });
-		}
-
-		const notif = await Notification.findById(req.params.notifId);
-		if (!notif) return res.status(404).json({ message: "Notification not found" });
-
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		if (req.user.role !== "admin" && currentUserId !== notif.targetUserId?.toString()) {
-			return res.status(403).json({ message: "Unauthorized to update this notification." });
-		}
-
-		notif.read = true;
-		await notif.save();
-
-		const io = req.io || req.app?.get("io");
-		if (io) io.to(notif.targetUserId.toString()).emit("notificationRead", { notifId: notif._id, read: true });
-
-		res.json({ success: true, notification: notif });
-	} catch (error) {
-		res.status(500).json({ message: "Error updating notification" });
-	}
-});
-
-const sendNotification = async (io, targetUserId, message, link) => {
-	if (!targetUserId || targetUserId === "000000000000000000000000") return;
-	const notif = new Notification({ targetUserId, message, link });
-	await notif.save();
-	if (io) io.to(targetUserId.toString()).emit("newNotification", notif);
-};
-
-// ==========================================
-// POST VISIBILITY & SCOPED REAL-TIME HELPERS
-// ==========================================
-const isPublicPost = (post) => !post?.visibility || post.visibility === "PUBLIC";
-
-// Mirrors the privacy rules of GET /:postId. Returns true when `user` may view `post`.
-const canViewPost = async (post, user) => {
-	if (!post) return false;
-	if (post.visibility !== "ONLY_ME" && post.visibility !== "FRIENDS_ONLY") return true;
-
-	const userId = user ? String(user.id || user.userId || user._id || "") : "";
-	const isAuthor = Boolean(userId && post.authorId && String(post.authorId) === userId);
-	const isAdmin = Boolean(user && user.role === "admin");
-	if (isAuthor || isAdmin) return true;
-	if (post.visibility === "ONLY_ME" || !userId) return false;
-
-	const authorUser = await User.findById(post.authorId).select("friends").lean();
-	return Boolean(authorUser && Array.isArray(authorUser.friends) &&
-		authorUser.friends.some(f => (f?._id || f).toString() === userId));
-};
-
-// Personal rooms (clients join `userId` rooms via joinUserRoom) allowed to see a private post:
-// the author, the involved users, and for FRIENDS_ONLY posts the author's friends.
-const getPostAudienceRooms = async (post, involvedUserIds = []) => {
-	const ids = [post?.authorId, ...involvedUserIds];
-	if (post?.visibility === "FRIENDS_ONLY" && post.authorId) {
-		try {
-			let query = User.findById(post.authorId);
-			if (query && typeof query.select === "function") query = query.select("friends");
-			if (query && typeof query.lean === "function") query = query.lean();
-			const author = await query;
-			if (author && Array.isArray(author.friends)) {
-				ids.push(...author.friends.map(f => f?._id || f));
-			}
-		} catch (_) { /* fall back to author + involved users */ }
-	}
-	return [...new Set(ids.filter(Boolean).map(String))];
-};
-
-// Public posts broadcast to everyone; private posts only reach their audience rooms.
-const emitForPost = async (io, post, event, payload, involvedUserIds = []) => {
-	if (!io) return;
-	try {
-		if (isPublicPost(post)) {
-			io.emit(event, payload);
-			return;
-		}
-		const rooms = await getPostAudienceRooms(post, involvedUserIds);
-		if (rooms.length > 0) io.to(rooms).emit(event, payload);
-	} catch (error) {
-		console.error(`Error emitting ${event}:`, error);
-	}
-};
-
-// A post that just went private must disappear from every client outside its audience.
-const emitPostHiddenFromOthers = async (io, post, involvedUserIds = []) => {
-	if (!io || typeof io.except !== "function") return;
-	try {
-		const rooms = await getPostAudienceRooms(post, involvedUserIds);
-		io.except(rooms).emit("postDeleted", String(post._id));
-	} catch (error) {
-		console.error("Error emitting postDeleted:", error);
-	}
-};
-
-// ==========================================
-// RALLY RSVP ATOMIC HELPERS
-// ==========================================
-const getRallyCapacity = (post) => post?.playerMatchmaking?.slotsNeeded || post?.rsvp?.capacity || 1;
-
-// Aggregation expression: number of confirmed entries in playerMatchmaking.rsvpList
-const confirmedRsvpCountExpr = {
-	$size: {
-		$filter: {
-			input: { $ifNull: ["$playerMatchmaking.rsvpList", []] },
-			as: "r",
-			cond: { $eq: ["$$r.status", "confirmed"] }
-		}
-	}
-};
-
-const loadPostLean = async (postId) => {
-	let query = Post.findById(postId);
-	if (query && typeof query.lean === "function") query = query.lean();
-	return query;
-};
-
-// Promotes waitlisted RSVPs in FIFO order while confirmed slots are free.
-// Each promotion is a conditional positional update guarded by the confirmed count,
-// so concurrent cancellations/joins can never push the rally over capacity.
-const promoteWaitlistedRsvps = async (postId, capacity) => {
-	const promoted = [];
-	let current = await loadPostLean(postId);
-	for (let attempt = 0; attempt < 50 && current; attempt++) {
-		const list = Array.isArray(current.playerMatchmaking?.rsvpList) ? current.playerMatchmaking.rsvpList : [];
-		const confirmedCount = list.filter(r => r.status === "confirmed").length;
-		if (confirmedCount >= capacity) break;
-		const next = list.find(r => r.status === "waitlist");
-		if (!next) break;
-		const nextUserId = String(next.userId);
-
-		const updated = await Post.findOneAndUpdate(
-			{
-				_id: postId,
-				"playerMatchmaking.rsvpList": { $elemMatch: { userId: nextUserId, status: "waitlist" } },
-				$expr: { $lt: [confirmedRsvpCountExpr, capacity] }
-			},
-			{
-				$set: { "playerMatchmaking.rsvpList.$.status": "confirmed" },
-				$pull: { "rsvp.waitlist": nextUserId },
-				$addToSet: { "rsvp.attendees": nextUserId }
-			},
-			{ returnDocument: "after", lean: true }
-		);
-
-		if (updated) {
-			promoted.push({ ...next, userId: nextUserId, status: "confirmed" });
-			current = updated;
-		} else {
-			// Lost a race (entry changed or slot taken): re-read and re-evaluate
-			current = await loadPostLean(postId);
-		}
-	}
-	return promoted;
-};
-
-// Recomputes isFilled from the stored list in a single pipeline update and returns the fresh post.
-const syncRallyFilledFlag = (postId, capacity) => Post.findOneAndUpdate(
-	{ _id: postId },
-	[{ $set: { "playerMatchmaking.isFilled": { $gte: [confirmedRsvpCountExpr, capacity] } } }],
-	{ returnDocument: "after", lean: true, updatePipeline: true }
-);
-
-const notifyPromotedRsvps = (req, post, promoted) => {
-	for (const entry of promoted || []) {
-		const promotedId = String(entry.userId);
-		// Fire-and-forget: never block the response on push delivery
-		Promise.resolve().then(() => sendPushToUser(promotedId, {
-			title: "🏸 You're in! Rally Spot Confirmed",
-			body: "A spot opened up and you've been promoted from the waitlist!",
-			url: `/community?postId=${post._id}`
-		})).catch(err => console.error("[Push] Error sending waitlist promotion push:", err?.message || err));
-
-		Promise.resolve().then(() => sendNotification(
-			req.io,
-			promotedId,
-			"You've been promoted from the waitlist to confirmed for a badminton rally!",
-			`/community?postId=${post._id}`
-		)).catch(err => console.error("[Notify] Error sending waitlist promotion notification:", err?.message || err));
-
-		if (req.io) {
-			req.io.to(promotedId).emit("waitlistPromoted", {
-				postId: post._id,
-				userId: promotedId,
-				status: "confirmed"
-			});
-		}
-	}
-};
-
-// ==========================================
-// POSTS (FETCH & CREATE)
-// ==========================================
-const ALLOWED_CATEGORIES = [
-	'general',
-	'match_result',
-	'gear_review',
-	'meetup_rally',
-	'training',
-	'find_partner',
-	'challenge_match',
-	'qa_forum',
-	'gear_exchange'
-];
-
-const parsePlayerMatchmaking = (pm) => {
-	if (!pm || typeof pm !== 'object') return undefined;
-	return {
-		skillLevelRequired: pm.skillLevelRequired ? xss(String(pm.skillLevelRequired).trim()).slice(0, 50) : 'Any',
-		format: pm.format ? xss(String(pm.format).trim()).slice(0, 50) : 'Doubles',
-		preferredCourt: pm.preferredCourt ? xss(String(pm.preferredCourt).trim()).slice(0, 100) : 'RAC Courts 1-3',
-		rallyDate: pm.rallyDate ? new Date(pm.rallyDate) : undefined,
-		timeWindow: pm.timeWindow ? xss(String(pm.timeWindow).trim()).slice(0, 50) : '',
-		slotsNeeded: typeof pm.slotsNeeded === 'number' && pm.slotsNeeded > 0 ? Math.min(10, pm.slotsNeeded) : 1,
-		// rsvpList / isFilled are server-owned: only the RSVP endpoint may change them
-		rsvpList: [],
-		isFilled: false,
-		isEnabled: Boolean(pm.isEnabled)
-	};
-};
-
-// Author-editable playerMatchmaking fields (everything except the server-owned RSVP state)
-const EDITABLE_MATCHMAKING_FIELDS = ['skillLevelRequired', 'format', 'preferredCourt', 'rallyDate', 'timeWindow', 'slotsNeeded', 'isEnabled'];
-
-const parseChallengeMatch = (cm, authorInfo) => {
-	if (!cm || typeof cm !== 'object') return undefined;
-	const challengerTeam = Array.isArray(cm.challengerTeam) && cm.challengerTeam.length > 0
-		? cm.challengerTeam.map(c => ({
-			userId: String(c.userId || ''),
-			userName: xss(String(c.userName || 'Challenger')).slice(0, 60),
-			avatarUrl: c.avatarUrl ? xss(String(c.avatarUrl).trim()) : ''
-		}))
-		: (authorInfo ? [{ userId: authorInfo.userId, userName: authorInfo.userName, avatarUrl: authorInfo.avatarUrl || '' }] : []);
-
-	return {
-		matchType: cm.matchType ? xss(String(cm.matchType).trim()).slice(0, 50) : 'Friendly Scrimmage',
-		gameFormat: cm.gameFormat ? xss(String(cm.gameFormat).trim()).slice(0, 50) : 'Best of 3 to 21',
-		stipulations: cm.stipulations ? xss(String(cm.stipulations).trim()).slice(0, 200) : '',
-		matchStatus: ['open', 'accepted', 'completed', 'declined'].includes(cm.matchStatus) ? cm.matchStatus : 'open',
-		challengerTeam,
-		acceptedBy: Array.isArray(cm.acceptedBy) ? cm.acceptedBy.map(a => ({
-			userId: String(a.userId || ''),
-			userName: xss(String(a.userName || 'Opponent')).slice(0, 60),
-			avatarUrl: a.avatarUrl ? xss(String(a.avatarUrl).trim()) : ''
-		})) : [],
-		linkedMatchId: cm.linkedMatchId ? xss(String(cm.linkedMatchId).trim()).slice(0, 60) : ''
-	};
-};
-
-// Status, opponents, and the linked match are owned by the accept/sync flow, never the client.
-const parseNewChallengeMatch = (cm, authorInfo) => {
-	const parsed = parseChallengeMatch(cm, authorInfo);
-	if (!parsed) return undefined;
-	return { ...parsed, matchStatus: 'open', acceptedBy: [], linkedMatchId: '' };
-};
-
-// Edits may only touch the descriptive fields; the challenger team is frozen once accepted.
-const applyChallengeMatchEdit = (post, cm, authorInfo) => {
-	const parsed = parseChallengeMatch(cm, authorInfo);
-	if (!parsed) return;
-	if (!post.challengeMatch || !post.challengeMatch.challengerTeam?.length) {
-		post.challengeMatch = { isEnabled: Boolean(post.challengeMatch?.isEnabled), ...parseNewChallengeMatch(cm, authorInfo) };
-		return;
-	}
-	post.challengeMatch.matchType = parsed.matchType;
-	post.challengeMatch.gameFormat = parsed.gameFormat;
-	post.challengeMatch.stipulations = parsed.stipulations;
-	const status = post.challengeMatch.matchStatus || 'open';
-	if (status === 'open' && Array.isArray(cm.challengerTeam) && cm.challengerTeam.length > 0) {
-		post.challengeMatch.challengerTeam = parsed.challengerTeam;
-	}
-};
-
-const parseQaDetails = (qa) => {
-	if (!qa || typeof qa !== 'object') return undefined;
-	return {
-		subtopic: qa.subtopic ? xss(String(qa.subtopic).trim()).slice(0, 50) : 'General',
-		isResolved: Boolean(qa.isResolved),
-		acceptedCommentId: qa.acceptedCommentId ? xss(String(qa.acceptedCommentId).trim()).slice(0, 60) : '',
-		acceptedBy: qa.acceptedBy && typeof qa.acceptedBy === 'object' ? {
-			userId: String(qa.acceptedBy.userId || ''),
-			userName: xss(String(qa.acceptedBy.userName || '')).slice(0, 60),
-			at: qa.acceptedBy.at ? new Date(qa.acceptedBy.at) : new Date()
-		} : undefined
-	};
-};
-
-// Resolution state is owned by the accept-answer route.
-const parseNewQaDetails = (qa) => {
-	const parsed = parseQaDetails(qa);
-	if (!parsed) return undefined;
-	return { ...parsed, isResolved: false, acceptedCommentId: '', acceptedBy: undefined };
-};
-
-const parseGearDetails = (gd) => {
-	if (!gd || typeof gd !== 'object') return undefined;
-	return {
-		gearType: gd.gearType ? xss(String(gd.gearType).trim()).slice(0, 50) : 'Racket',
-		brand: gd.brand ? xss(String(gd.brand).trim()).slice(0, 50) : '',
-		condition: gd.condition ? xss(String(gd.condition).trim()).slice(0, 50) : 'Good',
-		specs: gd.specs && typeof gd.specs === 'object' ? {
-			weightCode: gd.specs.weightCode ? xss(String(gd.specs.weightCode).trim()).slice(0, 10) : '',
-			gripSize: gd.specs.gripSize ? xss(String(gd.specs.gripSize).trim()).slice(0, 10) : '',
-			balancePoint: gd.specs.balancePoint ? xss(String(gd.specs.balancePoint).trim()).slice(0, 30) : '',
-			currentString: gd.specs.currentString ? xss(String(gd.specs.currentString).trim()).slice(0, 60) : ''
-		} : {},
-		tradeType: gd.tradeType ? xss(String(gd.tradeType).trim()).slice(0, 50) : 'Review / Discussion',
-		price: typeof gd.price === 'number' && gd.price >= 0 ? gd.price : (Number(gd.price) || 0),
-		isEnabled: Boolean(gd.isEnabled)
-	};
-};
-
-const parseOpponents = (opponents) => {
-	if (Array.isArray(opponents)) {
-		return opponents.map((o) => xss(String(o || "").trim()).slice(0, 100)).filter(Boolean);
-	}
-	if (typeof opponents === "string" && opponents.trim()) {
-		return opponents.split(",").map((o) => xss(o.trim()).slice(0, 100)).filter(Boolean);
-	}
-	return [];
-};
-
-router.get("/", async (req, res) => {
-	try {
-		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
-		const skip = (page - 1) * limit;
-
-		const query = {
-			isFlagged: { $ne: true },
-			status: { $nin: ['quarantined', 'deleted'] }
-		};
-
-		const { start: dateStart, end: dateEnd } = parseDateRange(req.query);
-		if (dateStart || dateEnd) {
-			query.createdAt = {};
-			if (dateStart) query.createdAt.$gte = dateStart;
-			if (dateEnd) query.createdAt.$lte = dateEnd;
-		} else if (req.query.date && typeof req.query.date === "string") {
-			query.targetDate = req.query.date.slice(0, 50);
-		}
-
-		if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {
-			const cat = req.query.category.trim().toLowerCase().slice(0, 50);
-			if (cat === "find_partner") {
-				query.category = { $in: ["find_partner", "meetup_rally"] };
-			} else if (cat === "gear_exchange") {
-				query.category = { $in: ["gear_exchange", "gear_review"] };
-			} else if (ALLOWED_CATEGORIES.includes(cat)) {
-				query.category = cat;
-			}
-		}
-
-		if (req.query.tag && typeof req.query.tag === "string") {
-			const cleanTag = req.query.tag.trim().replace(/^#/, "").slice(0, 50);
-			if (cleanTag) {
-				const escaped = cleanTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-				query.tags = { $regex: new RegExp(`^#?${escaped}$`, "i") };
-			}
-		}
-
-		const rawQuerySearch = typeof req.query.search === "string"
-			? req.query.search
-			: (typeof req.query.q === "string" ? req.query.q : (Array.isArray(req.query.search) && typeof req.query.search[0] === "string" ? req.query.search[0] : ""));
-		const rawSearch = rawQuerySearch.trim().slice(0, 100);
-		let searchOr = null;
-		if (rawSearch) {
-			const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			const searchRegex = new RegExp(escaped, 'i');
-			searchOr = [
-				{ title: { $regex: searchRegex } },
-				{ content: { $regex: searchRegex } },
-				{ authorName: { $regex: searchRegex } },
-				{ tags: searchRegex },
-				{ "matchDetails.court": { $regex: searchRegex } },
-				{ "matchDetails.partner": { $regex: searchRegex } },
-				{ "matchDetails.opponents": searchRegex },
-				{ "playerMatchmaking.preferredCourt": { $regex: searchRegex } },
-				{ "gearDetails.brand": { $regex: searchRegex } },
-				{ "gearDetails.gearType": { $regex: searchRegex } }
-			];
-		}
-
-		// Privacy Visibility Filtering
-		const currentUser = getOptionalUser(req);
-		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : "";
-		const userObjId = mongoose.isValidObjectId(currentUserId) ? new mongoose.Types.ObjectId(currentUserId) : null;
-
-		let friendIds = [];
-		if (currentUserId) {
-			const userDoc = await User.findById(currentUserId).select("friends").lean();
-			friendIds = Array.isArray(userDoc?.friends)
-				? userDoc.friends.map(f => (f._id ? f._id.toString() : f.toString()))
-				: [];
-		}
-		const friendObjIds = friendIds
-			.filter(id => mongoose.isValidObjectId(id))
-			.map(id => new mongoose.Types.ObjectId(id));
-
-		const visibilityOr = [
-			{ visibility: 'PUBLIC' },
-			{ visibility: { $exists: false } }
-		];
-		if (userObjId) {
-			visibilityOr.push({ authorId: userObjId });
-			visibilityOr.push({ authorId: currentUserId });
-		} else if (currentUserId) {
-			visibilityOr.push({ authorId: currentUserId });
-		}
-		if (friendIds.length > 0) {
-			visibilityOr.push({
-				visibility: 'FRIENDS_ONLY',
-				authorId: { $in: [...friendIds, ...friendObjIds] }
-			});
-		}
-
-		if (searchOr) {
-			query.$and = [
-				{ $or: visibilityOr },
-				{ $or: searchOr }
-			];
-		} else {
-			query.$or = visibilityOr;
-		}
-
-		// Smart Feed Sorting & Tab Handling
-		const tab = (req.query.tab || req.query.sort || "latest").toString().toLowerCase();
-		let sortOption = { isPinned: -1, timestamp: -1, createdAt: -1 };
-
-		if (tab === "top") {
-			sortOption = { isPinned: -1, score: -1, createdAt: -1 };
-		} else if (tab === "recent_activity" || tab === "activity" || tab === "recent") {
-			sortOption = { isPinned: -1, lastActivityAt: -1, createdAt: -1 };
-		} else if (tab === "saved") {
-			if (!currentUser) {
-				return res.status(401).json({ message: "Authentication required to view saved posts" });
-			}
-			const userDoc = await User.findById(currentUser.id).select("savedPosts bookmarkedPosts").lean();
-			const savedIds = [
-				...(userDoc?.savedPosts || []),
-				...(userDoc?.bookmarkedPosts || [])
-			].map(id => id ? id.toString() : "").filter(Boolean);
-			const uniqueSavedIds = Array.from(new Set(savedIds)).filter(id => mongoose.isValidObjectId(id));
-			query._id = { $in: uniqueSavedIds };
-			sortOption = { createdAt: -1, timestamp: -1 };
-		} else if (tab === "latest") {
-			sortOption = { isPinned: -1, createdAt: -1, timestamp: -1 };
-		}
-
-		let rawPosts = await Post.find(query)
-			.sort(sortOption)
-			.skip(skip)
-			.limit(limit)
-			.lean();
-
-		if (Array.isArray(rawPosts)) {
-			rawPosts = rawPosts.filter((post) => {
-				const vis = post.visibility || "PUBLIC";
-				if (vis === "PUBLIC") return true;
-				if (!currentUserId) return false;
-				const postAuthor = (post.authorId || "").toString();
-				if (postAuthor === currentUserId) return true;
-				if (currentUser && currentUser.role === "admin") return true;
-				if (vis === "ONLY_ME") return false;
-				if (vis === "FRIENDS_ONLY") {
-					return friendIds.includes(postAuthor);
-				}
-				return true;
-			});
-		}
-
-		if (tab === "top" && Array.isArray(rawPosts)) {
-			rawPosts.sort((a, b) => {
-				const aPinned = a.isPinned ? 1 : 0;
-				const bPinned = b.isPinned ? 1 : 0;
-				if (aPinned !== bPinned) return bPinned - aPinned;
-				const aScore = (a.score !== undefined && a.score !== null)
-					? a.score
-					: ((a.reactions?.length || 0) + (a.comments?.length || 0) * 2);
-				const bScore = (b.score !== undefined && b.score !== null)
-					? b.score
-					: ((b.reactions?.length || 0) + (b.comments?.length || 0) * 2);
-				if (aScore !== bScore) return bScore - aScore;
-				return new Date(b.createdAt || b.timestamp || 0) - new Date(a.createdAt || a.timestamp || 0);
-			});
-		}
-
-		res.json(await hydrateWithPictures(rawPosts));
-	} catch (error) {
-		res.status(500).json({ message: "Error fetching posts" });
-	}
-});
-
-router.post("/", authMiddleware, postLimiter, async (req, res) => {
-	try {
-		const { title, content, imageUrl, imageUrls, videoUrl, audioUrl, linkPreviews, targetDate, tags, visibility, isPinned, category, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
-
-		if (!title || typeof title !== "string" || !title.trim()) {
-			return res.status(400).json({ message: "Post title is required." });
-		}
-		if (title.trim().length > 200) {
-			return res.status(400).json({ message: "Post title cannot exceed 200 characters." });
-		}
-
-		if (!content || typeof content !== "string" || !content.trim()) {
-			return res.status(400).json({ message: "Post content is required." });
-		}
-
-		let cleanCategory = "general";
-		if (category) {
-			if (!ALLOWED_CATEGORIES.includes(category)) {
-				return res.status(400).json({ message: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}` });
-			}
-			cleanCategory = category;
-		}
-
-		let cleanMatchDetails = undefined;
-		if (matchDetails && typeof matchDetails === "object" && cleanCategory === 'match_result') {
-			cleanMatchDetails = {
-				partner: matchDetails.partner ? xss(String(matchDetails.partner).trim()).slice(0, 100) : "",
-				opponents: parseOpponents(matchDetails.opponents),
-				score: matchDetails.score ? xss(String(matchDetails.score).trim()).slice(0, 100) : "",
-				court: matchDetails.court ? xss(String(matchDetails.court).trim()).slice(0, 100) : "",
-				winner: matchDetails.winner ? xss(String(matchDetails.winner).trim()).slice(0, 100) : "",
-			};
-		}
-		
-		const cleanTitle = xss(title.trim());
-		const cleanContent = xss(content.trim());
-		const cleanImageUrl = (imageUrl && typeof imageUrl === "string") ? xss(imageUrl.trim()) : "";
-		const cleanImageUrls = Array.isArray(imageUrls) ? imageUrls.map(url => typeof url === "string" ? xss(url.trim()) : "").filter(url => url) : [];
-		const cleanTags = Array.isArray(tags) ? tags.filter(t => typeof t === "string").map(t => xss(t.trim()).slice(0, 50)) : [];
-		
-		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
-		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
-
-		const authorId = (req.user.id || req.user.userId || req.user._id).toString();
-		const authorName = req.user.name || req.body.authorName || "Member";
-
-		const spamEvaluation = await evaluateSpamHeuristics({
-			userId: authorId,
-			title: cleanTitle,
-			content: cleanContent
-		});
-
-		const isFlagged = Boolean(isSpam || aiAnalysis.isFlagged || spamEvaluation.isSpam);
-		const status = isFlagged ? 'quarantined' : 'active';
-		const toxicityScore = spamEvaluation.score || aiAnalysis.score || 0;
-
-		const authorInfo = { userId: authorId, userName: authorName, avatarUrl: req.user.profilePic || "" };
-		const cleanPlayerMatchmaking = (cleanCategory === 'find_partner' || cleanCategory === 'meetup_rally') ? parsePlayerMatchmaking(playerMatchmaking) : undefined;
-		const cleanChallengeMatch = cleanCategory === 'challenge_match' ? parseNewChallengeMatch(challengeMatch, authorInfo) : undefined;
-		const cleanQaDetails = cleanCategory === 'qa_forum' ? parseNewQaDetails(qaDetails) : undefined;
-		const cleanGearDetails = (cleanCategory === 'gear_exchange' || cleanCategory === 'gear_review') ? parseGearDetails(gearDetails) : undefined;
-
-		let cleanOriginalPostId = null;
-		let cleanSharedThought = "";
-		if (req.body.originalPostId && mongoose.isValidObjectId(req.body.originalPostId)) {
-			const originalPost = await Post.findById(req.body.originalPostId);
-			if (originalPost) {
-				const origAuthorId = (originalPost.authorId || "").toString();
-				const currentUserId = (req.user.id || req.user.userId || req.user._id || "").toString();
-				const isAuthor = Boolean(currentUserId && origAuthorId && origAuthorId === currentUserId);
-				const isAdmin = req.user.role === "admin";
-
-				if (originalPost.visibility === "ONLY_ME" && !isAuthor && !isAdmin) {
-					return res.status(403).json({ message: "Cannot repost a private post." });
-				}
-				if (originalPost.visibility === "FRIENDS_ONLY" && !isAuthor && !isAdmin) {
-					const authorUser = originalPost.authorId ? await User.findById(originalPost.authorId).select("friends").lean() : null;
-					const isFriend = authorUser && Array.isArray(authorUser.friends) &&
-						authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
-					if (!isFriend) {
-						return res.status(403).json({ message: "Cannot repost a friends-only post." });
-					}
-				}
-
-				cleanOriginalPostId = originalPost._id;
-				cleanSharedThought = req.body.sharedThought ? xss(String(req.body.sharedThought).trim()) : "";
-				await Post.updateOne({ _id: originalPost._id }, { $inc: { shareCount: 1 } });
-			}
-		}
-
-		const newPost = new Post({
-			title: cleanTitle,
-			content: cleanContent,
-			category: cleanCategory,
-			matchDetails: cleanMatchDetails,
-			playerMatchmaking: cleanPlayerMatchmaking,
-			challengeMatch: cleanChallengeMatch,
-			qaDetails: cleanQaDetails,
-			gearDetails: cleanGearDetails,
-			imageUrl: cleanImageUrl,
-			imageUrls: cleanImageUrls,
-			videoUrl: sanitizeCloudinaryMediaUrl(videoUrl),
-			audioUrl: sanitizeCloudinaryMediaUrl(audioUrl),
-			linkPreviews: sanitizeLinkPreviews(linkPreviews),
-			tags: cleanTags,
-			isPinned: req.user.role === "admin" && Boolean(isPinned),
-			visibility: visibility || 'PUBLIC',
-			authorName,
-			targetDate: targetDate || "General",
-			authorId,
-			status,
-			isFlagged,
-			toxicityScore,
-			originalPostId: cleanOriginalPostId,
-			sharedThought: cleanSharedThought,
-			shareCount: 0,
-			lastActivityAt: new Date()
-		});
-
-		await newPost.save();
-
-		try {
-			await ActivityFeed.findOneAndUpdate(
-				{ type: "post", referenceId: newPost._id },
-				{
-					type: "post",
-					referenceId: newPost._id,
-					authorId: newPost.authorId,
-					authorName: newPost.authorName,
-					authorProfilePic: req.user.profilePic || "",
-					authorSkillLevel: req.user.skillLevel || "Beginner",
-					authorBadges: req.user.badges || [],
-					authorRole: req.user.role || "user",
-					authorStreak: req.user.stats?.winStreak || 0,
-					title: newPost.title,
-					content: newPost.content,
-					image: newPost.imageUrl,
-					images: newPost.imageUrls || [],
-					videoUrl: newPost.videoUrl || "",
-					audioUrl: newPost.audioUrl || "",
-					linkPreviews: newPost.linkPreviews || [],
-					tags: newPost.tags || [],
-					isPinned: newPost.isPinned || false,
-					category: newPost.category || "general",
-					matchDetails: newPost.matchDetails || null,
-					playerMatchmaking: newPost.playerMatchmaking || null,
-					challengeMatch: newPost.challengeMatch || null,
-					qaDetails: newPost.qaDetails || null,
-					gearDetails: newPost.gearDetails || null,
-					reactions: newPost.reactions || [],
-					likes: 0,
-					comments: 0,
-					createdAt: newPost.createdAt,
-					visibility: newPost.visibility,
-					score: (newPost.isPinned ? 1000 : 0),
-					originalPostId: cleanOriginalPostId,
-					sharedThought: cleanSharedThought,
-					shareCount: 0,
-					lastActivityAt: newPost.lastActivityAt || new Date()
-				},
-				{ upsert: true, returnDocument: "after" }
-			);
-		} catch (feedSyncErr) {
-			console.error("ActivityFeed initial sync error:", feedSyncErr);
-		}
-		feedCache.invalidateFeed();
-
-
-		if (isFlagged) {
-			return res
-				.status(201)
-				.json({
-					message: "Post submitted for review.",
-					post: { _id: newPost._id, status: newPost.status, isFlagged: newPost.isFlagged }
-				});
-		}
-
-		const hydratedPost = await hydrateWithPictures(newPost.toObject());
-		if (req.io) await emitForPost(req.io, hydratedPost, "postCreated", hydratedPost);
-		res.status(201).json(hydratedPost);
-	} catch (error) {
-		console.error("Error creating post:", error);
-		res.status(500).json({ message: "Error creating post" });
-	}
-});
-
-router.get("/user/:userId", async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
-		const skip = (page - 1) * limit;
-
-		const currentUser = getOptionalUser(req);
-		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : "";
-		const targetUserId = req.params.userId.toString();
-		const isSelf = currentUserId && currentUserId === targetUserId;
-		const isAdmin = currentUser && currentUser.role === "admin";
-
-		let visibilityOr = [{ visibility: "PUBLIC" }, { visibility: { $exists: false } }];
-		if (isSelf || isAdmin) {
-			visibilityOr = null;
-		} else if (currentUserId) {
-			const targetUser = await User.findById(targetUserId).select("friends").lean();
-			const isFriend = targetUser && Array.isArray(targetUser.friends) &&
-				targetUser.friends.some(f => (f._id || f).toString() === currentUserId);
-			if (isFriend) {
-				visibilityOr = [{ visibility: { $in: ["PUBLIC", "FRIENDS_ONLY"] } }, { visibility: { $exists: false } }];
-			}
-		}
-
-		const query = {
-			authorId: req.params.userId,
-			isFlagged: { $ne: true },
-			status: { $nin: ['quarantined', 'deleted'] }
-		};
-		if (visibilityOr) query.$or = visibilityOr;
-
-		const rawPosts = await Post.find(query)
-			.sort({ timestamp: -1 })
-			.skip(skip)
-			.limit(limit)
-			.lean();
-		res.json(await hydrateWithPictures(rawPosts));
-	} catch (error) {
-		res.status(500).json({ message: "Error fetching user posts" });
-	}
-});
-
-// ==========================================
-// REPORT POST & COMMUNITY QUARANTINE
-// ==========================================
-router.post("/:postId/report", authMiddleware, async (req, res) => {
-	try {
-		const { postId } = req.params;
-		if (!mongoose.isValidObjectId(postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const post = await findPostByIdOrActivityFeed(postId);
-		if (!post) {
-			return res.status(404).json({ message: "Post not found." });
-		}
-
-		// Invariant: author cannot report their own post
-		if (post.authorId && post.authorId.toString() === currentUserId) {
-			return res.status(400).json({ message: "You cannot report your own post." });
-		}
-
-		// Invariant: prevent duplicate reports from the same user
-		if (!Array.isArray(post.reports)) post.reports = [];
-		const alreadyReported = post.reports.some(r => r.reportedBy && r.reportedBy.toString() === currentUserId);
-		if (alreadyReported) {
-			return res.status(400).json({ message: "You have already reported this post." });
-		}
-
-		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Inappropriate";
-		post.reports.push({
-			reportedBy: currentUserId,
-			reason,
-			timestamp: new Date()
-		});
-		post.reportCount = post.reports.length;
-
-		let quarantined = false;
-		// 3-Report Auto-Quarantine Trigger
-		if (post.reportCount >= 3) {
-			post.status = 'quarantined';
-			post.isFlagged = true;
-			quarantined = true;
-		}
-
-		await post.save(); // Triggers post-save hook to remove from ActivityFeed if quarantined
-
-		if (quarantined) {
-			const io = req.io || req.app?.get('io');
-			if (io) {
-				io.emit("postQuarantined", { postId: post._id, reportCount: post.reportCount });
-				io.emit("postDeleted", post._id.toString());
-			}
-		}
-
-		return res.status(200).json({
-			success: true,
-			message: quarantined 
-				? "Post has received 3 community reports and has been quarantined for moderator review."
-				: "Post reported successfully.",
-			reportCount: post.reportCount,
-			status: post.status
-		});
-	} catch (err) {
-		console.error("Error reporting post:", err);
-		return res.status(500).json({ message: "Internal server error reporting post." });
-	}
-});
-
-// ==========================================
-// EDIT & DELETE POSTS (WITH ADMIN GOD MODE)
-// ==========================================
-router.put("/:postId", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const { title, content, category, visibility, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails, videoUrl, audioUrl, linkPreviews } = req.body;
-		if (!title || typeof title !== "string" || !title.trim()) {
-			return res.status(400).json({ message: "Post title is required." });
-		}
-		if (title.trim().length > 200) {
-			return res.status(400).json({ message: "Post title cannot exceed 200 characters." });
-		}
-
-		if (!content || typeof content !== "string" || !content.trim()) {
-			return res.status(400).json({ message: "Post content is required." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-
-		if (post.authorId.toString() !== currentUserId && req.user.role !== "admin")
-			return res.status(403).json({ message: "Unauthorized" });
-
-		if (category) {
-			if (!ALLOWED_CATEGORIES.includes(category)) {
-				return res.status(400).json({ message: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}` });
-			}
-			post.category = category;
-		}
-
-		const wasPublic = isPublicPost(post);
-		const targetVis = visibility || req.body.privacy;
-		if (targetVis) {
-			if (!["PUBLIC", "FRIENDS_ONLY", "ONLY_ME"].includes(targetVis)) {
-				return res.status(400).json({ message: "Invalid visibility. Allowed: PUBLIC, FRIENDS_ONLY, ONLY_ME" });
-			}
-			post.visibility = targetVis;
-		}
-
-		if (matchDetails && typeof matchDetails === "object") {
-			post.matchDetails = {
-				partner: matchDetails.partner !== undefined ? xss(String(matchDetails.partner || "").trim()).slice(0, 100) : (post.matchDetails?.partner || ""),
-				opponents: matchDetails.opponents !== undefined
-					? parseOpponents(matchDetails.opponents)
-					: (post.matchDetails?.opponents || []),
-				score: matchDetails.score !== undefined ? xss(String(matchDetails.score || "").trim()).slice(0, 100) : (post.matchDetails?.score || ""),
-				court: matchDetails.court !== undefined ? xss(String(matchDetails.court || "").trim()).slice(0, 100) : (post.matchDetails?.court || ""),
-				winner: matchDetails.winner !== undefined ? xss(String(matchDetails.winner || "").trim()).slice(0, 100) : (post.matchDetails?.winner || ""),
-			};
-		}
-
-		let rallyCapacityChanged = false;
-		if (playerMatchmaking && typeof playerMatchmaking === "object") {
-			const parsedMatchmaking = parsePlayerMatchmaking(playerMatchmaking);
-			const previousCapacity = getRallyCapacity(post);
-			if (post.playerMatchmaking) {
-				// Assign leaf paths only so the save never rewrites the server-owned rsvpList / isFilled
-				for (const field of EDITABLE_MATCHMAKING_FIELDS) {
-					post.playerMatchmaking[field] = parsedMatchmaking[field];
-				}
-			} else {
-				post.playerMatchmaking = parsedMatchmaking;
-			}
-			rallyCapacityChanged = getRallyCapacity(post) !== previousCapacity;
-		}
-		if (challengeMatch && typeof challengeMatch === "object") {
-			applyChallengeMatchEdit(post, challengeMatch, { userId: currentUserId, userName: req.user.name, avatarUrl: req.user.profilePic });
-		}
-		if (qaDetails && typeof qaDetails === "object") {
-			const parsedQa = parseQaDetails(qaDetails);
-			if (post.qaDetails && parsedQa) {
-				post.qaDetails.subtopic = parsedQa.subtopic;
-			} else {
-				post.qaDetails = parseNewQaDetails(qaDetails);
-			}
-		}
-		if (gearDetails && typeof gearDetails === "object") {
-			post.gearDetails = parseGearDetails(gearDetails);
-		}
-
-		// Media: an explicit empty value clears it; a non-Cloudinary URL is ignored.
-		if (videoUrl === "" || videoUrl === null) {
-			post.videoUrl = "";
-		} else if (sanitizeCloudinaryMediaUrl(videoUrl)) {
-			post.videoUrl = sanitizeCloudinaryMediaUrl(videoUrl);
-		}
-		if (audioUrl === "" || audioUrl === null) {
-			post.audioUrl = "";
-		} else if (sanitizeCloudinaryMediaUrl(audioUrl)) {
-			post.audioUrl = sanitizeCloudinaryMediaUrl(audioUrl);
-		}
-		if (Array.isArray(linkPreviews)) {
-			post.linkPreviews = sanitizeLinkPreviews(linkPreviews);
-		}
-
-		const cleanTitle = xss(title.trim());
-		const cleanContent = xss(content.trim());
-
-		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
-		if (aiAnalysis.isFlagged || await checkSpam(cleanTitle) || await checkSpam(cleanContent)) {
-			post.isFlagged = true;
-			await post.save();
-			if (req.io) req.io.emit("postDeleted", post._id);
-			return res
-				.status(200)
-				.json({ message: "Post submitted for review." });
-		}
-
-		post.title = cleanTitle;
-		post.content = cleanContent;
-		post.isEdited = true;
-		post.editedAt = new Date();
-		post.lastActivityAt = new Date();
-		await post.save();
-
-		// Capacity changed: promote waitlisted players FIFO into any new slots and refresh isFilled
-		let responsePost = post.toObject ? post.toObject() : post;
-		if (rallyCapacityChanged) {
-			const newCapacity = getRallyCapacity(post);
-			const promoted = await promoteWaitlistedRsvps(post._id, newCapacity);
-			const refreshed = await syncRallyFilledFlag(post._id, newCapacity);
-			if (refreshed) responsePost = refreshed.toObject ? refreshed.toObject() : refreshed;
-			notifyPromotedRsvps(req, post, promoted);
-		}
-
-			try {
-			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
-				const p = ActivityFeed.updateOne(
-					{ referenceId: post._id },
-					{ $set: { title: post.title, content: post.content, category: post.category, visibility: post.visibility, isEdited: true, editedAt: post.editedAt, reactions: post.reactions, likes: post.likedBy?.length || 0, videoUrl: post.videoUrl || "", audioUrl: post.audioUrl || "", linkPreviews: post.linkPreviews || [] } }
-				);
-				if (p && typeof p.catch === 'function') p.catch(() => {});
-			}
-		} catch (_) {}
-		feedCache.invalidateFeed();
-
-		const hydratedPost = await hydrateWithPictures(responsePost);
-		if (req.io) {
-			if (wasPublic && !isPublicPost(hydratedPost)) await emitPostHiddenFromOthers(req.io, hydratedPost);
-			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-		}
-		res.json(hydratedPost);
-	} catch (error) {
-		res.status(500).json({ message: "Error updating post" });
-	}
-});
-
-router.delete("/:postId", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		const post = await Post.findById(req.params.postId);
-		const isAdmin = req.user.role === "admin";
-
-		if (!post) return res.status(404).json({ message: "Post not found" });
-		// Only Author OR Admin can delete
-		if (post.authorId.toString() !== currentUserId && !isAdmin)
-			return res.status(403).json({ message: "Unauthorized" });
-
-		await Post.findByIdAndDelete(req.params.postId);
-		if (req.io) req.io.emit("postDeleted", req.params.postId);
-		res.json({ success: true });
-	} catch (error) {
-		res.status(500).json({ message: "Error deleting post" });
-	}
-});
-
-// ==========================================
-// ==========================================
-// GET SINGLE POST BY ID (URL DEEP-LINKING)
-// ==========================================
-
-// ==========================================
-// PHASE 9: MODERATION QUEUE & RESOLUTION
-// ==========================================
-router.get("/reports", authMiddleware, adminMiddleware, async (req, res) => {
-	try {
-		const reportedPosts = await Post.find({
-			$or: [
-				{ "reports.0": { $exists: true } },
-				{ isFlagged: true },
-				{ status: "quarantined" }
-			]
-		})
-			.populate("reports.reportedBy", "name profilePic email")
-			.sort({ "reports.createdAt": -1, createdAt: -1 })
-			.lean();
-
-		res.json(await hydrateWithPictures(reportedPosts));
-	} catch (error) {
-		res.status(500).json({ message: "Error fetching reported posts" });
-	}
-});
-
-router.put("/reports/:postId/resolve", authMiddleware, adminMiddleware, async (req, res) => {
-	try {
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-
-		const { action } = req.body;
-
-		if (action === "approve") {
-			post.reports = [];
-			post.reportCount = 0;
-			post.isFlagged = false;
-			post.status = "active";
-			await post.save();
-			feedCache.invalidateFeed();
-			const hydrated = await hydrateWithPictures(post.toObject());
-			if (req.io) await emitForPost(req.io, hydrated, "postCreated", hydrated);
-			return res.json({ message: "Post approved and reinstated.", post: hydrated });
-		}
-
-		if (action === "quarantine") {
-			post.status = "quarantined";
-			post.isFlagged = true;
-			await post.save();
-			await ActivityFeed.deleteOne({ type: "post", referenceId: post._id });
-			feedCache.invalidateFeed();
-			if (req.io) req.io.emit("postDeleted", post._id.toString());
-			return res.json({ message: "Post moved to quarantine.", post });
-		}
-
-		if (action === "delete") {
-			post.status = "deleted";
-			post.isFlagged = true;
-			await post.save();
-			await ActivityFeed.deleteOne({ type: "post", referenceId: post._id });
-			feedCache.invalidateFeed();
-			if (req.io) req.io.emit("postDeleted", post._id.toString());
-			return res.json({ message: "Post deleted permanently from community.", post });
-		}
-
-		return res.status(400).json({ message: "Invalid resolution action. Use approve, quarantine, or delete." });
-	} catch (error) {
-		res.status(500).json({ message: "Error resolving report" });
-	}
-});
-
-// ==========================================
-// SAVED POSTS (M1 - J8)
-// ==========================================
-router.get("/saved", authMiddleware, async (req, res) => {
-	try {
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const user = await User.findById(currentUserId).select("savedPosts bookmarkedPosts").lean();
-		const savedIds = [
-			...(user?.savedPosts || []),
-			...(user?.bookmarkedPosts || [])
-		].map(id => id ? id.toString() : "").filter(Boolean);
-		const uniqueSavedIds = Array.from(new Set(savedIds)).filter(id => mongoose.isValidObjectId(id));
-
-		const posts = await Post.find({
-			_id: { $in: uniqueSavedIds },
-			status: { $nin: ['quarantined', 'deleted'] },
-			isFlagged: { $ne: true }
-		}).sort({ createdAt: -1, timestamp: -1 }).lean();
-
-		const hydrated = await hydrateWithPictures(posts);
-		res.json(hydrated);
-	} catch (error) {
-		console.error("Error fetching saved posts:", error);
-		res.status(500).json({ message: "Error fetching saved posts" });
-	}
-});
-
-// ==========================================
-// MEMBER SEARCH / AUTOCOMPLETE (M1 - J10)
-// ==========================================
-router.get("/members", async (req, res) => {
-	try {
-		const query = (req.query.q || req.query.query || req.query.search || "").trim();
-		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
-		const filter = {
-			hideFromSearch: { $ne: true },
-			$nor: [
-				{ name: /tu\s+pham/i },
-				{ name: /nhat\s+quang/i },
-			],
-		};
-		if (query) {
-			const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-			filter.name = { $regex: escaped, $options: "i" };
-		}
-		const users = await User.find(filter)
-			.select("_id name profilePic role badges skillLevel")
-			.limit(limit)
-			.lean();
-
-		const formatted = users.map((u) => ({
-			_id: u._id.toString(),
-			id: u._id.toString(),
-			name: u.name,
-			profilePic: u.profilePic || "",
-			role: u.role || "user",
-			skillLevel: u.skillLevel || "Intermediate",
-			badges: Array.isArray(u.badges) ? u.badges : [],
-		}));
-
-		res.json({ users: formatted });
-	} catch (err) {
-		console.error("Error fetching members:", err);
-		res.status(500).json({ message: "Failed to fetch members" });
-	}
-});
-
-// ==========================================
-// MEMBER CARD / HOVER CARD HYDRATION
-// ==========================================
-router.get("/members/:userId/card", authMiddleware, async (req, res) => {
-	try {
-		const { userId } = req.params;
-		if (!userId || !mongoose.isValidObjectId(userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const targetUser = await User.findById(userId).lean();
-		if (!targetUser) {
-			return res.status(404).json({ message: "Member not found." });
-		}
-
-		// Personal name filter invariant
-		if (/tu\s+pham|nhat\s+quang/i.test(targetUser.name || "")) {
-			return res.status(404).json({ message: "Member not found." });
-		}
-
-		const callerId = (req.user.id || req.user.userId || "").toString();
-		const isSelf = callerId === userId.toString();
-
-		// Respect "hide from search" privacy for everyone but the member themselves
-		if (targetUser.hideFromSearch === true && !isSelf) {
-			return res.status(404).json({ message: "Member not found." });
-		}
-
-		// Presence hydration
-		const onlineUsers = req.app?.get("onlineUsers");
-		const isOnline = onlineUsers ? onlineUsers.has(userId.toString()) : false;
-
-		// Friendship status relative to the authenticated caller
-		let friendshipStatus = "none";
-		if (isSelf) {
-			friendshipStatus = "self";
-		} else {
-			const callerUser = await User.findById(callerId)
-				.select("friends friendRequests sentFriendRequests")
-				.lean();
-			if (callerUser) {
-				const friendsList = (callerUser.friends || []).map((f) => (f?._id || f).toString());
-				const sentList = (callerUser.sentFriendRequests || []).map((f) => (f?._id || f).toString());
-				const receivedList = (callerUser.friendRequests || []).map((f) => (f?._id || f).toString());
-
-				if (friendsList.includes(userId.toString())) {
-					friendshipStatus = "friends";
-				} else if (sentList.includes(userId.toString())) {
-					friendshipStatus = "pending_sent";
-				} else if (receivedList.includes(userId.toString())) {
-					friendshipStatus = "pending_received";
-				}
-			}
-		}
-
-		// Court check-ins expire; never surface a stale one
-		const checkIn = targetUser.currentCourtCheckIn;
-		const hasActiveCheckIn = Boolean(
-			checkIn &&
-			checkIn.courtNumber &&
-			checkIn.expiresAt &&
-			new Date(checkIn.expiresAt).getTime() > Date.now()
-		);
-
-		const stats = targetUser.stats || {
-			totalMatches: 0,
-			winStreak: 0,
-			highestWinStreak: 0,
-		};
-		const totalMatches = Number(stats.totalMatches || 0);
-		const winStreak = Number(stats.winStreak || 0);
-		const winRate = totalMatches > 0 ? Math.round(((totalMatches + winStreak) / (totalMatches * 2)) * 100) : 0;
-
-		res.json({
-			user: {
-				_id: targetUser._id.toString(),
-				id: targetUser._id.toString(),
-				name: targetUser.name,
-				profilePic: targetUser.profilePic || "",
-				role: targetUser.role || "user",
-				skillLevel: targetUser.skillLevel || "Intermediate",
-				bio: targetUser.bio || "I'm ready to play!",
-				preferredPlay: targetUser.preferredPlay || "Any",
-				racket: targetUser.racket || "N/A",
-				homeUniversity: targetUser.homeUniversity || "George Mason University",
-				singlesElo: targetUser.singlesElo || 1200,
-				doublesElo: targetUser.doublesElo || 1200,
-				stats: {
-					totalMatches,
-					winStreak,
-					highestWinStreak: Number(stats.highestWinStreak || 0),
-					winRate,
-				},
-				isOnline,
-				friendshipStatus,
-				currentCourtCheckIn: hasActiveCheckIn ? checkIn : null,
-				checkInLocation: targetUser.checkInLocation || "None",
-				badges: Array.isArray(targetUser.badges) ? targetUser.badges : [],
-			},
-		});
-	} catch (err) {
-		console.error("Error fetching member card:", err);
-		res.status(500).json({ message: "Failed to fetch member card" });
-	}
-});
-
-router.get("/:postId", async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
-		if (!post) return res.status(404).json({ message: "Post not found" });
-		if (post.status === "quarantined" || post.status === "deleted") {
-			return res.status(404).json({ message: "Post not available" });
-		}
-
-		// Privacy Check
-		const currentUser = getOptionalUser(req);
-		if (!(await canViewPost(post, currentUser))) {
-			return res.status(403).json({
-				message: post.visibility === "ONLY_ME"
-					? "This post is private."
-					: "This post is only visible to friends of the author."
-			});
-		}
-
-		const hydratedPost = await hydrateWithPictures(post);
-		res.json(hydratedPost);
-	} catch (error) {
-		console.error("Error fetching single post:", error);
-		res.status(500).json({ message: "Server error fetching post" });
-	}
-});
-
-// ==========================================
-// COMMENTS & REPLIES (CREATE, EDIT, DELETE)
-// ==========================================
-
-router.get("/:postId/comments", async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
-		if (!post) return res.status(404).json({ message: "Post not found" });
-		if (post.status === "quarantined" || post.status === "deleted") {
-			return res.status(404).json({ message: "Post not available" });
-		}
-
-		const currentUser = getOptionalUser(req);
-		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : null;
-		const postAuthorId = post.authorId ? post.authorId.toString() : null;
-		const isAuthor = Boolean(currentUserId && postAuthorId && currentUserId === postAuthorId);
-		const isAdmin = Boolean(currentUser && currentUser.role === "admin");
-
-		if (post.visibility === "ONLY_ME" && !isAuthor && !isAdmin) {
-			return res.status(403).json({ message: "This post is private." });
-		} else if (post.visibility === "FRIENDS_ONLY" && !isAuthor && !isAdmin) {
-			if (!currentUserId) {
-				return res.status(403).json({ message: "This post is only visible to friends of the author." });
-			}
-			const authorUser = await User.findById(post.authorId).select("friends").lean();
-			const isFriend = authorUser && Array.isArray(authorUser.friends) &&
-				authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
-			if (!isFriend) {
-				return res.status(403).json({ message: "This post is only visible to friends of the author." });
-			}
-		}
-
-		const hydratedPost = await hydrateWithPictures(post);
-		res.json({ comments: hydratedPost.comments || [] });
-	} catch (error) {
-		console.error("Error fetching comments:", error);
-		res.status(500).json({ message: "Server error fetching comments" });
-	}
-});
-
-router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const { content } = req.body;
-		if (!content || typeof content !== "string" || !content.trim()) {
-			return res.status(400).json({ message: "Comment content cannot be empty." });
-		}
-
-		const authorId = (req.user.id || req.user.userId).toString();
-		const authorName = req.user.name || req.body.authorName || "Member";
-		const cleanContent = xss(content.trim());
-		const cleanAuthorName = xss(authorName);
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-
-		const isSpam = await checkSpam(cleanContent);
-		const aiAnalysis = await analyzeContent(cleanContent);
-
-		if (isSpam || aiAnalysis.isFlagged)
-			return res
-				.status(400)
-				.json({ message: "Comment rejected: Spam or toxicity detected." });
-
-		post.comments.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
-		post.lastActivityAt = new Date();
-		await post.save();
-
-		const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
-		const hydratedPost = await hydrateWithPictures(updatedPost);
-
-		if (req.io) {
-			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-			if (post.authorId?.toString() !== authorId.toString()) {
-				const newComment =
-					updatedPost.comments[updatedPost.comments.length - 1];
-				await sendNotification(
-					req.io,
-					post.authorId.toString(),
-					`${authorName} commented: "${truncateText(content)}"`,
-					`/community?postId=${post._id}&highlight=${newComment._id}`,
-				);
-			}
-
-			// Phase 8: Mention Notifications
-			const mentionMatches = cleanContent.match(/@([a-zA-Z0-9_\s]{2,30})/g);
-			if (mentionMatches && mentionMatches.length > 0) {
-				const rawNames = mentionMatches.map((m) => m.substring(1).trim());
-				const mentionedUsers = await User.find({
-					name: { $in: rawNames }
-				}).select('_id name').lean();
-
-				for (const u of mentionedUsers) {
-					if (u._id.toString() !== authorId && u._id.toString() !== post.authorId?.toString()) {
-						await sendNotification(
-							req.io,
-							u._id.toString(),
-							`${authorName} mentioned you in a badminton comment: "${truncateText(content)}"`,
-							`/community?postId=${post._id}`
-						);
-					}
-				}
-			}
-		}
-		res.json(hydratedPost);
-	} catch (error) {
-		res.status(500).json({ message: "Error adding comment" });
-	}
-});
-
-router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
-			return res.status(400).json({ message: "Invalid post or comment ID format." });
-		}
-
-		const { content } = req.body;
-		if (!content || typeof content !== "string" || !content.trim()) {
-			return res.status(400).json({ message: "Comment content cannot be empty." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		const cleanContent = xss(content.trim());
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-		const comment = post.comments.id(req.params.commentId);
-		if (!comment) return res.status(404).json({ message: "Comment not found" });
-
-		if (comment.authorId.toString() !== currentUserId && req.user.role !== "admin")
-			return res.status(403).json({ message: "Unauthorized" });
-		const aiAnalysis = await analyzeContent(cleanContent);
-		if (aiAnalysis.isFlagged || await checkSpam(cleanContent))
-			return res.status(400).json({ message: "Comment rejected: Spam or toxicity detected." });
-		if (false)
-			return res.json(await hydrateWithPictures(post.toObject()));
-
-		comment.content = cleanContent;
-		comment.isEdited = true;
-		comment.editedAt = new Date();
-		await post.save();
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-		res.json(hydratedPost);
-	} catch (error) {
-		res.status(500).json({ message: "Error updating comment" });
-	}
-});
-
-router.delete("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
-			return res.status(400).json({ message: "Invalid post or comment ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-		const comment = post.comments.id(req.params.commentId);
-		if (!comment) return res.status(404).json({ message: "Comment not found" });
-		const isAdmin = req.user.role === "admin";
-
-		// Author OR Admin
-		if (comment.authorId.toString() !== currentUserId && !isAdmin)
-			return res.status(403).json({ message: "Unauthorized" });
-
-		comment.deleteOne();
-		await post.save();
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-		res.json(hydratedPost);
-	} catch (error) {
-		res.status(500).json({ message: "Error deleting comment" });
-	}
-});
-
-router.post(
-	"/:postId/comments/:commentId/replies",
-	authMiddleware,
-	postLimiter,
-	async (req, res) => {
-		try {
-			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
-				return res.status(400).json({ message: "Invalid post or comment ID format." });
-			}
-
-			const { content } = req.body;
-			if (!content || typeof content !== "string" || !content.trim()) {
-				return res.status(400).json({ message: "Reply content cannot be empty." });
-			}
-
-			const authorId = (req.user.id || req.user.userId).toString();
-			const authorName = req.user.name || req.body.authorName || "Member";
-			const cleanContent = xss(content.trim());
-			const cleanAuthorName = xss(authorName);
-			const post = await findPostByIdOrActivityFeed(req.params.postId);
-			if (!post) return res.status(404).json({ message: "Post not found" });
-			const comment = post.comments.id(req.params.commentId);
-			if (!comment) return res.status(404).json({ message: "Comment not found" });
-
-			const isSpam = await checkSpam(cleanContent);
-			const aiAnalysis = await analyzeContent(cleanContent);
-
-			if (isSpam || aiAnalysis.isFlagged)
-				return res
-					.status(400)
-					.json({ message: "Reply rejected: Spam or toxicity detected." });
-
-			comment.replies.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
-			post.lastActivityAt = new Date();
-			await post.save();
-
-			const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
-			const hydratedPost = await hydrateWithPictures(updatedPost);
-
-			if (req.io) {
-				await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-				const commentToReply = Array.isArray(updatedPost?.comments)
-					? updatedPost.comments.find(
-							(c) => c && c._id && c._id.toString() === req.params.commentId,
-						)
-					: null;
-				if (
-					commentToReply &&
-					commentToReply.authorId?.toString() !== authorId.toString() &&
-					Array.isArray(commentToReply.replies) &&
-					commentToReply.replies.length > 0
-				) {
-					const newReply =
-						commentToReply.replies[
-							commentToReply.replies.length - 1
-						];
-					await sendNotification(
-						req.io,
-						commentToReply.authorId.toString(),
-						`${authorName} replied: "${truncateText(content)}"`,
-						`/community?postId=${post._id}&highlight=${newReply?._id || ""}`,
-					);
-				}
-			}
-			res.json(hydratedPost);
-		} catch (error) {
-			res.status(500).json({ message: "Error adding reply" });
-		}
-	},
-);
-
-router.put(
-	"/:postId/comments/:commentId/replies/:replyId",
-	authMiddleware,
-	async (req, res) => {
-		try {
-			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
-				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
-			}
-
-			const { content } = req.body;
-			if (!content || typeof content !== "string" || !content.trim()) {
-				return res.status(400).json({ message: "Reply content cannot be empty." });
-			}
-
-			const currentUserId = (req.user.id || req.user.userId).toString();
-			const cleanContent = xss(content.trim());
-			const post = await findPostByIdOrActivityFeed(req.params.postId);
-			if (!post) return res.status(404).json({ message: "Post not found" });
-			const comment = post.comments.id(req.params.commentId);
-			if (!comment) return res.status(404).json({ message: "Comment not found" });
-			const reply = comment.replies.id(req.params.replyId);
-			if (!reply) return res.status(404).json({ message: "Reply not found" });
-
-			if (reply.authorId.toString() !== currentUserId && req.user.role !== "admin")
-				return res.status(403).json({ message: "Unauthorized" });
-			const aiAnalysis = await analyzeContent(cleanContent);
-		if (aiAnalysis.isFlagged || await checkSpam(cleanContent))
-			return res.status(400).json({ message: "Comment rejected: Spam or toxicity detected." });
-		if (false)
-				return res.json(await hydrateWithPictures(post.toObject()));
-
-			reply.content = cleanContent;
-			reply.isEdited = true;
-			reply.editedAt = new Date();
-			await post.save();
-			const hydratedPost = await hydrateWithPictures(post.toObject());
-			if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-			res.json(hydratedPost);
-		} catch (error) {
-			res.status(500).json({ message: "Error updating reply" });
-		}
-	},
-);
-
-router.delete(
-	"/:postId/comments/:commentId/replies/:replyId",
-	authMiddleware,
-	async (req, res) => {
-		try {
-			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
-				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
-			}
-
-			const currentUserId = (req.user.id || req.user.userId).toString();
-			const post = await findPostByIdOrActivityFeed(req.params.postId);
-			if (!post) return res.status(404).json({ message: "Post not found" });
-			const comment = post.comments.id(req.params.commentId);
-			if (!comment) return res.status(404).json({ message: "Comment not found" });
-			const reply = comment.replies.id(req.params.replyId);
-			if (!reply) return res.status(404).json({ message: "Reply not found" });
-			const isAdmin = req.user.role === "admin";
-
-			// Author OR Admin
-			if (reply.authorId.toString() !== currentUserId && !isAdmin)
-				return res.status(403).json({ message: "Unauthorized" });
-
-			reply.deleteOne();
-			await post.save();
-			const hydratedPost = await hydrateWithPictures(post.toObject());
-			if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-			res.json(hydratedPost);
-		} catch (error) {
-			res.status(500).json({ message: "Error deleting reply" });
-		}
-	},
-);
-
-// ==========================================
-// ==========================================
-// REPORT COMMENTS & REPLIES
-// ==========================================
-router.post("/:postId/comments/:commentId/report", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
-			return res.status(400).json({ message: "Invalid post or comment ID format." });
-		}
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found." });
-
-		const comment = post.comments.id(req.params.commentId);
-		if (!comment) return res.status(404).json({ message: "Comment not found." });
-
-		if (comment.authorId && comment.authorId.toString() === currentUserId) {
-			return res.status(400).json({ message: "You cannot report your own comment." });
-		}
-
-		if (!Array.isArray(comment.reports)) comment.reports = [];
-		const alreadyReported = comment.reports.some(
-			(r) => r.reportedBy && r.reportedBy.toString() === currentUserId
-		);
-		if (alreadyReported) {
-			return res.status(400).json({ message: "You have already reported this comment." });
-		}
-
-		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Abuse";
-		const details = req.body.details ? xss(String(req.body.details).trim()).slice(0, 500) : "";
-		comment.reports.push({
-			reportedBy: currentUserId,
-			reason,
-			details,
-			timestamp: new Date(),
-		});
-		comment.reportCount = comment.reports.length;
-
-		let flagged = false;
-		if (comment.reportCount >= 3) {
-			comment.isFlagged = true;
-			flagged = true;
-		}
-
-		await post.save();
-
-		const updatedPost = await Post.findById(req.params.postId).lean();
-		const hydratedPost = await hydrateWithPictures(updatedPost);
-		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-
-		return res.status(200).json({
-			success: true,
-			message: flagged
-				? "Comment has received 3 reports and has been flagged for review."
-				: "Comment reported successfully.",
-			reportCount: comment.reportCount,
-			isFlagged: comment.isFlagged,
-		});
-	} catch (err) {
-		console.error("Error reporting comment:", err);
-		return res.status(500).json({ message: "Internal server error reporting comment." });
-	}
-});
-
-router.post("/:postId/comments/:commentId/replies/:replyId/report", authMiddleware, async (req, res) => {
-	try {
-		if (
-			!mongoose.isValidObjectId(req.params.postId) ||
-			!mongoose.isValidObjectId(req.params.commentId) ||
-			!mongoose.isValidObjectId(req.params.replyId)
-		) {
-			return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
-		}
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found." });
-
-		const comment = post.comments.id(req.params.commentId);
-		if (!comment) return res.status(404).json({ message: "Comment not found." });
-
-		const reply = comment.replies.id(req.params.replyId);
-		if (!reply) return res.status(404).json({ message: "Reply not found." });
-
-		if (reply.authorId && reply.authorId.toString() === currentUserId) {
-			return res.status(400).json({ message: "You cannot report your own reply." });
-		}
-
-		if (!Array.isArray(reply.reports)) reply.reports = [];
-		const alreadyReported = reply.reports.some(
-			(r) => r.reportedBy && r.reportedBy.toString() === currentUserId
-		);
-		if (alreadyReported) {
-			return res.status(400).json({ message: "You have already reported this reply." });
-		}
-
-		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Abuse";
-		const details = req.body.details ? xss(String(req.body.details).trim()).slice(0, 500) : "";
-		reply.reports.push({
-			reportedBy: currentUserId,
-			reason,
-			details,
-			timestamp: new Date(),
-		});
-		reply.reportCount = reply.reports.length;
-
-		let flagged = false;
-		if (reply.reportCount >= 3) {
-			reply.isFlagged = true;
-			flagged = true;
-		}
-
-		await post.save();
-
-		const updatedPost = await Post.findById(req.params.postId).lean();
-		const hydratedPost = await hydrateWithPictures(updatedPost);
-		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-
-		return res.status(200).json({
-			success: true,
-			message: flagged
-				? "Reply has received 3 reports and has been flagged for review."
-				: "Reply reported successfully.",
-			reportCount: reply.reportCount,
-			isFlagged: reply.isFlagged,
-		});
-	} catch (err) {
-		console.error("Error reporting reply:", err);
-		return res.status(500).json({ message: "Internal server error reporting reply." });
-	}
-});
-
-// BOOKMARKS
-// ==========================================
-
-const handleBookmarkToggle = async (req, res) => {
-	try {
-		const targetPostId = req.params.postId || req.params.id;
-		if (!mongoose.isValidObjectId(targetPostId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const userId = (req.user.id || req.user.userId).toString();
-		const user = await User.findById(userId);
-		if (!user) return res.status(404).json({ message: "User not found" });
-
-		if (!user.bookmarkedPosts) user.bookmarkedPosts = [];
-		if (!user.savedPosts) user.savedPosts = [];
-		const postIndex = user.bookmarkedPosts.indexOf(targetPostId);
-		let isBookmarked = false;
-
-		if (postIndex === -1) {
-			user.bookmarkedPosts.push(targetPostId);
-			if (!user.savedPosts.includes(targetPostId)) {
-				user.savedPosts.push(targetPostId);
-			}
-			isBookmarked = true;
-		} else {
-			user.bookmarkedPosts.splice(postIndex, 1);
-			const savedIdx = user.savedPosts.indexOf(targetPostId);
-			if (savedIdx !== -1) user.savedPosts.splice(savedIdx, 1);
-		}
-
-		await user.save();
-		// Saved-tab feed responses are cached per user; drop them so the change shows up immediately.
-		feedCache.invalidateFeed();
-		res.json({
-			bookmarkedPosts: user.bookmarkedPosts,
-			savedPosts: user.savedPosts,
-			isBookmarked,
-			isSaved: isBookmarked
-		});
-	} catch (error) {
-		console.error(error);
-		res.status(500).json({ message: "Server error toggling bookmark" });
-	}
-};
-
-router.put("/:postId/bookmark", authMiddleware, handleBookmarkToggle);
-router.post("/:postId/bookmark", authMiddleware, handleBookmarkToggle);
-router.put("/:postId/save", authMiddleware, handleBookmarkToggle);
-router.post("/:postId/save", authMiddleware, handleBookmarkToggle);
-
-router.get("/bookmarks/:userId", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId).toString();
-		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
-			return res.status(403).json({ message: "Unauthorized to access bookmarks." });
-		}
-
-		const user = await User.findById(req.params.userId).populate('bookmarkedPosts');
-		if (!user) return res.status(404).json({ message: "User not found" });
-
-		// Filter out nulls in case a post was deleted but still bookmarked
-		const validPosts = user.bookmarkedPosts.filter(p => p !== null);
-		const hydratedPosts = await hydrateWithPictures(validPosts.map(p => typeof p.toObject === 'function' ? p.toObject() : p));
-		res.json(hydratedPosts);
-	} catch (error) {
-		console.error(error);
-		res.status(500).json({ message: "Server error fetching bookmarks" });
-	}
-});
-
-// ==========================================
-// LIKES
-// ==========================================
-router.put("/:postId/like", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const userId = (req.user.id || req.user.userId).toString();
-		const userName = req.user.name || req.body.userName || "Player";
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-
-		const hasLiked = post.likedBy.some(
-			(id) => id.toString() === userId.toString(),
-		);
-		if (hasLiked) {
-			post.likedBy = post.likedBy.filter(
-				(id) => id.toString() !== userId.toString(),
-			);
-		} else {
-			post.likedBy.push(userId);
-		}
-		await post.save();
-
-		try {
-			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
-				const p = ActivityFeed.updateOne(
-					{ referenceId: post._id },
-					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
-				);
-				if (p && typeof p.catch === 'function') p.catch(() => {});
-			}
-		} catch (_) {}
-		feedCache.invalidateFeed();
-
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) {
-			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-			if (!hasLiked && post.authorId?.toString() !== userId.toString()) {
-				await sendNotification(
-					req.io,
-					post.authorId.toString(),
-					`${userName} liked your post.`,
-					`/community?postId=${post._id}`,
-				);
-			}
-		}
-		res.json(hydratedPost);
-	} catch (error) {
-		console.error("Error toggling like:", error);
-		res.status(500).json({ message: "Error toggling like" });
-	}
-});
-
-router.put("/:postId/comments/:commentId/like", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
-			return res.status(400).json({ message: "Invalid post or comment ID format." });
-		}
-
-		const userId = (req.user.id || req.user.userId).toString();
-		const userName = req.user.name || req.body.userName || "Player";
-		const post = await Post.findById(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found" });
-		const comment = post.comments.id(req.params.commentId);
-		if (!comment) return res.status(404).json({ message: "Comment not found" });
-
-		const hasLiked = comment.likedBy.some(
-			(id) => id.toString() === userId.toString(),
-		);
-		if (hasLiked) {
-			comment.likedBy = comment.likedBy.filter(
-				(id) => id.toString() !== userId.toString(),
-			);
-		} else {
-			comment.likedBy.push(userId);
-		}
-		await post.save();
-
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) {
-			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-			if (
-				!hasLiked &&
-				comment.authorId?.toString() !== userId.toString()
-			) {
-				await sendNotification(
-					req.io,
-					comment.authorId.toString(),
-					`${userName} liked your comment.`,
-					`/community?postId=${post._id}&highlight=${comment._id}`,
-				);
-			}
-		}
-		res.json(hydratedPost);
-	} catch (error) {
-		res.status(500).json({ message: "Error toggling comment like" });
-	}
-});
-
-router.put(
-	"/:postId/comments/:commentId/replies/:replyId/like",
-	authMiddleware,
-	async (req, res) => {
-		try {
-			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
-				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
-			}
-
-			const userId = (req.user.id || req.user.userId).toString();
-			const userName = req.user.name || req.body.userName || "Player";
-			const post = await Post.findById(req.params.postId);
-			if (!post) return res.status(404).json({ message: "Post not found" });
-			const comment = post.comments.id(req.params.commentId);
-			if (!comment) return res.status(404).json({ message: "Comment not found" });
-			const reply = comment.replies.id(req.params.replyId);
-			if (!reply) return res.status(404).json({ message: "Reply not found" });
-
-			const hasLiked = reply.likedBy.some(
-				(id) => id.toString() === userId.toString(),
-			);
-			if (hasLiked) {
-				reply.likedBy = reply.likedBy.filter(
-					(id) => id.toString() !== userId.toString(),
-				);
-			} else {
-				reply.likedBy.push(userId);
-			}
-			await post.save();
-
-			const hydratedPost = await hydrateWithPictures(post.toObject());
-			if (req.io) {
-				await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-				if (
-					!hasLiked &&
-					reply.authorId?.toString() !== userId.toString()
-				) {
-					await sendNotification(
-						req.io,
-						reply.authorId.toString(),
-						`${userName} liked your reply.`,
-						`/community?postId=${post._id}&highlight=${reply._id}`,
-					);
-				}
-			}
-			res.json(hydratedPost);
-		} catch (error) {
-			res.status(500).json({ message: "Error toggling reply like" });
-		}
-	},
-);
-
-// ==========================================
-// PIN POST (ADMIN ONLY)
-// ==========================================
-router.put("/:postId/pin", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const post = await findPostByIdOrActivityFeed(req.params.postId);
-		if (!post) return res.status(404).json({ message: "Post not found." });
-
-		const isAdmin = req.user && req.user.role === "admin";
-
-		if (!isAdmin) {
-			return res.status(403).json({ message: "Only administrators can pin or unpin posts." });
-		}
-
-		post.isPinned = !post.isPinned;
-		await post.save();
-
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-
-		res.json({
-			success: true,
-			isPinned: post.isPinned,
-			post: hydratedPost,
-			message: post.isPinned ? "Post pinned successfully." : "Post unpinned."
-		});
-	} catch (error) {
-		console.error("Error toggling pin status:", error);
-		res.status(500).json({ message: "Error toggling pin status." });
-	}
-});
-
-// ==========================================
-// BADMINTON & FACEBOOK REACTION DOCK (M1 - J1)
-// ==========================================
-const BADMINTON_REACTIONS_MAP = {
-	"💥": { reactionType: "smash", notificationText: "smashed your post." },
-	"🧊": { reactionType: "ice_drop", notificationText: "dropped on your post." },
-	"⚡": { reactionType: "clutch", notificationText: "marked your post as clutch." },
-	"👍": { reactionType: "like", notificationText: "liked your post." },
-	"❤️": { reactionType: "love", notificationText: "loved your post." },
-	"🏸": { reactionType: "smash", notificationText: "smashed your post." },
-	"😮": { reactionType: "wow", notificationText: "was amazed by your post." },
-	"😂": { reactionType: "haha", notificationText: "laughed at your post." },
-	"😢": { reactionType: "sad", notificationText: "felt sad about your post." },
-	"🔥": { reactionType: "smash", notificationText: "smashed your post." },
-	"💯": { reactionType: "clutch", notificationText: "marked your post as clutch." },
-	"👏": { reactionType: "like", notificationText: "applauded your post." },
-	"😡": { reactionType: "angry", notificationText: "reacted to your post." }
-};
-
-const REACTION_TYPE_TO_EMOJI = {
-	like: "👍",
-	love: "❤️",
-	smash: "🏸",
-	wow: "😮",
-	haha: "😂",
-	sad: "😢",
-	ice_drop: "🧊",
-	clutch: "⚡",
-	angry: "😡",
-};
-
-const ALLOWED_EMOJIS = [
-	"👍", "❤️", "🏸", "😮", "😂", "😢", "💥", "🧊", "⚡",
-	"🔥", "💯", "👏", "😡", "🎉"
-];
-
-const ALLOWED_REACTION_TYPES = new Set([
-	...Object.values(BADMINTON_REACTIONS_MAP).map((r) => r.reactionType),
-	"custom",
-]);
-
-const handleReactionRoute = async (req, res) => {
-	try {
-		const targetPostId = req.params.postId || req.params.id;
-		if (!mongoose.isValidObjectId(targetPostId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		let { emoji, reactionType } = req.body;
-		if (!emoji && reactionType && REACTION_TYPE_TO_EMOJI[reactionType]) {
-			emoji = REACTION_TYPE_TO_EMOJI[reactionType];
-		}
-
-		if (!emoji || !ALLOWED_EMOJIS.includes(emoji)) {
-			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
-		}
-
-		const resolvedReactionType = reactionType || BADMINTON_REACTIONS_MAP[emoji]?.reactionType || "custom";
-
-		const userId = (req.user.id || req.user.userId || req.user._id).toString();
-		const userName = req.user.name || "Player";
-		let post = await findPostByIdOrActivityFeed(targetPostId);
-
-		if (!post) {
-			const feedItem = await ActivityFeed.findById(targetPostId);
-			if (feedItem) {
-				if (!Array.isArray(feedItem.reactions)) feedItem.reactions = [];
-				const existingIndex = feedItem.reactions.findIndex(
-					(r) => r.userId && r.userId.toString() === userId.toString()
-				);
-				let feedAction = "added";
-				if (existingIndex !== -1) {
-					if (feedItem.reactions[existingIndex].emoji === emoji) {
-						feedItem.reactions.splice(existingIndex, 1);
-						feedAction = "removed";
-					} else {
-						feedItem.reactions[existingIndex].emoji = emoji;
-						feedItem.reactions[existingIndex].reactionType = resolvedReactionType;
-						feedItem.reactions[existingIndex].createdAt = new Date();
-						feedAction = "updated";
-					}
-				} else {
-					feedItem.reactions.push({
-						userId,
-						userName,
-						emoji,
-						reactionType: resolvedReactionType,
-						createdAt: new Date(),
-					});
-				}
-				await feedItem.save();
-				feedCache.invalidateFeed();
-				if (req.io) {
-					req.io.emit("reactionUpdated", {
-						postId: feedItem._id.toString(),
-						reactions: feedItem.reactions,
-						action: feedAction,
-						userId,
-					});
-				}
-				return res.json(feedItem);
-			}
-			return res.status(404).json({ message: "Post not found." });
-		}
-
-		if (!Array.isArray(post.reactions)) {
-			post.reactions = [];
-		}
-
-		const existingReactionIndex = post.reactions.findIndex(
-			(r) => r.userId && r.userId.toString() === userId.toString()
-		);
-
-		let action = "added";
-		if (existingReactionIndex !== -1) {
-			if (post.reactions[existingReactionIndex].emoji === emoji) {
-				// Same emoji clicked -> remove reaction (toggle off)
-				post.reactions.splice(existingReactionIndex, 1);
-				action = "removed";
-			} else {
-				// Different emoji clicked -> replace reaction
-				post.reactions[existingReactionIndex].emoji = emoji;
-				post.reactions[existingReactionIndex].reactionType = resolvedReactionType;
-				post.reactions[existingReactionIndex].createdAt = new Date();
-				action = "updated";
-			}
-		} else {
-			// New reaction
-			post.reactions.push({
-				userId,
-				userName,
-				emoji,
-				reactionType: resolvedReactionType,
-				createdAt: new Date(),
-			});
-			action = "added";
-		}
-
-		await post.save();
-
-		try {
-			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
-				const p = ActivityFeed.updateOne(
-					{ referenceId: post._id },
-					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
-				);
-				if (p && typeof p.catch === 'function') p.catch(() => {});
-			}
-		} catch (_) {}
-		feedCache.invalidateFeed();
-
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) {
-			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-			await emitForPost(req.io, hydratedPost, "reactionUpdated", {
-				postId: post._id.toString(),
-				reactions: hydratedPost.reactions || [],
-				action,
-				userId,
-			});
-			if (action === "added" && post.authorId?.toString() !== userId.toString()) {
-				const notificationSuffix = BADMINTON_REACTIONS_MAP[emoji]?.notificationText || `reacted with ${emoji} to your post.`;
-				await sendNotification(
-					req.io,
-					post.authorId.toString(),
-					`${userName} ${notificationSuffix}`,
-					`/community?postId=${post._id}`
-				);
-			}
-		}
-
-		const reactionCounts = {};
-		ALLOWED_EMOJIS.forEach((e) => { reactionCounts[e] = 0; });
-		(hydratedPost.reactions || post.reactions || []).forEach((r) => {
-			if (r && r.emoji) {
-				reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1;
-			}
-		});
-
-		const userReaction = action !== "removed" ? emoji : null;
-
-		const reactionObj = action !== "removed"
-			? (post.reactions[existingReactionIndex !== -1 ? existingReactionIndex : post.reactions.length - 1] || null)
-			: null;
-
-		const responseData = {
-			success: true,
-			message: "Reaction updated successfully",
-			action,
-			userReaction,
-			reactionCounts,
-			reaction: reactionObj,
-			reactions: hydratedPost.reactions || post.reactions || [],
-			post: hydratedPost,
-			...hydratedPost,
-		};
-
-		res.json(responseData);
-	} catch (error) {
-		console.error("Error handling reaction:", error);
-		res.status(500).json({ message: "Error updating reaction." });
-	}
-};
-
-router.put("/:postId/react", authMiddleware, handleReactionRoute);
-router.put("/:postId/reaction", authMiddleware, handleReactionRoute);
-router.post("/:postId/react", authMiddleware, handleReactionRoute);
-router.post("/:postId/reaction", authMiddleware, handleReactionRoute);
-router.put("/:id/react", authMiddleware, handleReactionRoute);
-router.post("/:id/react", authMiddleware, handleReactionRoute);
-
-
-// ==========================================
-// SPECIALIZED COMMUNITY WORKFLOWS (PHASE 2)
-// ==========================================
-
-// 1. Toggle RSVP for Player Matchmaking / Meetup Rally
-// All rsvpList mutations are single atomic conditional updates so concurrent
-// RSVPs can never overbook, duplicate an entry, or skip a waitlist promotion.
-router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
-		if (!post) return res.status(404).json({ message: "Post not found." });
-		if (!(await canViewPost(post, req.user))) {
-			return res.status(404).json({ message: "Post not found." });
-		}
-		if (post.isFlagged || post.status === "quarantined" || post.status === "deleted") {
-			return res.status(403).json({ message: "Cannot RSVP to this post." });
-		}
-
-		const postObjectId = post._id;
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const currentUserName = req.user.name || "Player";
-		const capacity = getRallyCapacity(post);
-		const rsvpList = Array.isArray(post.playerMatchmaking?.rsvpList) ? post.playerMatchmaking.rsvpList : [];
-		const isMember = rsvpList.some(r => String(r.userId) === currentUserId);
-
-		let userAction = "joined";
-		let promoted = [];
-
-		if (isMember) {
-			// Toggle off (cancel RSVP): remove the user everywhere in one atomic op
-			userAction = "left";
-			const before = await Post.findOneAndUpdate(
-				{ _id: postObjectId, "playerMatchmaking.rsvpList.userId": currentUserId },
-				{
-					$pull: {
-						"playerMatchmaking.rsvpList": { userId: currentUserId },
-						"rsvp.attendees": currentUserId,
-						"rsvp.waitlist": currentUserId
-					}
-				},
-				{ returnDocument: "before", lean: true }
-			);
-			const removed = before?.playerMatchmaking?.rsvpList?.find(r => String(r.userId) === currentUserId);
-			if (removed && removed.status === "confirmed") {
-				// A confirmed slot opened up: promote the oldest waitlisted player(s) (FIFO)
-				promoted = await promoteWaitlistedRsvps(postObjectId, capacity);
-			}
-		} else {
-			// Prevent host / author from RSVPing to their own rally
-			if (String(post.authorId) === currentUserId) {
-				return res.status(400).json({ message: "You are the host of this rally and cannot RSVP to your own post." });
-			}
-
-			const userDoc = await User.findById(currentUserId).select("profilePic").lean();
-			const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
-			const buildEntry = (status) => ({
-				userId: currentUserId,
-				userName: currentUserName,
-				avatarUrl,
-				status,
-				joinedAt: new Date()
-			});
-
-			// Join as confirmed only if not already present AND a confirmed slot is free
-			const joinedConfirmed = await Post.findOneAndUpdate(
-				{
-					_id: postObjectId,
-					"playerMatchmaking.rsvpList.userId": { $ne: currentUserId },
-					$expr: { $lt: [confirmedRsvpCountExpr, capacity] }
-				},
-				{
-					$push: { "playerMatchmaking.rsvpList": buildEntry("confirmed") },
-					$addToSet: { "rsvp.attendees": currentUserId }
-				},
-				{ returnDocument: "after", lean: true }
-			);
-
-			if (!joinedConfirmed) {
-				// Rally is full (or user was added concurrently): join the waitlist if still absent
-				await Post.findOneAndUpdate(
-					{ _id: postObjectId, "playerMatchmaking.rsvpList.userId": { $ne: currentUserId } },
-					{
-						$push: { "playerMatchmaking.rsvpList": buildEntry("waitlist") },
-						$addToSet: { "rsvp.waitlist": currentUserId }
-					},
-					{ returnDocument: "after", lean: true }
-				);
-			}
-		}
-
-		// Recompute isFilled atomically from the authoritative list
-		const finalPost = (await syncRallyFilledFlag(postObjectId, capacity)) || post;
-
-		notifyPromotedRsvps(req, finalPost, promoted);
-
-		const hydratedPost = await hydrateWithPictures(finalPost.toObject ? finalPost.toObject() : finalPost);
-		const involvedUserIds = (finalPost.playerMatchmaking?.rsvpList || []).map(r => r.userId).concat(currentUserId);
-		emitForPost(req.io, finalPost, "rallyRsvpUpdated", {
-			postId: finalPost._id,
-			rsvpList: finalPost.playerMatchmaking?.rsvpList || [],
-			rsvp: finalPost.rsvp,
-			isFilled: Boolean(finalPost.playerMatchmaking?.isFilled),
-			slotsNeeded: finalPost.playerMatchmaking?.slotsNeeded
-		}, involvedUserIds);
-		emitForPost(req.io, finalPost, "postUpdated", hydratedPost, involvedUserIds);
-
-		// Notify author if user joined
-		if (userAction === "joined" && post.authorId && post.authorId.toString() !== currentUserId) {
-			await sendNotification(
-				req.io,
-				post.authorId.toString(),
-				`${currentUserName} joined your badminton rally!`,
-				`/community?postId=${post._id}`
-			);
-		}
-
-		res.json(hydratedPost);
-	} catch (error) {
-		console.error("Error toggling RSVP:", error);
-		res.status(500).json({ message: "Error updating RSVP status." });
-	}
-});
-
-const buildChallengeMatchDoc = (post, acceptorId) => {
-	const challengerId = post.authorId || post.challengeMatch?.challengerTeam?.[0]?.userId;
-	return new Match({
-		team1: [challengerId],
-		team2: [acceptorId],
-		type: (post.challengeMatch?.matchType || post.challengeMatch?.gameFormat || "").toLowerCase().includes("double") ? "doubles" : "singles",
-		matchType: post.challengeMatch?.matchType || "singles",
-		status: "scheduled",
-		source: "community_challenge",
-		communityPostId: post._id,
-		stipulations: post.challengeMatch?.stipulations || "",
-		scheduledAt: post.targetDate ? new Date(post.targetDate) : new Date(),
-		challengeMetadata: { postId: post._id, acceptedAt: new Date() }
-	});
-};
-
-// Creates the scheduled Match for a claimed challenge. If a Match already exists
-// for this post (unique index on communityPostId), the existing one is reused.
-const createOrFindChallengeMatch = async (post, acceptorId) => {
-	try {
-		return await buildChallengeMatchDoc(post, acceptorId).save();
-	} catch (err) {
-		if (err && err.code === 11000) {
-			const existing = await Match.findOne({ communityPostId: post._id });
-			if (existing) return existing;
-		}
-		throw err;
-	}
-};
-
-// 2. Accept Scrimmage / Match Challenge
-router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.postId)) {
-			return res.status(400).json({ message: "Invalid post ID format." });
-		}
-
-		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
-		if (!post) return res.status(404).json({ message: "Post not found." });
-		if (!(await canViewPost(post, req.user))) {
-			return res.status(404).json({ message: "Post not found." });
-		}
-
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		if (post.authorId?.toString() === currentUserId) {
-			return res.status(400).json({ message: "You cannot accept your own challenge." });
-		}
-
-		const postObjectId = post._id;
-		const isAcceptor = (p) => Array.isArray(p?.challengeMatch?.acceptedBy) &&
-			p.challengeMatch.acceptedBy.some(a => String(a.userId) === currentUserId);
-
-		let currentPost = post;
-		let createdMatch = null;
-		let claimedNow = false;
-
-		if (!isAcceptor(post)) {
-			const status = post.challengeMatch?.matchStatus || "open";
-			if (status !== "open") {
-				return res.status(400).json({ message: "This challenge has already been accepted." });
-			}
-
-			const userDoc = await User.findById(currentUserId).select("name profilePic").lean();
-			const currentUserName = userDoc?.name || req.user.name || "Opponent";
-			const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
-
-			const claimSet = { "challengeMatch.matchStatus": "accepted" };
-			if (!post.challengeMatch) {
-				claimSet["challengeMatch.matchType"] = "Friendly Scrimmage";
-				claimSet["challengeMatch.gameFormat"] = "Best of 3 to 21";
-				claimSet["challengeMatch.challengerTeam"] = [{ userId: String(post.authorId), userName: post.authorName || "Challenger", avatarUrl: "" }];
-			}
-
-			// Atomic claim: only one acceptor can flip an open challenge to accepted
-			const claimed = await Post.findOneAndUpdate(
-				{ _id: postObjectId, "challengeMatch.matchStatus": { $in: ["open", null] } },
-				{
-					$set: claimSet,
-					$push: { "challengeMatch.acceptedBy": { userId: currentUserId, userName: currentUserName, avatarUrl } }
-				},
-				{ returnDocument: "after", lean: true }
-			);
-
-			if (!claimed) {
-				const latest = await findPostByIdOrActivityFeed(postObjectId, { lean: true });
-				if (!isAcceptor(latest)) {
-					return res.status(400).json({ message: "This challenge has already been accepted." });
-				}
-				// Duplicate request from the same acceptor: fall through as idempotent
-				currentPost = latest;
-			} else {
-				currentPost = claimed;
-				claimedNow = true;
-				try {
-					createdMatch = await createOrFindChallengeMatch(claimed, currentUserId);
-				} catch (matchErr) {
-					console.error("[Match] Error creating downstream scheduled match:", matchErr);
-					// Roll back the claim so the challenge stays open instead of half-accepted
-					await Post.updateOne(
-						{ _id: postObjectId, "challengeMatch.acceptedBy.userId": currentUserId },
-						{
-							$set: { "challengeMatch.matchStatus": "open" },
-							$pull: { "challengeMatch.acceptedBy": { userId: currentUserId } }
-						}
-					);
-					return res.status(500).json({ message: "Error accepting challenge." });
-				}
-			}
-		}
-
-		// Legacy repair: accepted by this user but the Match was never linked
-		if (!createdMatch && !currentPost.challengeMatch?.linkedMatchId && isAcceptor(currentPost)) {
-			createdMatch = await createOrFindChallengeMatch(currentPost, currentUserId);
-		}
-
-		if (createdMatch && createdMatch._id) {
-			const linked = await Post.findOneAndUpdate(
-				{ _id: postObjectId },
-				{ $set: { "challengeMatch.linkedMatchId": createdMatch._id.toString() } },
-				{ returnDocument: "after", lean: true }
-			);
-			if (linked) currentPost = linked;
-		}
-
-		const involvedUserIds = [
-			currentPost.authorId,
-			...(currentPost.challengeMatch?.challengerTeam || []).map(c => c.userId),
-			...(currentPost.challengeMatch?.acceptedBy || []).map(a => a.userId)
-		];
-
-		if (claimedNow) {
-			const acceptorName = currentPost.challengeMatch?.acceptedBy?.find(a => String(a.userId) === currentUserId)?.userName || req.user.name || "Opponent";
-
-			await sendNotification(
-				req.io,
-				currentPost.authorId.toString(),
-				`${acceptorName} accepted your match challenge!`,
-				`/community?postId=${currentPost._id}`
-			);
-
-			// Fire-and-forget: never block the response on push delivery
-			Promise.resolve().then(() => sendPushToUser(currentPost.authorId.toString(), {
-				title: "🏸 Match Challenge Accepted!",
-				body: `${acceptorName} accepted your match challenge!`,
-				url: `/community?postId=${currentPost._id}`
-			})).catch(err => console.error("[Push] Error sending challenge push:", err?.message || err));
-		}
-
-		if (createdMatch) {
-			emitForPost(req.io, currentPost, "challengeMatchCreated", {
-				matchId: currentPost.challengeMatch?.linkedMatchId,
-				postId: currentPost._id,
-				match: createdMatch
-			}, involvedUserIds);
-		}
-		if (claimedNow) {
-			emitForPost(req.io, currentPost, "challengeStatusChanged", {
-				postId: currentPost._id,
-				matchStatus: "accepted",
-				linkedMatchId: currentPost.challengeMatch?.linkedMatchId,
-				acceptedBy: currentPost.challengeMatch?.acceptedBy
-			}, involvedUserIds);
-		}
-
-		const hydratedPost = await hydrateWithPictures(currentPost.toObject ? currentPost.toObject() : currentPost);
-		emitForPost(req.io, currentPost, "postUpdated", hydratedPost, involvedUserIds);
-		res.json(hydratedPost);
-	} catch (error) {
-		console.error("Error accepting challenge:", error);
-		res.status(500).json({ message: "Error accepting challenge." });
-	}
-});
-
-// 3. Mark Comment as Accepted Solution (Q&A Forum)
-router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (req, res) => {
-	try {
-		const { postId, commentId } = req.params;
-		if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
-			return res.status(400).json({ message: "Invalid ID format." });
-		}
-
-		const post = await findPostByIdOrActivityFeed(postId);
-		if (!post) return res.status(404).json({ message: "Post not found." });
-
-		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
-		const isAdmin = req.user.role === "admin";
-		if (post.authorId?.toString() !== currentUserId && !isAdmin) {
-			return res.status(403).json({ message: "Only the post author or an admin can mark the accepted answer." });
-		}
-
-		const comment = post.comments.id(commentId);
-		if (!comment) return res.status(404).json({ message: "Comment not found." });
-
-		if (!post.qaDetails) {
-			post.qaDetails = { subtopic: "General", isResolved: false };
-		}
-
-		// Toggle accepted answer
-		if (post.qaDetails.isResolved && String(post.qaDetails.acceptedCommentId) === String(commentId)) {
-			// Unmark
-			post.qaDetails.isResolved = false;
-			post.qaDetails.acceptedCommentId = "";
-			post.qaDetails.acceptedBy = undefined;
-		} else {
-			// Mark
-			post.qaDetails.isResolved = true;
-			post.qaDetails.acceptedCommentId = commentId.toString();
-			post.qaDetails.acceptedBy = {
-				userId: currentUserId,
-				userName: req.user.name || "Author",
-				at: new Date()
-			};
-
-			if (comment.authorId?.toString() !== currentUserId) {
-				await sendNotification(
-					req.io,
-					comment.authorId.toString(),
-					`${req.user.name || "The author"} marked your answer as the accepted solution!`,
-					`/community?postId=${post._id}`
-				);
-			}
-		}
-
-		await post.save();
-		const hydratedPost = await hydrateWithPictures(post.toObject());
-		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-		res.json(hydratedPost);
-	} catch (error) {
-		console.error("Error marking accepted answer:", error);
-		res.status(500).json({ message: "Error marking accepted answer." });
-	}
-});
-
-// 4. SSRF-Safe Link Preview Scraping Route
-const linkPreviewLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000,
-	max: 30,
-	skip: (req) => req.method === "OPTIONS",
-	message: { message: "Too many link preview requests, please try again later." },
-});
-
-router.post("/link-preview", authMiddleware, linkPreviewLimiter, async (req, res) => {
-	try {
-		const { url } = req.body;
-		if (!url || typeof url !== "string") {
-			return res.status(400).json({ message: "URL is required and must be a string." });
-		}
-
-		const preview = await scrapeLinkPreview(url);
-		return res.json(preview);
-	} catch (error) {
-		const message = error.message || "Failed to fetch link preview";
-		if (
-			message.includes("SSRF Protection") ||
-			message.includes("Forbidden") ||
-			message.includes("Invalid URL")
-		) {
-			return res.status(400).json({ message });
-		}
-		return res.status(422).json({ message: `Could not scrape link preview: ${message}` });
-	}
-});
-
-// 5. Comment Emoji Reactions
-const handleCommentReaction = async (req, res) => {
-	try {
-		const { postId, commentId } = req.params;
-		if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
-			return res.status(400).json({ message: "Invalid post or comment ID format." });
-		}
-
-		let { emoji, reactionType } = req.body || {};
-		if (emoji === undefined && typeof reactionType === "string" && REACTION_TYPE_TO_EMOJI[reactionType]) {
-			emoji = REACTION_TYPE_TO_EMOJI[reactionType];
-		}
-		if (emoji === undefined) emoji = "👍";
-		if (typeof emoji !== "string" || !ALLOWED_EMOJIS.includes(emoji)) {
-			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
-		}
-		const resolvedReactionType = (typeof reactionType === "string" && ALLOWED_REACTION_TYPES.has(reactionType))
-			? reactionType
-			: (BADMINTON_REACTIONS_MAP[emoji]?.reactionType || "custom");
-
-		const post = await findPostByIdOrActivityFeed(postId, { lean: true });
-		if (!post) return res.status(404).json({ message: "Post not found." });
-
-		const commentExists = Array.isArray(post.comments) &&
-			post.comments.some((c) => c && String(c._id) === String(commentId));
-		if (!commentExists) return res.status(404).json({ message: "Comment not found." });
-
-		const userId = (req.user.id || req.user.userId || req.user._id).toString();
-		const userName = req.user.name || "Player";
-		const postObjectId = post._id;
-		const commentObjectId = new mongoose.Types.ObjectId(commentId);
-		const commentFilter = { "c._id": commentObjectId };
-
-		// Atomic, query-guarded toggle: each step only applies if the comment is still in the
-		// expected state, so concurrent double-taps can never leave two reactions for one user.
-		let action = null;
-		for (let attempt = 0; attempt < 3 && !action; attempt += 1) {
-			// 1) Same emoji already present -> toggle off
-			const removed = await Post.updateOne(
-				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, reactions: { $elemMatch: { userId, emoji } } } } },
-				{ $pull: { "comments.$[c].reactions": { userId } } },
-				{ arrayFilters: [commentFilter] }
-			);
-			if (removed?.modifiedCount) {
-				action = "removed";
-				break;
-			}
-
-			// 2) Different emoji present -> switch it in place
-			const changed = await Post.updateOne(
-				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, reactions: { $elemMatch: { userId, emoji: { $ne: emoji } } } } } },
-				{
-					$set: {
-						"comments.$[c].reactions.$[r].emoji": emoji,
-						"comments.$[c].reactions.$[r].reactionType": resolvedReactionType,
-						"comments.$[c].reactions.$[r].createdAt": new Date(),
-					},
-				},
-				{ arrayFilters: [commentFilter, { "r.userId": userId }] }
-			);
-			if (changed?.modifiedCount) {
-				action = "changed";
-				break;
-			}
-
-			// 3) No reaction from this user yet -> push (guarded so it cannot double-insert)
-			const added = await Post.updateOne(
-				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, "reactions.userId": { $ne: userId } } } },
-				{
-					$push: {
-						"comments.$[c].reactions": {
-							userId,
-							userName,
-							emoji,
-							reactionType: resolvedReactionType,
-							createdAt: new Date(),
-						},
-					},
-				},
-				{ arrayFilters: [commentFilter] }
-			);
-			if (added?.modifiedCount) {
-				action = "added";
-			}
-		}
-
-		if (!action) {
-			return res.status(409).json({ message: "Comment reaction changed concurrently. Please retry." });
-		}
-		feedCache.invalidateFeed();
-
-		const freshPost = await Post.findById(postObjectId).lean();
-		if (!freshPost) return res.status(404).json({ message: "Post not found." });
-		const freshComment = (freshPost.comments || []).find((c) => c && String(c._id) === String(commentId));
-		const reactions = freshComment?.reactions || [];
-
-		const hydratedPost = await hydrateWithPictures(freshPost);
-		if (req.io) {
-			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
-			await emitForPost(req.io, hydratedPost, "commentReactionUpdated", {
-				postId: postObjectId.toString(),
-				commentId: String(commentId),
-				reactions,
-				action,
-				userId,
-			});
-		}
-
-		return res.json({
-			success: true,
-			message: "Comment reaction updated successfully",
-			action,
-			reactions,
-			post: hydratedPost,
-		});
-	} catch (error) {
-		console.error("Error handling comment reaction:", error);
-		return res.status(500).json({ message: "Error updating comment reaction." });
-	}
-};
-
-router.put("/:postId/comments/:commentId/react", authMiddleware, handleCommentReaction);
-router.post("/:postId/comments/:commentId/react", authMiddleware, handleCommentReaction);
-
-module.exports = router;
-
-
+const express = require("express");
+const mongoose = require("mongoose");
+const Post = require("../models/Post");
+const User = require("../models/User");
+const Notification = require("../models/Notification");
+const ActivityFeed = require("../models/ActivityFeed");
+const Match = require("../models/Match");
+const { sendPushToUser } = require("../utils/pushNotifications");
+const { authMiddleware, adminMiddleware } = require("../middleware/auth");
+const rateLimit = require("express-rate-limit");
+const xss = require("xss");
+const { analyzeContent } = require("../utils/aiModeration");
+const { evaluateSpamHeuristics } = require("../utils/spamDetector");
+const { parseDateRange } = require("../utils/dateRange");
+const feedCache = require("../utils/feedCache");
+const { scrapeLinkPreview, sanitizeHttpUrl } = require("../utils/linkPreviewScraper");
+const router = express.Router();
+
+// ==========================================
+// MEDIA & LINK PREVIEW SANITIZATION (M3)
+// ==========================================
+const CLOUDINARY_MEDIA_PREFIX = "https://res.cloudinary.com/";
+const MAX_LINK_PREVIEWS = 3;
+
+// Accept only HTTPS Cloudinary delivery URLs for uploaded video/audio; anything else yields "".
+const sanitizeCloudinaryMediaUrl = (value) => {
+	const url = sanitizeHttpUrl(value);
+	return url.startsWith(CLOUDINARY_MEDIA_PREFIX) ? url : "";
+};
+
+const sanitizePreviewText = (value, maxLength) =>
+	typeof value === "string" ? xss(value.trim()).slice(0, maxLength) : "";
+
+const sanitizeLinkPreviews = (input) => {
+	if (!Array.isArray(input)) return [];
+	const cleaned = [];
+	for (const preview of input) {
+		if (cleaned.length >= MAX_LINK_PREVIEWS) break;
+		if (!preview || typeof preview !== "object") continue;
+		const url = sanitizeHttpUrl(preview.url);
+		if (!url) continue;
+		const image = sanitizeHttpUrl(preview.image) || sanitizeHttpUrl(preview.imageUrl);
+		let domain = "";
+		try {
+			domain = new URL(url).hostname;
+		} catch {
+			domain = "";
+		}
+		cleaned.push({
+			url,
+			title: sanitizePreviewText(preview.title, 300),
+			description: sanitizePreviewText(preview.description, 500),
+			image,
+			imageUrl: image,
+			siteName: sanitizePreviewText(preview.siteName, 100),
+			domain,
+		});
+	}
+	return cleaned;
+};
+const jwt = require("jsonwebtoken");
+const { JWT_SECRET } = require("../config/jwtSecret");
+
+const getOptionalUser = (req) => {
+	if (req.user) return req.user;
+	const authHeader = req.header("Authorization");
+	if (!authHeader) return null;
+	try {
+		const token = authHeader.split(" ")[1];
+		if (!token) return null;
+		const decoded = jwt.verify(token, JWT_SECRET);
+		if (decoded) {
+			const normalizedId = (decoded.userId || decoded.id || "").toString();
+			decoded.id = normalizedId;
+			decoded.userId = normalizedId;
+			return decoded;
+		}
+	} catch (err) {
+		return null;
+	}
+	return null;
+};
+
+
+// Helper to look up post by either Post._id or ActivityFeed._id
+const findPostByIdOrActivityFeed = async (postId, options = {}) => {
+	if (!postId || !mongoose.isValidObjectId(postId)) return null;
+	let query = Post.findById(postId);
+	if (options.lean && query && typeof query.lean === 'function') {
+		query = query.lean();
+	}
+	let post = await query;
+	if (!post) {
+		const feedItem = await ActivityFeed.findById(postId);
+		if (feedItem?.referenceId && mongoose.isValidObjectId(feedItem.referenceId)) {
+			let refQuery = Post.findById(feedItem.referenceId);
+			if (options.lean && refQuery && typeof refQuery.lean === 'function') {
+				refQuery = refQuery.lean();
+			}
+			post = await refQuery;
+		}
+	}
+	return post;
+};
+
+const escapeHtml = (str) => {
+	if (!str || typeof str !== "string") return "";
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#039;");
+};
+
+// Helper to shorten long comments in notifications
+const truncateText = (text, maxLength = 40) => {
+	if (!text) return "";
+	return text.length > maxLength
+		? text.substring(0, maxLength - 3) + "..."
+		: text;
+};
+
+// 1. RATE LIMITER
+const postLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 10,
+	skip: (req) => req.method === "OPTIONS",
+	message: {
+		message: "You are posting too fast. Please wait a few minutes.",
+	},
+});
+
+
+// 2. THE UPGRADED AI SPAM ENGINE
+const checkSpam = async (text) => {
+	const result = await analyzeContent(text);
+	return result.isFlagged;
+};
+
+const hydrateWithPictures = async (data) => {
+	const posts = Array.isArray(data) ? data : (data ? [data] : []);
+	const userIds = new Set();
+	
+	posts.forEach(post => {
+		if (!post) return;
+		if (post.authorId) userIds.add(post.authorId.toString());
+		if (Array.isArray(post.likedBy)) post.likedBy.forEach(id => userIds.add(id.toString()));
+		if (Array.isArray(post.reactions)) {
+			post.reactions.forEach(r => {
+				if (r && r.userId) userIds.add(r.userId.toString());
+			});
+		}
+		
+		if (Array.isArray(post.comments)) {
+			post.comments.forEach(comment => {
+				if (!comment) return;
+				if (comment.authorId) userIds.add(comment.authorId.toString());
+				if (Array.isArray(comment.likedBy)) comment.likedBy.forEach(id => userIds.add(id.toString()));
+				
+				if (Array.isArray(comment.replies)) {
+					comment.replies.forEach(reply => {
+						if (!reply) return;
+						if (reply.authorId) userIds.add(reply.authorId.toString());
+						if (Array.isArray(reply.likedBy)) reply.likedBy.forEach(id => userIds.add(id.toString()));
+					});
+				}
+			});
+		}
+	});
+
+	const validUserIds = Array.from(userIds).filter((id) => id && mongoose.isValidObjectId(id));
+	const users = validUserIds.length > 0
+		? await User.find({ _id: { $in: validUserIds } }).select("_id name profilePic role badges stats").lean()
+		: [];
+	const userMap = {};
+	users.forEach(
+		(u) =>
+			(userMap[u._id.toString()] = {
+				name: u.name,
+				profilePic: u.profilePic,
+				role: u.role || "user",
+				badges: Array.isArray(u.badges) ? u.badges : [],
+				streak: u.stats?.winStreak || 0,
+			}),
+	);
+
+	const originalPostIds = posts
+		.map((p) => p && p.originalPostId)
+		.filter((id) => id && mongoose.isValidObjectId(id));
+	const originalPostMap = {};
+	if (originalPostIds.length > 0) {
+		try {
+			let origQuery = Post.find({ _id: { $in: originalPostIds } });
+			if (origQuery && typeof origQuery.select === "function") {
+				origQuery = origQuery.select("_id title content authorName authorId imageUrl imageUrls category createdAt tags");
+			}
+			if (origQuery && typeof origQuery.lean === "function") {
+				origQuery = origQuery.lean();
+			}
+			const originalPosts = (await origQuery) || [];
+			if (Array.isArray(originalPosts)) {
+				originalPosts.forEach((op) => {
+					if (op && op._id) originalPostMap[op._id.toString()] = op;
+				});
+			}
+		} catch (_) {}
+	}
+
+	const attach = (post) => {
+		if (!post) return post;
+		const authorInfo = userMap[post.authorId?.toString()];
+		post.authorPic = authorInfo?.profilePic || "";
+		post.authorRole = authorInfo?.role || "user";
+		post.authorBadges = authorInfo?.badges || [];
+		post.authorStreak = authorInfo?.streak || 0;
+		if (post.originalPostId && originalPostMap[post.originalPostId.toString()]) {
+			post.originalPost = originalPostMap[post.originalPostId.toString()];
+		}
+		post.likedByDetails = Array.isArray(post.likedBy)
+			? post.likedBy.map((id) => ({
+					id,
+					name: userMap[id.toString()]?.name || "Unknown",
+					profilePic: userMap[id.toString()]?.profilePic || "",
+				}))
+			: [];
+
+		if (Array.isArray(post.comments)) {
+			post.comments.forEach((comment) => {
+				if (!comment) return;
+				comment.authorPic =
+					userMap[comment.authorId?.toString()]?.profilePic || "";
+				comment.authorRole = userMap[comment.authorId?.toString()]?.role || "user";
+				comment.authorBadges = userMap[comment.authorId?.toString()]?.badges || [];
+				comment.authorStreak = userMap[comment.authorId?.toString()]?.streak || 0;
+				comment.likedByDetails = Array.isArray(comment.likedBy)
+					? comment.likedBy.map((id) => ({
+							id,
+							name: userMap[id.toString()]?.name || "Unknown",
+							profilePic: userMap[id.toString()]?.profilePic || "",
+						}))
+					: [];
+
+				if (Array.isArray(comment.replies)) {
+					comment.replies.forEach((reply) => {
+						if (!reply) return;
+						reply.authorPic =
+							userMap[reply.authorId?.toString()]?.profilePic || "";
+						reply.authorRole = userMap[reply.authorId?.toString()]?.role || "user";
+						reply.authorBadges = userMap[reply.authorId?.toString()]?.badges || [];
+						reply.authorStreak = userMap[reply.authorId?.toString()]?.streak || 0;
+						reply.likedByDetails = Array.isArray(reply.likedBy)
+							? reply.likedBy.map((id) => ({
+									id,
+									name: userMap[id.toString()]?.name || "Unknown",
+									profilePic:
+										userMap[id.toString()]?.profilePic || "",
+								}))
+							: [];
+					});
+				}
+			});
+		}
+		return post;
+	};
+
+	if (Array.isArray(data)) return data.map(attach);
+	return attach(data);
+};
+
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+
+// ==========================================
+
+// ==========================================
+// ACTIVE ONLINE USERS PRESENCE
+// ==========================================
+router.get("/online-users", (req, res) => {
+	const onlineUsersMap = req.app.get("onlineUsers");
+	const onlineUserIds = onlineUsersMap ? Array.from(onlineUsersMap.keys()) : [];
+	res.json({ onlineUserIds });
+});
+
+// ==========================================
+// MENTION SUGGESTIONS (Phase 8 Autocomplete)
+// ==========================================
+router.get("/mention-suggestions", authMiddleware, async (req, res) => {
+	try {
+		const query = (req.query.q || "").trim();
+		let filter = {};
+		if (query) {
+			filter = { name: { $regex: query, $options: "i" } };
+		}
+		const users = await User.find(filter)
+			.select("_id name profilePic role badges")
+			.limit(8)
+			.lean();
+
+		const formatted = users.map((u) => ({
+			id: u._id.toString(),
+			name: u.name,
+			profilePic: u.profilePic || "",
+			role: u.role || "user",
+			badges: Array.isArray(u.badges) ? u.badges : [],
+		}));
+
+		res.json({ users: formatted });
+	} catch (err) {
+		console.error("Error fetching mention suggestions:", err);
+		res.status(500).json({ message: "Failed to fetch suggestions" });
+	}
+});
+
+// TRENDING TAGS (Cached with 2-minute TTL)
+// ==========================================
+router.get("/trending-tags", async (req, res, next) => {
+	try {
+		const cached = feedCache.get("trending_tags");
+		if (cached) {
+			if (req.headers["if-none-match"] === cached.etag) {
+				return res.status(304).end();
+			}
+			res.setHeader("ETag", cached.etag);
+			res.setHeader("X-Feed-Cache", "HIT");
+			return res.json(cached.data);
+		}
+
+		const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+		let tagsAggregation = await Post.aggregate([
+			{
+				$match: {
+					status: { $nin: ["quarantined", "deleted"] },
+					isFlagged: { $ne: true },
+					createdAt: { $gte: twoDaysAgo },
+					tags: { $exists: true, $ne: [] }
+				}
+			},
+			{ $unwind: "$tags" },
+			{
+				$project: {
+					tag: { $trim: { input: { $toLower: "$tags" } } }
+				}
+			},
+			{ $match: { tag: { $ne: "" } } },
+			{
+				$group: {
+					_id: "$tag",
+					count: { $sum: 1 }
+				}
+			},
+			{ $sort: { count: -1, _id: 1 } },
+			{ $limit: 10 },
+			{
+				$project: {
+					_id: 0,
+					tag: "$_id",
+					count: 1
+				}
+			}
+		]);
+
+		if (tagsAggregation.length < 3) {
+			tagsAggregation = await Post.aggregate([
+				{
+					$match: {
+						status: { $nin: ["quarantined", "deleted"] },
+						isFlagged: { $ne: true },
+						tags: { $exists: true, $ne: [] }
+					}
+				},
+				{ $unwind: "$tags" },
+				{
+					$project: {
+						tag: { $trim: { input: { $toLower: "$tags" } } }
+					}
+				},
+				{ $match: { tag: { $ne: "" } } },
+				{
+					$group: {
+						_id: "$tag",
+						count: { $sum: 1 }
+					}
+				},
+				{ $sort: { count: -1, _id: 1 } },
+				{ $limit: 10 },
+				{
+					$project: {
+						_id: 0,
+						tag: "$_id",
+						count: 1
+					}
+				}
+			]);
+		}
+
+		const payload = { tags: tagsAggregation };
+		const etag = feedCache.set("trending_tags", payload, 120);
+		res.setHeader("ETag", etag);
+		res.setHeader("X-Feed-Cache", "MISS");
+		return res.json(payload);
+	} catch (err) {
+		next(err);
+	}
+});
+
+router.get("/share/:postId", async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.postId)) {
+            return res.status(404).send("Post not found");
+        }
+
+        const post = await Post.findById(req.params.postId);
+        if (!post) return res.status(404).send("Post not found");
+        
+        const frontendUrl = (process.env.FRONTEND_URL || "https://gmu-badminton-app.onrender.com").replace(/\/+$/, "");
+        const rawTitle = post.authorName ? `${post.authorName} on GMU Badminton` : "GMU Badminton Post";
+        let rawDescription = post.content || "Check out this discussion on GMU Badminton!";
+        if (rawDescription.length > 150) rawDescription = rawDescription.substring(0, 150) + "...";
+        
+        const rawImageUrl = (post.imageUrls && post.imageUrls.length > 0) ? post.imageUrls[0] : (post.imageUrl || "https://res.cloudinary.com/dcb4ilgpy/image/upload/v1727221064/default-preview_h7xk6p.png");
+        const safePostId = encodeURIComponent(post._id.toString());
+        const targetUrl = `${frontendUrl}/post/${safePostId}`;
+
+        const safeTitle = escapeHtml(rawTitle);
+        const safeDescription = escapeHtml(rawDescription);
+        const safeImageUrl = escapeHtml(rawImageUrl);
+        const safeTargetUrl = escapeHtml(targetUrl);
+        const jsonTargetUrl = JSON.stringify(targetUrl);
+
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:description" content="${safeDescription}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:url" content="${safeTargetUrl}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>${safeTitle}</title>
+    <script>
+        // Redirect immediately to the frontend deep link
+        window.location.href = ${jsonTargetUrl};
+    </script>
+</head>
+<body style="background:#111; color:white; font-family:sans-serif; text-align:center; padding-top:20vh;">
+    <h2>Redirecting you to the post...</h2>
+    <p>If you are not redirected automatically, <a href="${safeTargetUrl}" style="color:#00BFFF;">click here</a>.</p>
+</body>
+</html>`;
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.send(html);
+    } catch (e) {
+        console.error("Error generating share link:", e);
+        res.status(500).send("Error generating preview");
+    }
+});
+router.get("/notifications/:userId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to access these notifications." });
+		}
+
+		const notifs = await Notification.find({
+			targetUserId: req.params.userId,
+		})
+			.sort({ time: -1 })
+			.limit(30);
+		res.json(notifs);
+	} catch (error) {
+		res.status(500).json({ message: "Error fetching notifications" });
+	}
+});
+
+router.put("/notifications/:userId/read", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to update these notifications." });
+		}
+
+		const result = await Notification.updateMany(
+			{ targetUserId: req.params.userId, read: false },
+			{ read: true },
+		);
+
+		const io = req.io || req.app?.get("io");
+		if (io) io.to(req.params.userId).emit("notificationsMarkedRead", { userId: req.params.userId, unreadCount: 0 });
+
+		res.json({ success: true, markedReadCount: result.modifiedCount ?? 0, unreadCount: 0 });
+	} catch (error) {
+		res.status(500).json({ message: "Error updating notifications" });
+	}
+});
+
+router.delete("/notifications/:userId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to clear these notifications." });
+		}
+
+		const result = await Notification.deleteMany({ targetUserId: req.params.userId });
+
+		const io = req.io || req.app?.get("io");
+		if (io) io.to(req.params.userId).emit("notificationsCleared", { userId: req.params.userId });
+
+		res.json({ success: true, message: "All notifications cleared.", deletedCount: result.deletedCount ?? 0 });
+	} catch (error) {
+		res.status(500).json({ message: "Error clearing notifications" });
+	}
+});
+
+router.put("/notifications/single/:notifId/read", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.notifId)) {
+			return res.status(400).json({ message: "Invalid notification ID format." });
+		}
+
+		const notif = await Notification.findById(req.params.notifId);
+		if (!notif) return res.status(404).json({ message: "Notification not found" });
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		if (req.user.role !== "admin" && currentUserId !== notif.targetUserId?.toString()) {
+			return res.status(403).json({ message: "Unauthorized to update this notification." });
+		}
+
+		notif.read = true;
+		await notif.save();
+
+		const io = req.io || req.app?.get("io");
+		if (io) io.to(notif.targetUserId.toString()).emit("notificationRead", { notifId: notif._id, read: true });
+
+		res.json({ success: true, notification: notif });
+	} catch (error) {
+		res.status(500).json({ message: "Error updating notification" });
+	}
+});
+
+const sendNotification = async (io, targetUserId, message, link) => {
+	if (!targetUserId || targetUserId === "000000000000000000000000") return;
+	const notif = new Notification({ targetUserId, message, link });
+	await notif.save();
+	if (io) io.to(targetUserId.toString()).emit("newNotification", notif);
+};
+
+// ==========================================
+// POST VISIBILITY & SCOPED REAL-TIME HELPERS
+// ==========================================
+const isPublicPost = (post) => !post?.visibility || post.visibility === "PUBLIC";
+
+// Mirrors the privacy rules of GET /:postId. Returns true when `user` may view `post`.
+const canViewPost = async (post, user) => {
+	if (!post) return false;
+	if (post.visibility !== "ONLY_ME" && post.visibility !== "FRIENDS_ONLY") return true;
+
+	const userId = user ? String(user.id || user.userId || user._id || "") : "";
+	const isAuthor = Boolean(userId && post.authorId && String(post.authorId) === userId);
+	const isAdmin = Boolean(user && user.role === "admin");
+	if (isAuthor || isAdmin) return true;
+	if (post.visibility === "ONLY_ME" || !userId) return false;
+
+	const authorUser = await User.findById(post.authorId).select("friends").lean();
+	return Boolean(authorUser && Array.isArray(authorUser.friends) &&
+		authorUser.friends.some(f => (f?._id || f).toString() === userId));
+};
+
+// Personal rooms (clients join `userId` rooms via joinUserRoom) allowed to see a private post:
+// the author, the involved users, and for FRIENDS_ONLY posts the author's friends.
+const getPostAudienceRooms = async (post, involvedUserIds = []) => {
+	const ids = [post?.authorId, ...involvedUserIds];
+	if (post?.visibility === "FRIENDS_ONLY" && post.authorId) {
+		try {
+			let query = User.findById(post.authorId);
+			if (query && typeof query.select === "function") query = query.select("friends");
+			if (query && typeof query.lean === "function") query = query.lean();
+			const author = await query;
+			if (author && Array.isArray(author.friends)) {
+				ids.push(...author.friends.map(f => f?._id || f));
+			}
+		} catch (_) { /* fall back to author + involved users */ }
+	}
+	return [...new Set(ids.filter(Boolean).map(String))];
+};
+
+// Public posts broadcast to everyone; private posts only reach their audience rooms.
+const emitForPost = async (io, post, event, payload, involvedUserIds = []) => {
+	if (!io) return;
+	try {
+		if (isPublicPost(post)) {
+			io.emit(event, payload);
+			return;
+		}
+		const rooms = await getPostAudienceRooms(post, involvedUserIds);
+		if (rooms.length > 0) io.to(rooms).emit(event, payload);
+	} catch (error) {
+		console.error(`Error emitting ${event}:`, error);
+	}
+};
+
+// A post that just went private must disappear from every client outside its audience.
+const emitPostHiddenFromOthers = async (io, post, involvedUserIds = []) => {
+	if (!io || typeof io.except !== "function") return;
+	try {
+		const rooms = await getPostAudienceRooms(post, involvedUserIds);
+		io.except(rooms).emit("postDeleted", String(post._id));
+	} catch (error) {
+		console.error("Error emitting postDeleted:", error);
+	}
+};
+
+// ==========================================
+// RALLY RSVP ATOMIC HELPERS
+// ==========================================
+const getRallyCapacity = (post) => post?.playerMatchmaking?.slotsNeeded || post?.rsvp?.capacity || 1;
+
+// Aggregation expression: number of confirmed entries in playerMatchmaking.rsvpList
+const confirmedRsvpCountExpr = {
+	$size: {
+		$filter: {
+			input: { $ifNull: ["$playerMatchmaking.rsvpList", []] },
+			as: "r",
+			cond: { $eq: ["$$r.status", "confirmed"] }
+		}
+	}
+};
+
+const loadPostLean = async (postId) => {
+	let query = Post.findById(postId);
+	if (query && typeof query.lean === "function") query = query.lean();
+	return query;
+};
+
+// Promotes waitlisted RSVPs in FIFO order while confirmed slots are free.
+// Each promotion is a conditional positional update guarded by the confirmed count,
+// so concurrent cancellations/joins can never push the rally over capacity.
+const promoteWaitlistedRsvps = async (postId, capacity) => {
+	const promoted = [];
+	let current = await loadPostLean(postId);
+	for (let attempt = 0; attempt < 50 && current; attempt++) {
+		const list = Array.isArray(current.playerMatchmaking?.rsvpList) ? current.playerMatchmaking.rsvpList : [];
+		const confirmedCount = list.filter(r => r.status === "confirmed").length;
+		if (confirmedCount >= capacity) break;
+		const next = list.find(r => r.status === "waitlist");
+		if (!next) break;
+		const nextUserId = String(next.userId);
+
+		const updated = await Post.findOneAndUpdate(
+			{
+				_id: postId,
+				"playerMatchmaking.rsvpList": { $elemMatch: { userId: nextUserId, status: "waitlist" } },
+				$expr: { $lt: [confirmedRsvpCountExpr, capacity] }
+			},
+			{
+				$set: { "playerMatchmaking.rsvpList.$.status": "confirmed" },
+				$pull: { "rsvp.waitlist": nextUserId },
+				$addToSet: { "rsvp.attendees": nextUserId }
+			},
+			{ returnDocument: "after", lean: true }
+		);
+
+		if (updated) {
+			promoted.push({ ...next, userId: nextUserId, status: "confirmed" });
+			current = updated;
+		} else {
+			// Lost a race (entry changed or slot taken): re-read and re-evaluate
+			current = await loadPostLean(postId);
+		}
+	}
+	return promoted;
+};
+
+// Recomputes isFilled from the stored list in a single pipeline update and returns the fresh post.
+const syncRallyFilledFlag = (postId, capacity) => Post.findOneAndUpdate(
+	{ _id: postId },
+	[{ $set: { "playerMatchmaking.isFilled": { $gte: [confirmedRsvpCountExpr, capacity] } } }],
+	{ returnDocument: "after", lean: true, updatePipeline: true }
+);
+
+// Atomic Post updates (findOneAndUpdate) bypass the Post save hook, so the denormalized ActivityFeed
+// row would keep stale RSVP / challenge state and every cached feed would keep serving it. Mirror the
+// mutable fields onto the feed row and drop cached feed pages. Returns { _id, referenceId } of the
+// feed row (or null) so socket payloads can carry both ids.
+const syncFeedEntryFromPost = async (post) => {
+	if (!post || !post._id) return null;
+	let feedEntry = null;
+	try {
+		if (ActivityFeed && typeof ActivityFeed.findOneAndUpdate === "function") {
+			feedEntry = await ActivityFeed.findOneAndUpdate(
+				{ type: "post", referenceId: post._id },
+				{
+					$set: {
+						playerMatchmaking: post.playerMatchmaking || null,
+						rsvp: post.rsvp || null,
+						challengeMatch: post.challengeMatch || null,
+						visibility: post.visibility || "PUBLIC"
+					}
+				},
+				{ returnDocument: "after", lean: true, projection: { _id: 1, referenceId: 1 } }
+			);
+		}
+	} catch (err) {
+		console.error("ActivityFeed sync error (rally/challenge state):", err?.message || err);
+	}
+	try {
+		feedCache.invalidateFeed();
+	} catch (_) { /* cache is best-effort */ }
+	return feedEntry && feedEntry._id ? feedEntry : null;
+};
+
+// Ids a client may use to match a post in its list: Post id (postId / referenceId) and feed row id.
+const buildPostMatchIds = (post, feedEntry) => {
+	const postId = post && post._id ? String(post._id) : null;
+	return {
+		postId,
+		referenceId: postId,
+		feedId: feedEntry && feedEntry._id ? String(feedEntry._id) : null
+	};
+};
+
+const notifyPromotedRsvps = (req, post, promoted) => {
+	for (const entry of promoted || []) {
+		const promotedId = String(entry.userId);
+		// Fire-and-forget: never block the response on push delivery
+		Promise.resolve().then(() => sendPushToUser(promotedId, {
+			title: "🏸 You're in! Rally Spot Confirmed",
+			body: "A spot opened up and you've been promoted from the waitlist!",
+			url: `/community?postId=${post._id}`
+		})).catch(err => console.error("[Push] Error sending waitlist promotion push:", err?.message || err));
+
+		Promise.resolve().then(() => sendNotification(
+			req.io,
+			promotedId,
+			"You've been promoted from the waitlist to confirmed for a badminton rally!",
+			`/community?postId=${post._id}`
+		)).catch(err => console.error("[Notify] Error sending waitlist promotion notification:", err?.message || err));
+
+		if (req.io) {
+			req.io.to(promotedId).emit("waitlistPromoted", {
+				postId: post._id,
+				userId: promotedId,
+				status: "confirmed"
+			});
+		}
+	}
+};
+
+// ==========================================
+// POSTS (FETCH & CREATE)
+// ==========================================
+const ALLOWED_CATEGORIES = [
+	'general',
+	'match_result',
+	'gear_review',
+	'meetup_rally',
+	'training',
+	'find_partner',
+	'challenge_match',
+	'qa_forum',
+	'gear_exchange'
+];
+
+const parsePlayerMatchmaking = (pm) => {
+	if (!pm || typeof pm !== 'object') return undefined;
+	return {
+		skillLevelRequired: pm.skillLevelRequired ? xss(String(pm.skillLevelRequired).trim()).slice(0, 50) : 'Any',
+		format: pm.format ? xss(String(pm.format).trim()).slice(0, 50) : 'Doubles',
+		preferredCourt: pm.preferredCourt ? xss(String(pm.preferredCourt).trim()).slice(0, 100) : 'RAC Courts 1-3',
+		rallyDate: pm.rallyDate ? new Date(pm.rallyDate) : undefined,
+		timeWindow: pm.timeWindow ? xss(String(pm.timeWindow).trim()).slice(0, 50) : '',
+		slotsNeeded: typeof pm.slotsNeeded === 'number' && pm.slotsNeeded > 0 ? Math.min(10, pm.slotsNeeded) : 1,
+		// rsvpList / isFilled are server-owned: only the RSVP endpoint may change them
+		rsvpList: [],
+		isFilled: false,
+		isEnabled: Boolean(pm.isEnabled)
+	};
+};
+
+// Author-editable playerMatchmaking fields (everything except the server-owned RSVP state)
+const EDITABLE_MATCHMAKING_FIELDS = ['skillLevelRequired', 'format', 'preferredCourt', 'rallyDate', 'timeWindow', 'slotsNeeded', 'isEnabled'];
+
+const parseChallengeMatch = (cm, authorInfo) => {
+	if (!cm || typeof cm !== 'object') return undefined;
+	const challengerTeam = Array.isArray(cm.challengerTeam) && cm.challengerTeam.length > 0
+		? cm.challengerTeam.map(c => ({
+			userId: String(c.userId || ''),
+			userName: xss(String(c.userName || 'Challenger')).slice(0, 60),
+			avatarUrl: c.avatarUrl ? xss(String(c.avatarUrl).trim()) : ''
+		}))
+		: (authorInfo ? [{ userId: authorInfo.userId, userName: authorInfo.userName, avatarUrl: authorInfo.avatarUrl || '' }] : []);
+
+	return {
+		matchType: cm.matchType ? xss(String(cm.matchType).trim()).slice(0, 50) : 'Friendly Scrimmage',
+		gameFormat: cm.gameFormat ? xss(String(cm.gameFormat).trim()).slice(0, 50) : 'Best of 3 to 21',
+		stipulations: cm.stipulations ? xss(String(cm.stipulations).trim()).slice(0, 200) : '',
+		matchStatus: ['open', 'accepted', 'completed', 'declined'].includes(cm.matchStatus) ? cm.matchStatus : 'open',
+		challengerTeam,
+		acceptedBy: Array.isArray(cm.acceptedBy) ? cm.acceptedBy.map(a => ({
+			userId: String(a.userId || ''),
+			userName: xss(String(a.userName || 'Opponent')).slice(0, 60),
+			avatarUrl: a.avatarUrl ? xss(String(a.avatarUrl).trim()) : ''
+		})) : [],
+		linkedMatchId: cm.linkedMatchId ? xss(String(cm.linkedMatchId).trim()).slice(0, 60) : ''
+	};
+};
+
+// Status, opponents, and the linked match are owned by the accept/sync flow, never the client.
+const parseNewChallengeMatch = (cm, authorInfo) => {
+	const parsed = parseChallengeMatch(cm, authorInfo);
+	if (!parsed) return undefined;
+	return { ...parsed, matchStatus: 'open', acceptedBy: [], linkedMatchId: '' };
+};
+
+// Edits may only touch the descriptive fields; the challenger team is frozen once accepted.
+const applyChallengeMatchEdit = (post, cm, authorInfo) => {
+	const parsed = parseChallengeMatch(cm, authorInfo);
+	if (!parsed) return;
+	if (!post.challengeMatch || !post.challengeMatch.challengerTeam?.length) {
+		post.challengeMatch = { isEnabled: Boolean(post.challengeMatch?.isEnabled), ...parseNewChallengeMatch(cm, authorInfo) };
+		return;
+	}
+	post.challengeMatch.matchType = parsed.matchType;
+	post.challengeMatch.gameFormat = parsed.gameFormat;
+	post.challengeMatch.stipulations = parsed.stipulations;
+	const status = post.challengeMatch.matchStatus || 'open';
+	if (status === 'open' && Array.isArray(cm.challengerTeam) && cm.challengerTeam.length > 0) {
+		post.challengeMatch.challengerTeam = parsed.challengerTeam;
+	}
+};
+
+const parseQaDetails = (qa) => {
+	if (!qa || typeof qa !== 'object') return undefined;
+	return {
+		subtopic: qa.subtopic ? xss(String(qa.subtopic).trim()).slice(0, 50) : 'General',
+		isResolved: Boolean(qa.isResolved),
+		acceptedCommentId: qa.acceptedCommentId ? xss(String(qa.acceptedCommentId).trim()).slice(0, 60) : '',
+		acceptedBy: qa.acceptedBy && typeof qa.acceptedBy === 'object' ? {
+			userId: String(qa.acceptedBy.userId || ''),
+			userName: xss(String(qa.acceptedBy.userName || '')).slice(0, 60),
+			at: qa.acceptedBy.at ? new Date(qa.acceptedBy.at) : new Date()
+		} : undefined
+	};
+};
+
+// Resolution state is owned by the accept-answer route.
+const parseNewQaDetails = (qa) => {
+	const parsed = parseQaDetails(qa);
+	if (!parsed) return undefined;
+	return { ...parsed, isResolved: false, acceptedCommentId: '', acceptedBy: undefined };
+};
+
+const parseGearDetails = (gd) => {
+	if (!gd || typeof gd !== 'object') return undefined;
+	return {
+		gearType: gd.gearType ? xss(String(gd.gearType).trim()).slice(0, 50) : 'Racket',
+		brand: gd.brand ? xss(String(gd.brand).trim()).slice(0, 50) : '',
+		condition: gd.condition ? xss(String(gd.condition).trim()).slice(0, 50) : 'Good',
+		specs: gd.specs && typeof gd.specs === 'object' ? {
+			weightCode: gd.specs.weightCode ? xss(String(gd.specs.weightCode).trim()).slice(0, 10) : '',
+			gripSize: gd.specs.gripSize ? xss(String(gd.specs.gripSize).trim()).slice(0, 10) : '',
+			balancePoint: gd.specs.balancePoint ? xss(String(gd.specs.balancePoint).trim()).slice(0, 30) : '',
+			currentString: gd.specs.currentString ? xss(String(gd.specs.currentString).trim()).slice(0, 60) : ''
+		} : {},
+		tradeType: gd.tradeType ? xss(String(gd.tradeType).trim()).slice(0, 50) : 'Review / Discussion',
+		price: typeof gd.price === 'number' && gd.price >= 0 ? gd.price : (Number(gd.price) || 0),
+		isEnabled: Boolean(gd.isEnabled)
+	};
+};
+
+const parseOpponents = (opponents) => {
+	if (Array.isArray(opponents)) {
+		return opponents.map((o) => xss(String(o || "").trim()).slice(0, 100)).filter(Boolean);
+	}
+	if (typeof opponents === "string" && opponents.trim()) {
+		return opponents.split(",").map((o) => xss(o.trim()).slice(0, 100)).filter(Boolean);
+	}
+	return [];
+};
+
+router.get("/", async (req, res) => {
+	try {
+		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+		const skip = (page - 1) * limit;
+
+		const query = {
+			isFlagged: { $ne: true },
+			status: { $nin: ['quarantined', 'deleted'] }
+		};
+
+		const { start: dateStart, end: dateEnd } = parseDateRange(req.query);
+		if (dateStart || dateEnd) {
+			query.createdAt = {};
+			if (dateStart) query.createdAt.$gte = dateStart;
+			if (dateEnd) query.createdAt.$lte = dateEnd;
+		} else if (req.query.date && typeof req.query.date === "string") {
+			query.targetDate = req.query.date.slice(0, 50);
+		}
+
+		if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {
+			const cat = req.query.category.trim().toLowerCase().slice(0, 50);
+			if (cat === "find_partner") {
+				query.category = { $in: ["find_partner", "meetup_rally"] };
+			} else if (cat === "gear_exchange") {
+				query.category = { $in: ["gear_exchange", "gear_review"] };
+			} else if (ALLOWED_CATEGORIES.includes(cat)) {
+				query.category = cat;
+			}
+		}
+
+		if (req.query.tag && typeof req.query.tag === "string") {
+			const cleanTag = req.query.tag.trim().replace(/^#/, "").slice(0, 50);
+			if (cleanTag) {
+				const escaped = cleanTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+				query.tags = { $regex: new RegExp(`^#?${escaped}$`, "i") };
+			}
+		}
+
+		const rawQuerySearch = typeof req.query.search === "string"
+			? req.query.search
+			: (typeof req.query.q === "string" ? req.query.q : (Array.isArray(req.query.search) && typeof req.query.search[0] === "string" ? req.query.search[0] : ""));
+		const rawSearch = rawQuerySearch.trim().slice(0, 100);
+		let searchOr = null;
+		if (rawSearch) {
+			const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const searchRegex = new RegExp(escaped, 'i');
+			searchOr = [
+				{ title: { $regex: searchRegex } },
+				{ content: { $regex: searchRegex } },
+				{ authorName: { $regex: searchRegex } },
+				{ tags: searchRegex },
+				{ "matchDetails.court": { $regex: searchRegex } },
+				{ "matchDetails.partner": { $regex: searchRegex } },
+				{ "matchDetails.opponents": searchRegex },
+				{ "playerMatchmaking.preferredCourt": { $regex: searchRegex } },
+				{ "gearDetails.brand": { $regex: searchRegex } },
+				{ "gearDetails.gearType": { $regex: searchRegex } }
+			];
+		}
+
+		// Privacy Visibility Filtering
+		const currentUser = getOptionalUser(req);
+		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : "";
+		const userObjId = mongoose.isValidObjectId(currentUserId) ? new mongoose.Types.ObjectId(currentUserId) : null;
+
+		let friendIds = [];
+		if (currentUserId) {
+			const userDoc = await User.findById(currentUserId).select("friends").lean();
+			friendIds = Array.isArray(userDoc?.friends)
+				? userDoc.friends.map(f => (f._id ? f._id.toString() : f.toString()))
+				: [];
+		}
+		const friendObjIds = friendIds
+			.filter(id => mongoose.isValidObjectId(id))
+			.map(id => new mongoose.Types.ObjectId(id));
+
+		const visibilityOr = [
+			{ visibility: 'PUBLIC' },
+			{ visibility: { $exists: false } }
+		];
+		if (userObjId) {
+			visibilityOr.push({ authorId: userObjId });
+			visibilityOr.push({ authorId: currentUserId });
+		} else if (currentUserId) {
+			visibilityOr.push({ authorId: currentUserId });
+		}
+		if (friendIds.length > 0) {
+			visibilityOr.push({
+				visibility: 'FRIENDS_ONLY',
+				authorId: { $in: [...friendIds, ...friendObjIds] }
+			});
+		}
+
+		if (searchOr) {
+			query.$and = [
+				{ $or: visibilityOr },
+				{ $or: searchOr }
+			];
+		} else {
+			query.$or = visibilityOr;
+		}
+
+		// Smart Feed Sorting & Tab Handling
+		const tab = (req.query.tab || req.query.sort || "latest").toString().toLowerCase();
+		let sortOption = { isPinned: -1, timestamp: -1, createdAt: -1 };
+
+		if (tab === "top") {
+			sortOption = { isPinned: -1, score: -1, createdAt: -1 };
+		} else if (tab === "recent_activity" || tab === "activity" || tab === "recent") {
+			sortOption = { isPinned: -1, lastActivityAt: -1, createdAt: -1 };
+		} else if (tab === "saved") {
+			if (!currentUser) {
+				return res.status(401).json({ message: "Authentication required to view saved posts" });
+			}
+			const userDoc = await User.findById(currentUser.id).select("savedPosts bookmarkedPosts").lean();
+			const savedIds = [
+				...(userDoc?.savedPosts || []),
+				...(userDoc?.bookmarkedPosts || [])
+			].map(id => id ? id.toString() : "").filter(Boolean);
+			const uniqueSavedIds = Array.from(new Set(savedIds)).filter(id => mongoose.isValidObjectId(id));
+			query._id = { $in: uniqueSavedIds };
+			sortOption = { createdAt: -1, timestamp: -1 };
+		} else if (tab === "latest") {
+			sortOption = { isPinned: -1, createdAt: -1, timestamp: -1 };
+		}
+
+		let rawPosts = await Post.find(query)
+			.sort(sortOption)
+			.skip(skip)
+			.limit(limit)
+			.lean();
+
+		if (Array.isArray(rawPosts)) {
+			rawPosts = rawPosts.filter((post) => {
+				const vis = post.visibility || "PUBLIC";
+				if (vis === "PUBLIC") return true;
+				if (!currentUserId) return false;
+				const postAuthor = (post.authorId || "").toString();
+				if (postAuthor === currentUserId) return true;
+				if (currentUser && currentUser.role === "admin") return true;
+				if (vis === "ONLY_ME") return false;
+				if (vis === "FRIENDS_ONLY") {
+					return friendIds.includes(postAuthor);
+				}
+				return true;
+			});
+		}
+
+		if (tab === "top" && Array.isArray(rawPosts)) {
+			rawPosts.sort((a, b) => {
+				const aPinned = a.isPinned ? 1 : 0;
+				const bPinned = b.isPinned ? 1 : 0;
+				if (aPinned !== bPinned) return bPinned - aPinned;
+				const aScore = (a.score !== undefined && a.score !== null)
+					? a.score
+					: ((a.reactions?.length || 0) + (a.comments?.length || 0) * 2);
+				const bScore = (b.score !== undefined && b.score !== null)
+					? b.score
+					: ((b.reactions?.length || 0) + (b.comments?.length || 0) * 2);
+				if (aScore !== bScore) return bScore - aScore;
+				return new Date(b.createdAt || b.timestamp || 0) - new Date(a.createdAt || a.timestamp || 0);
+			});
+		}
+
+		res.json(await hydrateWithPictures(rawPosts));
+	} catch (error) {
+		res.status(500).json({ message: "Error fetching posts" });
+	}
+});
+
+const POST_VISIBILITIES = ["PUBLIC", "FRIENDS_ONLY", "ONLY_ME"];
+const QUARANTINE_REVIEW_MESSAGE = "Your post is being reviewed and will appear once approved.";
+
+router.post("/", authMiddleware, postLimiter, async (req, res) => {
+	try {
+		const { title, content, imageUrl, imageUrls, videoUrl, audioUrl, linkPreviews, targetDate, tags, visibility, isPinned, category, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails } = req.body;
+
+		if (!title || typeof title !== "string" || !title.trim()) {
+			return res.status(400).json({ message: "Post title is required." });
+		}
+		if (title.trim().length > 200) {
+			return res.status(400).json({ message: "Post title cannot exceed 200 characters." });
+		}
+
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Post content is required." });
+		}
+
+		let cleanCategory = "general";
+		if (category) {
+			if (!ALLOWED_CATEGORIES.includes(category)) {
+				return res.status(400).json({ message: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}` });
+			}
+			cleanCategory = category;
+		}
+
+		const requestedVisibility = visibility || req.body.privacy;
+		if (requestedVisibility && !POST_VISIBILITIES.includes(requestedVisibility)) {
+			return res.status(400).json({ message: "Invalid visibility. Allowed: PUBLIC, FRIENDS_ONLY, ONLY_ME" });
+		}
+		const cleanVisibility = requestedVisibility || "PUBLIC";
+
+		let cleanMatchDetails = undefined;
+		if (matchDetails && typeof matchDetails === "object" && cleanCategory === 'match_result') {
+			cleanMatchDetails = {
+				partner: matchDetails.partner ? xss(String(matchDetails.partner).trim()).slice(0, 100) : "",
+				opponents: parseOpponents(matchDetails.opponents),
+				score: matchDetails.score ? xss(String(matchDetails.score).trim()).slice(0, 100) : "",
+				court: matchDetails.court ? xss(String(matchDetails.court).trim()).slice(0, 100) : "",
+				winner: matchDetails.winner ? xss(String(matchDetails.winner).trim()).slice(0, 100) : "",
+			};
+		}
+		
+		const cleanTitle = xss(title.trim());
+		const cleanContent = xss(content.trim());
+		const cleanImageUrl = (imageUrl && typeof imageUrl === "string") ? xss(imageUrl.trim()) : "";
+		const cleanImageUrls = Array.isArray(imageUrls) ? imageUrls.map(url => typeof url === "string" ? xss(url.trim()) : "").filter(url => url) : [];
+		const cleanTags = Array.isArray(tags) ? tags.filter(t => typeof t === "string").map(t => xss(t.trim()).slice(0, 50)) : [];
+		
+		const isSpam = await checkSpam(cleanTitle) || await checkSpam(cleanContent);
+		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
+
+		const authorId = (req.user.id || req.user.userId || req.user._id).toString();
+		const authorName = req.user.name || req.body.authorName || "Member";
+
+		const spamEvaluation = await evaluateSpamHeuristics({
+			userId: authorId,
+			title: cleanTitle,
+			content: cleanContent
+		});
+
+		const isFlagged = Boolean(isSpam || aiAnalysis.isFlagged || spamEvaluation.isSpam);
+		const status = isFlagged ? 'quarantined' : 'active';
+		const toxicityScore = spamEvaluation.score || aiAnalysis.score || 0;
+
+		const authorInfo = { userId: authorId, userName: authorName, avatarUrl: req.user.profilePic || "" };
+		const cleanPlayerMatchmaking = (cleanCategory === 'find_partner' || cleanCategory === 'meetup_rally') ? parsePlayerMatchmaking(playerMatchmaking) : undefined;
+		const cleanChallengeMatch = cleanCategory === 'challenge_match' ? parseNewChallengeMatch(challengeMatch, authorInfo) : undefined;
+		const cleanQaDetails = cleanCategory === 'qa_forum' ? parseNewQaDetails(qaDetails) : undefined;
+		const cleanGearDetails = (cleanCategory === 'gear_exchange' || cleanCategory === 'gear_review') ? parseGearDetails(gearDetails) : undefined;
+
+		let cleanOriginalPostId = null;
+		let cleanSharedThought = "";
+		if (req.body.originalPostId && mongoose.isValidObjectId(req.body.originalPostId)) {
+			const originalPost = await Post.findById(req.body.originalPostId);
+			if (originalPost) {
+				const origAuthorId = (originalPost.authorId || "").toString();
+				const currentUserId = (req.user.id || req.user.userId || req.user._id || "").toString();
+				const isAuthor = Boolean(currentUserId && origAuthorId && origAuthorId === currentUserId);
+				const isAdmin = req.user.role === "admin";
+
+				if (originalPost.visibility === "ONLY_ME" && !isAuthor && !isAdmin) {
+					return res.status(403).json({ message: "Cannot repost a private post." });
+				}
+				if (originalPost.visibility === "FRIENDS_ONLY" && !isAuthor && !isAdmin) {
+					const authorUser = originalPost.authorId ? await User.findById(originalPost.authorId).select("friends").lean() : null;
+					const isFriend = authorUser && Array.isArray(authorUser.friends) &&
+						authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
+					if (!isFriend) {
+						return res.status(403).json({ message: "Cannot repost a friends-only post." });
+					}
+				}
+
+				cleanOriginalPostId = originalPost._id;
+				cleanSharedThought = req.body.sharedThought ? xss(String(req.body.sharedThought).trim()) : "";
+				await Post.updateOne({ _id: originalPost._id }, { $inc: { shareCount: 1 } });
+			}
+		}
+
+		const newPost = new Post({
+			title: cleanTitle,
+			content: cleanContent,
+			category: cleanCategory,
+			matchDetails: cleanMatchDetails,
+			playerMatchmaking: cleanPlayerMatchmaking,
+			challengeMatch: cleanChallengeMatch,
+			qaDetails: cleanQaDetails,
+			gearDetails: cleanGearDetails,
+			imageUrl: cleanImageUrl,
+			imageUrls: cleanImageUrls,
+			videoUrl: sanitizeCloudinaryMediaUrl(videoUrl),
+			audioUrl: sanitizeCloudinaryMediaUrl(audioUrl),
+			linkPreviews: sanitizeLinkPreviews(linkPreviews),
+			tags: cleanTags,
+			isPinned: req.user.role === "admin" && Boolean(isPinned),
+			visibility: cleanVisibility,
+			authorName,
+			targetDate: targetDate || "General",
+			authorId,
+			status,
+			isFlagged,
+			toxicityScore,
+			originalPostId: cleanOriginalPostId,
+			sharedThought: cleanSharedThought,
+			shareCount: 0,
+			lastActivityAt: new Date()
+		});
+
+		await newPost.save();
+
+		// A quarantined post still gets a feed row, flagged pendingReview so GET /api/feed shows it
+		// to its author only (with a pending badge); everyone else never sees it until approval.
+		let createdFeedEntry = null;
+		try {
+			createdFeedEntry = await ActivityFeed.findOneAndUpdate(
+				{ type: "post", referenceId: newPost._id },
+				{
+					type: "post",
+					referenceId: newPost._id,
+					authorId: newPost.authorId,
+					authorName: newPost.authorName,
+					authorProfilePic: req.user.profilePic || "",
+					authorSkillLevel: req.user.skillLevel || "Beginner",
+					authorBadges: req.user.badges || [],
+					authorRole: req.user.role || "user",
+					authorStreak: req.user.stats?.winStreak || 0,
+					title: newPost.title,
+					content: newPost.content,
+					image: newPost.imageUrl,
+					images: newPost.imageUrls || [],
+					videoUrl: newPost.videoUrl || "",
+					audioUrl: newPost.audioUrl || "",
+					linkPreviews: newPost.linkPreviews || [],
+					tags: newPost.tags || [],
+					isPinned: newPost.isPinned || false,
+					category: newPost.category || "general",
+					matchDetails: newPost.matchDetails || null,
+					playerMatchmaking: newPost.playerMatchmaking || null,
+					challengeMatch: newPost.challengeMatch || null,
+					qaDetails: newPost.qaDetails || null,
+					gearDetails: newPost.gearDetails || null,
+					reactions: newPost.reactions || [],
+					likes: 0,
+					comments: 0,
+					createdAt: newPost.createdAt,
+					visibility: newPost.visibility || "PUBLIC",
+					pendingReview: isFlagged,
+					score: (newPost.isPinned ? 1000 : 0),
+					originalPostId: cleanOriginalPostId,
+					sharedThought: cleanSharedThought,
+					shareCount: 0,
+					lastActivityAt: newPost.lastActivityAt || new Date()
+				},
+				{ upsert: true, returnDocument: "after" }
+			);
+		} catch (feedSyncErr) {
+			console.error("ActivityFeed initial sync error:", feedSyncErr);
+		}
+		feedCache.invalidateFeed();
+
+
+		const createdMatchIds = buildPostMatchIds(newPost, createdFeedEntry);
+
+		if (isFlagged) {
+			// No socket broadcast: only the author learns about a quarantined post, via this response.
+			let pendingPost = { _id: newPost._id, status: newPost.status, isFlagged: newPost.isFlagged };
+			try {
+				pendingPost = await hydrateWithPictures(newPost.toObject ? newPost.toObject() : { ...pendingPost });
+			} catch (_) { /* fall back to the minimal shape */ }
+			return res
+				.status(201)
+				.json({
+					message: "Post submitted for review.",
+					quarantined: true,
+					pendingReview: true,
+					reviewMessage: QUARANTINE_REVIEW_MESSAGE,
+					post: {
+						...pendingPost,
+						_id: newPost._id,
+						status: newPost.status,
+						isFlagged: newPost.isFlagged,
+						visibility: newPost.visibility || "PUBLIC",
+						quarantined: true,
+						pendingReview: true,
+						...createdMatchIds
+					}
+				});
+		}
+
+		const hydratedPost = await hydrateWithPictures(newPost.toObject());
+		hydratedPost.visibility = hydratedPost.visibility || "PUBLIC";
+		if (req.io) await emitForPost(req.io, hydratedPost, "postCreated", hydratedPost);
+		res.status(201).json({ ...hydratedPost, ...createdMatchIds, quarantined: false });
+	} catch (error) {
+		console.error("Error creating post:", error);
+		res.status(500).json({ message: "Error creating post" });
+	}
+});
+
+router.get("/user/:userId", async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+		const skip = (page - 1) * limit;
+
+		const currentUser = getOptionalUser(req);
+		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : "";
+		const targetUserId = req.params.userId.toString();
+		const isSelf = currentUserId && currentUserId === targetUserId;
+		const isAdmin = currentUser && currentUser.role === "admin";
+
+		let visibilityOr = [{ visibility: "PUBLIC" }, { visibility: { $exists: false } }];
+		if (isSelf || isAdmin) {
+			visibilityOr = null;
+		} else if (currentUserId) {
+			const targetUser = await User.findById(targetUserId).select("friends").lean();
+			const isFriend = targetUser && Array.isArray(targetUser.friends) &&
+				targetUser.friends.some(f => (f._id || f).toString() === currentUserId);
+			if (isFriend) {
+				visibilityOr = [{ visibility: { $in: ["PUBLIC", "FRIENDS_ONLY"] } }, { visibility: { $exists: false } }];
+			}
+		}
+
+		const query = {
+			authorId: req.params.userId,
+			isFlagged: { $ne: true },
+			status: { $nin: ['quarantined', 'deleted'] }
+		};
+		if (visibilityOr) query.$or = visibilityOr;
+
+		const rawPosts = await Post.find(query)
+			.sort({ timestamp: -1 })
+			.skip(skip)
+			.limit(limit)
+			.lean();
+		res.json(await hydrateWithPictures(rawPosts));
+	} catch (error) {
+		res.status(500).json({ message: "Error fetching user posts" });
+	}
+});
+
+// ==========================================
+// REPORT POST & COMMUNITY QUARANTINE
+// ==========================================
+router.post("/:postId/report", authMiddleware, async (req, res) => {
+	try {
+		const { postId } = req.params;
+		if (!mongoose.isValidObjectId(postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const post = await findPostByIdOrActivityFeed(postId);
+		if (!post) {
+			return res.status(404).json({ message: "Post not found." });
+		}
+
+		// Invariant: author cannot report their own post
+		if (post.authorId && post.authorId.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot report your own post." });
+		}
+
+		// Invariant: prevent duplicate reports from the same user
+		if (!Array.isArray(post.reports)) post.reports = [];
+		const alreadyReported = post.reports.some(r => r.reportedBy && r.reportedBy.toString() === currentUserId);
+		if (alreadyReported) {
+			return res.status(400).json({ message: "You have already reported this post." });
+		}
+
+		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Inappropriate";
+		post.reports.push({
+			reportedBy: currentUserId,
+			reason,
+			timestamp: new Date()
+		});
+		post.reportCount = post.reports.length;
+
+		let quarantined = false;
+		// 3-Report Auto-Quarantine Trigger
+		if (post.reportCount >= 3) {
+			post.status = 'quarantined';
+			post.isFlagged = true;
+			quarantined = true;
+		}
+
+		await post.save(); // Triggers post-save hook to remove from ActivityFeed if quarantined
+
+		if (quarantined) {
+			const io = req.io || req.app?.get('io');
+			if (io) {
+				io.emit("postQuarantined", { postId: post._id, reportCount: post.reportCount });
+				io.emit("postDeleted", post._id.toString());
+			}
+		}
+
+		return res.status(200).json({
+			success: true,
+			message: quarantined 
+				? "Post has received 3 community reports and has been quarantined for moderator review."
+				: "Post reported successfully.",
+			reportCount: post.reportCount,
+			status: post.status
+		});
+	} catch (err) {
+		console.error("Error reporting post:", err);
+		return res.status(500).json({ message: "Internal server error reporting post." });
+	}
+});
+
+// ==========================================
+// EDIT & DELETE POSTS (WITH ADMIN GOD MODE)
+// ==========================================
+router.put("/:postId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const { title, content, category, visibility, matchDetails, playerMatchmaking, challengeMatch, qaDetails, gearDetails, videoUrl, audioUrl, linkPreviews } = req.body;
+		if (!title || typeof title !== "string" || !title.trim()) {
+			return res.status(400).json({ message: "Post title is required." });
+		}
+		if (title.trim().length > 200) {
+			return res.status(400).json({ message: "Post title cannot exceed 200 characters." });
+		}
+
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Post content is required." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		if (post.authorId.toString() !== currentUserId && req.user.role !== "admin")
+			return res.status(403).json({ message: "Unauthorized" });
+
+		if (category) {
+			if (!ALLOWED_CATEGORIES.includes(category)) {
+				return res.status(400).json({ message: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}` });
+			}
+			post.category = category;
+		}
+
+		const wasPublic = isPublicPost(post);
+		const targetVis = visibility || req.body.privacy;
+		if (targetVis) {
+			if (!["PUBLIC", "FRIENDS_ONLY", "ONLY_ME"].includes(targetVis)) {
+				return res.status(400).json({ message: "Invalid visibility. Allowed: PUBLIC, FRIENDS_ONLY, ONLY_ME" });
+			}
+			post.visibility = targetVis;
+		}
+
+		if (matchDetails && typeof matchDetails === "object") {
+			post.matchDetails = {
+				partner: matchDetails.partner !== undefined ? xss(String(matchDetails.partner || "").trim()).slice(0, 100) : (post.matchDetails?.partner || ""),
+				opponents: matchDetails.opponents !== undefined
+					? parseOpponents(matchDetails.opponents)
+					: (post.matchDetails?.opponents || []),
+				score: matchDetails.score !== undefined ? xss(String(matchDetails.score || "").trim()).slice(0, 100) : (post.matchDetails?.score || ""),
+				court: matchDetails.court !== undefined ? xss(String(matchDetails.court || "").trim()).slice(0, 100) : (post.matchDetails?.court || ""),
+				winner: matchDetails.winner !== undefined ? xss(String(matchDetails.winner || "").trim()).slice(0, 100) : (post.matchDetails?.winner || ""),
+			};
+		}
+
+		let rallyCapacityChanged = false;
+		if (playerMatchmaking && typeof playerMatchmaking === "object") {
+			const parsedMatchmaking = parsePlayerMatchmaking(playerMatchmaking);
+			const previousCapacity = getRallyCapacity(post);
+			if (post.playerMatchmaking) {
+				// Assign leaf paths only so the save never rewrites the server-owned rsvpList / isFilled
+				for (const field of EDITABLE_MATCHMAKING_FIELDS) {
+					post.playerMatchmaking[field] = parsedMatchmaking[field];
+				}
+			} else {
+				post.playerMatchmaking = parsedMatchmaking;
+			}
+			rallyCapacityChanged = getRallyCapacity(post) !== previousCapacity;
+		}
+		if (challengeMatch && typeof challengeMatch === "object") {
+			applyChallengeMatchEdit(post, challengeMatch, { userId: currentUserId, userName: req.user.name, avatarUrl: req.user.profilePic });
+		}
+		if (qaDetails && typeof qaDetails === "object") {
+			const parsedQa = parseQaDetails(qaDetails);
+			if (post.qaDetails && parsedQa) {
+				post.qaDetails.subtopic = parsedQa.subtopic;
+			} else {
+				post.qaDetails = parseNewQaDetails(qaDetails);
+			}
+		}
+		if (gearDetails && typeof gearDetails === "object") {
+			post.gearDetails = parseGearDetails(gearDetails);
+		}
+
+		// Media: an explicit empty value clears it; a non-Cloudinary URL is ignored.
+		if (videoUrl === "" || videoUrl === null) {
+			post.videoUrl = "";
+		} else if (sanitizeCloudinaryMediaUrl(videoUrl)) {
+			post.videoUrl = sanitizeCloudinaryMediaUrl(videoUrl);
+		}
+		if (audioUrl === "" || audioUrl === null) {
+			post.audioUrl = "";
+		} else if (sanitizeCloudinaryMediaUrl(audioUrl)) {
+			post.audioUrl = sanitizeCloudinaryMediaUrl(audioUrl);
+		}
+		if (Array.isArray(linkPreviews)) {
+			post.linkPreviews = sanitizeLinkPreviews(linkPreviews);
+		}
+
+		const cleanTitle = xss(title.trim());
+		const cleanContent = xss(content.trim());
+
+		const aiAnalysis = await analyzeContent(cleanTitle + " " + cleanContent);
+		if (aiAnalysis.isFlagged || await checkSpam(cleanTitle) || await checkSpam(cleanContent)) {
+			post.isFlagged = true;
+			await post.save();
+			if (req.io) req.io.emit("postDeleted", post._id);
+			return res
+				.status(200)
+				.json({
+					message: "Post submitted for review.",
+					quarantined: true,
+					reviewMessage: QUARANTINE_REVIEW_MESSAGE
+				});
+		}
+
+		post.title = cleanTitle;
+		post.content = cleanContent;
+		post.isEdited = true;
+		post.editedAt = new Date();
+		post.lastActivityAt = new Date();
+		await post.save();
+
+		// Capacity changed: promote waitlisted players FIFO into any new slots and refresh isFilled
+		let responsePost = post.toObject ? post.toObject() : post;
+		if (rallyCapacityChanged) {
+			const newCapacity = getRallyCapacity(post);
+			const promoted = await promoteWaitlistedRsvps(post._id, newCapacity);
+			const refreshed = await syncRallyFilledFlag(post._id, newCapacity);
+			if (refreshed) responsePost = refreshed.toObject ? refreshed.toObject() : refreshed;
+			await syncFeedEntryFromPost(refreshed || post);
+			notifyPromotedRsvps(req, post, promoted);
+		}
+
+			try {
+			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
+				const p = ActivityFeed.updateOne(
+					{ referenceId: post._id },
+					{ $set: { title: post.title, content: post.content, category: post.category, visibility: post.visibility, isEdited: true, editedAt: post.editedAt, reactions: post.reactions, likes: post.likedBy?.length || 0, videoUrl: post.videoUrl || "", audioUrl: post.audioUrl || "", linkPreviews: post.linkPreviews || [] } }
+				);
+				if (p && typeof p.catch === 'function') p.catch(() => {});
+			}
+		} catch (_) {}
+		feedCache.invalidateFeed();
+
+		const hydratedPost = await hydrateWithPictures(responsePost);
+		if (req.io) {
+			if (wasPublic && !isPublicPost(hydratedPost)) await emitPostHiddenFromOthers(req.io, hydratedPost);
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+		}
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error updating post" });
+	}
+});
+
+router.delete("/:postId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const post = await Post.findById(req.params.postId);
+		const isAdmin = req.user.role === "admin";
+
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		// Only Author OR Admin can delete
+		if (post.authorId.toString() !== currentUserId && !isAdmin)
+			return res.status(403).json({ message: "Unauthorized" });
+
+		await Post.findByIdAndDelete(req.params.postId);
+		if (req.io) req.io.emit("postDeleted", req.params.postId);
+		res.json({ success: true });
+	} catch (error) {
+		res.status(500).json({ message: "Error deleting post" });
+	}
+});
+
+// ==========================================
+// ==========================================
+// GET SINGLE POST BY ID (URL DEEP-LINKING)
+// ==========================================
+
+// ==========================================
+// PHASE 9: MODERATION QUEUE & RESOLUTION
+// ==========================================
+router.get("/reports", authMiddleware, adminMiddleware, async (req, res) => {
+	try {
+		const reportedPosts = await Post.find({
+			$or: [
+				{ "reports.0": { $exists: true } },
+				{ isFlagged: true },
+				{ status: "quarantined" }
+			]
+		})
+			.populate("reports.reportedBy", "name profilePic email")
+			.sort({ "reports.createdAt": -1, createdAt: -1 })
+			.lean();
+
+		res.json(await hydrateWithPictures(reportedPosts));
+	} catch (error) {
+		res.status(500).json({ message: "Error fetching reported posts" });
+	}
+});
+
+router.put("/reports/:postId/resolve", authMiddleware, adminMiddleware, async (req, res) => {
+	try {
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		const { action } = req.body;
+
+		if (action === "approve") {
+			post.reports = [];
+			post.reportCount = 0;
+			post.isFlagged = false;
+			post.status = "active";
+			await post.save();
+			feedCache.invalidateFeed();
+			const hydrated = await hydrateWithPictures(post.toObject());
+			if (req.io) await emitForPost(req.io, hydrated, "postCreated", hydrated);
+			return res.json({ message: "Post approved and reinstated.", post: hydrated });
+		}
+
+		if (action === "quarantine") {
+			post.status = "quarantined";
+			post.isFlagged = true;
+			await post.save();
+			await ActivityFeed.deleteOne({ type: "post", referenceId: post._id });
+			feedCache.invalidateFeed();
+			if (req.io) req.io.emit("postDeleted", post._id.toString());
+			return res.json({ message: "Post moved to quarantine.", post });
+		}
+
+		if (action === "delete") {
+			post.status = "deleted";
+			post.isFlagged = true;
+			await post.save();
+			await ActivityFeed.deleteOne({ type: "post", referenceId: post._id });
+			feedCache.invalidateFeed();
+			if (req.io) req.io.emit("postDeleted", post._id.toString());
+			return res.json({ message: "Post deleted permanently from community.", post });
+		}
+
+		return res.status(400).json({ message: "Invalid resolution action. Use approve, quarantine, or delete." });
+	} catch (error) {
+		res.status(500).json({ message: "Error resolving report" });
+	}
+});
+
+// ==========================================
+// SAVED POSTS (M1 - J8)
+// ==========================================
+router.get("/saved", authMiddleware, async (req, res) => {
+	try {
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const user = await User.findById(currentUserId).select("savedPosts bookmarkedPosts").lean();
+		const savedIds = [
+			...(user?.savedPosts || []),
+			...(user?.bookmarkedPosts || [])
+		].map(id => id ? id.toString() : "").filter(Boolean);
+		const uniqueSavedIds = Array.from(new Set(savedIds)).filter(id => mongoose.isValidObjectId(id));
+
+		const posts = await Post.find({
+			_id: { $in: uniqueSavedIds },
+			status: { $nin: ['quarantined', 'deleted'] },
+			isFlagged: { $ne: true }
+		}).sort({ createdAt: -1, timestamp: -1 }).lean();
+
+		const hydrated = await hydrateWithPictures(posts);
+		res.json(hydrated);
+	} catch (error) {
+		console.error("Error fetching saved posts:", error);
+		res.status(500).json({ message: "Error fetching saved posts" });
+	}
+});
+
+// ==========================================
+// MEMBER SEARCH / AUTOCOMPLETE (M1 - J10)
+// ==========================================
+router.get("/members", async (req, res) => {
+	try {
+		const query = (req.query.q || req.query.query || req.query.search || "").trim();
+		const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+		const filter = {
+			hideFromSearch: { $ne: true },
+			$nor: [
+				{ name: /tu\s+pham/i },
+				{ name: /nhat\s+quang/i },
+			],
+		};
+		if (query) {
+			const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			filter.name = { $regex: escaped, $options: "i" };
+		}
+		const users = await User.find(filter)
+			.select("_id name profilePic role badges skillLevel")
+			.limit(limit)
+			.lean();
+
+		const formatted = users.map((u) => ({
+			_id: u._id.toString(),
+			id: u._id.toString(),
+			name: u.name,
+			profilePic: u.profilePic || "",
+			role: u.role || "user",
+			skillLevel: u.skillLevel || "Intermediate",
+			badges: Array.isArray(u.badges) ? u.badges : [],
+		}));
+
+		res.json({ users: formatted });
+	} catch (err) {
+		console.error("Error fetching members:", err);
+		res.status(500).json({ message: "Failed to fetch members" });
+	}
+});
+
+// ==========================================
+// MEMBER CARD / HOVER CARD HYDRATION
+// ==========================================
+router.get("/members/:userId/card", authMiddleware, async (req, res) => {
+	try {
+		const { userId } = req.params;
+		if (!userId || !mongoose.isValidObjectId(userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const targetUser = await User.findById(userId).lean();
+		if (!targetUser) {
+			return res.status(404).json({ message: "Member not found." });
+		}
+
+		// Personal name filter invariant
+		if (/tu\s+pham|nhat\s+quang/i.test(targetUser.name || "")) {
+			return res.status(404).json({ message: "Member not found." });
+		}
+
+		const callerId = (req.user.id || req.user.userId || "").toString();
+		const isSelf = callerId === userId.toString();
+
+		// Respect "hide from search" privacy for everyone but the member themselves
+		if (targetUser.hideFromSearch === true && !isSelf) {
+			return res.status(404).json({ message: "Member not found." });
+		}
+
+		// Presence hydration
+		const onlineUsers = req.app?.get("onlineUsers");
+		const isOnline = onlineUsers ? onlineUsers.has(userId.toString()) : false;
+
+		// Friendship status relative to the authenticated caller
+		let friendshipStatus = "none";
+		if (isSelf) {
+			friendshipStatus = "self";
+		} else {
+			const callerUser = await User.findById(callerId)
+				.select("friends friendRequests sentFriendRequests")
+				.lean();
+			if (callerUser) {
+				const friendsList = (callerUser.friends || []).map((f) => (f?._id || f).toString());
+				const sentList = (callerUser.sentFriendRequests || []).map((f) => (f?._id || f).toString());
+				const receivedList = (callerUser.friendRequests || []).map((f) => (f?._id || f).toString());
+
+				if (friendsList.includes(userId.toString())) {
+					friendshipStatus = "friends";
+				} else if (sentList.includes(userId.toString())) {
+					friendshipStatus = "pending_sent";
+				} else if (receivedList.includes(userId.toString())) {
+					friendshipStatus = "pending_received";
+				}
+			}
+		}
+
+		// Court check-ins expire; never surface a stale one
+		const checkIn = targetUser.currentCourtCheckIn;
+		const hasActiveCheckIn = Boolean(
+			checkIn &&
+			checkIn.courtNumber &&
+			checkIn.expiresAt &&
+			new Date(checkIn.expiresAt).getTime() > Date.now()
+		);
+
+		const stats = targetUser.stats || {
+			totalMatches: 0,
+			winStreak: 0,
+			highestWinStreak: 0,
+		};
+		const totalMatches = Number(stats.totalMatches || 0);
+		const winStreak = Number(stats.winStreak || 0);
+		const winRate = totalMatches > 0 ? Math.round(((totalMatches + winStreak) / (totalMatches * 2)) * 100) : 0;
+
+		res.json({
+			user: {
+				_id: targetUser._id.toString(),
+				id: targetUser._id.toString(),
+				name: targetUser.name,
+				profilePic: targetUser.profilePic || "",
+				role: targetUser.role || "user",
+				skillLevel: targetUser.skillLevel || "Intermediate",
+				bio: targetUser.bio || "I'm ready to play!",
+				preferredPlay: targetUser.preferredPlay || "Any",
+				racket: targetUser.racket || "N/A",
+				homeUniversity: targetUser.homeUniversity || "George Mason University",
+				singlesElo: targetUser.singlesElo || 1200,
+				doublesElo: targetUser.doublesElo || 1200,
+				stats: {
+					totalMatches,
+					winStreak,
+					highestWinStreak: Number(stats.highestWinStreak || 0),
+					winRate,
+				},
+				isOnline,
+				friendshipStatus,
+				currentCourtCheckIn: hasActiveCheckIn ? checkIn : null,
+				checkInLocation: targetUser.checkInLocation || "None",
+				badges: Array.isArray(targetUser.badges) ? targetUser.badges : [],
+			},
+		});
+	} catch (err) {
+		console.error("Error fetching member card:", err);
+		res.status(500).json({ message: "Failed to fetch member card" });
+	}
+});
+
+router.get("/:postId", async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		if (post.status === "quarantined" || post.status === "deleted") {
+			return res.status(404).json({ message: "Post not available" });
+		}
+
+		// Privacy Check
+		const currentUser = getOptionalUser(req);
+		if (!(await canViewPost(post, currentUser))) {
+			return res.status(403).json({
+				message: post.visibility === "ONLY_ME"
+					? "This post is private."
+					: "This post is only visible to friends of the author."
+			});
+		}
+
+		const hydratedPost = await hydrateWithPictures(post);
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error fetching single post:", error);
+		res.status(500).json({ message: "Server error fetching post" });
+	}
+});
+
+// ==========================================
+// COMMENTS & REPLIES (CREATE, EDIT, DELETE)
+// ==========================================
+
+router.get("/:postId/comments", async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		if (post.status === "quarantined" || post.status === "deleted") {
+			return res.status(404).json({ message: "Post not available" });
+		}
+
+		const currentUser = getOptionalUser(req);
+		const currentUserId = currentUser ? (currentUser.id || currentUser.userId || "").toString() : null;
+		const postAuthorId = post.authorId ? post.authorId.toString() : null;
+		const isAuthor = Boolean(currentUserId && postAuthorId && currentUserId === postAuthorId);
+		const isAdmin = Boolean(currentUser && currentUser.role === "admin");
+
+		if (post.visibility === "ONLY_ME" && !isAuthor && !isAdmin) {
+			return res.status(403).json({ message: "This post is private." });
+		} else if (post.visibility === "FRIENDS_ONLY" && !isAuthor && !isAdmin) {
+			if (!currentUserId) {
+				return res.status(403).json({ message: "This post is only visible to friends of the author." });
+			}
+			const authorUser = await User.findById(post.authorId).select("friends").lean();
+			const isFriend = authorUser && Array.isArray(authorUser.friends) &&
+				authorUser.friends.some(f => (f._id || f).toString() === currentUserId);
+			if (!isFriend) {
+				return res.status(403).json({ message: "This post is only visible to friends of the author." });
+			}
+		}
+
+		const hydratedPost = await hydrateWithPictures(post);
+		res.json({ comments: hydratedPost.comments || [] });
+	} catch (error) {
+		console.error("Error fetching comments:", error);
+		res.status(500).json({ message: "Server error fetching comments" });
+	}
+});
+
+router.post("/:postId/comments", authMiddleware, postLimiter, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const { content } = req.body;
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Comment content cannot be empty." });
+		}
+
+		const authorId = (req.user.id || req.user.userId).toString();
+		const authorName = req.user.name || req.body.authorName || "Member";
+		const cleanContent = xss(content.trim());
+		const cleanAuthorName = xss(authorName);
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		const isSpam = await checkSpam(cleanContent);
+		const aiAnalysis = await analyzeContent(cleanContent);
+
+		if (isSpam || aiAnalysis.isFlagged)
+			return res
+				.status(400)
+				.json({ message: "Comment rejected: Spam or toxicity detected." });
+
+		post.comments.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
+		post.lastActivityAt = new Date();
+		await post.save();
+
+		const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
+		const hydratedPost = await hydrateWithPictures(updatedPost);
+
+		if (req.io) {
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			if (post.authorId?.toString() !== authorId.toString()) {
+				const newComment =
+					updatedPost.comments[updatedPost.comments.length - 1];
+				await sendNotification(
+					req.io,
+					post.authorId.toString(),
+					`${authorName} commented: "${truncateText(content)}"`,
+					`/community?postId=${post._id}&highlight=${newComment._id}`,
+				);
+			}
+
+			// Phase 8: Mention Notifications
+			const mentionMatches = cleanContent.match(/@([a-zA-Z0-9_\s]{2,30})/g);
+			if (mentionMatches && mentionMatches.length > 0) {
+				const rawNames = mentionMatches.map((m) => m.substring(1).trim());
+				const mentionedUsers = await User.find({
+					name: { $in: rawNames }
+				}).select('_id name').lean();
+
+				for (const u of mentionedUsers) {
+					if (u._id.toString() !== authorId && u._id.toString() !== post.authorId?.toString()) {
+						await sendNotification(
+							req.io,
+							u._id.toString(),
+							`${authorName} mentioned you in a badminton comment: "${truncateText(content)}"`,
+							`/community?postId=${post._id}`
+						);
+					}
+				}
+			}
+		}
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error adding comment" });
+	}
+});
+
+router.put("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
+		}
+
+		const { content } = req.body;
+		if (!content || typeof content !== "string" || !content.trim()) {
+			return res.status(400).json({ message: "Comment content cannot be empty." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const cleanContent = xss(content.trim());
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+		if (comment.authorId.toString() !== currentUserId && req.user.role !== "admin")
+			return res.status(403).json({ message: "Unauthorized" });
+		const aiAnalysis = await analyzeContent(cleanContent);
+		if (aiAnalysis.isFlagged || await checkSpam(cleanContent))
+			return res.status(400).json({ message: "Comment rejected: Spam or toxicity detected." });
+		if (false)
+			return res.json(await hydrateWithPictures(post.toObject()));
+
+		comment.content = cleanContent;
+		comment.isEdited = true;
+		comment.editedAt = new Date();
+		await post.save();
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error updating comment" });
+	}
+});
+
+router.delete("/:postId/comments/:commentId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found" });
+		const isAdmin = req.user.role === "admin";
+
+		// Author OR Admin
+		if (comment.authorId.toString() !== currentUserId && !isAdmin)
+			return res.status(403).json({ message: "Unauthorized" });
+
+		comment.deleteOne();
+		await post.save();
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error deleting comment" });
+	}
+});
+
+router.post(
+	"/:postId/comments/:commentId/replies",
+	authMiddleware,
+	postLimiter,
+	async (req, res) => {
+		try {
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+				return res.status(400).json({ message: "Invalid post or comment ID format." });
+			}
+
+			const { content } = req.body;
+			if (!content || typeof content !== "string" || !content.trim()) {
+				return res.status(400).json({ message: "Reply content cannot be empty." });
+			}
+
+			const authorId = (req.user.id || req.user.userId).toString();
+			const authorName = req.user.name || req.body.authorName || "Member";
+			const cleanContent = xss(content.trim());
+			const cleanAuthorName = xss(authorName);
+			const post = await findPostByIdOrActivityFeed(req.params.postId);
+			if (!post) return res.status(404).json({ message: "Post not found" });
+			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+			const isSpam = await checkSpam(cleanContent);
+			const aiAnalysis = await analyzeContent(cleanContent);
+
+			if (isSpam || aiAnalysis.isFlagged)
+				return res
+					.status(400)
+					.json({ message: "Reply rejected: Spam or toxicity detected." });
+
+			comment.replies.push({ authorId, authorName: cleanAuthorName, content: cleanContent });
+			post.lastActivityAt = new Date();
+			await post.save();
+
+			const updatedPost = await findPostByIdOrActivityFeed(post._id, { lean: true });
+			const hydratedPost = await hydrateWithPictures(updatedPost);
+
+			if (req.io) {
+				await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+				const commentToReply = Array.isArray(updatedPost?.comments)
+					? updatedPost.comments.find(
+							(c) => c && c._id && c._id.toString() === req.params.commentId,
+						)
+					: null;
+				if (
+					commentToReply &&
+					commentToReply.authorId?.toString() !== authorId.toString() &&
+					Array.isArray(commentToReply.replies) &&
+					commentToReply.replies.length > 0
+				) {
+					const newReply =
+						commentToReply.replies[
+							commentToReply.replies.length - 1
+						];
+					await sendNotification(
+						req.io,
+						commentToReply.authorId.toString(),
+						`${authorName} replied: "${truncateText(content)}"`,
+						`/community?postId=${post._id}&highlight=${newReply?._id || ""}`,
+					);
+				}
+			}
+			res.json(hydratedPost);
+		} catch (error) {
+			res.status(500).json({ message: "Error adding reply" });
+		}
+	},
+);
+
+router.put(
+	"/:postId/comments/:commentId/replies/:replyId",
+	authMiddleware,
+	async (req, res) => {
+		try {
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
+				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
+			}
+
+			const { content } = req.body;
+			if (!content || typeof content !== "string" || !content.trim()) {
+				return res.status(400).json({ message: "Reply content cannot be empty." });
+			}
+
+			const currentUserId = (req.user.id || req.user.userId).toString();
+			const cleanContent = xss(content.trim());
+			const post = await findPostByIdOrActivityFeed(req.params.postId);
+			if (!post) return res.status(404).json({ message: "Post not found" });
+			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
+			const reply = comment.replies.id(req.params.replyId);
+			if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+			if (reply.authorId.toString() !== currentUserId && req.user.role !== "admin")
+				return res.status(403).json({ message: "Unauthorized" });
+			const aiAnalysis = await analyzeContent(cleanContent);
+		if (aiAnalysis.isFlagged || await checkSpam(cleanContent))
+			return res.status(400).json({ message: "Comment rejected: Spam or toxicity detected." });
+		if (false)
+				return res.json(await hydrateWithPictures(post.toObject()));
+
+			reply.content = cleanContent;
+			reply.isEdited = true;
+			reply.editedAt = new Date();
+			await post.save();
+			const hydratedPost = await hydrateWithPictures(post.toObject());
+			if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			res.json(hydratedPost);
+		} catch (error) {
+			res.status(500).json({ message: "Error updating reply" });
+		}
+	},
+);
+
+router.delete(
+	"/:postId/comments/:commentId/replies/:replyId",
+	authMiddleware,
+	async (req, res) => {
+		try {
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
+				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
+			}
+
+			const currentUserId = (req.user.id || req.user.userId).toString();
+			const post = await findPostByIdOrActivityFeed(req.params.postId);
+			if (!post) return res.status(404).json({ message: "Post not found" });
+			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
+			const reply = comment.replies.id(req.params.replyId);
+			if (!reply) return res.status(404).json({ message: "Reply not found" });
+			const isAdmin = req.user.role === "admin";
+
+			// Author OR Admin
+			if (reply.authorId.toString() !== currentUserId && !isAdmin)
+				return res.status(403).json({ message: "Unauthorized" });
+
+			reply.deleteOne();
+			await post.save();
+			const hydratedPost = await hydrateWithPictures(post.toObject());
+			if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			res.json(hydratedPost);
+		} catch (error) {
+			res.status(500).json({ message: "Error deleting reply" });
+		}
+	},
+);
+
+// ==========================================
+// ==========================================
+// REPORT COMMENTS & REPLIES
+// ==========================================
+router.post("/:postId/comments/:commentId/report", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
+		}
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found." });
+
+		if (comment.authorId && comment.authorId.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot report your own comment." });
+		}
+
+		if (!Array.isArray(comment.reports)) comment.reports = [];
+		const alreadyReported = comment.reports.some(
+			(r) => r.reportedBy && r.reportedBy.toString() === currentUserId
+		);
+		if (alreadyReported) {
+			return res.status(400).json({ message: "You have already reported this comment." });
+		}
+
+		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Abuse";
+		const details = req.body.details ? xss(String(req.body.details).trim()).slice(0, 500) : "";
+		comment.reports.push({
+			reportedBy: currentUserId,
+			reason,
+			details,
+			timestamp: new Date(),
+		});
+		comment.reportCount = comment.reports.length;
+
+		let flagged = false;
+		if (comment.reportCount >= 3) {
+			comment.isFlagged = true;
+			flagged = true;
+		}
+
+		await post.save();
+
+		const updatedPost = await Post.findById(req.params.postId).lean();
+		const hydratedPost = await hydrateWithPictures(updatedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+
+		return res.status(200).json({
+			success: true,
+			message: flagged
+				? "Comment has received 3 reports and has been flagged for review."
+				: "Comment reported successfully.",
+			reportCount: comment.reportCount,
+			isFlagged: comment.isFlagged,
+		});
+	} catch (err) {
+		console.error("Error reporting comment:", err);
+		return res.status(500).json({ message: "Internal server error reporting comment." });
+	}
+});
+
+router.post("/:postId/comments/:commentId/replies/:replyId/report", authMiddleware, async (req, res) => {
+	try {
+		if (
+			!mongoose.isValidObjectId(req.params.postId) ||
+			!mongoose.isValidObjectId(req.params.commentId) ||
+			!mongoose.isValidObjectId(req.params.replyId)
+		) {
+			return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
+		}
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found." });
+
+		const reply = comment.replies.id(req.params.replyId);
+		if (!reply) return res.status(404).json({ message: "Reply not found." });
+
+		if (reply.authorId && reply.authorId.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot report your own reply." });
+		}
+
+		if (!Array.isArray(reply.reports)) reply.reports = [];
+		const alreadyReported = reply.reports.some(
+			(r) => r.reportedBy && r.reportedBy.toString() === currentUserId
+		);
+		if (alreadyReported) {
+			return res.status(400).json({ message: "You have already reported this reply." });
+		}
+
+		const reason = req.body.reason ? xss(String(req.body.reason).trim()).slice(0, 200) : "Spam/Abuse";
+		const details = req.body.details ? xss(String(req.body.details).trim()).slice(0, 500) : "";
+		reply.reports.push({
+			reportedBy: currentUserId,
+			reason,
+			details,
+			timestamp: new Date(),
+		});
+		reply.reportCount = reply.reports.length;
+
+		let flagged = false;
+		if (reply.reportCount >= 3) {
+			reply.isFlagged = true;
+			flagged = true;
+		}
+
+		await post.save();
+
+		const updatedPost = await Post.findById(req.params.postId).lean();
+		const hydratedPost = await hydrateWithPictures(updatedPost);
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+
+		return res.status(200).json({
+			success: true,
+			message: flagged
+				? "Reply has received 3 reports and has been flagged for review."
+				: "Reply reported successfully.",
+			reportCount: reply.reportCount,
+			isFlagged: reply.isFlagged,
+		});
+	} catch (err) {
+		console.error("Error reporting reply:", err);
+		return res.status(500).json({ message: "Internal server error reporting reply." });
+	}
+});
+
+// BOOKMARKS
+// ==========================================
+
+const handleBookmarkToggle = async (req, res) => {
+	try {
+		const targetPostId = req.params.postId || req.params.id;
+		if (!mongoose.isValidObjectId(targetPostId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
+		const user = await User.findById(userId);
+		if (!user) return res.status(404).json({ message: "User not found" });
+
+		if (!user.bookmarkedPosts) user.bookmarkedPosts = [];
+		if (!user.savedPosts) user.savedPosts = [];
+		const postIndex = user.bookmarkedPosts.indexOf(targetPostId);
+		let isBookmarked = false;
+
+		if (postIndex === -1) {
+			user.bookmarkedPosts.push(targetPostId);
+			if (!user.savedPosts.includes(targetPostId)) {
+				user.savedPosts.push(targetPostId);
+			}
+			isBookmarked = true;
+		} else {
+			user.bookmarkedPosts.splice(postIndex, 1);
+			const savedIdx = user.savedPosts.indexOf(targetPostId);
+			if (savedIdx !== -1) user.savedPosts.splice(savedIdx, 1);
+		}
+
+		await user.save();
+		// Saved-tab feed responses are cached per user; drop them so the change shows up immediately.
+		feedCache.invalidateFeed();
+		res.json({
+			bookmarkedPosts: user.bookmarkedPosts,
+			savedPosts: user.savedPosts,
+			isBookmarked,
+			isSaved: isBookmarked
+		});
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: "Server error toggling bookmark" });
+	}
+};
+
+router.put("/:postId/bookmark", authMiddleware, handleBookmarkToggle);
+router.post("/:postId/bookmark", authMiddleware, handleBookmarkToggle);
+router.put("/:postId/save", authMiddleware, handleBookmarkToggle);
+router.post("/:postId/save", authMiddleware, handleBookmarkToggle);
+
+router.get("/bookmarks/:userId", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId).toString();
+		if (req.user.role !== "admin" && currentUserId !== req.params.userId) {
+			return res.status(403).json({ message: "Unauthorized to access bookmarks." });
+		}
+
+		const user = await User.findById(req.params.userId).populate('bookmarkedPosts');
+		if (!user) return res.status(404).json({ message: "User not found" });
+
+		// Filter out nulls in case a post was deleted but still bookmarked
+		const validPosts = user.bookmarkedPosts.filter(p => p !== null);
+		const hydratedPosts = await hydrateWithPictures(validPosts.map(p => typeof p.toObject === 'function' ? p.toObject() : p));
+		res.json(hydratedPosts);
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ message: "Server error fetching bookmarks" });
+	}
+});
+
+// ==========================================
+// LIKES
+// ==========================================
+router.put("/:postId/like", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
+		const userName = req.user.name || req.body.userName || "Player";
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+
+		const hasLiked = post.likedBy.some(
+			(id) => id.toString() === userId.toString(),
+		);
+		if (hasLiked) {
+			post.likedBy = post.likedBy.filter(
+				(id) => id.toString() !== userId.toString(),
+			);
+		} else {
+			post.likedBy.push(userId);
+		}
+		await post.save();
+
+		try {
+			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
+				const p = ActivityFeed.updateOne(
+					{ referenceId: post._id },
+					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
+				);
+				if (p && typeof p.catch === 'function') p.catch(() => {});
+			}
+		} catch (_) {}
+		feedCache.invalidateFeed();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) {
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			if (!hasLiked && post.authorId?.toString() !== userId.toString()) {
+				await sendNotification(
+					req.io,
+					post.authorId.toString(),
+					`${userName} liked your post.`,
+					`/community?postId=${post._id}`,
+				);
+			}
+		}
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error toggling like:", error);
+		res.status(500).json({ message: "Error toggling like" });
+	}
+});
+
+router.put("/:postId/comments/:commentId/like", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
+		}
+
+		const userId = (req.user.id || req.user.userId).toString();
+		const userName = req.user.name || req.body.userName || "Player";
+		const post = await Post.findById(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found" });
+		const comment = post.comments.id(req.params.commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+		const hasLiked = comment.likedBy.some(
+			(id) => id.toString() === userId.toString(),
+		);
+		if (hasLiked) {
+			comment.likedBy = comment.likedBy.filter(
+				(id) => id.toString() !== userId.toString(),
+			);
+		} else {
+			comment.likedBy.push(userId);
+		}
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) {
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			if (
+				!hasLiked &&
+				comment.authorId?.toString() !== userId.toString()
+			) {
+				await sendNotification(
+					req.io,
+					comment.authorId.toString(),
+					`${userName} liked your comment.`,
+					`/community?postId=${post._id}&highlight=${comment._id}`,
+				);
+			}
+		}
+		res.json(hydratedPost);
+	} catch (error) {
+		res.status(500).json({ message: "Error toggling comment like" });
+	}
+});
+
+router.put(
+	"/:postId/comments/:commentId/replies/:replyId/like",
+	authMiddleware,
+	async (req, res) => {
+		try {
+			if (!mongoose.isValidObjectId(req.params.postId) || !mongoose.isValidObjectId(req.params.commentId) || !mongoose.isValidObjectId(req.params.replyId)) {
+				return res.status(400).json({ message: "Invalid post, comment, or reply ID format." });
+			}
+
+			const userId = (req.user.id || req.user.userId).toString();
+			const userName = req.user.name || req.body.userName || "Player";
+			const post = await Post.findById(req.params.postId);
+			if (!post) return res.status(404).json({ message: "Post not found" });
+			const comment = post.comments.id(req.params.commentId);
+			if (!comment) return res.status(404).json({ message: "Comment not found" });
+			const reply = comment.replies.id(req.params.replyId);
+			if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+			const hasLiked = reply.likedBy.some(
+				(id) => id.toString() === userId.toString(),
+			);
+			if (hasLiked) {
+				reply.likedBy = reply.likedBy.filter(
+					(id) => id.toString() !== userId.toString(),
+				);
+			} else {
+				reply.likedBy.push(userId);
+			}
+			await post.save();
+
+			const hydratedPost = await hydrateWithPictures(post.toObject());
+			if (req.io) {
+				await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+				if (
+					!hasLiked &&
+					reply.authorId?.toString() !== userId.toString()
+				) {
+					await sendNotification(
+						req.io,
+						reply.authorId.toString(),
+						`${userName} liked your reply.`,
+						`/community?postId=${post._id}&highlight=${reply._id}`,
+					);
+				}
+			}
+			res.json(hydratedPost);
+		} catch (error) {
+			res.status(500).json({ message: "Error toggling reply like" });
+		}
+	},
+);
+
+// ==========================================
+// PIN POST (ADMIN ONLY)
+// ==========================================
+router.put("/:postId/pin", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await findPostByIdOrActivityFeed(req.params.postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const isAdmin = req.user && req.user.role === "admin";
+
+		if (!isAdmin) {
+			return res.status(403).json({ message: "Only administrators can pin or unpin posts." });
+		}
+
+		post.isPinned = !post.isPinned;
+		await post.save();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+
+		res.json({
+			success: true,
+			isPinned: post.isPinned,
+			post: hydratedPost,
+			message: post.isPinned ? "Post pinned successfully." : "Post unpinned."
+		});
+	} catch (error) {
+		console.error("Error toggling pin status:", error);
+		res.status(500).json({ message: "Error toggling pin status." });
+	}
+});
+
+// ==========================================
+// BADMINTON & FACEBOOK REACTION DOCK (M1 - J1)
+// ==========================================
+const BADMINTON_REACTIONS_MAP = {
+	"💥": { reactionType: "smash", notificationText: "smashed your post." },
+	"🧊": { reactionType: "ice_drop", notificationText: "dropped on your post." },
+	"⚡": { reactionType: "clutch", notificationText: "marked your post as clutch." },
+	"👍": { reactionType: "like", notificationText: "liked your post." },
+	"❤️": { reactionType: "love", notificationText: "loved your post." },
+	"🏸": { reactionType: "smash", notificationText: "smashed your post." },
+	"😮": { reactionType: "wow", notificationText: "was amazed by your post." },
+	"😂": { reactionType: "haha", notificationText: "laughed at your post." },
+	"😢": { reactionType: "sad", notificationText: "felt sad about your post." },
+	"🔥": { reactionType: "smash", notificationText: "smashed your post." },
+	"💯": { reactionType: "clutch", notificationText: "marked your post as clutch." },
+	"👏": { reactionType: "like", notificationText: "applauded your post." },
+	"😡": { reactionType: "angry", notificationText: "reacted to your post." }
+};
+
+const REACTION_TYPE_TO_EMOJI = {
+	like: "👍",
+	love: "❤️",
+	smash: "🏸",
+	wow: "😮",
+	haha: "😂",
+	sad: "😢",
+	ice_drop: "🧊",
+	clutch: "⚡",
+	angry: "😡",
+};
+
+const ALLOWED_EMOJIS = [
+	"👍", "❤️", "🏸", "😮", "😂", "😢", "💥", "🧊", "⚡",
+	"🔥", "💯", "👏", "😡", "🎉"
+];
+
+const ALLOWED_REACTION_TYPES = new Set([
+	...Object.values(BADMINTON_REACTIONS_MAP).map((r) => r.reactionType),
+	"custom",
+]);
+
+const handleReactionRoute = async (req, res) => {
+	try {
+		const targetPostId = req.params.postId || req.params.id;
+		if (!mongoose.isValidObjectId(targetPostId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		let { emoji, reactionType } = req.body;
+		if (!emoji && reactionType && REACTION_TYPE_TO_EMOJI[reactionType]) {
+			emoji = REACTION_TYPE_TO_EMOJI[reactionType];
+		}
+
+		if (!emoji || !ALLOWED_EMOJIS.includes(emoji)) {
+			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
+		}
+
+		const resolvedReactionType = reactionType || BADMINTON_REACTIONS_MAP[emoji]?.reactionType || "custom";
+
+		const userId = (req.user.id || req.user.userId || req.user._id).toString();
+		const userName = req.user.name || "Player";
+		let post = await findPostByIdOrActivityFeed(targetPostId);
+
+		if (!post) {
+			const feedItem = await ActivityFeed.findById(targetPostId);
+			if (feedItem) {
+				if (!Array.isArray(feedItem.reactions)) feedItem.reactions = [];
+				const existingIndex = feedItem.reactions.findIndex(
+					(r) => r.userId && r.userId.toString() === userId.toString()
+				);
+				let feedAction = "added";
+				if (existingIndex !== -1) {
+					if (feedItem.reactions[existingIndex].emoji === emoji) {
+						feedItem.reactions.splice(existingIndex, 1);
+						feedAction = "removed";
+					} else {
+						feedItem.reactions[existingIndex].emoji = emoji;
+						feedItem.reactions[existingIndex].reactionType = resolvedReactionType;
+						feedItem.reactions[existingIndex].createdAt = new Date();
+						feedAction = "updated";
+					}
+				} else {
+					feedItem.reactions.push({
+						userId,
+						userName,
+						emoji,
+						reactionType: resolvedReactionType,
+						createdAt: new Date(),
+					});
+				}
+				await feedItem.save();
+				feedCache.invalidateFeed();
+				if (req.io) {
+					req.io.emit("reactionUpdated", {
+						postId: feedItem._id.toString(),
+						reactions: feedItem.reactions,
+						action: feedAction,
+						userId,
+					});
+				}
+				return res.json(feedItem);
+			}
+			return res.status(404).json({ message: "Post not found." });
+		}
+
+		if (!Array.isArray(post.reactions)) {
+			post.reactions = [];
+		}
+
+		const existingReactionIndex = post.reactions.findIndex(
+			(r) => r.userId && r.userId.toString() === userId.toString()
+		);
+
+		let action = "added";
+		if (existingReactionIndex !== -1) {
+			if (post.reactions[existingReactionIndex].emoji === emoji) {
+				// Same emoji clicked -> remove reaction (toggle off)
+				post.reactions.splice(existingReactionIndex, 1);
+				action = "removed";
+			} else {
+				// Different emoji clicked -> replace reaction
+				post.reactions[existingReactionIndex].emoji = emoji;
+				post.reactions[existingReactionIndex].reactionType = resolvedReactionType;
+				post.reactions[existingReactionIndex].createdAt = new Date();
+				action = "updated";
+			}
+		} else {
+			// New reaction
+			post.reactions.push({
+				userId,
+				userName,
+				emoji,
+				reactionType: resolvedReactionType,
+				createdAt: new Date(),
+			});
+			action = "added";
+		}
+
+		await post.save();
+
+		try {
+			if (ActivityFeed && typeof ActivityFeed.updateOne === 'function') {
+				const p = ActivityFeed.updateOne(
+					{ referenceId: post._id },
+					{ $set: { reactions: post.reactions, likes: post.likedBy?.length || 0 } }
+				);
+				if (p && typeof p.catch === 'function') p.catch(() => {});
+			}
+		} catch (_) {}
+		feedCache.invalidateFeed();
+
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) {
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			await emitForPost(req.io, hydratedPost, "reactionUpdated", {
+				postId: post._id.toString(),
+				reactions: hydratedPost.reactions || [],
+				action,
+				userId,
+			});
+			if (action === "added" && post.authorId?.toString() !== userId.toString()) {
+				const notificationSuffix = BADMINTON_REACTIONS_MAP[emoji]?.notificationText || `reacted with ${emoji} to your post.`;
+				await sendNotification(
+					req.io,
+					post.authorId.toString(),
+					`${userName} ${notificationSuffix}`,
+					`/community?postId=${post._id}`
+				);
+			}
+		}
+
+		const reactionCounts = {};
+		ALLOWED_EMOJIS.forEach((e) => { reactionCounts[e] = 0; });
+		(hydratedPost.reactions || post.reactions || []).forEach((r) => {
+			if (r && r.emoji) {
+				reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1;
+			}
+		});
+
+		const userReaction = action !== "removed" ? emoji : null;
+
+		const reactionObj = action !== "removed"
+			? (post.reactions[existingReactionIndex !== -1 ? existingReactionIndex : post.reactions.length - 1] || null)
+			: null;
+
+		const responseData = {
+			success: true,
+			message: "Reaction updated successfully",
+			action,
+			userReaction,
+			reactionCounts,
+			reaction: reactionObj,
+			reactions: hydratedPost.reactions || post.reactions || [],
+			post: hydratedPost,
+			...hydratedPost,
+		};
+
+		res.json(responseData);
+	} catch (error) {
+		console.error("Error handling reaction:", error);
+		res.status(500).json({ message: "Error updating reaction." });
+	}
+};
+
+router.put("/:postId/react", authMiddleware, handleReactionRoute);
+router.put("/:postId/reaction", authMiddleware, handleReactionRoute);
+router.post("/:postId/react", authMiddleware, handleReactionRoute);
+router.post("/:postId/reaction", authMiddleware, handleReactionRoute);
+router.put("/:id/react", authMiddleware, handleReactionRoute);
+router.post("/:id/react", authMiddleware, handleReactionRoute);
+
+
+// ==========================================
+// SPECIALIZED COMMUNITY WORKFLOWS (PHASE 2)
+// ==========================================
+
+// 1. Toggle RSVP for Player Matchmaking / Meetup Rally
+// All rsvpList mutations are single atomic conditional updates so concurrent
+// RSVPs can never overbook, duplicate an entry, or skip a waitlist promotion.
+router.post("/:postId/rsvp", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
+		if (!post) return res.status(404).json({ message: "Post not found." });
+		if (!(await canViewPost(post, req.user))) {
+			return res.status(404).json({ message: "Post not found." });
+		}
+		if (post.isFlagged || post.status === "quarantined" || post.status === "deleted") {
+			return res.status(403).json({ message: "Cannot RSVP to this post." });
+		}
+
+		const postObjectId = post._id;
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const currentUserName = req.user.name || "Player";
+		const capacity = getRallyCapacity(post);
+		const rsvpList = Array.isArray(post.playerMatchmaking?.rsvpList) ? post.playerMatchmaking.rsvpList : [];
+		const isMember = rsvpList.some(r => String(r.userId) === currentUserId);
+
+		let userAction = "joined";
+		let promoted = [];
+
+		if (isMember) {
+			// Toggle off (cancel RSVP): remove the user everywhere in one atomic op
+			userAction = "left";
+			const before = await Post.findOneAndUpdate(
+				{ _id: postObjectId, "playerMatchmaking.rsvpList.userId": currentUserId },
+				{
+					$pull: {
+						"playerMatchmaking.rsvpList": { userId: currentUserId },
+						"rsvp.attendees": currentUserId,
+						"rsvp.waitlist": currentUserId
+					}
+				},
+				{ returnDocument: "before", lean: true }
+			);
+			const removed = before?.playerMatchmaking?.rsvpList?.find(r => String(r.userId) === currentUserId);
+			if (removed && removed.status === "confirmed") {
+				// A confirmed slot opened up: promote the oldest waitlisted player(s) (FIFO)
+				promoted = await promoteWaitlistedRsvps(postObjectId, capacity);
+			}
+		} else {
+			// Prevent host / author from RSVPing to their own rally
+			if (String(post.authorId) === currentUserId) {
+				return res.status(400).json({ message: "You are the host of this rally and cannot RSVP to your own post." });
+			}
+
+			const userDoc = await User.findById(currentUserId).select("profilePic").lean();
+			const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
+			const buildEntry = (status) => ({
+				userId: currentUserId,
+				userName: currentUserName,
+				avatarUrl,
+				status,
+				joinedAt: new Date()
+			});
+
+			// Join as confirmed only if not already present AND a confirmed slot is free
+			const joinedConfirmed = await Post.findOneAndUpdate(
+				{
+					_id: postObjectId,
+					"playerMatchmaking.rsvpList.userId": { $ne: currentUserId },
+					$expr: { $lt: [confirmedRsvpCountExpr, capacity] }
+				},
+				{
+					$push: { "playerMatchmaking.rsvpList": buildEntry("confirmed") },
+					$addToSet: { "rsvp.attendees": currentUserId }
+				},
+				{ returnDocument: "after", lean: true }
+			);
+
+			if (!joinedConfirmed) {
+				// Rally is full (or user was added concurrently): join the waitlist if still absent
+				await Post.findOneAndUpdate(
+					{ _id: postObjectId, "playerMatchmaking.rsvpList.userId": { $ne: currentUserId } },
+					{
+						$push: { "playerMatchmaking.rsvpList": buildEntry("waitlist") },
+						$addToSet: { "rsvp.waitlist": currentUserId }
+					},
+					{ returnDocument: "after", lean: true }
+				);
+			}
+		}
+
+		// Recompute isFilled atomically from the authoritative list
+		const finalPost = (await syncRallyFilledFlag(postObjectId, capacity)) || post;
+
+		// Keep the feed copy (what the host sees after a reload) in sync and drop cached feeds
+		const feedEntry = await syncFeedEntryFromPost(finalPost);
+		const matchIds = buildPostMatchIds(finalPost, feedEntry);
+
+		notifyPromotedRsvps(req, finalPost, promoted);
+
+		const hydratedPost = Object.assign(
+			await hydrateWithPictures(finalPost.toObject ? finalPost.toObject() : finalPost),
+			matchIds,
+			{ visibility: finalPost.visibility || "PUBLIC" }
+		);
+		const involvedUserIds = (finalPost.playerMatchmaking?.rsvpList || []).map(r => r.userId).concat(currentUserId);
+		emitForPost(req.io, finalPost, "rallyRsvpUpdated", {
+			...matchIds,
+			action: userAction,
+			userId: currentUserId,
+			promoted: promoted.map(p => String(p.userId)),
+			rsvpList: finalPost.playerMatchmaking?.rsvpList || [],
+			rsvp: finalPost.rsvp,
+			isFilled: Boolean(finalPost.playerMatchmaking?.isFilled),
+			slotsNeeded: finalPost.playerMatchmaking?.slotsNeeded,
+			confirmedCount: (finalPost.playerMatchmaking?.rsvpList || []).filter(r => r.status === "confirmed").length,
+			waitlistCount: (finalPost.playerMatchmaking?.rsvpList || []).filter(r => r.status === "waitlist").length
+		}, involvedUserIds);
+		emitForPost(req.io, finalPost, "postUpdated", hydratedPost, involvedUserIds);
+
+		// Notify author if user joined
+		if (userAction === "joined" && post.authorId && post.authorId.toString() !== currentUserId) {
+			await sendNotification(
+				req.io,
+				post.authorId.toString(),
+				`${currentUserName} joined your badminton rally!`,
+				`/community?postId=${post._id}`
+			);
+		}
+
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error toggling RSVP:", error);
+		res.status(500).json({ message: "Error updating RSVP status." });
+	}
+});
+
+const buildChallengeMatchDoc = (post, acceptorId) => {
+	const challengerId = post.authorId || post.challengeMatch?.challengerTeam?.[0]?.userId;
+	return new Match({
+		team1: [challengerId],
+		team2: [acceptorId],
+		type: (post.challengeMatch?.matchType || post.challengeMatch?.gameFormat || "").toLowerCase().includes("double") ? "doubles" : "singles",
+		matchType: post.challengeMatch?.matchType || "singles",
+		status: "scheduled",
+		source: "community_challenge",
+		communityPostId: post._id,
+		stipulations: post.challengeMatch?.stipulations || "",
+		scheduledAt: post.targetDate ? new Date(post.targetDate) : new Date(),
+		challengeMetadata: { postId: post._id, acceptedAt: new Date() }
+	});
+};
+
+// Creates the scheduled Match for a claimed challenge. If a Match already exists
+// for this post (unique index on communityPostId), the existing one is reused.
+const createOrFindChallengeMatch = async (post, acceptorId) => {
+	try {
+		return await buildChallengeMatchDoc(post, acceptorId).save();
+	} catch (err) {
+		if (err && err.code === 11000) {
+			const existing = await Match.findOne({ communityPostId: post._id });
+			if (existing) return existing;
+		}
+		throw err;
+	}
+};
+
+// 2. Accept Scrimmage / Match Challenge
+router.put("/:postId/accept-challenge", authMiddleware, async (req, res) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.postId)) {
+			return res.status(400).json({ message: "Invalid post ID format." });
+		}
+
+		const post = await findPostByIdOrActivityFeed(req.params.postId, { lean: true });
+		if (!post) return res.status(404).json({ message: "Post not found." });
+		if (!(await canViewPost(post, req.user))) {
+			return res.status(404).json({ message: "Post not found." });
+		}
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		if (post.authorId?.toString() === currentUserId) {
+			return res.status(400).json({ message: "You cannot accept your own challenge." });
+		}
+
+		const postObjectId = post._id;
+		const isAcceptor = (p) => Array.isArray(p?.challengeMatch?.acceptedBy) &&
+			p.challengeMatch.acceptedBy.some(a => String(a.userId) === currentUserId);
+
+		let currentPost = post;
+		let createdMatch = null;
+		let claimedNow = false;
+
+		if (!isAcceptor(post)) {
+			const status = post.challengeMatch?.matchStatus || "open";
+			if (status !== "open") {
+				return res.status(400).json({ message: "This challenge has already been accepted." });
+			}
+
+			const userDoc = await User.findById(currentUserId).select("name profilePic").lean();
+			const currentUserName = userDoc?.name || req.user.name || "Opponent";
+			const avatarUrl = userDoc?.profilePic || req.user.profilePic || "";
+
+			const claimSet = { "challengeMatch.matchStatus": "accepted" };
+			if (!post.challengeMatch) {
+				claimSet["challengeMatch.matchType"] = "Friendly Scrimmage";
+				claimSet["challengeMatch.gameFormat"] = "Best of 3 to 21";
+				claimSet["challengeMatch.challengerTeam"] = [{ userId: String(post.authorId), userName: post.authorName || "Challenger", avatarUrl: "" }];
+			}
+
+			// Atomic claim: only one acceptor can flip an open challenge to accepted
+			const claimed = await Post.findOneAndUpdate(
+				{ _id: postObjectId, "challengeMatch.matchStatus": { $in: ["open", null] } },
+				{
+					$set: claimSet,
+					$push: { "challengeMatch.acceptedBy": { userId: currentUserId, userName: currentUserName, avatarUrl } }
+				},
+				{ returnDocument: "after", lean: true }
+			);
+
+			if (!claimed) {
+				const latest = await findPostByIdOrActivityFeed(postObjectId, { lean: true });
+				if (!isAcceptor(latest)) {
+					return res.status(400).json({ message: "This challenge has already been accepted." });
+				}
+				// Duplicate request from the same acceptor: fall through as idempotent
+				currentPost = latest;
+			} else {
+				currentPost = claimed;
+				claimedNow = true;
+				try {
+					createdMatch = await createOrFindChallengeMatch(claimed, currentUserId);
+				} catch (matchErr) {
+					console.error("[Match] Error creating downstream scheduled match:", matchErr);
+					// Roll back the claim so the challenge stays open instead of half-accepted
+					await Post.updateOne(
+						{ _id: postObjectId, "challengeMatch.acceptedBy.userId": currentUserId },
+						{
+							$set: { "challengeMatch.matchStatus": "open" },
+							$pull: { "challengeMatch.acceptedBy": { userId: currentUserId } }
+						}
+					);
+					return res.status(500).json({ message: "Error accepting challenge." });
+				}
+			}
+		}
+
+		// Legacy repair: accepted by this user but the Match was never linked
+		if (!createdMatch && !currentPost.challengeMatch?.linkedMatchId && isAcceptor(currentPost)) {
+			createdMatch = await createOrFindChallengeMatch(currentPost, currentUserId);
+		}
+
+		if (createdMatch && createdMatch._id) {
+			const linked = await Post.findOneAndUpdate(
+				{ _id: postObjectId },
+				{ $set: { "challengeMatch.linkedMatchId": createdMatch._id.toString() } },
+				{ returnDocument: "after", lean: true }
+			);
+			if (linked) currentPost = linked;
+		}
+
+		const involvedUserIds = [
+			currentPost.authorId,
+			...(currentPost.challengeMatch?.challengerTeam || []).map(c => c.userId),
+			...(currentPost.challengeMatch?.acceptedBy || []).map(a => a.userId)
+		];
+
+		if (claimedNow) {
+			const acceptorName = currentPost.challengeMatch?.acceptedBy?.find(a => String(a.userId) === currentUserId)?.userName || req.user.name || "Opponent";
+
+			await sendNotification(
+				req.io,
+				currentPost.authorId.toString(),
+				`${acceptorName} accepted your match challenge!`,
+				`/community?postId=${currentPost._id}`
+			);
+
+			// Fire-and-forget: never block the response on push delivery
+			Promise.resolve().then(() => sendPushToUser(currentPost.authorId.toString(), {
+				title: "🏸 Match Challenge Accepted!",
+				body: `${acceptorName} accepted your match challenge!`,
+				url: `/community?postId=${currentPost._id}`
+			})).catch(err => console.error("[Push] Error sending challenge push:", err?.message || err));
+		}
+
+		if (createdMatch) {
+			emitForPost(req.io, currentPost, "challengeMatchCreated", {
+				matchId: currentPost.challengeMatch?.linkedMatchId,
+				postId: currentPost._id,
+				match: createdMatch
+			}, involvedUserIds);
+		}
+		if (claimedNow) {
+			emitForPost(req.io, currentPost, "challengeStatusChanged", {
+				postId: currentPost._id,
+				matchStatus: "accepted",
+				linkedMatchId: currentPost.challengeMatch?.linkedMatchId,
+				acceptedBy: currentPost.challengeMatch?.acceptedBy
+			}, involvedUserIds);
+		}
+
+		await syncFeedEntryFromPost(currentPost);
+
+		const hydratedPost = await hydrateWithPictures(currentPost.toObject ? currentPost.toObject() : currentPost);
+		emitForPost(req.io, currentPost, "postUpdated", hydratedPost, involvedUserIds);
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error accepting challenge:", error);
+		res.status(500).json({ message: "Error accepting challenge." });
+	}
+});
+
+// 3. Mark Comment as Accepted Solution (Q&A Forum)
+router.put("/:postId/comments/:commentId/accept-answer", authMiddleware, async (req, res) => {
+	try {
+		const { postId, commentId } = req.params;
+		if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
+			return res.status(400).json({ message: "Invalid ID format." });
+		}
+
+		const post = await findPostByIdOrActivityFeed(postId);
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const currentUserId = (req.user.id || req.user.userId || req.user._id).toString();
+		const isAdmin = req.user.role === "admin";
+		if (post.authorId?.toString() !== currentUserId && !isAdmin) {
+			return res.status(403).json({ message: "Only the post author or an admin can mark the accepted answer." });
+		}
+
+		const comment = post.comments.id(commentId);
+		if (!comment) return res.status(404).json({ message: "Comment not found." });
+
+		if (!post.qaDetails) {
+			post.qaDetails = { subtopic: "General", isResolved: false };
+		}
+
+		// Toggle accepted answer
+		if (post.qaDetails.isResolved && String(post.qaDetails.acceptedCommentId) === String(commentId)) {
+			// Unmark
+			post.qaDetails.isResolved = false;
+			post.qaDetails.acceptedCommentId = "";
+			post.qaDetails.acceptedBy = undefined;
+		} else {
+			// Mark
+			post.qaDetails.isResolved = true;
+			post.qaDetails.acceptedCommentId = commentId.toString();
+			post.qaDetails.acceptedBy = {
+				userId: currentUserId,
+				userName: req.user.name || "Author",
+				at: new Date()
+			};
+
+			if (comment.authorId?.toString() !== currentUserId) {
+				await sendNotification(
+					req.io,
+					comment.authorId.toString(),
+					`${req.user.name || "The author"} marked your answer as the accepted solution!`,
+					`/community?postId=${post._id}`
+				);
+			}
+		}
+
+		await post.save();
+		const hydratedPost = await hydrateWithPictures(post.toObject());
+		if (req.io) await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+		res.json(hydratedPost);
+	} catch (error) {
+		console.error("Error marking accepted answer:", error);
+		res.status(500).json({ message: "Error marking accepted answer." });
+	}
+});
+
+// 4. SSRF-Safe Link Preview Scraping Route
+const linkPreviewLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 30,
+	skip: (req) => req.method === "OPTIONS",
+	message: { message: "Too many link preview requests, please try again later." },
+});
+
+router.post("/link-preview", authMiddleware, linkPreviewLimiter, async (req, res) => {
+	try {
+		const { url } = req.body;
+		if (!url || typeof url !== "string") {
+			return res.status(400).json({ message: "URL is required and must be a string." });
+		}
+
+		const preview = await scrapeLinkPreview(url);
+		return res.json(preview);
+	} catch (error) {
+		const message = error.message || "Failed to fetch link preview";
+		if (
+			message.includes("SSRF Protection") ||
+			message.includes("Forbidden") ||
+			message.includes("Invalid URL")
+		) {
+			return res.status(400).json({ message });
+		}
+		return res.status(422).json({ message: `Could not scrape link preview: ${message}` });
+	}
+});
+
+// 5. Comment Emoji Reactions
+const handleCommentReaction = async (req, res) => {
+	try {
+		const { postId, commentId } = req.params;
+		if (!mongoose.isValidObjectId(postId) || !mongoose.isValidObjectId(commentId)) {
+			return res.status(400).json({ message: "Invalid post or comment ID format." });
+		}
+
+		let { emoji, reactionType } = req.body || {};
+		if (emoji === undefined && typeof reactionType === "string" && REACTION_TYPE_TO_EMOJI[reactionType]) {
+			emoji = REACTION_TYPE_TO_EMOJI[reactionType];
+		}
+		if (emoji === undefined) emoji = "👍";
+		if (typeof emoji !== "string" || !ALLOWED_EMOJIS.includes(emoji)) {
+			return res.status(400).json({ message: `Invalid emoji. Allowed: ${ALLOWED_EMOJIS.join(" ")}` });
+		}
+		const resolvedReactionType = (typeof reactionType === "string" && ALLOWED_REACTION_TYPES.has(reactionType))
+			? reactionType
+			: (BADMINTON_REACTIONS_MAP[emoji]?.reactionType || "custom");
+
+		const post = await findPostByIdOrActivityFeed(postId, { lean: true });
+		if (!post) return res.status(404).json({ message: "Post not found." });
+
+		const commentExists = Array.isArray(post.comments) &&
+			post.comments.some((c) => c && String(c._id) === String(commentId));
+		if (!commentExists) return res.status(404).json({ message: "Comment not found." });
+
+		const userId = (req.user.id || req.user.userId || req.user._id).toString();
+		const userName = req.user.name || "Player";
+		const postObjectId = post._id;
+		const commentObjectId = new mongoose.Types.ObjectId(commentId);
+		const commentFilter = { "c._id": commentObjectId };
+
+		// Atomic, query-guarded toggle: each step only applies if the comment is still in the
+		// expected state, so concurrent double-taps can never leave two reactions for one user.
+		let action = null;
+		for (let attempt = 0; attempt < 3 && !action; attempt += 1) {
+			// 1) Same emoji already present -> toggle off
+			const removed = await Post.updateOne(
+				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, reactions: { $elemMatch: { userId, emoji } } } } },
+				{ $pull: { "comments.$[c].reactions": { userId } } },
+				{ arrayFilters: [commentFilter] }
+			);
+			if (removed?.modifiedCount) {
+				action = "removed";
+				break;
+			}
+
+			// 2) Different emoji present -> switch it in place
+			const changed = await Post.updateOne(
+				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, reactions: { $elemMatch: { userId, emoji: { $ne: emoji } } } } } },
+				{
+					$set: {
+						"comments.$[c].reactions.$[r].emoji": emoji,
+						"comments.$[c].reactions.$[r].reactionType": resolvedReactionType,
+						"comments.$[c].reactions.$[r].createdAt": new Date(),
+					},
+				},
+				{ arrayFilters: [commentFilter, { "r.userId": userId }] }
+			);
+			if (changed?.modifiedCount) {
+				action = "changed";
+				break;
+			}
+
+			// 3) No reaction from this user yet -> push (guarded so it cannot double-insert)
+			const added = await Post.updateOne(
+				{ _id: postObjectId, comments: { $elemMatch: { _id: commentObjectId, "reactions.userId": { $ne: userId } } } },
+				{
+					$push: {
+						"comments.$[c].reactions": {
+							userId,
+							userName,
+							emoji,
+							reactionType: resolvedReactionType,
+							createdAt: new Date(),
+						},
+					},
+				},
+				{ arrayFilters: [commentFilter] }
+			);
+			if (added?.modifiedCount) {
+				action = "added";
+			}
+		}
+
+		if (!action) {
+			return res.status(409).json({ message: "Comment reaction changed concurrently. Please retry." });
+		}
+		feedCache.invalidateFeed();
+
+		const freshPost = await Post.findById(postObjectId).lean();
+		if (!freshPost) return res.status(404).json({ message: "Post not found." });
+		const freshComment = (freshPost.comments || []).find((c) => c && String(c._id) === String(commentId));
+		const reactions = freshComment?.reactions || [];
+
+		const hydratedPost = await hydrateWithPictures(freshPost);
+		if (req.io) {
+			await emitForPost(req.io, hydratedPost, "postUpdated", hydratedPost);
+			await emitForPost(req.io, hydratedPost, "commentReactionUpdated", {
+				postId: postObjectId.toString(),
+				commentId: String(commentId),
+				reactions,
+				action,
+				userId,
+			});
+		}
+
+		return res.json({
+			success: true,
+			message: "Comment reaction updated successfully",
+			action,
+			reactions,
+			post: hydratedPost,
+		});
+	} catch (error) {
+		console.error("Error handling comment reaction:", error);
+		return res.status(500).json({ message: "Error updating comment reaction." });
+	}
+};
+
+router.put("/:postId/comments/:commentId/react", authMiddleware, handleCommentReaction);
+router.post("/:postId/comments/:commentId/react", authMiddleware, handleCommentReaction);
+
+module.exports = router;
+
+

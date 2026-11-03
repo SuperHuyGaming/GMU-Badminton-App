@@ -1,728 +1,745 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const router = express.Router();
-const User = require("../models/User");
-const { authMiddleware } = require("../middleware/auth");
-const Notification = require("../models/Notification");
-const { executeWithTransactionOrFallback } = require("../utils/transactionHelper");
-const {
-	getIdempotentResult,
-	markIdempotentInFlight,
-	setIdempotentCompleted,
-	clearIdempotentKey
-} = require("../utils/idempotency");
-
-const extractIdempotencyKey = (req) => {
-	return req.headers["idempotency-key"] || req.headers["x-idempotency-key"] || req.body?.idempotencyKey || null;
-};
-
-const toIdString = (item) => {
-	if (!item) return null;
-	const raw = item._id !== undefined ? item._id : item;
-	if (!raw) return null;
-	const str = typeof raw.toString === "function" ? raw.toString() : String(raw);
-	return str && str !== "[object Object]" ? str : null;
-};
-
-const safeIncludesId = (arr, idToFind) => {
-	const target = toIdString(idToFind);
-	if (!target || !Array.isArray(arr)) return false;
-	return arr.some(item => toIdString(item) === target);
-};
-
-const safePushUnique = (arr, idToAdd) => {
-	if (!arr || !Array.isArray(arr)) return;
-	const target = toIdString(idToAdd);
-	if (!target) return;
-	if (!safeIncludesId(arr, target)) {
-		arr.push(idToAdd);
-	}
-};
-
-const clearBidirectionalRequests = (userA, userB) => {
-	const idA = toIdString(userA?._id || userA);
-	const idB = toIdString(userB?._id || userB);
-	if (!idA || !idB || idA === idB) return;
-
-	if (userA && userA.friendRequests) userA.friendRequests.pull(idB);
-	if (userA && userA.sentFriendRequests) userA.sentFriendRequests.pull(idB);
-	if (userB && userB.friendRequests) userB.friendRequests.pull(idA);
-	if (userB && userB.sentFriendRequests) userB.sentFriendRequests.pull(idA);
-};
-
-// Setup Socket io mapping later in server.js but for API:
-
-// GET: friends and friend requests
-router.get("/:userId", authMiddleware, async (req, res, next) => {
-	try {
-		if (!mongoose.isValidObjectId(req.params.userId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = toIdString(req.user.id || req.user.userId);
-		const isOwnerOrAdmin = currentUserId === req.params.userId || req.user.role === "admin";
-		if (!isOwnerOrAdmin) {
-			return res.status(403).json({ message: "Unauthorized to access this user's friend requests." });
-		}
-
-		const user = await User.findById(req.params.userId)
-			.populate("friends", "_id name profilePic skillLevel lastActive")
-			.populate("friendRequests", "_id name profilePic skillLevel")
-			.populate("sentFriendRequests", "_id name profilePic skillLevel");
-
-		if (!user) return res.status(404).json({ message: "User not found" });
-
-		res.json({
-			friends: (user.friends || []).filter(Boolean),
-			friendRequests: (user.friendRequests || []).filter(Boolean),
-			sentFriendRequests: (user.sentFriendRequests || []).filter(Boolean),
-		});
-	} catch (error) {
-		next(error);
-	}
-});
-
-// POST: send friend request
-router.post("/request", authMiddleware, async (req, res, next) => {
-	const idempotencyKey = extractIdempotencyKey(req);
-	try {
-		if (idempotencyKey) {
-			const cached = await getIdempotentResult(idempotencyKey);
-			if (cached) {
-				if (cached.status === "in-flight") {
-					return res.status(409).json({ message: "Friend request is already being processed." });
-				}
-				if (cached.status === "completed") {
-					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
-				}
-			}
-			await markIdempotentInFlight(idempotencyKey);
-		}
-
-		const currentUserId = toIdString(req.user.id || req.user.userId);
-		const requesterId = currentUserId;
-		const recipientId = toIdString(req.body.recipientId || req.body.friendId || req.body.targetId);
-		
-		if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Valid recipient ID is required." });
-		}
-
-		if (requesterId === recipientId) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Cannot add yourself" });
-		}
-
-		const requester = await User.findById(requesterId);
-		const recipient = await User.findById(recipientId);
-
-		if (!requester || !recipient) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(404).json({ message: "User not found" });
-		}
-
-		if (safeIncludesId(recipient.friends, requesterId) || safeIncludesId(requester.friends, recipientId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Already friends" });
-		}
-
-		// If they already sent YOU a request, just accept it
-		if (safeIncludesId(requester.friendRequests, recipientId)) {
-			await executeWithTransactionOrFallback({
-				transactionFn: async (session) => {
-					clearBidirectionalRequests(requester, recipient);
-					safePushUnique(requester.friends, recipientId);
-					safePushUnique(recipient.friends, requesterId);
-					await requester.save({ session });
-					await recipient.save({ session });
-				},
-				fallbackFn: async () => {
-					clearBidirectionalRequests(requester, recipient);
-					safePushUnique(requester.friends, recipientId);
-					safePushUnique(recipient.friends, requesterId);
-					if (typeof User.updateOne === "function") {
-						await User.updateOne(
-							{ _id: requesterId },
-							{ $pull: { friendRequests: recipientId, sentFriendRequests: recipientId }, $addToSet: { friends: recipientId } }
-						);
-						await User.updateOne(
-							{ _id: recipientId },
-							{ $pull: { friendRequests: requesterId, sentFriendRequests: requesterId }, $addToSet: { friends: requesterId } }
-						);
-					}
-					if (typeof requester.save === "function") await requester.save();
-					if (typeof recipient.save === "function") await recipient.save();
-				}
-			});
-
-			const io = req.app?.get("io") || req.io;
-			if (io) {
-				io.to(recipientId).emit("friendRequestAccepted", {
-					userId: requesterId,
-					friend: { _id: requester._id, name: requester.name, profilePic: requester.profilePic, skillLevel: requester.skillLevel }
-				});
-				io.to(requesterId).emit("friendRequestAccepted", {
-					userId: recipientId,
-					friend: { _id: recipient._id, name: recipient.name, profilePic: recipient.profilePic, skillLevel: recipient.skillLevel }
-				});
-			}
-			const responseBody = { message: "Friend request accepted automatically" };
-			if (idempotencyKey) {
-				await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
-			}
-			return res.json(responseBody);
-		}
-
-		if (safeIncludesId(recipient.friendRequests, requesterId) || safeIncludesId(requester.sentFriendRequests, recipientId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Request already sent" });
-		}
-
-		await executeWithTransactionOrFallback({
-			transactionFn: async (session) => {
-				safePushUnique(recipient.friendRequests, requesterId);
-				safePushUnique(requester.sentFriendRequests, recipientId);
-				await recipient.save({ session });
-				await requester.save({ session });
-			},
-			fallbackFn: async () => {
-				safePushUnique(recipient.friendRequests, requesterId);
-				safePushUnique(requester.sentFriendRequests, recipientId);
-				if (typeof User.updateOne === "function") {
-					await User.updateOne(
-						{ _id: recipientId },
-						{ $addToSet: { friendRequests: requesterId } }
-					);
-					await User.updateOne(
-						{ _id: requesterId },
-						{ $addToSet: { sentFriendRequests: recipientId } }
-					);
-				}
-				if (typeof recipient.save === "function") await recipient.save();
-				if (typeof requester.save === "function") await requester.save();
-			}
-		});
-
-		// Add Notification after 5 seconds to allow for 'Undo'
-		const addNotification = async () => {
-			try {
-				// Re-verify the request wasn't cancelled or accepted within the 5 seconds
-				const checkRecipient = await User.findById(recipientId);
-				if (!checkRecipient || !safeIncludesId(checkRecipient.friendRequests, requesterId)) return;
-
-				const notif = new Notification({
-					targetUserId: recipientId,
-					message: `${requester.name} sent you a friend request.`,
-					link: `/profile/${requesterId}`,
-				});
-				await notif.save();
-
-				const io = req.app?.get("io") || req.io;
-				if (io) {
-					io.to(recipientId).emit("newNotification", notif);
-					io.to(recipientId).emit("friendRequestReceived", {
-						requesterId,
-						requester: {
-							_id: requester._id,
-							name: requester.name,
-							profilePic: requester.profilePic,
-							skillLevel: requester.skillLevel
-						}
-					});
-				}
-			} catch (err) {
-				console.error("Delayed notification error:", err);
-			}
-		};
-
-		if (process.env.NODE_ENV === 'test') {
-			await addNotification();
-		} else {
-			setTimeout(addNotification, 5000);
-		}
-
-		const responseBody = { message: "Friend request sent" };
-		if (idempotencyKey) {
-			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
-		}
-		res.json(responseBody);
-	} catch (error) {
-		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
-		next(error);
-	}
-});
-
-// POST: cancel friend request (Undo)
-router.post("/cancel", authMiddleware, async (req, res, next) => {
-	const idempotencyKey = extractIdempotencyKey(req);
-	try {
-		if (idempotencyKey) {
-			const cached = await getIdempotentResult(idempotencyKey);
-			if (cached) {
-				if (cached.status === "in-flight") {
-					return res.status(409).json({ message: "Friend request is already being processed." });
-				}
-				if (cached.status === "completed") {
-					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
-				}
-			}
-			await markIdempotentInFlight(idempotencyKey);
-		}
-
-		const requesterId = toIdString(req.user.id || req.user.userId);
-		const recipientId = toIdString(req.body.recipientId || req.body.targetId);
-
-		if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Valid recipient ID is required." });
-		}
-
-		const requester = await User.findById(requesterId);
-		const recipient = await User.findById(recipientId);
-
-		if (!requester || !recipient) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(404).json({ message: "User not found" });
-		}
-
-		if (!safeIncludesId(recipient.friendRequests, requesterId) && !safeIncludesId(requester.sentFriendRequests, recipientId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "No pending request to cancel." });
-		}
-
-		await executeWithTransactionOrFallback({
-			transactionFn: async (session) => {
-				clearBidirectionalRequests(requester, recipient);
-				await recipient.save({ session });
-				await requester.save({ session });
-			},
-			fallbackFn: async () => {
-				clearBidirectionalRequests(requester, recipient);
-				if (typeof User.updateOne === "function") {
-					await User.updateOne(
-						{ _id: recipientId },
-						{ $pull: { friendRequests: requesterId, sentFriendRequests: requesterId } }
-					);
-					await User.updateOne(
-						{ _id: requesterId },
-						{ $pull: { friendRequests: recipientId, sentFriendRequests: recipientId } }
-					);
-				}
-				if (typeof recipient.save === "function") await recipient.save();
-				if (typeof requester.save === "function") await requester.save();
-			}
-		});
-
-		const responseBody = { message: "Friend request cancelled successfully" };
-		if (idempotencyKey) {
-			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
-		}
-		res.json(responseBody);
-	} catch (error) {
-		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
-		next(error);
-	}
-});
-
-// POST: accept friend request
-router.post("/accept", authMiddleware, async (req, res, next) => {
-	const idempotencyKey = extractIdempotencyKey(req);
-	try {
-		if (idempotencyKey) {
-			const cached = await getIdempotentResult(idempotencyKey);
-			if (cached) {
-				if (cached.status === "in-flight") {
-					return res.status(409).json({ message: "Friend request is already being processed." });
-				}
-				if (cached.status === "completed") {
-					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
-				}
-			}
-			await markIdempotentInFlight(idempotencyKey);
-		}
-
-		const currentUserId = toIdString(req.user.id || req.user.userId);
-		const userId = currentUserId;
-		const requesterId = toIdString(req.body.requesterId || req.body.friendId || req.body.targetId || req.body.recipientId);
-
-		if (!requesterId || !mongoose.isValidObjectId(requesterId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Valid requester ID is required." });
-		}
-
-		const user = await User.findById(userId);
-		const requester = await User.findById(requesterId);
-
-		if (!user || !requester) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(404).json({ message: "User not found" });
-		}
-
-		// Validate that requesterId exists in user.friendRequests
-		const hasPendingRequest = safeIncludesId(user.friendRequests, requesterId);
-		if (!hasPendingRequest) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "No pending friend request from this user" });
-		}
-
-		await executeWithTransactionOrFallback({
-			transactionFn: async (session) => {
-				clearBidirectionalRequests(user, requester);
-				safePushUnique(user.friends, requesterId);
-				safePushUnique(requester.friends, userId);
-				await user.save({ session });
-				await requester.save({ session });
-			},
-			fallbackFn: async () => {
-				clearBidirectionalRequests(user, requester);
-				safePushUnique(user.friends, requesterId);
-				safePushUnique(requester.friends, userId);
-				if (typeof User.updateOne === "function") {
-					await User.updateOne(
-						{ _id: userId },
-						{ $pull: { friendRequests: requesterId, sentFriendRequests: requesterId }, $addToSet: { friends: requesterId } }
-					);
-					await User.updateOne(
-						{ _id: requesterId },
-						{ $pull: { friendRequests: userId, sentFriendRequests: userId }, $addToSet: { friends: userId } }
-					);
-				}
-				if (typeof user.save === "function") await user.save();
-				if (typeof requester.save === "function") await requester.save();
-			}
-		});
-
-		// Add Notification
-		const notif = new Notification({
-			targetUserId: requesterId,
-			message: `${user.name} accepted your friend request!`,
-			link: `/profile/${userId}`,
-		});
-		await notif.save();
-
-		const io = req.app?.get("io") || req.io;
-		if (io) {
-			io.to(requesterId).emit("newNotification", notif);
-			io.to(requesterId).emit("friendRequestAccepted", {
-				userId,
-				friend: { _id: user._id, name: user.name, profilePic: user.profilePic, skillLevel: user.skillLevel }
-			});
-			io.to(userId).emit("friendRequestAccepted", {
-				userId: requesterId,
-				friend: { _id: requester._id, name: requester.name, profilePic: requester.profilePic, skillLevel: requester.skillLevel }
-			});
-		}
-
-		const responseBody = { message: "Friend request accepted" };
-		if (idempotencyKey) {
-			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
-		}
-		res.json(responseBody);
-	} catch (error) {
-		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
-		next(error);
-	}
-});
-
-// Helper for decline/reject
-const handleDeclineOrReject = async (req, res, next) => {
-	const idempotencyKey = extractIdempotencyKey(req);
-	try {
-		if (idempotencyKey) {
-			const cached = await getIdempotentResult(idempotencyKey);
-			if (cached) {
-				if (cached.status === "in-flight") {
-					return res.status(409).json({ message: "Friend request is already being processed." });
-				}
-				if (cached.status === "completed") {
-					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
-				}
-			}
-			await markIdempotentInFlight(idempotencyKey);
-		}
-
-		const currentUserId = toIdString(req.user.id || req.user.userId);
-		const userId = currentUserId;
-		const targetId = toIdString(req.body.requesterId || req.body.targetId || req.body.friendId || req.body.recipientId);
-
-		if (!targetId || !mongoose.isValidObjectId(targetId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Valid target ID is required." });
-		}
-
-		if (userId === targetId) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Cannot decline yourself" });
-		}
-
-		const user = await User.findById(userId);
-		const target = await User.findById(targetId);
-
-		if (!user || !target) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(404).json({ message: "User not found" });
-		}
-
-		await executeWithTransactionOrFallback({
-			transactionFn: async (session) => {
-				clearBidirectionalRequests(user, target);
-				await user.save({ session });
-				await target.save({ session });
-			},
-			fallbackFn: async () => {
-				clearBidirectionalRequests(user, target);
-				if (typeof User.updateOne === "function") {
-					await User.updateOne(
-						{ _id: userId },
-						{ $pull: { friendRequests: targetId, sentFriendRequests: targetId } }
-					);
-					await User.updateOne(
-						{ _id: targetId },
-						{ $pull: { friendRequests: userId, sentFriendRequests: userId } }
-					);
-				}
-				if (typeof user.save === "function") await user.save();
-				if (typeof target.save === "function") await target.save();
-			}
-		});
-
-		const io = req.app?.get("io") || req.io;
-		if (io) {
-			io.to(targetId).emit("friendRequestDeclined", { userId });
-			io.to(userId).emit("friendRequestDeclined", { userId: targetId });
-		}
-
-		const responseBody = { message: "Friend request declined" };
-		if (idempotencyKey) {
-			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
-		}
-		res.json(responseBody);
-	} catch (error) {
-		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
-		next(error);
-	}
-};
-
-// POST: decline friend request
-router.post("/decline", authMiddleware, handleDeclineOrReject);
-
-// POST: reject/cancel friend request (alias)
-router.post("/reject", authMiddleware, handleDeclineOrReject);
-
-// POST: remove friend
-router.post("/remove", authMiddleware, async (req, res, next) => {
-	const idempotencyKey = extractIdempotencyKey(req);
-	try {
-		if (idempotencyKey) {
-			const cached = await getIdempotentResult(idempotencyKey);
-			if (cached) {
-				if (cached.status === "in-flight") {
-					return res.status(409).json({ message: "Friend request is already being processed." });
-				}
-				if (cached.status === "completed") {
-					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
-				}
-			}
-			await markIdempotentInFlight(idempotencyKey);
-		}
-
-		const currentUserId = toIdString(req.user.id || req.user.userId);
-		const userId = currentUserId;
-		const friendId = toIdString(req.body.friendId || req.body.targetId || req.body.recipientId);
-
-		if (!friendId || !mongoose.isValidObjectId(friendId)) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(400).json({ message: "Valid friend ID is required." });
-		}
-
-		const user = await User.findById(userId);
-		const friend = await User.findById(friendId);
-
-		if (!user || !friend) {
-			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
-			return res.status(404).json({ message: "User not found" });
-		}
-
-		await executeWithTransactionOrFallback({
-			transactionFn: async (session) => {
-				if (user.friends) user.friends.pull(friendId);
-				if (friend.friends) friend.friends.pull(userId);
-				clearBidirectionalRequests(user, friend);
-				await user.save({ session });
-				await friend.save({ session });
-			},
-			fallbackFn: async () => {
-				if (user.friends) user.friends.pull(friendId);
-				if (friend.friends) friend.friends.pull(userId);
-				clearBidirectionalRequests(user, friend);
-				if (typeof User.updateOne === "function") {
-					await User.updateOne(
-						{ _id: userId },
-						{ $pull: { friends: friendId, friendRequests: friendId, sentFriendRequests: friendId } }
-					);
-					await User.updateOne(
-						{ _id: friendId },
-						{ $pull: { friends: userId, friendRequests: userId, sentFriendRequests: userId } }
-					);
-				}
-				if (typeof user.save === "function") await user.save();
-				if (typeof friend.save === "function") await friend.save();
-			}
-		});
-		
-		const io = req.app?.get("io") || req.io;
-		if (io) {
-			io.to(userId).emit("friendRemoved", { friendId });
-			io.to(friendId).emit("friendRemoved", { friendId: userId });
-		}
-
-		const responseBody = { message: "Friend removed" };
-		if (idempotencyKey) {
-			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
-		}
-		res.json(responseBody);
-	} catch (error) {
-		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
-		next(error);
-	}
-});
-
-const escapeRegex = (string) => {
-	if (typeof string !== "string") return "";
-	return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-};
-
-// GET: search users
-router.get("/search/:query", authMiddleware, async (req, res, next) => {
-	try {
-		const rawQuery = (req.params.query || "").trim();
-		if (!rawQuery) {
-			return res.json([]);
-		}
-		const safeQuery = escapeRegex(rawQuery);
-		const users = await User.find({
-			name: { $regex: safeQuery, $options: "i" }
-		}).select("_id name profilePic skillLevel").limit(10);
-		res.json(users);
-	} catch (error) {
-		next(error);
-	}
-});
-
-// GET: paginated friends list with mutual friends count
-router.get("/:id/list", authMiddleware, async (req, res, next) => {
-	try {
-		const targetId = req.params.id;
-		if (!mongoose.isValidObjectId(targetId)) {
-			return res.status(400).json({ message: "Invalid user ID format." });
-		}
-
-		const currentUserId = toIdString(req.user.id || req.user.userId);
-		const currentUserIdObj = new mongoose.Types.ObjectId(currentUserId);
-		const targetUserIdObj = new mongoose.Types.ObjectId(targetId);
-
-		const targetUser = await User.findById(targetUserIdObj).select("friendsListVisibility").lean();
-		if (!targetUser) return res.status(404).json({ message: "User not found" });
-
-		const currentUser = await User.findById(currentUserIdObj).select("role").lean();
-		if (!currentUser) return res.status(404).json({ message: "Current user not found" });
-
-		const isOwner = currentUserId === targetId;
-		const isAdmin = currentUser.role === "admin";
-
-		if (!isOwner && !isAdmin) {
-			const visibility = targetUser.friendsListVisibility || "Public";
-			if (visibility === "Only Me") {
-				return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
-			} else if (visibility === "Friends Only") {
-				const isFriend = await User.exists({ _id: targetUserIdObj, friends: currentUserIdObj });
-				if (!isFriend) {
-					return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
-				}
-			}
-		}
-
-		const cursor = req.query.cursor;
-		const limit = 20;
-
-		const pipeline = [
-			{ $match: { _id: targetUserIdObj } },
-			{ $project: { friends: { $ifNull: ["$friends", []] } } },
-			{ $unwind: "$friends" }
-		];
-
-		if (cursor && mongoose.isValidObjectId(cursor)) {
-			pipeline.push({ $match: { friends: { $gt: new mongoose.Types.ObjectId(cursor) } } });
-		}
-
-		pipeline.push(
-			{ $sort: { friends: 1 } },
-			{ $limit: limit },
-			{
-				$lookup: {
-					from: "users",
-					localField: "friends",
-					foreignField: "_id",
-					as: "friendData"
-				}
-			},
-			{ $unwind: "$friendData" },
-			{
-				$lookup: {
-					from: "users",
-					let: { theirFriends: { $ifNull: ["$friendData.friends", []] } },
-					pipeline: [
-						{ $match: { _id: currentUserIdObj } },
-						{
-							$project: {
-								mutualCount: {
-									$size: {
-										$setIntersection: ["$$theirFriends", { $ifNull: ["$friends", []] }]
-									}
-								}
-							}
-						}
-					],
-					as: "currentUserInfo"
-				}
-			},
-			{ $unwind: { path: "$currentUserInfo", preserveNullAndEmptyArrays: true } },
-			{
-				$project: {
-					_id: "$friendData._id",
-					name: "$friendData.name",
-					profilePic: "$friendData.profilePic",
-					skillLevel: "$friendData.skillLevel",
-					lastActive: "$friendData.lastActive",
-					mutualFriendsCount: { $ifNull: ["$currentUserInfo.mutualCount", 0] },
-					friendshipStatus: {
-						$cond: {
-							if: { $in: [currentUserIdObj, { $ifNull: ["$friendData.friends", []] }] },
-							then: "friends",
-							else: {
-								$cond: {
-									if: { $in: [currentUserIdObj, { $ifNull: ["$friendData.friendRequests", []] }] },
-									then: "pending",
-									else: "none"
-								}
-							}
-						}
-					}
-				}
-			}
-		);
-
-		const friends = await User.aggregate(pipeline);
-
-		const nextCursor = friends.length === limit ? friends[friends.length - 1]._id : null;
-
-		res.json({
-			friends,
-			nextCursor
-		});
-	} catch (error) {
-		next(error);
-	}
-});
-
-module.exports = router;
+const express = require("express");
+const mongoose = require("mongoose");
+const router = express.Router();
+const User = require("../models/User");
+const { authMiddleware } = require("../middleware/auth");
+const Notification = require("../models/Notification");
+const { executeWithTransactionOrFallback } = require("../utils/transactionHelper");
+const feedCache = require("../utils/feedCache");
+const {
+	getIdempotentResult,
+	markIdempotentInFlight,
+	setIdempotentCompleted,
+	clearIdempotentKey
+} = require("../utils/idempotency");
+
+const extractIdempotencyKey = (req) => {
+	return req.headers["idempotency-key"] || req.headers["x-idempotency-key"] || req.body?.idempotencyKey || null;
+};
+
+const toIdString = (item) => {
+	if (!item) return null;
+	const raw = item._id !== undefined ? item._id : item;
+	if (!raw) return null;
+	const str = typeof raw.toString === "function" ? raw.toString() : String(raw);
+	return str && str !== "[object Object]" ? str : null;
+};
+
+const safeIncludesId = (arr, idToFind) => {
+	const target = toIdString(idToFind);
+	if (!target || !Array.isArray(arr)) return false;
+	return arr.some(item => toIdString(item) === target);
+};
+
+const safePushUnique = (arr, idToAdd) => {
+	if (!arr || !Array.isArray(arr)) return;
+	const target = toIdString(idToAdd);
+	if (!target) return;
+	if (!safeIncludesId(arr, target)) {
+		arr.push(idToAdd);
+	}
+};
+
+const clearBidirectionalRequests = (userA, userB) => {
+	const idA = toIdString(userA?._id || userA);
+	const idB = toIdString(userB?._id || userB);
+	if (!idA || !idB || idA === idB) return;
+
+	if (userA && userA.friendRequests) userA.friendRequests.pull(idB);
+	if (userA && userA.sentFriendRequests) userA.sentFriendRequests.pull(idB);
+	if (userB && userB.friendRequests) userB.friendRequests.pull(idA);
+	if (userB && userB.sentFriendRequests) userB.sentFriendRequests.pull(idA);
+};
+
+// A friendship change alters which FRIENDS_ONLY posts both users may see: drop their cached feeds.
+const invalidateFriendFeeds = (...userIds) => {
+	try {
+		if (typeof feedCache.invalidateUserFeeds === "function") {
+			feedCache.invalidateUserFeeds(...userIds.map(toIdString));
+		} else if (typeof feedCache.invalidateFeed === "function") {
+			feedCache.invalidateFeed();
+		}
+	} catch (err) {
+		console.error("Feed cache invalidation error (friends):", err?.message || err);
+	}
+};
+
+// Setup Socket io mapping later in server.js but for API:
+
+// GET: friends and friend requests
+router.get("/:userId", authMiddleware, async (req, res, next) => {
+	try {
+		if (!mongoose.isValidObjectId(req.params.userId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const isOwnerOrAdmin = currentUserId === req.params.userId || req.user.role === "admin";
+		if (!isOwnerOrAdmin) {
+			return res.status(403).json({ message: "Unauthorized to access this user's friend requests." });
+		}
+
+		const user = await User.findById(req.params.userId)
+			.populate("friends", "_id name profilePic skillLevel lastActive")
+			.populate("friendRequests", "_id name profilePic skillLevel")
+			.populate("sentFriendRequests", "_id name profilePic skillLevel");
+
+		if (!user) return res.status(404).json({ message: "User not found" });
+
+		res.json({
+			friends: (user.friends || []).filter(Boolean),
+			friendRequests: (user.friendRequests || []).filter(Boolean),
+			sentFriendRequests: (user.sentFriendRequests || []).filter(Boolean),
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
+// POST: send friend request
+router.post("/request", authMiddleware, async (req, res, next) => {
+	const idempotencyKey = extractIdempotencyKey(req);
+	try {
+		if (idempotencyKey) {
+			const cached = await getIdempotentResult(idempotencyKey);
+			if (cached) {
+				if (cached.status === "in-flight") {
+					return res.status(409).json({ message: "Friend request is already being processed." });
+				}
+				if (cached.status === "completed") {
+					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
+				}
+			}
+			await markIdempotentInFlight(idempotencyKey);
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const requesterId = currentUserId;
+		const recipientId = toIdString(req.body.recipientId || req.body.friendId || req.body.targetId);
+		
+		if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Valid recipient ID is required." });
+		}
+
+		if (requesterId === recipientId) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Cannot add yourself" });
+		}
+
+		const requester = await User.findById(requesterId);
+		const recipient = await User.findById(recipientId);
+
+		if (!requester || !recipient) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(404).json({ message: "User not found" });
+		}
+
+		if (safeIncludesId(recipient.friends, requesterId) || safeIncludesId(requester.friends, recipientId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Already friends" });
+		}
+
+		// If they already sent YOU a request, just accept it
+		if (safeIncludesId(requester.friendRequests, recipientId)) {
+			await executeWithTransactionOrFallback({
+				transactionFn: async (session) => {
+					clearBidirectionalRequests(requester, recipient);
+					safePushUnique(requester.friends, recipientId);
+					safePushUnique(recipient.friends, requesterId);
+					await requester.save({ session });
+					await recipient.save({ session });
+				},
+				fallbackFn: async () => {
+					clearBidirectionalRequests(requester, recipient);
+					safePushUnique(requester.friends, recipientId);
+					safePushUnique(recipient.friends, requesterId);
+					if (typeof User.updateOne === "function") {
+						await User.updateOne(
+							{ _id: requesterId },
+							{ $pull: { friendRequests: recipientId, sentFriendRequests: recipientId }, $addToSet: { friends: recipientId } }
+						);
+						await User.updateOne(
+							{ _id: recipientId },
+							{ $pull: { friendRequests: requesterId, sentFriendRequests: requesterId }, $addToSet: { friends: requesterId } }
+						);
+					}
+					if (typeof requester.save === "function") await requester.save();
+					if (typeof recipient.save === "function") await recipient.save();
+				}
+			});
+			invalidateFriendFeeds(requesterId, recipientId);
+
+			const io = req.app?.get("io") || req.io;
+			if (io) {
+				io.to(recipientId).emit("friendRequestAccepted", {
+					userId: requesterId,
+					friend: { _id: requester._id, name: requester.name, profilePic: requester.profilePic, skillLevel: requester.skillLevel }
+				});
+				io.to(requesterId).emit("friendRequestAccepted", {
+					userId: recipientId,
+					friend: { _id: recipient._id, name: recipient.name, profilePic: recipient.profilePic, skillLevel: recipient.skillLevel }
+				});
+			}
+			const responseBody = { message: "Friend request accepted automatically" };
+			if (idempotencyKey) {
+				await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
+			}
+			return res.json(responseBody);
+		}
+
+		if (safeIncludesId(recipient.friendRequests, requesterId) || safeIncludesId(requester.sentFriendRequests, recipientId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Request already sent" });
+		}
+
+		await executeWithTransactionOrFallback({
+			transactionFn: async (session) => {
+				safePushUnique(recipient.friendRequests, requesterId);
+				safePushUnique(requester.sentFriendRequests, recipientId);
+				await recipient.save({ session });
+				await requester.save({ session });
+			},
+			fallbackFn: async () => {
+				safePushUnique(recipient.friendRequests, requesterId);
+				safePushUnique(requester.sentFriendRequests, recipientId);
+				if (typeof User.updateOne === "function") {
+					await User.updateOne(
+						{ _id: recipientId },
+						{ $addToSet: { friendRequests: requesterId } }
+					);
+					await User.updateOne(
+						{ _id: requesterId },
+						{ $addToSet: { sentFriendRequests: recipientId } }
+					);
+				}
+				if (typeof recipient.save === "function") await recipient.save();
+				if (typeof requester.save === "function") await requester.save();
+			}
+		});
+
+		// Add Notification after 5 seconds to allow for 'Undo'
+		const addNotification = async () => {
+			try {
+				// Re-verify the request wasn't cancelled or accepted within the 5 seconds
+				const checkRecipient = await User.findById(recipientId);
+				if (!checkRecipient || !safeIncludesId(checkRecipient.friendRequests, requesterId)) return;
+
+				const notif = new Notification({
+					targetUserId: recipientId,
+					message: `${requester.name} sent you a friend request.`,
+					link: `/profile/${requesterId}`,
+				});
+				await notif.save();
+
+				const io = req.app?.get("io") || req.io;
+				if (io) {
+					io.to(recipientId).emit("newNotification", notif);
+					io.to(recipientId).emit("friendRequestReceived", {
+						requesterId,
+						requester: {
+							_id: requester._id,
+							name: requester.name,
+							profilePic: requester.profilePic,
+							skillLevel: requester.skillLevel
+						}
+					});
+				}
+			} catch (err) {
+				console.error("Delayed notification error:", err);
+			}
+		};
+
+		if (process.env.NODE_ENV === 'test') {
+			await addNotification();
+		} else {
+			setTimeout(addNotification, 5000);
+		}
+
+		const responseBody = { message: "Friend request sent" };
+		if (idempotencyKey) {
+			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
+		}
+		res.json(responseBody);
+	} catch (error) {
+		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
+		next(error);
+	}
+});
+
+// POST: cancel friend request (Undo)
+router.post("/cancel", authMiddleware, async (req, res, next) => {
+	const idempotencyKey = extractIdempotencyKey(req);
+	try {
+		if (idempotencyKey) {
+			const cached = await getIdempotentResult(idempotencyKey);
+			if (cached) {
+				if (cached.status === "in-flight") {
+					return res.status(409).json({ message: "Friend request is already being processed." });
+				}
+				if (cached.status === "completed") {
+					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
+				}
+			}
+			await markIdempotentInFlight(idempotencyKey);
+		}
+
+		const requesterId = toIdString(req.user.id || req.user.userId);
+		const recipientId = toIdString(req.body.recipientId || req.body.targetId);
+
+		if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Valid recipient ID is required." });
+		}
+
+		const requester = await User.findById(requesterId);
+		const recipient = await User.findById(recipientId);
+
+		if (!requester || !recipient) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(404).json({ message: "User not found" });
+		}
+
+		if (!safeIncludesId(recipient.friendRequests, requesterId) && !safeIncludesId(requester.sentFriendRequests, recipientId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "No pending request to cancel." });
+		}
+
+		await executeWithTransactionOrFallback({
+			transactionFn: async (session) => {
+				clearBidirectionalRequests(requester, recipient);
+				await recipient.save({ session });
+				await requester.save({ session });
+			},
+			fallbackFn: async () => {
+				clearBidirectionalRequests(requester, recipient);
+				if (typeof User.updateOne === "function") {
+					await User.updateOne(
+						{ _id: recipientId },
+						{ $pull: { friendRequests: requesterId, sentFriendRequests: requesterId } }
+					);
+					await User.updateOne(
+						{ _id: requesterId },
+						{ $pull: { friendRequests: recipientId, sentFriendRequests: recipientId } }
+					);
+				}
+				if (typeof recipient.save === "function") await recipient.save();
+				if (typeof requester.save === "function") await requester.save();
+			}
+		});
+
+		const responseBody = { message: "Friend request cancelled successfully" };
+		if (idempotencyKey) {
+			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
+		}
+		res.json(responseBody);
+	} catch (error) {
+		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
+		next(error);
+	}
+});
+
+// POST: accept friend request
+router.post("/accept", authMiddleware, async (req, res, next) => {
+	const idempotencyKey = extractIdempotencyKey(req);
+	try {
+		if (idempotencyKey) {
+			const cached = await getIdempotentResult(idempotencyKey);
+			if (cached) {
+				if (cached.status === "in-flight") {
+					return res.status(409).json({ message: "Friend request is already being processed." });
+				}
+				if (cached.status === "completed") {
+					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
+				}
+			}
+			await markIdempotentInFlight(idempotencyKey);
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const userId = currentUserId;
+		const requesterId = toIdString(req.body.requesterId || req.body.friendId || req.body.targetId || req.body.recipientId);
+
+		if (!requesterId || !mongoose.isValidObjectId(requesterId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Valid requester ID is required." });
+		}
+
+		const user = await User.findById(userId);
+		const requester = await User.findById(requesterId);
+
+		if (!user || !requester) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(404).json({ message: "User not found" });
+		}
+
+		// Validate that requesterId exists in user.friendRequests
+		const hasPendingRequest = safeIncludesId(user.friendRequests, requesterId);
+		if (!hasPendingRequest) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "No pending friend request from this user" });
+		}
+
+		await executeWithTransactionOrFallback({
+			transactionFn: async (session) => {
+				clearBidirectionalRequests(user, requester);
+				safePushUnique(user.friends, requesterId);
+				safePushUnique(requester.friends, userId);
+				await user.save({ session });
+				await requester.save({ session });
+			},
+			fallbackFn: async () => {
+				clearBidirectionalRequests(user, requester);
+				safePushUnique(user.friends, requesterId);
+				safePushUnique(requester.friends, userId);
+				if (typeof User.updateOne === "function") {
+					await User.updateOne(
+						{ _id: userId },
+						{ $pull: { friendRequests: requesterId, sentFriendRequests: requesterId }, $addToSet: { friends: requesterId } }
+					);
+					await User.updateOne(
+						{ _id: requesterId },
+						{ $pull: { friendRequests: userId, sentFriendRequests: userId }, $addToSet: { friends: userId } }
+					);
+				}
+				if (typeof user.save === "function") await user.save();
+				if (typeof requester.save === "function") await requester.save();
+			}
+		});
+		invalidateFriendFeeds(userId, requesterId);
+
+		// Add Notification
+		const notif = new Notification({
+			targetUserId: requesterId,
+			message: `${user.name} accepted your friend request!`,
+			link: `/profile/${userId}`,
+		});
+		await notif.save();
+
+		const io = req.app?.get("io") || req.io;
+		if (io) {
+			io.to(requesterId).emit("newNotification", notif);
+			io.to(requesterId).emit("friendRequestAccepted", {
+				userId,
+				friend: { _id: user._id, name: user.name, profilePic: user.profilePic, skillLevel: user.skillLevel }
+			});
+			io.to(userId).emit("friendRequestAccepted", {
+				userId: requesterId,
+				friend: { _id: requester._id, name: requester.name, profilePic: requester.profilePic, skillLevel: requester.skillLevel }
+			});
+		}
+
+		const responseBody = { message: "Friend request accepted" };
+		if (idempotencyKey) {
+			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
+		}
+		res.json(responseBody);
+	} catch (error) {
+		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
+		next(error);
+	}
+});
+
+// Helper for decline/reject
+const handleDeclineOrReject = async (req, res, next) => {
+	const idempotencyKey = extractIdempotencyKey(req);
+	try {
+		if (idempotencyKey) {
+			const cached = await getIdempotentResult(idempotencyKey);
+			if (cached) {
+				if (cached.status === "in-flight") {
+					return res.status(409).json({ message: "Friend request is already being processed." });
+				}
+				if (cached.status === "completed") {
+					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
+				}
+			}
+			await markIdempotentInFlight(idempotencyKey);
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const userId = currentUserId;
+		const targetId = toIdString(req.body.requesterId || req.body.targetId || req.body.friendId || req.body.recipientId);
+
+		if (!targetId || !mongoose.isValidObjectId(targetId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Valid target ID is required." });
+		}
+
+		if (userId === targetId) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Cannot decline yourself" });
+		}
+
+		const user = await User.findById(userId);
+		const target = await User.findById(targetId);
+
+		if (!user || !target) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(404).json({ message: "User not found" });
+		}
+
+		await executeWithTransactionOrFallback({
+			transactionFn: async (session) => {
+				clearBidirectionalRequests(user, target);
+				await user.save({ session });
+				await target.save({ session });
+			},
+			fallbackFn: async () => {
+				clearBidirectionalRequests(user, target);
+				if (typeof User.updateOne === "function") {
+					await User.updateOne(
+						{ _id: userId },
+						{ $pull: { friendRequests: targetId, sentFriendRequests: targetId } }
+					);
+					await User.updateOne(
+						{ _id: targetId },
+						{ $pull: { friendRequests: userId, sentFriendRequests: userId } }
+					);
+				}
+				if (typeof user.save === "function") await user.save();
+				if (typeof target.save === "function") await target.save();
+			}
+		});
+
+		const io = req.app?.get("io") || req.io;
+		if (io) {
+			io.to(targetId).emit("friendRequestDeclined", { userId });
+			io.to(userId).emit("friendRequestDeclined", { userId: targetId });
+		}
+
+		const responseBody = { message: "Friend request declined" };
+		if (idempotencyKey) {
+			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
+		}
+		res.json(responseBody);
+	} catch (error) {
+		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
+		next(error);
+	}
+};
+
+// POST: decline friend request
+router.post("/decline", authMiddleware, handleDeclineOrReject);
+
+// POST: reject/cancel friend request (alias)
+router.post("/reject", authMiddleware, handleDeclineOrReject);
+
+// POST: remove friend
+router.post("/remove", authMiddleware, async (req, res, next) => {
+	const idempotencyKey = extractIdempotencyKey(req);
+	try {
+		if (idempotencyKey) {
+			const cached = await getIdempotentResult(idempotencyKey);
+			if (cached) {
+				if (cached.status === "in-flight") {
+					return res.status(409).json({ message: "Friend request is already being processed." });
+				}
+				if (cached.status === "completed") {
+					return res.status(cached.response?.status || 200).json({ ...cached.response?.body, idempotent: true });
+				}
+			}
+			await markIdempotentInFlight(idempotencyKey);
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const userId = currentUserId;
+		const friendId = toIdString(req.body.friendId || req.body.targetId || req.body.recipientId);
+
+		if (!friendId || !mongoose.isValidObjectId(friendId)) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(400).json({ message: "Valid friend ID is required." });
+		}
+
+		const user = await User.findById(userId);
+		const friend = await User.findById(friendId);
+
+		if (!user || !friend) {
+			if (idempotencyKey) await clearIdempotentKey(idempotencyKey);
+			return res.status(404).json({ message: "User not found" });
+		}
+
+		await executeWithTransactionOrFallback({
+			transactionFn: async (session) => {
+				if (user.friends) user.friends.pull(friendId);
+				if (friend.friends) friend.friends.pull(userId);
+				clearBidirectionalRequests(user, friend);
+				await user.save({ session });
+				await friend.save({ session });
+			},
+			fallbackFn: async () => {
+				if (user.friends) user.friends.pull(friendId);
+				if (friend.friends) friend.friends.pull(userId);
+				clearBidirectionalRequests(user, friend);
+				if (typeof User.updateOne === "function") {
+					await User.updateOne(
+						{ _id: userId },
+						{ $pull: { friends: friendId, friendRequests: friendId, sentFriendRequests: friendId } }
+					);
+					await User.updateOne(
+						{ _id: friendId },
+						{ $pull: { friends: userId, friendRequests: userId, sentFriendRequests: userId } }
+					);
+				}
+				if (typeof user.save === "function") await user.save();
+				if (typeof friend.save === "function") await friend.save();
+			}
+		});
+		invalidateFriendFeeds(userId, friendId);
+
+		const io = req.app?.get("io") || req.io;
+		if (io) {
+			io.to(userId).emit("friendRemoved", { friendId });
+			io.to(friendId).emit("friendRemoved", { friendId: userId });
+		}
+
+		const responseBody = { message: "Friend removed" };
+		if (idempotencyKey) {
+			await setIdempotentCompleted(idempotencyKey, { status: 200, body: responseBody });
+		}
+		res.json(responseBody);
+	} catch (error) {
+		if (idempotencyKey) await clearIdempotentKey(idempotencyKey).catch(() => {});
+		next(error);
+	}
+});
+
+const escapeRegex = (string) => {
+	if (typeof string !== "string") return "";
+	return string.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+// GET: search users
+router.get("/search/:query", authMiddleware, async (req, res, next) => {
+	try {
+		const rawQuery = (req.params.query || "").trim();
+		if (!rawQuery) {
+			return res.json([]);
+		}
+		const safeQuery = escapeRegex(rawQuery);
+		const users = await User.find({
+			name: { $regex: safeQuery, $options: "i" }
+		}).select("_id name profilePic skillLevel").limit(10);
+		res.json(users);
+	} catch (error) {
+		next(error);
+	}
+});
+
+// GET: paginated friends list with mutual friends count
+router.get("/:id/list", authMiddleware, async (req, res, next) => {
+	try {
+		const targetId = req.params.id;
+		if (!mongoose.isValidObjectId(targetId)) {
+			return res.status(400).json({ message: "Invalid user ID format." });
+		}
+
+		const currentUserId = toIdString(req.user.id || req.user.userId);
+		const currentUserIdObj = new mongoose.Types.ObjectId(currentUserId);
+		const targetUserIdObj = new mongoose.Types.ObjectId(targetId);
+
+		const targetUser = await User.findById(targetUserIdObj).select("friendsListVisibility").lean();
+		if (!targetUser) return res.status(404).json({ message: "User not found" });
+
+		const currentUser = await User.findById(currentUserIdObj).select("role").lean();
+		if (!currentUser) return res.status(404).json({ message: "Current user not found" });
+
+		const isOwner = currentUserId === targetId;
+		const isAdmin = currentUser.role === "admin";
+
+		if (!isOwner && !isAdmin) {
+			const visibility = targetUser.friendsListVisibility || "Public";
+			if (visibility === "Only Me") {
+				return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
+			} else if (visibility === "Friends Only") {
+				const isFriend = await User.exists({ _id: targetUserIdObj, friends: currentUserIdObj });
+				if (!isFriend) {
+					return res.status(403).json({ message: "Unauthorized to access this user's friends list." });
+				}
+			}
+		}
+
+		const cursor = req.query.cursor;
+		const limit = 20;
+
+		const pipeline = [
+			{ $match: { _id: targetUserIdObj } },
+			{ $project: { friends: { $ifNull: ["$friends", []] } } },
+			{ $unwind: "$friends" }
+		];
+
+		if (cursor && mongoose.isValidObjectId(cursor)) {
+			pipeline.push({ $match: { friends: { $gt: new mongoose.Types.ObjectId(cursor) } } });
+		}
+
+		pipeline.push(
+			{ $sort: { friends: 1 } },
+			{ $limit: limit },
+			{
+				$lookup: {
+					from: "users",
+					localField: "friends",
+					foreignField: "_id",
+					as: "friendData"
+				}
+			},
+			{ $unwind: "$friendData" },
+			{
+				$lookup: {
+					from: "users",
+					let: { theirFriends: { $ifNull: ["$friendData.friends", []] } },
+					pipeline: [
+						{ $match: { _id: currentUserIdObj } },
+						{
+							$project: {
+								mutualCount: {
+									$size: {
+										$setIntersection: ["$$theirFriends", { $ifNull: ["$friends", []] }]
+									}
+								}
+							}
+						}
+					],
+					as: "currentUserInfo"
+				}
+			},
+			{ $unwind: { path: "$currentUserInfo", preserveNullAndEmptyArrays: true } },
+			{
+				$project: {
+					_id: "$friendData._id",
+					name: "$friendData.name",
+					profilePic: "$friendData.profilePic",
+					skillLevel: "$friendData.skillLevel",
+					lastActive: "$friendData.lastActive",
+					mutualFriendsCount: { $ifNull: ["$currentUserInfo.mutualCount", 0] },
+					friendshipStatus: {
+						$cond: {
+							if: { $in: [currentUserIdObj, { $ifNull: ["$friendData.friends", []] }] },
+							then: "friends",
+							else: {
+								$cond: {
+									if: { $in: [currentUserIdObj, { $ifNull: ["$friendData.friendRequests", []] }] },
+									then: "pending",
+									else: "none"
+								}
+							}
+						}
+					}
+				}
+			}
+		);
+
+		const friends = await User.aggregate(pipeline);
+
+		const nextCursor = friends.length === limit ? friends[friends.length - 1]._id : null;
+
+		res.json({
+			friends,
+			nextCursor
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
+module.exports = router;

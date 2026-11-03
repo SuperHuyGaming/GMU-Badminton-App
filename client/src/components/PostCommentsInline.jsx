@@ -23,7 +23,9 @@ import {
 	Chip,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import CommentThread from "./CommentThread";
+import { ensureOk, errorMessage } from "./postRequest";
 
 import socket from "../utils/socket";
 import apiFetch from "../utils/api";
@@ -256,46 +258,71 @@ export default function PostCommentsInline({
 		);
 	};
 
+	// Resolves with the response when the server accepted the request, or null
+	// after showing the server's error message as a toast.
 	const apiCall = async (
 		endpoint,
 		method,
 		bodyData,
 		skipStateUpdate = false,
+		fallbackMessage = "Something went wrong. Please try again.",
 	) => {
 		try {
 			const res = await apiFetch(endpoint, {
 				method,
 				body: JSON.stringify(bodyData),
 			});
-			if (res.ok && !skipStateUpdate) {
+			await ensureOk(res, fallbackMessage);
+			if (!skipStateUpdate) {
 				const data = await res.json();
 				setLocalPost(data);
 			}
 			return res;
 		} catch (err) {
-			console.error("API error in comments:", err);
+			toast.error(errorMessage(err, fallbackMessage));
+			return null;
 		}
 	};
 
 	const handleToggleLike = async (endpoint, itemId) => {
-		if (!currentUser) return alert("You must be logged in!");
+		if (!currentUser) {
+			toast.error("Log in to like comments.");
+			return;
+		}
 		if (loadingItems[itemId]) return;
 
 		setLoadingItems((prev) => ({ ...prev, [itemId]: true }));
-		await apiCall(endpoint, "PUT", {
-			userId: currentUser.id,
-			userName: currentUser.name,
-		});
+		await apiCall(
+			endpoint,
+			"PUT",
+			{
+				userId: currentUser.id,
+				userName: currentUser.name,
+			},
+			false,
+			"Couldn't update the like. Please try again.",
+		);
 		setLoadingItems((prev) => ({ ...prev, [itemId]: false }));
 	};
 
-	const handlePostMainComment = () => {
-		if (!newReplyText.trim() || !currentUser) return;
-		apiCall(`/api/forum/${localPost._id}/comments`, "POST", {
-			authorId: currentUser.id,
-			authorName: currentUser.name,
-			content: newReplyText.trim(),
-		});
+	const [isPostingComment, setIsPostingComment] = useState(false);
+	const handlePostMainComment = async () => {
+		if (!newReplyText.trim() || !currentUser || isPostingComment) return;
+		setIsPostingComment(true);
+		const res = await apiCall(
+			`/api/forum/${localPost._id}/comments`,
+			"POST",
+			{
+				authorId: currentUser.id,
+				authorName: currentUser.name,
+				content: newReplyText.trim(),
+			},
+			false,
+			"Couldn't post your comment. Please try again.",
+		);
+		setIsPostingComment(false);
+		// Keep the typed text if the server rejected the comment so nothing is lost.
+		if (!res) return;
 		setNewReplyText("");
 		setMentionQuery(null);
 		socket.emit("commentStopTyping", { postId: localPost._id, userName: currentUser.name });
@@ -552,6 +579,8 @@ export default function PostCommentsInline({
 					}}
 					disabled={!currentUser}
 					sx={{
+						minWidth: 0,
+						"& textarea, & input": { overflowWrap: "anywhere" },
 						"& .MuiOutlinedInput-root": {
 							borderRadius: 5,
 							backgroundColor: "action.hover",
@@ -572,7 +601,7 @@ export default function PostCommentsInline({
 				<Button
 					variant="contained"
 					onClick={handlePostMainComment}
-					disabled={!newReplyText.trim() || !currentUser}
+					disabled={!newReplyText.trim() || !currentUser || isPostingComment}
 					sx={{
 						borderRadius: 5,
 						fontWeight: "bold",

@@ -291,9 +291,10 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 			const reactBtn = screen.getByRole('button', { name: /React to post/i });
 			fireEvent.click(reactBtn);
 
-			expect(window.alert).toHaveBeenCalledWith(
-				expect.stringContaining('You must be logged in to react to posts!')
+			expect(toast.error).toHaveBeenCalledWith(
+				expect.stringContaining('Log in to react to posts.')
 			);
+			expect(window.alert).not.toHaveBeenCalled();
 			expect(apiFetch).not.toHaveBeenCalled();
 		});
 
@@ -546,7 +547,7 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 			await waitFor(() => {
 				expect(failingWriteText).toHaveBeenCalled();
 				// Fallback toast is invoked with URL directly
-				expect(toast).toHaveBeenCalledWith(expect.stringContaining(`/community#post-${basePost._id}`));
+				expect(toast).toHaveBeenCalledWith(expect.stringContaining(`/post/${basePost._id}`));
 				expect(onClose).toHaveBeenCalled();
 			});
 		});
@@ -574,7 +575,7 @@ describe('Milestone 2 Challenger 1 Adversarial Suite (J1, J7, J9)', () => {
 
 			await waitFor(() => {
 				expect(failingWriteText).toHaveBeenCalled();
-				expect(toast).toHaveBeenCalledWith(expect.stringContaining(`/community#post-${basePost._id}`));
+				expect(toast).toHaveBeenCalledWith(expect.stringContaining(`/post/${basePost._id}`));
 				expect(onClose).toHaveBeenCalled();
 			});
 		});

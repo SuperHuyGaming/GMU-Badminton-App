@@ -6,11 +6,13 @@
   "scripts": {
     "test": "playwright test",
     "test:smoke": "playwright test",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "twobots": "node two-bots/run-all.cjs"
   },
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
+    "@playwright/test": "^1.63.0",
+    "mongodb-memory-server": "^11.3.0"
   }
 }

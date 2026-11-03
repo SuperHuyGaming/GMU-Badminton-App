@@ -336,7 +336,7 @@ export default function FeedbackModal() {
 				sx={{
 					position: "fixed",
 					bottom: { xs: 80, sm: 96 },
-					right: { xs: 16, sm: 28 },
+					left: { xs: 16, sm: 28 },
 					zIndex: 1350,
 					cursor: "pointer",
 					display: "flex",

@@ -103,7 +103,9 @@ describe('Forum 3-Column Facebook Layout & Ecosystem Tests', () => {
         // Right rail widgets
         expect(screen.getByTestId('facebook-right-rail')).toBeInTheDocument();
         expect(screen.getByText('Upcoming Tournaments')).toBeInTheDocument();
-        expect(screen.getByText('Mason Fall Open 2026')).toBeInTheDocument();
+        // No real tournaments in this mock, so the widget shows its empty state (never placeholder events)
+        expect(await screen.findByText('No upcoming tournaments')).toBeInTheDocument();
+        expect(screen.queryByText('Mason Fall Open 2026')).not.toBeInTheDocument();
         expect(screen.getByText('Badminton Buddies')).toBeInTheDocument();
         // RAC court check-in widget must be gone from the community page
         expect(screen.queryByText(/RAC Court Occupancy/i)).not.toBeInTheDocument();

@@ -28,24 +28,20 @@ import { compressImage } from "../utils/imageUtils";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useMentionAutocomplete, renderContentWithMentions } from "../hooks/useMentionAutocomplete";
 
-const DEFAULT_UPCOMING_TOURNAMENTS = [
-	{
-		_id: '65f01a1b2c3d4e5f6a7b8c98',
-		tournamentName: 'Mason Fall Open 2026',
-		eventLocation: 'George Mason RAC Gym',
-		startDate: 'Oct 15-16',
-		badge: 'Open Registration',
-		badgeColor: 'success'
-	},
-	{
-		_id: '65f01a1b2c3d4e5f6a7b8c99',
-		tournamentName: 'Capital Fall Classic 2026',
-		eventLocation: 'CBA Columbia, MD',
-		startDate: 'Nov 5-6',
-		badge: 'Doubles / Singles',
-		badgeColor: 'primary'
-	}
-];
+// A tournament is still "upcoming" until the end of the day it ends (or starts, if it has no end date).
+const isTournamentUpcoming = (t, now = new Date()) => {
+	if (!t || t.status === 'archived' || t.status === 'canceled') return false;
+	const raw = t.endDate || t.startDate;
+	if (!raw) return true;
+	const date = new Date(raw);
+	if (Number.isNaN(date.getTime())) return true;
+	const startOfToday = new Date(now);
+	startOfToday.setHours(0, 0, 0, 0);
+	return date >= startOfToday;
+};
+
+// Same fallback look for the signed-in user's avatar everywhere on this page.
+const CURRENT_USER_AVATAR_FALLBACK_SX = { bgcolor: 'secondary.main', color: 'secondary.contrastText', fontWeight: 'bold' };
 
 const CATEGORY_FILTERS = [
 	{ id: "all", label: "All" },
@@ -70,6 +66,21 @@ const matchesCategory = (item, cat) => {
 	if (cat === "gear_exchange") return itemCat === "gear_exchange" || itemCat === "gear_review";
 	if (cat === "general") return itemCat === "general" || itemCat === "qa_forum" || itemCat === "training" || itemCat === "match_result";
 	return itemCat === cat;
+};
+
+// True when POST /api/forum held the new post for review (spam filter) instead of publishing it.
+const PENDING_REVIEW_STATUSES = new Set(["quarantined", "pending", "flagged"]);
+const isPostPendingReview = (data) => {
+	if (!data || typeof data !== "object") return false;
+	const statusOf = (s) => (typeof s === "string" ? s.toLowerCase() : "");
+	return Boolean(
+		data.quarantined === true
+		|| data.post?.quarantined === true
+		|| data.isFlagged === true
+		|| data.post?.isFlagged === true
+		|| PENDING_REVIEW_STATUSES.has(statusOf(data.status))
+		|| PENDING_REVIEW_STATUSES.has(statusOf(data.post?.status))
+	);
 };
 
 export default function Forum() {
@@ -167,12 +178,12 @@ export default function Forum() {
 			}
 
 			try {
-				const tournRes = await apiFetch("/api/tournaments?status=published");
+				const tournRes = await apiFetch("/api/tournaments?upcoming=true");
 				if (!isCancelled && tournRes && tournRes.ok) {
 					const tournData = await tournRes.json();
-					if (Array.isArray(tournData?.tournaments) && tournData.tournaments.length > 0) {
-						setUpcomingTournaments(tournData.tournaments.slice(0, 3));
-					}
+					if (isCancelled) return;
+					const list = Array.isArray(tournData?.tournaments) ? tournData.tournaments : [];
+					setUpcomingTournaments(list.filter(t => t?._id && isTournamentUpcoming(t)).slice(0, 3));
 				}
 			} catch (err) {
 				console.warn("Failed to load tournaments for sidebar:", err);
@@ -247,29 +258,74 @@ export default function Forum() {
 	const [hasMore, setHasMore] = useState(true);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isFetchingMore, setIsFetchingMore] = useState(false);
-	const observer = useRef();
+	// null | "initial" (page 1 failed) | "more" (a later page failed)
+	const [feedError, setFeedError] = useState(null);
+
+	// Deep-linked post (/post/:id, ?postId=, #post-<id>) and whether it turned out to be missing
+	const deepLinkTargetId = useMemo(() => {
+		const hash = location.hash || (typeof window !== 'undefined' ? window.location.hash : "") || "";
+		const id = routePostId || searchParams.get("postId") || (hash.startsWith("#post-") ? hash.replace("#post-", "") : null);
+		return id ? String(id) : null;
+	}, [routePostId, searchParams, location.hash]);
+	const deepLinkTargetRef = useRef(deepLinkTargetId);
+	useEffect(() => { deepLinkTargetRef.current = deepLinkTargetId; }, [deepLinkTargetId]);
+	const [missingPostId, setMissingPostId] = useState(null);
+	const isDeepLinkedPostMissing = Boolean(deepLinkTargetId) && missingPostId === deepLinkTargetId;
+	// id -> fetched post (or null when the server said it is gone) so we never refetch on every feed change
+	const deepLinkCacheRef = useRef(new Map());
+
+	// Removes a post everywhere this page keeps it: feed, new-post queue, tab caches.
+	const removePostFromFeed = useCallback((rawId) => {
+		const postId = rawId && typeof rawId === 'object' ? (rawId.postId || rawId._id) : rawId;
+		if (!postId) return;
+		const id = String(postId);
+		const keep = (item) => item && String(item.referenceId || "") !== id && String(item._id || "") !== id;
+		setFeed(prev => prev.filter(keep));
+		setNewPostsQueue(prev => prev.filter(keep));
+		Object.keys(tabsCacheRef.current).forEach(key => {
+			const entry = tabsCacheRef.current[key];
+			if (entry && Array.isArray(entry.feed)) {
+				tabsCacheRef.current[key] = { ...entry, feed: entry.feed.filter(keep) };
+			}
+		});
+		if (deepLinkCacheRef.current.has(id)) deepLinkCacheRef.current.set(id, null);
+		if (deepLinkTargetRef.current === id) setMissingPostId(id);
+	}, []);
 
 	// Deep-link scroll, fetch, and highlight handler
 	useEffect(() => {
-		const searchParams = new URLSearchParams(location.search);
-		const hash = location.hash || window.location.hash || "";
-		const targetId = routePostId || searchParams.get("postId") || (hash.startsWith("#post-") ? hash.replace("#post-", "") : null);
+		const targetId = deepLinkTargetId;
 		if (!targetId) return;
 
-		// If post not present in active feed, fetch directly and prepend
-		const exists = feedRef.current.some(p => String(p._id) === String(targetId) || String(p.referenceId) === String(targetId));
+		// If post not present in active feed, fetch directly (once) and prepend
+		const exists = feedRef.current.some(p => String(p._id) === targetId || String(p.referenceId) === targetId);
 		if (!exists && !isLoading) {
-			apiFetch(`/api/forum/${targetId}`)
-				.then(res => (res && res.ok ? res.json() : null))
-				.then(singlePost => {
-					if (singlePost && singlePost._id) {
-						setFeed(prev => {
-							if (prev.some(p => String(p._id) === String(singlePost._id))) return prev;
-							return [singlePost, ...prev];
-						});
-					}
-				})
-				.catch(err => console.error("Error fetching deep-linked post:", err));
+			const prependPost = (singlePost) => setFeed(prev => {
+				if (prev.some(p => String(p._id) === String(singlePost._id))) return prev;
+				return [singlePost, ...prev];
+			});
+			if (deepLinkCacheRef.current.has(targetId)) {
+				const cached = deepLinkCacheRef.current.get(targetId);
+				if (cached) prependPost(cached);
+			} else {
+				deepLinkCacheRef.current.set(targetId, undefined);
+				apiFetch(`/api/forum/${targetId}`)
+					.then(res => (res && res.ok ? res.json() : null))
+					.then(singlePost => {
+						if (singlePost && singlePost._id) {
+							deepLinkCacheRef.current.set(targetId, singlePost);
+							prependPost(singlePost);
+						} else {
+							deepLinkCacheRef.current.set(targetId, null);
+							setMissingPostId(targetId);
+						}
+					})
+					.catch(err => {
+						console.error("Error fetching deep-linked post:", err);
+						deepLinkCacheRef.current.set(targetId, null);
+						setMissingPostId(targetId);
+					});
+			}
 		}
 
 		// Smooth scroll and pulse highlight
@@ -285,7 +341,7 @@ export default function Forum() {
 		}, 350);
 
 		return () => clearTimeout(timer);
-	}, [routePostId, location.search, location.hash, feed.length, isLoading]);
+	}, [deepLinkTargetId, feed.length, isLoading]);
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [isModQueueOpen, setIsModQueueOpen] = useState(false);
@@ -335,6 +391,15 @@ export default function Forum() {
 	};
 	const [newPost, setNewPost] = useState(defaultNewPost);
 	const contentTextareaRef = useRef(null);
+	const composerCardRef = useRef(null);
+
+	// Close the composer and hand keyboard focus back to the card that opened it.
+	const closeComposer = useCallback(() => {
+		setIsModalOpen(false);
+		setTimeout(() => {
+			composerCardRef.current?.focus();
+		}, 0);
+	}, []);
 
 	const {
 		isOpen: isMentionOpen,
@@ -423,22 +488,19 @@ export default function Forum() {
 		});
 	};
 
-	const lastFeedElementRef = useCallback(node => {
-		if (isLoading || isFetchingMore) return;
-		if (observer.current) observer.current.disconnect();
-		if (typeof IntersectionObserver !== 'undefined') {
-			observer.current = new IntersectionObserver(entries => {
-				if (entries[0].isIntersecting && hasMore) {
-					setPage(prevPage => prevPage + 1);
-				}
-			});
-			if (node) observer.current.observe(node);
-		}
-	}, [isLoading, isFetchingMore, hasMore]);
-
-	// J11: 80% Viewport Infinite Scroll Pre-fetcher (Seamless append without skeleton flashing)
+	// J11: the ONLY "load more" trigger. Prefetches the next page once the viewport passes 80% of the
+	// document (seamless append without skeleton flashing). Paging stops when the server says hasMore: false,
+	// and pauses after a failed page until the user presses "Try again".
+	const canLoadMore = hasMore && !isLoading && !isFetchingMore && !feedError && feed.length > 0;
 	useEffect(() => {
+		if (!canLoadMore) return undefined;
 		let isThrottled = false;
+		let requested = false;
+		const requestNextPage = () => {
+			if (requested) return;
+			requested = true;
+			setPage(prevPage => prevPage + 1);
+		};
 		const handleWindowScroll = () => {
 			if (isThrottled) return;
 			isThrottled = true;
@@ -450,14 +512,16 @@ export default function Forum() {
 			const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
 			const threshold = scrollHeight * 0.8;
 
-			if (scrollPos >= threshold && hasMore && !isFetchingMore && !isLoading) {
-				setPage(prevPage => prevPage + 1);
-			}
+			if (scrollPos >= threshold) requestNextPage();
 		};
+
+		// A page too short to scroll never fires "scroll"; load the next page right away in that case.
+		const docHeight = document.documentElement.scrollHeight || 0;
+		if (docHeight > 0 && docHeight <= window.innerHeight) requestNextPage();
 
 		window.addEventListener("scroll", handleWindowScroll, { passive: true });
 		return () => window.removeEventListener("scroll", handleWindowScroll);
-	}, [hasMore, isFetchingMore, isLoading]);
+	}, [canLoadMore]);
 
 	// Global keyboard shortcuts: Press '/' or 'Cmd+K' / 'Ctrl+K' to quickly focus search
 	useEffect(() => {
@@ -489,6 +553,12 @@ export default function Forum() {
 		setFeed([]);
 		setNewPostsQueue([]);
 		setIsLoading(true);
+		setFeedRefreshKey(k => k + 1);
+	}, []);
+
+	// Re-runs the page that failed (page 1, or the next page with the same cursor).
+	const retryFeedLoad = useCallback(() => {
+		setFeedError(null);
 		setFeedRefreshKey(k => k + 1);
 	}, []);
 
@@ -533,39 +603,47 @@ export default function Forum() {
 				const cursorQuery = cursorRef.current ? `&cursor=${cursorRef.current}` : "";
 				const sessionQuery = `&sessionTime=${sessionTimeRef.current}`;
 				const res = await apiFetch(`/api/feed?tab=${tab}&limit=10${tagQuery}${catQuery}${searchQuery}${cursorQuery}${sessionQuery}`);
-				if (!isCancelled && res && res.ok) {
-					const data = await res.json();
-					if (isCancelled) return;
-					cursorRef.current = data.nextCursor;
-					setHasMore(!!data.nextCursor);
-					if (data.bookmarkedPosts) setBookmarkedPosts(new Set(data.bookmarkedPosts));
-					
-					if (isFirstPage) {
-						setFeed(data.feed);
+				if (isCancelled) return;
+				// apiFetch throws for most failures; a missing/non-OK response is still a failed load.
+				if (!res || !res.ok) throw new Error("Couldn't load posts.");
+				const rawData = await res.json();
+				if (isCancelled) return;
+				const data = rawData && typeof rawData === 'object' ? rawData : {};
+				const pageItems = Array.isArray(data.feed) ? data.feed.filter(item => item && typeof item === 'object') : [];
+				const nextCursor = data.nextCursor || null;
+				// Trust the server's hasMore when it sends one; a page with no items or no cursor is the end.
+				const moreAvailable = Boolean(nextCursor) && pageItems.length > 0 && (typeof data.hasMore === 'boolean' ? data.hasMore : true);
+				cursorRef.current = nextCursor;
+				setHasMore(moreAvailable);
+				setFeedError(null);
+				if (Array.isArray(data.bookmarkedPosts)) setBookmarkedPosts(new Set(data.bookmarkedPosts));
+
+				if (isFirstPage) {
+					setFeed(pageItems);
+					tabsCacheRef.current[tab] = {
+						feed: pageItems,
+						nextCursor,
+						hasMore: moreAvailable,
+						timestamp: Date.now()
+					};
+				} else {
+					setFeed(prev => {
+						const existingIds = new Set(prev.map(item => item._id));
+						const newItems = pageItems.filter(item => !existingIds.has(item._id));
+						const updated = [...prev, ...newItems];
 						tabsCacheRef.current[tab] = {
-							feed: data.feed,
-							nextCursor: data.nextCursor,
-							hasMore: !!data.nextCursor,
+							feed: updated,
+							nextCursor,
+							hasMore: moreAvailable,
 							timestamp: Date.now()
 						};
-					} else {
-						setFeed(prev => {
-							const existingIds = new Set(prev.map(item => item._id));
-							const newItems = data.feed.filter(item => !existingIds.has(item._id));
-							const updated = [...prev, ...newItems];
-							tabsCacheRef.current[tab] = {
-								feed: updated,
-								nextCursor: data.nextCursor,
-								hasMore: !!data.nextCursor,
-								timestamp: Date.now()
-							};
-							return updated;
-						});
-					}
+						return updated;
+					});
 				}
 			} catch (e) {
 				if (!isCancelled) {
 					console.error("Failed to load community feed", e);
+					setFeedError(isFirstPage ? "initial" : "more");
 				}
 			} finally {
 				if (!isCancelled) {
@@ -639,40 +717,81 @@ export default function Forum() {
 			});
 		};
 
+		// Applies `update(item)` to every post item that refers to `postId`. Items from
+		// the feed carry the Post id in referenceId; a just-created post (from the
+		// POST response or postCreated) carries it in _id and may have no `type`.
+		const updateFeedPost = (postId, update) => {
+			if (!postId) return;
+			const id = String(postId);
+			const isTarget = (item) => item
+				&& (!item.type || item.type === 'post')
+				&& [item._id, item.referenceId, item.postId].some(v => v != null && String(v) === id);
+			setFeed(prevFeed => (prevFeed.some(isTarget)
+				? prevFeed.map(item => (isTarget(item) ? update(item) : item))
+				: prevFeed));
+		};
+
 		const handlePostUpdated = (updatedPost) => {
-			// Update likes/comments/reactions/category/matchDetails inline without changing feed order
-			setFeed(prevFeed => prevFeed.map(item => {
-				if (item.type === 'post' && (item.referenceId === updatedPost._id || item._id === updatedPost._id)) {
-					const totalComments = updatedPost.comments?.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0) || 0;
-					return {
-						...item,
-						title: updatedPost.title ?? item.title,
-						content: updatedPost.content ?? item.content,
-						category: updatedPost.category ?? item.category,
-						matchDetails: updatedPost.matchDetails ?? item.matchDetails,
-						playerMatchmaking: updatedPost.playerMatchmaking ?? item.playerMatchmaking,
-						challengeMatch: updatedPost.challengeMatch ?? item.challengeMatch,
-						qaDetails: updatedPost.qaDetails ?? item.qaDetails,
-						gearDetails: updatedPost.gearDetails ?? item.gearDetails,
-						reactions: updatedPost.reactions ?? item.reactions,
-						likes: updatedPost.likedBy?.length ?? item.likes,
-						comments: totalComments
-					};
-				}
-				return item;
+			if (!updatedPost || !updatedPost._id) return;
+			// Update likes/comments/reactions/category/matchDetails inline without changing feed order.
+			// Missing or partial fields keep what the item already has.
+			updateFeedPost(updatedPost._id, item => ({
+				...item,
+				title: updatedPost.title ?? item.title,
+				content: updatedPost.content ?? item.content,
+				category: updatedPost.category ?? item.category,
+				visibility: updatedPost.visibility ?? item.visibility,
+				isEdited: updatedPost.isEdited ?? item.isEdited,
+				editedAt: updatedPost.editedAt ?? item.editedAt,
+				matchDetails: updatedPost.matchDetails ?? item.matchDetails,
+				playerMatchmaking: updatedPost.playerMatchmaking ?? item.playerMatchmaking,
+				rsvp: updatedPost.rsvp ?? item.rsvp,
+				challengeMatch: updatedPost.challengeMatch ?? item.challengeMatch,
+				qaDetails: updatedPost.qaDetails ?? item.qaDetails,
+				gearDetails: updatedPost.gearDetails ?? item.gearDetails,
+				reactions: Array.isArray(updatedPost.reactions) ? updatedPost.reactions : item.reactions,
+				likedBy: Array.isArray(updatedPost.likedBy) ? updatedPost.likedBy : item.likedBy,
+				recentLikerAvatars: Array.isArray(updatedPost.recentLikerAvatars) ? updatedPost.recentLikerAvatars : item.recentLikerAvatars,
+				likes: updatedPost.likedBy?.length ?? item.likes,
+				comments: Array.isArray(updatedPost.comments)
+					? updatedPost.comments.reduce((acc, c) => acc + 1 + (c?.replies?.length || 0), 0)
+					: item.comments,
 			}));
+		};
+
+		const handleReactionUpdated = (payload) => {
+			if (!payload || !Array.isArray(payload.reactions)) return;
+			updateFeedPost(payload.postId, item => ({ ...item, reactions: payload.reactions }));
+		};
+
+		const handleRallyRsvpUpdated = (payload) => {
+			if (!payload) return;
+			updateFeedPost(payload.postId, item => {
+				const playerMatchmaking = { ...(item.playerMatchmaking || {}) };
+				if (Array.isArray(payload.rsvpList)) playerMatchmaking.rsvpList = payload.rsvpList;
+				if (typeof payload.isFilled === 'boolean') playerMatchmaking.isFilled = payload.isFilled;
+				if (payload.slotsNeeded != null) playerMatchmaking.slotsNeeded = payload.slotsNeeded;
+				return { ...item, playerMatchmaking, rsvp: payload.rsvp ?? item.rsvp };
+			});
 		};
 
 		socket.on("postCreated", handleNewPost);
 		socket.on("matchConfirmed", handleNewPost);
 		socket.on("postUpdated", handlePostUpdated); // For likes/comments
+		socket.on("reactionUpdated", handleReactionUpdated);
+		socket.on("rallyRsvpUpdated", handleRallyRsvpUpdated);
+		// Server emits postDeleted (id) on delete, moderation removal, or when a post goes private.
+		socket.on("postDeleted", removePostFromFeed);
 
 		return () => {
 			socket.off("postCreated", handleNewPost);
 			socket.off("matchConfirmed", handleNewPost);
 			socket.off("postUpdated", handlePostUpdated);
+			socket.off("reactionUpdated", handleReactionUpdated);
+			socket.off("rallyRsvpUpdated", handleRallyRsvpUpdated);
+			socket.off("postDeleted", removePostFromFeed);
 		};
-	}, []);
+	}, [removePostFromFeed]);
 
 
 
@@ -754,11 +873,24 @@ export default function Forum() {
 			setShowMatchmakingDetails(false);
 			setShowGearDetails(false);
 			setShowTagsSelector(false);
-			setIsModalOpen(false);
+			closeComposer();
 			if (typeof window !== "undefined") sessionStorage.removeItem("mbc_community_post_draft");
-			toast.success("Post created successfully!");
 			tabsCacheRef.current = {};
-			setFeed(prev => [data, ...prev.filter(p => (p._id || p.referenceId) !== data._id)]);
+			// The spam filter can hold a post for review; then the server answers
+			// { message, post: { _id, status: 'quarantined', isFlagged } } and the post
+			// is not public yet, so say so instead of claiming success.
+			if (isPostPendingReview(data)) {
+				toast("Your post is being reviewed and will appear once approved.", { icon: "⏳", duration: 6000 });
+				return;
+			}
+			toast.success("Post created successfully!");
+			// Keep the audience the author picked even if the response leaves it out.
+			const createdPost = {
+				...data,
+				type: data.type || 'post',
+				visibility: data.visibility || newPost.visibility || 'PUBLIC',
+			};
+			setFeed(prev => [createdPost, ...prev.filter(p => String(p._id) !== String(createdPost._id) && String(p.referenceId || '') !== String(createdPost._id))]);
 		} catch (error) {
 			setIsUploadingImage(false);
 			setUploadStage("idle");
@@ -769,18 +901,23 @@ export default function Forum() {
 
 	const displayBuddies = useMemo(() => buddyRecommendations.slice(0, 4), [buddyRecommendations]);
 
+	// Only real, not-yet-finished tournaments from the server; no placeholder data.
 	const displayTournaments = useMemo(() => {
-		if (upcomingTournaments.length > 0) {
-			return upcomingTournaments.map(t => ({
+		const now = new Date();
+		return upcomingTournaments.filter(t => isTournamentUpcoming(t, now)).map(t => {
+			const deadline = t.registrationDeadline ? new Date(t.registrationDeadline) : null;
+			const registrationOpen = t.status === 'active' && deadline && !Number.isNaN(deadline.getTime()) && deadline >= now;
+			const soldOut = t.status === 'sold_out';
+			const start = t.startDate ? new Date(t.startDate) : null;
+			return {
 				_id: t._id,
-				tournamentName: t.tournamentName || t.name,
-				eventLocation: t.eventLocation || t.location || 'George Mason RAC Gym',
-				startDate: t.startDate ? new Date(t.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Upcoming',
-				badge: t.status === 'open' ? 'Open Registration' : 'Upcoming',
-				badgeColor: t.status === 'open' ? 'success' : 'primary'
-			}));
-		}
-		return DEFAULT_UPCOMING_TOURNAMENTS;
+				tournamentName: t.tournamentName || t.name || 'Tournament',
+				eventLocation: t.eventLocation || t.location || '',
+				startDate: start && !Number.isNaN(start.getTime()) ? start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Date TBA',
+				badge: soldOut ? 'Sold Out' : registrationOpen ? 'Open Registration' : 'Upcoming',
+				badgeColor: soldOut ? 'default' : registrationOpen ? 'success' : 'primary'
+			};
+		});
 	}, [upcomingTournaments]);
 
 	return (
@@ -861,24 +998,46 @@ export default function Forum() {
 							'&:hover': { bgcolor: 'action.hover' }
 						}}
 						onClick={() => navigate('/profile')}
+						role="link"
+						tabIndex={0}
+						aria-label={currentUser?.skillLevel ? "Open your profile" : "Open your profile to set your skill level"}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								navigate('/profile');
+							}
+						}}
 					>
 						<Avatar
 							src={currentUser?.profilePic}
 							alt={currentUser?.name || "Player"}
-							sx={{ width: 44, height: 44, border: '2px solid', borderColor: 'primary.light' }}
+							sx={{ width: 44, height: 44, border: '2px solid', borderColor: 'primary.light', ...CURRENT_USER_AVATAR_FALLBACK_SX }}
 						>
-							{currentUser?.name?.charAt(0) || "U"}
+							{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
 						</Avatar>
 						<Box sx={{ minWidth: 0, flex: 1 }}>
 							<Typography variant="subtitle2" fontWeight="bold" noWrap>
 								{currentUser?.name || "Mason Badminton"}
 							</Typography>
-							<Chip
-								label={currentUser?.skillLevel || "Intermediate"}
-								size="small"
-								color="primary"
-								sx={{ height: 20, fontSize: '0.68rem', fontWeight: 'bold', mt: 0.25 }}
-							/>
+							{currentUser?.skillLevel ? (
+								<Chip
+									data-testid="profile-skill-level"
+									label={currentUser.skillLevel}
+									size="small"
+									color="primary"
+									sx={{ height: 20, fontSize: '0.68rem', fontWeight: 'bold', mt: 0.25 }}
+								/>
+							) : currentUser ? (
+								// The whole card links to /profile; this just tells the user what to do there.
+								<Chip
+									data-testid="profile-set-skill-level"
+									label="Set your level"
+									size="small"
+									variant="outlined"
+									color="primary"
+									sx={{ height: 20, fontSize: '0.68rem', fontWeight: 'bold', mt: 0.25, cursor: 'pointer' }}
+								/>
+							) : null}
 						</Box>
 					</Paper>
 
@@ -1068,9 +1227,47 @@ export default function Forum() {
 					</Box>
 				)}
 
+				{/* DEEP-LINKED POST NOT FOUND (deleted, private, or bad link) */}
+				{isDeepLinkedPostMissing && (
+					<Box
+						data-testid="missing-post-banner"
+						role="alert"
+						sx={{
+							width: '100%',
+							maxWidth: '100%',
+							display: 'flex',
+							alignItems: 'center',
+							justifyContent: 'space-between',
+							flexWrap: 'wrap',
+							gap: 1,
+							p: 1.5,
+							borderRadius: 2.5,
+							bgcolor: 'action.hover',
+							border: '1px solid',
+							borderColor: 'warning.main'
+						}}
+					>
+						<Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+							This post was deleted or is no longer available.
+						</Typography>
+						<Button
+							size="small"
+							variant="outlined"
+							onClick={() => {
+								setMissingPostId(null);
+								navigate('/community');
+							}}
+							sx={{ textTransform: 'none', fontWeight: 'bold', fontSize: '0.8rem' }}
+						>
+							Back to feed
+						</Button>
+					</Box>
+				)}
+
 				{/* 1. FACEBOOK-STYLE COMPOSER CARD (PROMINENTLY AT THE VERY TOP OF FEED) */}
 				{Boolean(currentUser) && (
-					<Paper 
+					<Paper
+						ref={composerCardRef}
 						elevation={0}
 						data-testid="facebook-composer-card"
 						onClick={handleOpenCreatePost}
@@ -1106,12 +1303,10 @@ export default function Forum() {
 						<Avatar 
 							src={currentUser?.profilePic} 
 							alt={currentUser?.name || "User"}
-							sx={{ 
-								width: 40, 
-								height: 40, 
-								bgcolor: 'secondary.main', 
-								color: 'primary.main', 
-								fontWeight: 'bold',
+							sx={{
+								width: 40,
+								height: 40,
+								...CURRENT_USER_AVATAR_FALLBACK_SX,
 								fontSize: '1rem',
 								border: '1px solid',
 								borderColor: 'divider'
@@ -1160,46 +1355,62 @@ export default function Forum() {
 					<Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', whiteSpace: 'nowrap', mr: 0.5 }}>
 						Filter:
 					</Typography>
-					{CATEGORY_FILTERS.map((cat) => (
-						<Chip 
-							key={cat.id} 
-							label={cat.label} 
-							size="small" 
-							variant={selectedCategory === cat.id ? "filled" : "outlined"}
-							color={selectedCategory === cat.id ? "primary" : "default"}
-							onClick={() => {
-								setSelectedCategory(prev => prev === cat.id && cat.id !== "all" ? "all" : cat.id);
-								resetFeedAndPagination();
-							}}
-							clickable
-							sx={{ 
-								fontWeight: 'bold', 
-								borderRadius: 2,
-								cursor: 'pointer',
-								fontSize: '0.8rem',
-								transition: 'all 0.2s ease-in-out'
-							}} 
-						/>
-					))}
+					{CATEGORY_FILTERS.map((cat) => {
+						// "All" means no category AND no #tag; it only looks selected when nothing is filtering.
+						const isAll = cat.id === "all";
+						const isSelected = isAll ? (selectedCategory === "all" && !selectedTag) : selectedCategory === cat.id;
+						return (
+							<Chip
+								key={cat.id}
+								label={cat.label}
+								size="small"
+								variant={isSelected ? "filled" : "outlined"}
+								color={isSelected ? "primary" : "default"}
+								aria-pressed={isSelected}
+								onClick={() => {
+									if (isAll) {
+										setSelectedCategory("all");
+										setSelectedTag("");
+									} else {
+										setSelectedCategory(prev => prev === cat.id ? "all" : cat.id);
+									}
+									resetFeedAndPagination();
+								}}
+								clickable
+								sx={{
+									fontWeight: 'bold',
+									borderRadius: 2,
+									cursor: 'pointer',
+									fontSize: '0.8rem',
+									height: { xs: 32, sm: 24 },
+									flexShrink: 0,
+									transition: 'all 0.2s ease-in-out'
+								}}
+							/>
+						);
+					})}
 					{((trendingTags && trendingTags.length > 0) ? trendingTags : DEFAULT_TRENDING_TAGS).map((item) => (
-						<Chip 
-							key={item.tag} 
-							label={item.count ? `#${item.tag} (${item.count})` : `#${item.tag}`} 
-							size="small" 
+						<Chip
+							key={item.tag}
+							label={item.count ? `#${item.tag} (${item.count})` : `#${item.tag}`}
+							size="small"
 							variant={selectedTag === item.tag ? "filled" : "outlined"}
 							color={selectedTag === item.tag ? "primary" : "default"}
+							aria-pressed={selectedTag === item.tag}
 							onClick={() => {
 								setSelectedTag(prev => prev === item.tag ? "" : item.tag);
 								resetFeedAndPagination();
 							}}
 							clickable
-							sx={{ 
-								fontWeight: 'bold', 
+							sx={{
+								fontWeight: 'bold',
 								borderRadius: 2,
 								cursor: 'pointer',
 								fontSize: '0.75rem',
+								height: { xs: 32, sm: 24 },
+								flexShrink: 0,
 								transition: 'all 0.2s ease-in-out'
-							}} 
+							}}
 						/>
 					))}
 				</Box>
@@ -1264,6 +1475,18 @@ export default function Forum() {
                             <Skeleton variant="rounded" height={100} sx={{ borderRadius: 2 }} />
                         </Paper>
 					))
+				) : feedError === "initial" && displayedFeed.length === 0 ? (
+					<Box
+						data-testid="feed-error-state"
+						role="alert"
+						sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 1.5, textAlign: 'center' }}
+					>
+						<Typography color="text.primary" sx={{ fontWeight: 'bold' }}>Couldn&apos;t load posts.</Typography>
+						<Typography variant="body2" color="text.secondary">Check your connection and try again.</Typography>
+						<Button variant="outlined" size="small" onClick={retryFeedLoad} sx={{ fontWeight: 'bold', textTransform: 'none' }}>
+							Try again
+						</Button>
+					</Box>
 				) : displayedFeed.length === 0 ? (
 					<Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, gap: 1 }}>
 						{tab === 'saved' ? (
@@ -1322,6 +1545,20 @@ export default function Forum() {
 									View All Categories
 								</Button>
 							</>
+						) : selectedTag ? (
+							<>
+								<Typography color="text.primary">No posts tagged #{selectedTag}.</Typography>
+								<Button
+									variant="outlined"
+									size="small"
+									onClick={() => {
+										setSelectedTag('');
+										resetFeedAndPagination();
+									}}
+								>
+									Clear Tag
+								</Button>
+							</>
 						) : (
 							<Typography color="text.primary">No activity found.</Typography>
 						)}
@@ -1333,32 +1570,33 @@ export default function Forum() {
 							const team2Wins = item.team2Score > item.team1Score;
 
 							return (
-								<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
-									<Paper 
-										elevation={0} 
-										sx={{ 
-											p: 0, borderRadius: 4, overflow: 'hidden', border: "1px solid", borderColor: "divider", 
+								<Box key={item._id || item.referenceId || idx} sx={{ width: '100%' }}>
+									<Paper
+										elevation={0}
+										sx={{
+											p: 0, borderRadius: 4, overflow: 'hidden', border: "1px solid", borderColor: "divider",
 											display: 'flex', flexDirection: 'column',
 											background: 'linear-gradient(135deg, rgba(0, 102, 51, 0.05) 0%, rgba(255, 204, 51, 0.05) 100%)',
-											transition: '0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+											transition: 'box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+											// No scale/translate on hover: growing the card made it overlap its neighbours.
 											'&:hover': {
-												transform: 'scale(1.02) translateY(-4px)',
 												boxShadow: '0 12px 30px rgba(0,102,51,0.15)',
 												borderColor: 'primary.main'
 											}
 										}}
 									>
 										{/* HEADER BAR */}
-										<Box sx={{ display: 'flex', px: 3, py: 1.5, background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid rgba(0,0,0,0.05)', alignItems: 'center' }}>
-											<Chip label="🏆 Official Match" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: 'black' }} />
-											<Typography variant="caption" fontWeight="bold" color="text.primary" ml="auto">{formatTime(item.createdAt)}</Typography>
+										<Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, px: { xs: 2, sm: 3 }, py: 1.5, background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid rgba(0,0,0,0.05)', alignItems: 'center' }}>
+											<Chip label="🏆 Official Match" size="small" sx={{ fontWeight: 'bold', background: 'linear-gradient(45deg, #FFD700 0%, #FFA500 100%)', color: 'black', flexShrink: 0 }} />
+											<Typography variant="caption" fontWeight="bold" color="text.primary" sx={{ ml: 'auto', whiteSpace: 'nowrap' }}>{formatTime(item.createdAt)}</Typography>
 										</Box>
 
 										{/* SCOREBOARD */}
-										<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 3, position: 'relative' }}>
+										<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: { xs: 2, sm: 3 }, pt: 2, pb: 3, position: 'relative' }}>
 											{/* TEAM 1 */}
-											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
-												{team1Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem' }}>👑</Box>}
+											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '35%', position: 'relative' }}>
+												{/* Crown sits in its own row (kept for both teams so avatars line up) instead of floating over the avatars */}
+												<Box aria-hidden="true" sx={{ height: 28, lineHeight: '28px', fontSize: '1.5rem', visibility: team1Wins ? 'visible' : 'hidden' }}>👑</Box>
 												<Box sx={{ display: 'flex' }}>
 													{item.team1Avatars?.map((avatar, i) => (
 														<Avatar key={i} src={avatar} alt={item.team1?.[i] || `Team 1 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team1Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
@@ -1380,8 +1618,8 @@ export default function Forum() {
 											</Box>
 
 											{/* TEAM 2 */}
-											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, width: '35%', position: 'relative' }}>
-												{team2Wins && <Box sx={{ position: 'absolute', top: -20, fontSize: '1.5rem' }}>👑</Box>}
+											<Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '35%', position: 'relative' }}>
+												<Box aria-hidden="true" sx={{ height: 28, lineHeight: '28px', fontSize: '1.5rem', visibility: team2Wins ? 'visible' : 'hidden' }}>👑</Box>
 												<Box sx={{ display: 'flex' }}>
 													{item.team2Avatars?.map((avatar, i) => (
 														<Avatar key={i} src={avatar} alt={item.team2?.[i] || `Team 2 player ${i + 1}`} sx={{ width: 56, height: 56, ml: i > 0 ? -2 : 0, border: '3px solid', borderColor: team2Wins ? '#FFD700' : 'background.paper', zIndex: 2 - i, boxShadow: 2 }} />
@@ -1399,10 +1637,18 @@ export default function Forum() {
 
 						// Post items (either type === 'post' or standard Post objects from real-time events)
 						const mockPost = {
-							_id: item.referenceId || item._id,
-							referenceId: item.referenceId,
+							_id: (item.referenceId && typeof item.referenceId === 'object' ? item.referenceId._id : item.referenceId) || item.postId || item._id,
+							referenceId: item.referenceId && typeof item.referenceId === 'object' ? item.referenceId._id : item.referenceId,
 							title: item.title,
 							content: item.content,
+							// Audience may sit on the feed item or on the Post it points to.
+							visibility: item.visibility
+								|| item.post?.visibility
+								|| (item.referenceId && typeof item.referenceId === 'object' ? item.referenceId.visibility : undefined)
+								|| 'PUBLIC',
+							isEdited: item.isEdited,
+							editedAt: item.editedAt,
+							rsvp: item.rsvp,
 							category: item.category || 'general',
 							matchDetails: item.matchDetails || null,
 							playerMatchmaking: item.playerMatchmaking || null,
@@ -1422,13 +1668,14 @@ export default function Forum() {
 							isPinned: Boolean(item.isPinned),
 							reactions: item.reactions || [],
 							likes: item.likes ?? item.likedBy?.length ?? 0,
-							likedBy: Array.isArray(item.likedBy) ? item.likedBy : new Array(Math.max(0, item.likes || 0)).fill('mock_id'),
+							// Only real liker ids; the like count itself comes from `likes`.
+							likedBy: Array.isArray(item.likedBy) ? item.likedBy : [],
 							recentLikerAvatars: item.recentLikerAvatars || [],
 							comments: Array.isArray(item.comments) ? item.comments : [],
 							commentCount: typeof item.comments === 'number' ? item.comments : (Array.isArray(item.comments) ? item.comments.length : 0), 
 						};
 						return (
-							<Box key={item._id || item.referenceId || idx} ref={idx === displayedFeed.length - 1 ? lastFeedElementRef : null} sx={{ width: '100%' }}>
+							<Box key={item._id || item.referenceId || idx} sx={{ width: '100%' }}>
 								<PostCard 
 									post={mockPost} 
 									compact={feedDensity === "compact"} 
@@ -1442,7 +1689,8 @@ export default function Forum() {
 										else n.delete(targetId); 
 										return n; 
 									})} 
-									onDelete={() => {}} 
+									// PostCard calls this only after the server confirmed the delete.
+									onDelete={(deletedId) => removePostFromFeed(deletedId || mockPost._id)}
 								/>
 							</Box>
 						);
@@ -1450,9 +1698,17 @@ export default function Forum() {
 				)}
 			</Box>
 			
-			<Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, height: 60, alignItems: 'center' }}>
+			<Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, minHeight: 60, alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
 				{isFetchingMore && <CircularProgress size={24} color="primary" />}
-                {!isFetchingMore && !hasMore && feed.length > 0 && (
+				{!isFetchingMore && feedError === "more" && (
+					<Box role="alert" data-testid="feed-load-more-error" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', justifyContent: 'center' }}>
+						<Typography variant="body2" color="text.primary">Couldn&apos;t load more posts.</Typography>
+						<Button variant="outlined" size="small" onClick={retryFeedLoad} sx={{ fontWeight: 'bold', textTransform: 'none' }}>
+							Try again
+						</Button>
+					</Box>
+				)}
+                {!isFetchingMore && !feedError && !hasMore && feed.length > 0 && (
                     <Typography variant="body2" color="text.primary" sx={{ fontWeight: 'bold' }}>
                         You're all caught up! 🏸
                     </Typography>
@@ -1500,6 +1756,20 @@ export default function Forum() {
 						</Box>
 
 						<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+							{displayTournaments.length === 0 && (
+								<Box data-testid="tournaments-empty-state" sx={{ py: 1, textAlign: 'center' }}>
+									<Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.82rem' }}>
+										No upcoming tournaments
+									</Typography>
+									<Button
+										size="small"
+										onClick={() => navigate('/tournaments')}
+										sx={{ textTransform: 'none', fontSize: '0.78rem', fontWeight: 'bold', mt: 0.5 }}
+									>
+										Browse tournaments
+									</Button>
+								</Box>
+							)}
 							{displayTournaments.map(t => (
 								<Box
 									key={t._id}
@@ -1517,7 +1787,7 @@ export default function Forum() {
 										{t.tournamentName}
 									</Typography>
 									<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-										{t.eventLocation} • {t.startDate}
+										{[t.eventLocation, t.startDate].filter(Boolean).join(' • ')}
 									</Typography>
 									<Chip label={t.badge} size="small" color={t.badgeColor} sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }} />
 								</Box>
@@ -1618,8 +1888,8 @@ export default function Forum() {
 			{/* Create Post Modal */}
 			<Dialog 
 				fullScreen={fullScreen} 
-				open={isModalOpen} 
-				onClose={() => setIsModalOpen(false)} 
+				open={isModalOpen}
+				onClose={closeComposer}
 				disableRestoreFocus
 				aria-labelledby="create-post-dialog-title"
 				maxWidth="sm"
@@ -1629,7 +1899,9 @@ export default function Forum() {
 						sx: {
 							borderRadius: { xs: 0, sm: 3 },
 							p: 0,
-							overflow: "hidden"
+							overflow: "hidden",
+							// Opaque surface: the theme's translucent glass paper let the backdrop wash out the title text.
+							bgcolor: (t) => (t.palette.mode === 'dark' ? '#0b2416' : '#ffffff')
 						}
 					}
 				}}
@@ -1649,13 +1921,14 @@ export default function Forum() {
 						m: 0,
 						fontWeight: "bold",
 						textAlign: "center",
-						fontSize: "1.15rem"
+						fontSize: "1.15rem",
+						color: "text.primary"
 					}}
 				>
 					Create a Post
 					<IconButton
 						aria-label="Close"
-						onClick={() => setIsModalOpen(false)}
+						onClick={closeComposer}
 						size="small"
 						sx={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)" }}
 					>
@@ -1702,9 +1975,9 @@ export default function Forum() {
 						<Avatar
 							src={currentUser?.profilePic}
 							alt={currentUser?.name || "Player"}
-							sx={{ width: 44, height: 44, border: "2px solid", borderColor: "primary.light" }}
+							sx={{ width: 44, height: 44, border: "2px solid", borderColor: "primary.light", ...CURRENT_USER_AVATAR_FALLBACK_SX }}
 						>
-							{currentUser?.name?.charAt(0) || "U"}
+							{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
 						</Avatar>
 						<Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
 							<Typography variant="subtitle2" sx={{ fontWeight: "bold", lineHeight: 1.2 }}>
@@ -2445,7 +2718,7 @@ export default function Forum() {
 						</Button>
 					)}
 
-					<Button onClick={() => setIsModalOpen(false)} color="inherit" sx={{ fontWeight: "bold" }}>Cancel</Button>
+					<Button onClick={closeComposer} color="inherit" sx={{ fontWeight: "bold" }}>Cancel</Button>
 					<Button 
 						onClick={handleSubmit} 
 						variant="contained" 
@@ -2472,8 +2745,9 @@ export default function Forum() {
 					onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
 					sx={{
 						position: 'fixed',
-						bottom: { xs: 80, sm: 36 },
-						right: { xs: 16, sm: 36 },
+						// Stacked above the 56px Messenger / feedback FABs (bottom 24, right 24) so they never overlap.
+						bottom: { xs: 96, sm: 100 },
+						right: { xs: 28, sm: 32 },
 						zIndex: 1100,
 						bgcolor: 'primary.main',
 						color: 'primary.contrastText',
@@ -2492,7 +2766,7 @@ export default function Forum() {
 				onClose={() => setIsModQueueOpen(false)}
 				onPostResolved={(postId, action) => {
 					if (action === "delete" || action === "quarantine") {
-						setFeed((prev) => prev.filter((p) => (p._id || p.referenceId) !== postId));
+						removePostFromFeed(postId);
 					}
 				}}
 			/>

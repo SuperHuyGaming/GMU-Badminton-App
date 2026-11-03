@@ -431,7 +431,7 @@ export default function SearchResults() {
                 </Grid>
 
                 {/* Main Central Column - Results */}
-                <Grid size={{ xs: 12, md: 9 }} component="main" aria-label="Search results list">
+                <Grid size={{ xs: 12, md: 9 }} component="section" aria-label="Search results list">
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} aria-live="polite" aria-atomic="false">
                         {results.length === 0 && !loading && (
                             <Paper 
