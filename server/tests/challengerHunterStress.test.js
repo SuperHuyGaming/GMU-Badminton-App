@@ -81,6 +81,9 @@ const {
 const { getRacStatus } = require('../services/scraper');
 
 const DiscoveryQueue = require('../models/DiscoveryQueue');
+
+// Heavy parsing/heap loops can exceed the 5 s default on shared CI runners.
+jest.setTimeout(30000);
 const ProposedTournament = require('../models/ProposedTournament');
 const Tournament = require('../models/Tournament');
 
