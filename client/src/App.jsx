@@ -29,31 +29,10 @@ import FeedbackModal from "./components/FeedbackModal";
 import FeedbackFAB from "./components/FeedbackFAB";
 import ErrorBoundary from "./components/ErrorBoundary";
 import socket from "./utils/socket";
-import posthog from 'posthog-js';
+import analytics, { initAnalytics } from './utils/analytics';
 
-// Initialize PostHog Analytics only if a real key is provided
-const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY || 'mock-posthog-api-key';
-if (POSTHOG_KEY && POSTHOG_KEY !== 'mock-posthog-api-key') {
-    posthog.init(POSTHOG_KEY, {
-        api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com',
-        autocapture: true, // Automatically captures clicks, etc.
-        capture_pageview: false, // We will manually capture SPA page views
-        session_recording: {
-            maskAllInputs: false,
-            maskTextSelector: "password",
-        },
-        loaded: (ph) => {
-            // eslint-disable-next-line no-undef
-            if (process.env.NODE_ENV === 'development') ph.debug(false);
-        }
-    });
-} else {
-    // Stub PostHog methods to prevent 404/401 errors and crashes when called
-    posthog.init = () => {};
-    posthog.capture = () => {};
-    posthog.identify = () => {};
-    posthog.reset = () => {};
-}
+// Loads PostHog in the background after first paint, only when VITE_POSTHOG_KEY is set.
+initAnalytics();
 
 import {
 	BrowserRouter,
@@ -119,7 +98,7 @@ const AnimatedRoutes = () => {
 
     useEffect(() => {
         // Track SPA pageviews for analytics and heatmaps
-        posthog.capture('$pageview', {
+        analytics.capture('$pageview', {
             $current_url: window.location.href,
         });
     }, [location]);
@@ -309,12 +288,12 @@ function App() {
 
 	useEffect(() => {
 		if (user) {
-			posthog.identify(user.id || user._id, {
+			analytics.identify(user.id || user._id, {
 				name: user.name,
 				skillLevel: user.skillLevel
 			});
 		} else {
-			posthog.reset();
+			analytics.reset();
 		}
 	}, [user]);
 
