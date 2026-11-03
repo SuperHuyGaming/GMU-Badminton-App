@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, AvatarGroup, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, Drawer, FormControlLabel, Switch, Select, MenuItem, InputLabel, FormControl, Popover, Paper, MenuList } from '@mui/material';
+import { Box, Typography, Card, CardContent, Alert, Grid, Avatar, AvatarGroup, Button, Chip, Stack, TextField, InputAdornment, Skeleton, Divider, IconButton, ClickAwayListener, MenuItem, Popover, Paper, MenuList } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import TuneIcon from '@mui/icons-material/Tune';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -49,16 +48,10 @@ export default function CommunityDirectory() {
     const [isFocused, setIsFocused] = useState(false);
     
     // Advanced Filter state
-    const [drawerOpen, setDrawerOpen] = useState(false);
-    const [campusFilter, setCampusFilter] = useState('All');
-    const [playStyleFilter, setPlayStyleFilter] = useState('All');
-    const [timeOfDayFilter, setTimeOfDayFilter] = useState('All');
-    const [availableNow, setAvailableNow] = useState(false);
 
     // Online Presence & Queue state
     // eslint-disable-next-line no-unused-vars
     const [onlineUsers, setOnlineUsers] = useState(new Set());
-    const [inQueue, setInQueue] = useState(false);
 
     // Friend Request state
     const [requestedFriends, setRequestedFriends] = useState(new Set());
@@ -165,10 +158,6 @@ export default function CommunityDirectory() {
                 let url = `/api/matchmaking/discover?`;
                 if (submittedQuery) url += `search=${encodeURIComponent(submittedQuery)}&`;
                 if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
-                if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
-                if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
-                if (playStyleFilter !== 'All') url += `playStyle=${encodeURIComponent(playStyleFilter)}&`;
-                if (availableNow) url += `availableNow=true&`;
 
                 const response = await apiFetch(url);
                 const data = await response.json();
@@ -198,7 +187,7 @@ export default function CommunityDirectory() {
         return () => {
             isCancelled = true;
         };
-    }, [skillFilter, campusFilter, timeOfDayFilter, playStyleFilter, availableNow, submittedQuery]);
+    }, [skillFilter, submittedQuery]);
 
     useEffect(() => {
         if (!hasMore || loading || !cursor) return;
@@ -210,10 +199,6 @@ export default function CommunityDirectory() {
                         let url = `/api/matchmaking/discover?`;
                         if (submittedQuery) url += `search=${encodeURIComponent(submittedQuery)}&`;
                         if (skillFilter !== 'All') url += `skill=${encodeURIComponent(skillFilter)}&`;
-                        if (campusFilter !== 'All') url += `campus=${encodeURIComponent(campusFilter)}&`;
-                        if (timeOfDayFilter !== 'All') url += `time=${encodeURIComponent(timeOfDayFilter)}&`;
-                        if (playStyleFilter !== 'All') url += `playStyle=${encodeURIComponent(playStyleFilter)}&`;
-                        if (availableNow) url += `availableNow=true&`;
                         url += `cursor=${encodeURIComponent(cursor)}&`;
 
                         const response = await apiFetch(url);
@@ -244,7 +229,7 @@ export default function CommunityDirectory() {
             if (currentTarget) observer.unobserve(currentTarget);
             observer.disconnect();
         };
-    }, [cursor, hasMore, loading, submittedQuery, skillFilter, campusFilter, timeOfDayFilter, playStyleFilter, availableNow]);
+    }, [cursor, hasMore, loading, submittedQuery, skillFilter]);
 
     // Privacy: Removed Presence Polling
 
@@ -506,22 +491,6 @@ export default function CommunityDirectory() {
                                 }
                             }}
                         />
-                        <IconButton 
-                            onClick={() => setDrawerOpen(true)}
-                            aria-label="Advanced filters"
-                            sx={{ 
-                                display: 'none',
-                                bgcolor: 'background.paper', 
-                                border: '1px solid',
-                                borderColor: 'divider',
-                                borderRadius: '50%',
-                                width: 56,
-                                height: 56,
-                                '&:hover': { bgcolor: 'action.hover' }
-                            }}
-                        >
-                            <TuneIcon />
-                        </IconButton>
                     </Box>
                         {isFocused && (
                             <Paper elevation={8} sx={{ position: 'absolute', top: '100%', left: 0, right: 0, mt: 1, borderRadius: 3, overflow: 'hidden', zIndex: 20 }}>
@@ -605,7 +574,7 @@ export default function CommunityDirectory() {
                 </Stack>
             </Box>
 
-            {!searchQuery && skillFilter === 'All' && campusFilter === 'All' && timeOfDayFilter === 'All' && playStyleFilter === 'All' && !availableNow && (
+            {!searchQuery && skillFilter === 'All' && (
                 <Box sx={{ mb: 5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                         <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
@@ -692,7 +661,7 @@ export default function CommunityDirectory() {
                 </Box>
             )}
 
-            {(submittedQuery || skillFilter !== 'All' || campusFilter !== 'All' || timeOfDayFilter !== 'All' || playStyleFilter !== 'All' || availableNow) && (
+            {(submittedQuery || skillFilter !== 'All') && (
                 <>
                     <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
                         Search Results
@@ -714,10 +683,6 @@ export default function CommunityDirectory() {
                                     setSearchQuery('');
                                     setSubmittedQuery('');
                                     setSkillFilter('All');
-                                    setCampusFilter('All');
-                                    setTimeOfDayFilter('All');
-                                    setPlayStyleFilter('All');
-                                    setAvailableNow(false);
                                 }}
                                 sx={{ borderRadius: 50, px: 4, fontWeight: 'bold' }}
                             >
@@ -802,89 +767,6 @@ export default function CommunityDirectory() {
                     )}
                 </>
             )}
-
-            <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} ModalProps={{ disableRestoreFocus: true }}>
-                <Box sx={{ width: { xs: '100vw', sm: 340 }, p: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Advanced Filters</Typography>
-                        <IconButton aria-label="Close filter drawer" onClick={() => setDrawerOpen(false)}>
-                            <CloseIcon />
-                        </IconButton>
-                    </Box>
-
-                    <Typography variant="subtitle2" color="primary" sx={{ mb: 1, fontWeight: 'bold' }}>
-                        PLAY NOW QUEUE
-                    </Typography>
-                    <FormControlLabel 
-                        control={
-                            <Switch 
-                                checked={inQueue} 
-                                onChange={async (e) => {
-                                    const join = e.target.checked;
-                                    try {
-                                        const res = await apiFetch(`/api/matchmaking/queue/${join ? 'join' : 'leave'}`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                checkInLocation: campusFilter !== 'All' ? campusFilter : undefined,
-                                                preferredTimeOfDay: timeOfDayFilter !== 'All' ? timeOfDayFilter : undefined
-                                            })
-                                        });
-                                        if (res.ok) setInQueue(join);
-                                    } catch (err) {
-                                        console.error('Queue toggle error', err);
-                                    }
-                                }} 
-                                color="success" 
-                            />
-                        } 
-                        label={<Typography sx={{ fontWeight: 500 }}>{inQueue ? "Looking for match..." : "Join Matchmaking Queue"}</Typography>} 
-                        sx={{ mb: 4, display: 'block', p: 1.5, border: '1px solid', borderColor: inQueue ? 'success.main' : 'divider', borderRadius: 2, bgcolor: inQueue ? 'success.light' : 'transparent' }}
-                    />
-                    
-                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, fontWeight: 'bold' }}>
-                        SEARCH FILTERS
-                    </Typography>
-                    <FormControlLabel 
-                        control={<Switch checked={availableNow} onChange={(e) => setAvailableNow(e.target.checked)} color="primary" />} 
-                        label={<Typography sx={{ fontWeight: 500 }}>Available Now (Online)</Typography>} 
-                        sx={{ mb: 4, display: 'block' }}
-                    />
-
-                    <FormControl fullWidth sx={{ mb: 4 }}>
-                        <InputLabel id="campus-filter-label">Campus Location</InputLabel>
-                        <Select labelId="campus-filter-label" value={campusFilter} label="Campus Location" onChange={(e) => setCampusFilter(e.target.value)}>
-                            <MenuItem value="All">All Locations</MenuItem>
-                            <MenuItem value="RAC">RAC (Recreation Athletic Complex)</MenuItem>
-                            <MenuItem value="Skyline">Skyline Fitness</MenuItem>
-                            <MenuItem value="AFC">AFC (Aquatic Fitness Center)</MenuItem>
-                        </Select>
-                    </FormControl>
-
-                    <FormControl fullWidth sx={{ mb: 4 }}>
-                        <InputLabel id="time-filter-label">Time of Day</InputLabel>
-                        <Select labelId="time-filter-label" value={timeOfDayFilter} label="Time of Day" onChange={(e) => setTimeOfDayFilter(e.target.value)}>
-                            <MenuItem value="All">Any Time</MenuItem>
-                            <MenuItem value="Morning">Morning</MenuItem>
-                            <MenuItem value="Afternoon">Afternoon</MenuItem>
-                            <MenuItem value="Evening">Evening</MenuItem>
-                        </Select>
-                    </FormControl>
-
-                    <FormControl fullWidth sx={{ mb: 5 }}>
-                        <InputLabel id="playstyle-filter-label">Play Style</InputLabel>
-                        <Select labelId="playstyle-filter-label" value={playStyleFilter} label="Play Style" onChange={(e) => setPlayStyleFilter(e.target.value)}>
-                            <MenuItem value="All">Any Style</MenuItem>
-                            <MenuItem value="Singles">Singles</MenuItem>
-                            <MenuItem value="Doubles">Doubles</MenuItem>
-                        </Select>
-                    </FormControl>
-
-                    <Button variant="contained" color="primary" fullWidth size="large" onClick={() => setDrawerOpen(false)} sx={{ borderRadius: 2, fontWeight: 'bold' }}>
-                        Apply Filters
-                    </Button>
-                </Box>
-            </Drawer>
 
             <Popover
                 id="mouse-over-popover"

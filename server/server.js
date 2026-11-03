@@ -1,6 +1,5 @@
 require("dotenv").config();
 const express = require("express");
-const promBundle = require("express-prom-bundle");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
@@ -120,9 +119,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
-
-const metricsMiddleware = promBundle({includeMethod: true});
-app.use(metricsMiddleware);
 
 // 1. HTTP Security Headers
 app.use(helmet());
