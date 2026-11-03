@@ -1,16 +1,13 @@
 // server/config/jwtSecret.js
 // Single source of truth for the JWT signing secret.
-// The fallback exists only so local dev and the test suite run without a .env.
-// Once JWT_SECRET is confirmed on Render, production should refuse to start without it.
+// Production must set JWT_SECRET; the fallback exists only so local dev and the test suite
+// run without a .env.
 const DEV_FALLBACK_SECRET = "gmu_badminton_super_secret_key_2026";
 
-const JWT_SECRET = process.env.JWT_SECRET || DEV_FALLBACK_SECRET;
-
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
-	console.error(
-		"[SECURITY] JWT_SECRET is not set in production; falling back to the public default secret. " +
-		"Set JWT_SECRET in the deployment environment immediately."
-	);
+	throw new Error("[SECURITY] JWT_SECRET must be set in production. Refusing to start with the default secret.");
 }
+
+const JWT_SECRET = process.env.JWT_SECRET || DEV_FALLBACK_SECRET;
 
 module.exports = { JWT_SECRET };
