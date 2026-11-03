@@ -11,6 +11,10 @@ import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useAuth } from '../context/AuthContext';
 import apiFetch from '../utils/api';
 import socket from '../utils/socket';
+import { CHAT_READ_EVENT, idOf, markChatVisible, mergeMessage, notifyChatRead } from '../utils/chatState';
+
+// /api/messages/recent returns { friend, lastMessage, unreadCount }; older shapes used partner/user.
+const getPartner = (c) => (c && (c.friend || c.partner || c.user)) || c || {};
 
 export default function FloatingChatDock() {
     const { user } = useAuth();
@@ -48,8 +52,7 @@ export default function FloatingChatDock() {
                     setRecentConversations(data);
                     // Default to the most recent conversation partner if no active chat
                     if (data.length > 0) {
-                        const first = data[0];
-                        const partner = first.partner || first.user || first;
+                        const partner = getPartner(data[0]);
                         if (partner && (partner._id || partner.id)) {
                             setActiveRecipient(prev => prev || {
                                 _id: partner._id || partner.id,
@@ -75,8 +78,15 @@ export default function FloatingChatDock() {
                 const data = await res.json();
                 const list = Array.isArray(data) ? data : (data.messages || []);
                 setMessages(list);
-                // Mark messages as read
-                apiFetch(`/api/messages/read/${currentUserId}/${recipientId}`, { method: 'PUT' }).catch(() => {});
+                // Mark messages as read, clearing this conversation's unread count right away
+                // and re-syncing the global badges once the server confirms.
+                setRecentConversations(prev => prev.map(c =>
+                    idOf(getPartner(c)) === String(recipientId) && c.unreadCount ? { ...c, unreadCount: 0 } : c
+                ));
+                notifyChatRead(recipientId, { optimistic: true });
+                Promise.resolve(apiFetch(`/api/messages/read/${currentUserId}/${recipientId}`, { method: 'PUT' }))
+                    .then(() => notifyChatRead(recipientId))
+                    .catch(() => {});
             }
         } catch (err) {
             console.warn('[FloatingChatDock] Failed to load messages:', err.message);
@@ -101,13 +111,14 @@ export default function FloatingChatDock() {
             });
             setIsOpen(true);
             setIsMinimized(false);
-            fetchMessages(targetId);
+            // The conversation is loaded by the activeRecipient effect below (calling
+            // fetchMessages here too loaded it, and marked it read, twice).
             setTimeout(() => inputRef.current?.focus(), 200);
         };
 
         window.addEventListener('openChatWithUser', handleOpenChat);
         return () => window.removeEventListener('openChatWithUser', handleOpenChat);
-    }, [currentUserId, fetchMessages]);
+    }, [currentUserId]);
 
     // Initial load
     useEffect(() => {
@@ -146,30 +157,61 @@ export default function FloatingChatDock() {
         return () => { isCancelled = true; };
     }, [isOpen, isMinimized, activeRecipient, currentUserId]);
 
+    // Latest values for the socket handler, so the listener is registered once per user
+    // instead of being torn down and re-added on every state change.
+    const liveStateRef = useRef({ activeRecipient, isOpen, isMinimized });
+    useEffect(() => {
+        liveStateRef.current = { activeRecipient, isOpen, isMinimized };
+    }, [activeRecipient, isOpen, isMinimized]);
+
+    // While the chat window is expanded, its conversation doesn't count as unread.
+    const visibleRecipientId = isOpen && !isMinimized ? activeRecipient?._id : null;
+    useEffect(() => markChatVisible(visibleRecipientId), [visibleRecipientId]);
+
+    // Keep the launcher badge in sync when a conversation is read elsewhere (Messages page, other tab).
+    useEffect(() => {
+        const handleChatRead = (e) => {
+            const partnerId = e?.detail?.partnerId;
+            if (partnerId) {
+                setRecentConversations(prev => prev.map(c =>
+                    idOf(getPartner(c)) === partnerId && c.unreadCount ? { ...c, unreadCount: 0 } : c
+                ));
+            }
+        };
+        window.addEventListener(CHAT_READ_EVENT, handleChatRead);
+        return () => window.removeEventListener(CHAT_READ_EVENT, handleChatRead);
+    }, []);
+
     // Socket listeners for real-time messaging
     useEffect(() => {
         if (!socket || !currentUserId) return;
+        const selfId = String(currentUserId);
 
         const handlePrivateMessage = (msg) => {
-            const senderId = typeof msg.sender === 'object' ? (msg.sender?._id || msg.sender?.id) : msg.sender;
-            const recipientId = typeof msg.recipient === 'object' ? (msg.recipient?._id || msg.recipient?.id) : msg.recipient;
+            if (!msg) return;
+            const senderId = idOf(msg.sender);
+            // The server sends `receiver`; keep `recipient` for older payloads.
+            const recipientId = idOf(msg.receiver ?? msg.recipient);
+            const isMine = senderId === selfId;
+            const partnerId = isMine ? recipientId : senderId;
+            const { activeRecipient: active, isOpen: open, isMinimized: minimized } = liveStateRef.current;
+            const isActive = Boolean(active?._id) && String(active._id) === partnerId;
+            const isVisible = isActive && open && !minimized;
 
-            // If message belongs to active chat, append it
-            if (
-                activeRecipient && 
-                (senderId === activeRecipient._id || recipientId === activeRecipient._id)
-            ) {
-                setMessages(prev => {
-                    if (prev.some(m => (m._id || m.id) === (msg._id || msg.id))) return prev;
-                    return [...prev, msg];
-                });
+            // If message belongs to the active chat, merge it (de-duplicated by _id; our own
+            // echo replaces its optimistic copy).
+            if (isActive) {
+                setMessages(prev => mergeMessage(prev, msg, { selfId }));
                 setTimeout(scrollToBottom, 50);
+            }
 
-                if (isOpen && !isMinimized && senderId === activeRecipient._id) {
-                    apiFetch(`/api/messages/read/${currentUserId}/${activeRecipient._id}`, { method: 'PUT' }).catch(() => {});
-                }
+            if (isMine) return;
+            if (isVisible) {
+                Promise.resolve(apiFetch(`/api/messages/read/${selfId}/${partnerId}`, { method: 'PUT' }))
+                    .then(() => notifyChatRead(partnerId))
+                    .catch(() => {});
             } else {
-                // Refresh recent conversations to update preview/unread
+                // Refresh recent conversations to update preview + the launcher's unread badge
                 fetchRecentConversations();
             }
         };
@@ -187,7 +229,7 @@ export default function FloatingChatDock() {
             socket.off('privateMessage', handlePrivateMessage);
             socket.off('onlineUsersUpdate', handleOnlineUsers);
         };
-    }, [currentUserId, activeRecipient, isOpen, isMinimized, scrollToBottom, fetchRecentConversations]);
+    }, [currentUserId, scrollToBottom, fetchRecentConversations]);
 
     // Send message handler
     const handleSendMessage = async (e) => {
@@ -195,12 +237,12 @@ export default function FloatingChatDock() {
         const trimmed = inputMessage.trim();
         if (!trimmed || !activeRecipient?._id || !currentUserId) return;
 
-        const optimisticId = `temp-${Date.now()}`;
+        const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const newMsg = {
             _id: optimisticId,
             content: trimmed,
             sender: { _id: currentUserId, name: user?.name || 'You', avatarUrl: user?.avatarUrl || '' },
-            recipient: { _id: activeRecipient._id, name: activeRecipient.name },
+            receiver: { _id: activeRecipient._id, name: activeRecipient.name },
             createdAt: new Date().toISOString()
         };
 
@@ -220,8 +262,15 @@ export default function FloatingChatDock() {
             });
             if (res.ok) {
                 const saved = await res.json();
-                // Replace optimistic message with server version
-                setMessages(prev => prev.map(m => m._id === optimisticId ? saved : m));
+                // Replace the optimistic copy with the server version, unless the socket echo
+                // already did (then just drop the optimistic copy).
+                if (saved && saved._id) {
+                    setMessages(prev => mergeMessage(prev, saved, { selfId: String(currentUserId), tempId: optimisticId }));
+                }
+            } else {
+                // Not sent: drop the optimistic copy and give the text back.
+                setMessages(prev => prev.filter(m => m._id !== optimisticId));
+                setInputMessage(prev => prev || trimmed);
             }
         } catch (err) {
             console.warn('[FloatingChatDock] Message send failed:', err.message);
@@ -230,6 +279,7 @@ export default function FloatingChatDock() {
 
     if (!currentUserId) return null;
 
+    const unreadTotal = recentConversations.reduce((acc, c) => acc + (Number(c?.unreadCount) || 0), 0);
     const isRecipientOnline = activeRecipient?._id ? onlineUserIds.has(activeRecipient._id) : false;
 
     // 1. COLLAPSED FLOATING LAUNCHER (When closed or minimized)
@@ -244,15 +294,24 @@ export default function FloatingChatDock() {
                     zIndex: (theme) => theme.zIndex.speedDial
                 }}
             >
+                <Badge
+                    data-testid="floating-chat-unread-badge"
+                    badgeContent={unreadTotal}
+                    max={99}
+                    color="error"
+                    invisible={unreadTotal === 0}
+                    overlap="circular"
+                    sx={{ '& .MuiBadge-badge': { zIndex: 1, pointerEvents: 'none' } }}
+                >
                 <Tooltip title={isMinimized && activeRecipient ? `Chat with ${activeRecipient.name}` : "Open Messenger Chat"}>
                     <IconButton
                         data-testid="floating-chat-launcher"
-                        aria-label="Open Messenger Chat"
+                        aria-label={unreadTotal > 0 ? `Open Messenger Chat (${unreadTotal} unread)` : "Open Messenger Chat"}
                         onClick={() => {
                             setIsOpen(true);
                             setIsMinimized(false);
-                            if (activeRecipient?._id) fetchMessages(activeRecipient._id);
-                            else fetchRecentConversations();
+                            // With a recipient, the activeRecipient effect loads the conversation.
+                            if (!activeRecipient?._id) fetchRecentConversations();
                         }}
                         sx={{
                             width: 56,
@@ -279,6 +338,7 @@ export default function FloatingChatDock() {
                         </Badge>
                     </IconButton>
                 </Tooltip>
+                </Badge>
             </Box>
         );
     }
@@ -409,7 +469,7 @@ export default function FloatingChatDock() {
                     Recent Chats
                 </Typography>
                 {recentConversations.map((c, i) => {
-                    const partner = c.partner || c.user || c;
+                    const partner = getPartner(c);
                     const partnerId = partner._id || partner.id;
                     const isSelected = activeRecipient?._id === partnerId;
                     return (
@@ -432,7 +492,7 @@ export default function FloatingChatDock() {
                             </ListItemAvatar>
                             <ListItemText
                                 primary={partner.name || 'Player'}
-                                primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: isSelected ? 700 : 500 }}
+                                slotProps={{ primary: { sx: { fontSize: '0.85rem', fontWeight: isSelected ? 700 : 500 } } }}
                             />
                         </MenuItem>
                     );
@@ -473,7 +533,6 @@ export default function FloatingChatDock() {
                                         name: m.name,
                                         avatarUrl: m.profilePic || m.avatarUrl || ''
                                     });
-                                    fetchMessages(targetId);
                                     setTimeout(() => inputRef.current?.focus(), 200);
                                 }}
                                 sx={{

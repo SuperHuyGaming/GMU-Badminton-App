@@ -1,163 +1,175 @@
-// server/models/User.js
-const mongoose = require("mongoose");
-
-const userSchema = new mongoose.Schema({
-	name: { type: String, required: true },
-	firstName: { type: String },
-	lastName: { type: String },
-	internalId: { type: String, unique: true, sparse: true },
-	email: { type: String, required: true, unique: true },
-	password: { type: String, required: true },
-
-	role: {
-		type: String,
-		enum: ["user", "admin"],
-		default: "user",
-	},
-
-	// Player Card Fields
-	skillLevel: {
-		type: String,
-		enum: ["D Level", "C Level", "B Level"],
-		default: "D Level",
-	},
-	bio: { type: String, default: "I'm ready to play!" },
-	preferredPlay: { type: String, default: "Any" }, // Singles, Doubles, Mixed
-	racket: { type: String, default: "N/A" },
-	profilePic: { type: String, default: "" },
-	coverPic: { type: String, default: "" },
-
-	// Preferences
-	homeUniversity: { type: String, default: "George Mason University" },
-	searchRadius: { type: Number, default: 50 },
-	hideFromSearch: { type: Boolean, default: false },
-
-	// Geospatial Location (Task 4: Geolocation Proximity API)
-	location: {
-		type: {
-			type: String,
-			enum: ["Point"],
-			default: "Point",
-		},
-		coordinates: {
-			type: [Number], // [longitude, latitude]
-			default: [0, 0],
-		},
-	},
-
-	// Gamification
-	badges: { type: [String], default: [] }, // Array of badge IDs e.g. ["first_win", "streak_5"]
-	stats: {
-		totalMatches: { type: Number, default: 0 },
-		winStreak: { type: Number, default: 0 },
-		highestWinStreak: { type: Number, default: 0 },
-	},
-
-	// Friends System
-	friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-	friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-	sentFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-	friendsListVisibility: {
-		type: String,
-		enum: ['Public', 'Friends Only', 'Only Me'],
-		default: 'Public',
-	},
-
-	// Elo & Glicko-2 MMR Engine
-	singlesElo: { type: Number, default: 1200 },
-	doublesElo: { type: Number, default: 1200 },
-
-	glicko: {
-		singles: {
-			rating: { type: Number, default: 1200 },
-			rd: { type: Number, default: 350 },
-			volatility: { type: Number, default: 0.06 },
-			lastMatchDate: { type: Date, default: Date.now }
-		},
-		doubles: {
-			rating: { type: Number, default: 1200 },
-			rd: { type: Number, default: 350 },
-			volatility: { type: Number, default: 0.06 },
-			lastMatchDate: { type: Date, default: Date.now }
-		}
-	},
-
-	// Web Push Subscriptions for Notifications
-	pushSubscriptions: { type: Array, default: [] },
-
-	// Bookmarks / Saved Posts
-	bookmarkedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
-	savedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
-
-	// Calendar / RSVPs
-	rsvpedTournaments: [{ type: String }], // Array of Tournament IDs
-
-	// Matchmaking Masterplan Tasks
-	checkInLocation: { type: String, enum: ["RAC", "Skyline", "AFC", "None"], default: "None" },
-	currentCourtCheckIn: {
-		courtNumber: { type: Number },
-		checkInTime: { type: Date },
-		expiresAt: { type: Date }
-	},
-	inQueue: { type: Boolean, default: false },
-	queueJoinedAt: { type: Date },
-	preferredTimeOfDay: { type: String, enum: ["Morning", "Afternoon", "Evening", "Any"], default: "Any" },
-
-	lastActive: { type: Date, default: Date.now },
-	createdAt: { type: Date, default: Date.now },
-});
-
-// Create geospatial index for sub-millisecond location discovery
-userSchema.index({ location: "2dsphere" });
-
-userSchema.index({ name: 1 });
-userSchema.index({ homeUniversity: 1, lastActive: -1 });
-userSchema.index({ skillLevel: 1, lastActive: -1 });
-
-userSchema.virtual('rating').get(function() {
-	return this.singlesElo;
-});
-
-userSchema.virtual('elo').get(function() {
-	return this.singlesElo;
-});
-
-userSchema.pre('save', function(next) {
-	if (this.glicko?.singles?.rating !== undefined) {
-		this.singlesElo = Math.round(this.glicko.singles.rating);
-	}
-	if (this.glicko?.doubles?.rating !== undefined) {
-		this.doublesElo = Math.round(this.glicko.doubles.rating);
-	}
-	if (typeof next === 'function') next();
-});
-
-const { publishEvent } = require("../utils/kafkaProducer");
-
-const sanitizeUserForEvent = (doc) => {
-	if (!doc) return null;
-	const userObj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
-	delete userObj.password;
-	delete userObj.email;
-	delete userObj.pushSubscriptions;
-	return userObj;
-};
-
-userSchema.post("save", async function (doc) {
-	try {
-		await publishEvent("user-events", { type: "user.updated", payload: sanitizeUserForEvent(doc) });
-	} catch (error) {
-		console.error("Kafka publish error (User save):", error);
-	}
-});
-
-userSchema.post("findOneAndDelete", async function (doc) {
-	if (!doc) return;
-	try {
-		await publishEvent("user-events", { type: "user.deleted", payload: sanitizeUserForEvent(doc) });
-	} catch (error) {
-		console.error("Kafka publish error (User delete):", error);
-	}
-});
-
-module.exports = mongoose.model("User", userSchema);
+// server/models/User.js
+const mongoose = require("mongoose");
+
+const userSchema = new mongoose.Schema({
+	name: { type: String, required: true },
+	firstName: { type: String },
+	lastName: { type: String },
+	internalId: { type: String, unique: true, sparse: true },
+	email: { type: String, required: true, unique: true },
+	password: { type: String, required: true },
+
+	role: {
+		type: String,
+		enum: ["user", "admin"],
+		default: "user",
+	},
+
+	// Player Card Fields
+	skillLevel: {
+		type: String,
+		enum: ["D Level", "C Level", "B Level"],
+		default: "D Level",
+	},
+	bio: { type: String, default: "I'm ready to play!" },
+	preferredPlay: { type: String, default: "Any" }, // Singles, Doubles, Mixed
+	racket: { type: String, default: "N/A" },
+	profilePic: { type: String, default: "" },
+	coverPic: { type: String, default: "" },
+
+	// Preferences
+	homeUniversity: { type: String, default: "George Mason University" },
+	searchRadius: { type: Number, default: 50 },
+	hideFromSearch: { type: Boolean, default: false },
+
+	// Geospatial Location (Task 4: Geolocation Proximity API)
+	location: {
+		type: {
+			type: String,
+			enum: ["Point"],
+			default: "Point",
+		},
+		coordinates: {
+			type: [Number], // [longitude, latitude]
+			default: [0, 0],
+		},
+	},
+
+	// Gamification
+	badges: { type: [String], default: [] }, // Array of badge IDs e.g. ["first_win", "streak_5"]
+	stats: {
+		totalMatches: { type: Number, default: 0 },
+		winStreak: { type: Number, default: 0 },
+		highestWinStreak: { type: Number, default: 0 },
+	},
+
+	// Friends System
+	friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+	friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+	sentFriendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+	friendsListVisibility: {
+		type: String,
+		enum: ['Public', 'Friends Only', 'Only Me'],
+		default: 'Public',
+	},
+
+	// Elo & Glicko-2 MMR Engine
+	singlesElo: { type: Number, default: 1200 },
+	doublesElo: { type: Number, default: 1200 },
+
+	glicko: {
+		singles: {
+			rating: { type: Number, default: 1200 },
+			rd: { type: Number, default: 350 },
+			volatility: { type: Number, default: 0.06 },
+			lastMatchDate: { type: Date, default: Date.now }
+		},
+		doubles: {
+			rating: { type: Number, default: 1200 },
+			rd: { type: Number, default: 350 },
+			volatility: { type: Number, default: 0.06 },
+			lastMatchDate: { type: Date, default: Date.now }
+		}
+	},
+
+	// Web Push Subscriptions for Notifications
+	pushSubscriptions: { type: Array, default: [] },
+
+	// Bookmarks / Saved Posts
+	bookmarkedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
+	savedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
+
+	// Calendar / RSVPs
+	rsvpedTournaments: [{ type: String }], // Array of Tournament IDs
+
+	// Matchmaking Masterplan Tasks
+	checkInLocation: { type: String, enum: ["RAC", "Skyline", "AFC", "None"], default: "None" },
+	currentCourtCheckIn: {
+		courtNumber: { type: Number },
+		checkInTime: { type: Date },
+		expiresAt: { type: Date }
+	},
+	inQueue: { type: Boolean, default: false },
+	queueJoinedAt: { type: Date },
+	preferredTimeOfDay: { type: String, enum: ["Morning", "Afternoon", "Evening", "Any"], default: "Any" },
+
+	lastActive: { type: Date, default: Date.now },
+	createdAt: { type: Date, default: Date.now },
+});
+
+// Create geospatial index for sub-millisecond location discovery
+userSchema.index({ location: "2dsphere" });
+
+userSchema.index({ name: 1 });
+userSchema.index({ homeUniversity: 1, lastActive: -1 });
+userSchema.index({ skillLevel: 1, lastActive: -1 });
+
+userSchema.virtual('rating').get(function() {
+	return this.singlesElo;
+});
+
+userSchema.virtual('elo').get(function() {
+	return this.singlesElo;
+});
+
+userSchema.pre('save', function(next) {
+	if (this.glicko?.singles?.rating !== undefined) {
+		this.singlesElo = Math.round(this.glicko.singles.rating);
+	}
+	if (this.glicko?.doubles?.rating !== undefined) {
+		this.doublesElo = Math.round(this.glicko.doubles.rating);
+	}
+	if (typeof next === 'function') next();
+});
+
+const kafkaProducer = require("../utils/kafkaProducer");
+
+const sanitizeUserForEvent = (doc) => {
+	if (!doc) return null;
+	const userObj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
+	delete userObj.password;
+	delete userObj.email;
+	delete userObj.pushSubscriptions;
+	return userObj;
+};
+
+// Never awaited: a slow or missing broker must not delay the save that triggered the event.
+const emitUserEvent = (type, doc) => {
+	if (typeof kafkaProducer.isKafkaEnabled === "function" && !kafkaProducer.isKafkaEnabled()) return;
+	const message = { type, payload: sanitizeUserForEvent(doc) };
+	if (typeof kafkaProducer.publishEventInBackground === "function") {
+		kafkaProducer.publishEventInBackground("user-events", message);
+	} else if (typeof kafkaProducer.publishEvent === "function") {
+		Promise.resolve(kafkaProducer.publishEvent("user-events", message)).catch(() => {});
+	}
+};
+
+// Fire-and-forget: Kafka must never delay sign-up, onboarding, friend requests or profile saves.
+userSchema.post("save", function (doc) {
+	try {
+		emitUserEvent("user.updated", doc);
+	} catch (error) {
+		console.error("Kafka publish error (User save):", error?.message || error);
+	}
+});
+
+userSchema.post("findOneAndDelete", function (doc) {
+	if (!doc) return;
+	try {
+		emitUserEvent("user.deleted", doc);
+	} catch (error) {
+		console.error("Kafka publish error (User delete):", error?.message || error);
+	}
+});
+
+module.exports = mongoose.model("User", userSchema);

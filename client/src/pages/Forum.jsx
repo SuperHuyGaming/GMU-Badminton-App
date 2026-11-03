@@ -68,6 +68,21 @@ const matchesCategory = (item, cat) => {
 	return itemCat === cat;
 };
 
+// True when POST /api/forum held the new post for review (spam filter) instead of publishing it.
+const PENDING_REVIEW_STATUSES = new Set(["quarantined", "pending", "flagged"]);
+const isPostPendingReview = (data) => {
+	if (!data || typeof data !== "object") return false;
+	const statusOf = (s) => (typeof s === "string" ? s.toLowerCase() : "");
+	return Boolean(
+		data.quarantined === true
+		|| data.post?.quarantined === true
+		|| data.isFlagged === true
+		|| data.post?.isFlagged === true
+		|| PENDING_REVIEW_STATUSES.has(statusOf(data.status))
+		|| PENDING_REVIEW_STATUSES.has(statusOf(data.post?.status))
+	);
+};
+
 export default function Forum() {
 	const { user: currentUser } = useAuth();
 	const theme = useTheme();
@@ -702,34 +717,69 @@ export default function Forum() {
 			});
 		};
 
+		// Applies `update(item)` to every post item that refers to `postId`. Items from
+		// the feed carry the Post id in referenceId; a just-created post (from the
+		// POST response or postCreated) carries it in _id and may have no `type`.
+		const updateFeedPost = (postId, update) => {
+			if (!postId) return;
+			const id = String(postId);
+			const isTarget = (item) => item
+				&& (!item.type || item.type === 'post')
+				&& [item._id, item.referenceId, item.postId].some(v => v != null && String(v) === id);
+			setFeed(prevFeed => (prevFeed.some(isTarget)
+				? prevFeed.map(item => (isTarget(item) ? update(item) : item))
+				: prevFeed));
+		};
+
 		const handlePostUpdated = (updatedPost) => {
 			if (!updatedPost || !updatedPost._id) return;
-			// Update likes/comments/reactions/category/matchDetails inline without changing feed order
-			setFeed(prevFeed => prevFeed.map(item => {
-				if (item.type === 'post' && (item.referenceId === updatedPost._id || item._id === updatedPost._id)) {
-					const totalComments = updatedPost.comments?.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0) || 0;
-					return {
-						...item,
-						title: updatedPost.title ?? item.title,
-						content: updatedPost.content ?? item.content,
-						category: updatedPost.category ?? item.category,
-						matchDetails: updatedPost.matchDetails ?? item.matchDetails,
-						playerMatchmaking: updatedPost.playerMatchmaking ?? item.playerMatchmaking,
-						challengeMatch: updatedPost.challengeMatch ?? item.challengeMatch,
-						qaDetails: updatedPost.qaDetails ?? item.qaDetails,
-						gearDetails: updatedPost.gearDetails ?? item.gearDetails,
-						reactions: updatedPost.reactions ?? item.reactions,
-						likes: updatedPost.likedBy?.length ?? item.likes,
-						comments: totalComments
-					};
-				}
-				return item;
+			// Update likes/comments/reactions/category/matchDetails inline without changing feed order.
+			// Missing or partial fields keep what the item already has.
+			updateFeedPost(updatedPost._id, item => ({
+				...item,
+				title: updatedPost.title ?? item.title,
+				content: updatedPost.content ?? item.content,
+				category: updatedPost.category ?? item.category,
+				visibility: updatedPost.visibility ?? item.visibility,
+				isEdited: updatedPost.isEdited ?? item.isEdited,
+				editedAt: updatedPost.editedAt ?? item.editedAt,
+				matchDetails: updatedPost.matchDetails ?? item.matchDetails,
+				playerMatchmaking: updatedPost.playerMatchmaking ?? item.playerMatchmaking,
+				rsvp: updatedPost.rsvp ?? item.rsvp,
+				challengeMatch: updatedPost.challengeMatch ?? item.challengeMatch,
+				qaDetails: updatedPost.qaDetails ?? item.qaDetails,
+				gearDetails: updatedPost.gearDetails ?? item.gearDetails,
+				reactions: Array.isArray(updatedPost.reactions) ? updatedPost.reactions : item.reactions,
+				likedBy: Array.isArray(updatedPost.likedBy) ? updatedPost.likedBy : item.likedBy,
+				recentLikerAvatars: Array.isArray(updatedPost.recentLikerAvatars) ? updatedPost.recentLikerAvatars : item.recentLikerAvatars,
+				likes: updatedPost.likedBy?.length ?? item.likes,
+				comments: Array.isArray(updatedPost.comments)
+					? updatedPost.comments.reduce((acc, c) => acc + 1 + (c?.replies?.length || 0), 0)
+					: item.comments,
 			}));
+		};
+
+		const handleReactionUpdated = (payload) => {
+			if (!payload || !Array.isArray(payload.reactions)) return;
+			updateFeedPost(payload.postId, item => ({ ...item, reactions: payload.reactions }));
+		};
+
+		const handleRallyRsvpUpdated = (payload) => {
+			if (!payload) return;
+			updateFeedPost(payload.postId, item => {
+				const playerMatchmaking = { ...(item.playerMatchmaking || {}) };
+				if (Array.isArray(payload.rsvpList)) playerMatchmaking.rsvpList = payload.rsvpList;
+				if (typeof payload.isFilled === 'boolean') playerMatchmaking.isFilled = payload.isFilled;
+				if (payload.slotsNeeded != null) playerMatchmaking.slotsNeeded = payload.slotsNeeded;
+				return { ...item, playerMatchmaking, rsvp: payload.rsvp ?? item.rsvp };
+			});
 		};
 
 		socket.on("postCreated", handleNewPost);
 		socket.on("matchConfirmed", handleNewPost);
 		socket.on("postUpdated", handlePostUpdated); // For likes/comments
+		socket.on("reactionUpdated", handleReactionUpdated);
+		socket.on("rallyRsvpUpdated", handleRallyRsvpUpdated);
 		// Server emits postDeleted (id) on delete, moderation removal, or when a post goes private.
 		socket.on("postDeleted", removePostFromFeed);
 
@@ -737,6 +787,8 @@ export default function Forum() {
 			socket.off("postCreated", handleNewPost);
 			socket.off("matchConfirmed", handleNewPost);
 			socket.off("postUpdated", handlePostUpdated);
+			socket.off("reactionUpdated", handleReactionUpdated);
+			socket.off("rallyRsvpUpdated", handleRallyRsvpUpdated);
 			socket.off("postDeleted", removePostFromFeed);
 		};
 	}, [removePostFromFeed]);
@@ -823,9 +875,22 @@ export default function Forum() {
 			setShowTagsSelector(false);
 			closeComposer();
 			if (typeof window !== "undefined") sessionStorage.removeItem("mbc_community_post_draft");
-			toast.success("Post created successfully!");
 			tabsCacheRef.current = {};
-			setFeed(prev => [data, ...prev.filter(p => (p._id || p.referenceId) !== data._id)]);
+			// The spam filter can hold a post for review; then the server answers
+			// { message, post: { _id, status: 'quarantined', isFlagged } } and the post
+			// is not public yet, so say so instead of claiming success.
+			if (isPostPendingReview(data)) {
+				toast("Your post is being reviewed and will appear once approved.", { icon: "⏳", duration: 6000 });
+				return;
+			}
+			toast.success("Post created successfully!");
+			// Keep the audience the author picked even if the response leaves it out.
+			const createdPost = {
+				...data,
+				type: data.type || 'post',
+				visibility: data.visibility || newPost.visibility || 'PUBLIC',
+			};
+			setFeed(prev => [createdPost, ...prev.filter(p => String(p._id) !== String(createdPost._id) && String(p.referenceId || '') !== String(createdPost._id))]);
 		} catch (error) {
 			setIsUploadingImage(false);
 			setUploadStage("idle");
@@ -1572,10 +1637,18 @@ export default function Forum() {
 
 						// Post items (either type === 'post' or standard Post objects from real-time events)
 						const mockPost = {
-							_id: item.referenceId || item._id,
-							referenceId: item.referenceId,
+							_id: (item.referenceId && typeof item.referenceId === 'object' ? item.referenceId._id : item.referenceId) || item.postId || item._id,
+							referenceId: item.referenceId && typeof item.referenceId === 'object' ? item.referenceId._id : item.referenceId,
 							title: item.title,
 							content: item.content,
+							// Audience may sit on the feed item or on the Post it points to.
+							visibility: item.visibility
+								|| item.post?.visibility
+								|| (item.referenceId && typeof item.referenceId === 'object' ? item.referenceId.visibility : undefined)
+								|| 'PUBLIC',
+							isEdited: item.isEdited,
+							editedAt: item.editedAt,
+							rsvp: item.rsvp,
 							category: item.category || 'general',
 							matchDetails: item.matchDetails || null,
 							playerMatchmaking: item.playerMatchmaking || null,

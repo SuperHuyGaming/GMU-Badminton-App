@@ -11,6 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import apiFetch from "../utils/api";
 import socket from "../utils/socket";
 import { getOptimizedAvatar } from "../utils/image";
+import { idOf, mergeMessage, markChatVisible, notifyChatRead } from "../utils/chatState";
 import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 
 const formatTime = (dateString) => {
@@ -136,44 +137,53 @@ const Messages = () => {
 			setRecentChats(chatsData || []);
 		}).catch(console.error);
 
-		const handlePrivateMessage = (msg) => {
-			// Update messages if we're actively chatting with this person
-			const otherUser = msg.sender._id === user.id ? msg.receiver : msg.sender;
-			
-			setActiveChat(currentActive => {
-				if (currentActive && currentActive._id === otherUser._id) {
-					setMessages(prev => {
-						// Filter out optimistic UI temp messages if this is the real one
-						if (msg.sender._id === user.id && prev.length > 0) {
-							const lastMsg = prev[prev.length - 1];
-							if (lastMsg._id.startsWith("temp-") && lastMsg.content === msg.content) {
-								return [...prev.slice(0, -1), msg];
-							}
-						}
-						return [...prev, msg];
-					});
-					
-					// Mark as read immediately if it's from them
-					if (msg.sender._id !== user.id) {
-						apiFetch(`/api/messages/read/${user.id}/${msg.sender._id}`, { method: "PUT" });
-					}
-				}
-				return currentActive;
-			});
+		const myId = String(user.id || user._id);
 
-			// Update recent chats list
+		// Side effects (API calls, events) must stay OUT of state updaters: React StrictMode
+		// double-invokes updaters in dev, which used to append every live message twice and fire
+		// mark-as-read twice. The active chat is read from a ref instead of a setState updater.
+		const seenMessageIds = new Set();
+		const handlePrivateMessage = (msg) => {
+			if (!msg || !msg.sender || !msg.receiver) return;
+			// The same socket event delivered twice (e.g. after a reconnect) is handled once.
+			const msgId = idOf(msg);
+			if (msgId) {
+				if (seenMessageIds.has(msgId)) return;
+				seenMessageIds.add(msgId);
+			}
+			const isMine = idOf(msg.sender) === myId;
+			const otherUser = isMine ? msg.receiver : msg.sender;
+			const otherId = idOf(otherUser);
+			const current = activeChatRef.current;
+			const isActive = Boolean(current) && idOf(current) === otherId;
+
+			if (isActive) {
+				// De-duplicated by _id; our own echo replaces its optimistic copy.
+				setMessages(prev => mergeMessage(prev, msg, { selfId: myId }));
+
+				// Mark as read immediately if it's from them, then refresh the unread badges.
+				if (!isMine) {
+					Promise.resolve(apiFetch(`/api/messages/read/${user.id}/${otherId}`, { method: "PUT" }))
+						.then(() => notifyChatRead(otherId))
+						.catch(console.error);
+				}
+			}
+
+			// Update recent chats list (pure updater)
 			setRecentChats(prev => {
-				const existingIndex = prev.findIndex(c => c.friend._id === otherUser._id);
-				let newChats = [...prev];
-				
+				const existingIndex = prev.findIndex(c => idOf(c.friend) === otherId);
+				const existing = existingIndex >= 0 ? prev[existingIndex] : null;
+				// Same message delivered twice: nothing to change.
+				if (existing && idOf(existing.lastMessage) === idOf(msg)) return prev;
+
+				const newChats = [...prev];
 				const newChatObj = {
-					friend: otherUser,
+					friend: existing?.friend || otherUser,
 					lastMessage: msg,
-					unreadCount: (msg.receiver._id === user.id && (!activeChatRef.current || activeChatRef.current._id !== msg.sender._id)) ? 1 : 0
+					unreadCount: isActive ? 0 : (existing?.unreadCount || 0) + (isMine ? 0 : 1)
 				};
 
 				if (existingIndex >= 0) {
-					newChatObj.unreadCount += prev[existingIndex].unreadCount;
 					newChats.splice(existingIndex, 1);
 				}
 				
@@ -219,28 +229,37 @@ const Messages = () => {
 
 	useEffect(() => {
 		if (activeChat && user) {
+			let cancelled = false;
+			const partnerId = idOf(activeChat);
 			setIsLoadingChat(true);
 			setPage(1);
 			setHasMore(false);
-			
+
+			// Optimistically clear the unread count in the sidebar and the global badges.
+			setRecentChats(prev => prev.map(c =>
+				idOf(c.friend) === partnerId && c.unreadCount ? { ...c, unreadCount: 0 } : c
+			));
+			notifyChatRead(partnerId, { optimistic: true });
+
+			// Loading page 1 marks the conversation read on the server.
 			apiFetch(`/api/messages/${user.id}/${activeChat._id}?page=1&limit=50`)
 				.then(res => res.json())
 				.then(data => {
+					if (cancelled) return;
 					setMessages(data.messages || []);
 					setHasMore(data.hasMore || false);
-					
-					// Clear unread count in sidebar
-					setRecentChats(prev => prev.map(c => 
-						c.friend._id === activeChat._id ? { ...c, unreadCount: 0 } : c
-					));
-					
-					// Notify global unread count
-					window.dispatchEvent(new Event("chatRead"));
+					// Re-sync the global unread count now that the server has marked it read.
+					notifyChatRead(partnerId);
 				})
 				.catch(console.error)
-				.finally(() => setIsLoadingChat(false));
+				.finally(() => { if (!cancelled) setIsLoadingChat(false); });
+			return () => { cancelled = true; };
 		}
 	}, [activeChat, user]);
+
+	// While a conversation is on screen, incoming messages in it don't count as unread.
+	const activeChatId = activeChat?._id;
+	useEffect(() => markChatVisible(activeChatId), [activeChatId]);
 
 	const loadMoreMessages = async () => {
 		if (!hasMore || isLoadingMore || !activeChat || !user) return;
@@ -316,13 +335,13 @@ const Messages = () => {
 			receiver: activeChat,
 			content: msgText,
 			timestamp: new Date().toISOString(),
-			_id: "temp-" + Date.now(),
+			_id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 			read: false,
 		};
 		setMessages(prev => [...prev, tempMsg]);
 
 		try {
-			await apiFetch("/api/messages", {
+			const res = await apiFetch("/api/messages", {
 				method: "POST",
 				body: JSON.stringify({
 					senderId: user.id,
@@ -330,11 +349,14 @@ const Messages = () => {
 					content: msgText
 				})
 			});
+			if (res && res.ok === false) throw new Error("Failed to send message");
 			setNewMessage(""); // Clear after successful send
-			// We do not setMessages again here because the socket will emit the real message back to us, 
-			// and handlePrivateMessage will swap it or append it. Wait, handlePrivateMessage currently 
-			// appends it, so we'll get a duplicate! 
-			// So handlePrivateMessage should filter out duplicates.
+			// The server returns the saved message AND echoes it over the socket; whichever arrives
+			// first replaces the optimistic copy and the other is dropped as a duplicate (by _id).
+			const saved = res && typeof res.json === "function" ? await res.json().catch(() => null) : null;
+			if (saved && saved._id && idOf(activeChatRef.current) === idOf(activeChat)) {
+				setMessages(prev => mergeMessage(prev, saved, { selfId: String(user.id || user._id), tempId: tempMsg._id }));
+			}
 		} catch (error) {
 			console.error(error);
 			setMessages(prev => prev.filter(m => m._id !== tempMsg._id)); // Revert on failure
@@ -881,8 +903,10 @@ const Messages = () => {
 						<Box 
 							component="form" 
 							onSubmit={handleSendMessage} 
-							sx={{ 
-								p: { xs: 1, sm: 2 }, 
+							sx={{
+								p: { xs: 1, sm: 2 },
+								// Keep the input clear of the iOS home indicator.
+								pb: { xs: "calc(8px + env(safe-area-inset-bottom, 0px))", sm: "calc(16px + env(safe-area-inset-bottom, 0px))", md: 2 },
 								borderTop: "1px solid",
 								borderColor: "divider",
 								display: "flex", 

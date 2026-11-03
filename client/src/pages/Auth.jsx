@@ -247,7 +247,7 @@ export default function Auth() {
 						<Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>
 							{steps.map((label) => (
 								<Step key={label}>
-									<StepLabel StepIconProps={{ sx: { '&.Mui-active': { color: 'secondary.main' } } }}>
+									<StepLabel slotProps={{ stepIcon: { sx: { '&.Mui-active': { color: 'secondary.main' } } } }}>
                                         <Typography fontWeight={600}>{label}</Typography>
                                     </StepLabel>
 								</Step>

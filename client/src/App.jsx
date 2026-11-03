@@ -72,6 +72,24 @@ export const ForumRedirect = () => {
 	return <Navigate to={`/community${location.search}${location.hash}`} replace />;
 };
 
+const isMessagesRoute = (pathname = "") => pathname === "/messages" || pathname.startsWith("/messages/");
+
+// The floating Messenger duplicates the /messages page and sat on top of its Send button on
+// phones, so it is not mounted there.
+export const RouteAwareChatDock = () => {
+	const { user } = useAuth();
+	const { pathname } = useLocation();
+	if (!user || isMessagesRoute(pathname)) return null;
+	return <FloatingChatDock />;
+};
+
+// On /messages the chat input runs along the bottom of small screens, so the feedback FAB
+// is hidden there below the md breakpoint; everywhere else it stays bottom-left.
+export const RouteAwareFeedbackFAB = () => {
+	const { pathname } = useLocation();
+	return <FeedbackFAB hideOnSmallScreens={isMessagesRoute(pathname)} />;
+};
+
 const AnimatedRoutes = () => {
 	const location = useLocation();
 	const { user } = useAuth();
@@ -520,7 +538,7 @@ function App() {
 				<BrowserRouter>
 					<FeedbackProvider>
 						<FeedbackModal />
-						<FeedbackFAB />
+						<RouteAwareFeedbackFAB />
 					<Navbar />
 
 					<Toaster 
@@ -555,7 +573,7 @@ function App() {
 						</ErrorBoundary>
 						{user && <PushNotificationPrompt />}
 						<PWAInstallPrompt />
-						{user && <FloatingChatDock />}
+						<RouteAwareChatDock />
 					</Container>
 					</FeedbackProvider>
 				</BrowserRouter>

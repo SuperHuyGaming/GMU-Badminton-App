@@ -3,7 +3,9 @@ import { Fab, Tooltip, Box, Badge } from "@mui/material";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import { useFeedback } from "../context/FeedbackContext";
 
-export default function FeedbackFAB() {
+// hideOnSmallScreens: hide below the md breakpoint (used on /messages, where the chat input
+// runs along the bottom of the screen and the FAB covered it).
+export default function FeedbackFAB({ hideOnSmallScreens = false } = {}) {
 	const { isOpen, isMinimized, draft, openFeedbackModal, maximizeFeedbackModal } = useFeedback();
 
 	// When modal is open and expanded, hide FAB so it doesn't overlap the form
@@ -23,7 +25,9 @@ export default function FeedbackFAB() {
 
 	return (
 		<Box
+			data-testid="feedback-fab-container"
 			sx={{
+				display: hideOnSmallScreens ? { xs: "none", md: "block" } : "block",
 				position: "fixed",
 				bottom: { xs: 20, sm: 28 },
 				// Bottom-left: the Messenger launcher and back-to-top button live bottom-right.

@@ -64,4 +64,29 @@ describe("FeedbackFAB Component", () => {
 		fireEvent.click(fab);
 		expect(mockMaximize).toHaveBeenCalledTimes(1);
 	});
+
+	it("stays visible by default and is hidden at phone widths when hideOnSmallScreens is set", () => {
+		const contextValue = { isOpen: false, isMinimized: false, draft: null, openFeedbackModal: vi.fn() };
+		const { rerender } = render(
+			<FeedbackContext.Provider value={contextValue}>
+				<FeedbackFAB />
+			</FeedbackContext.Provider>
+		);
+		expect(window.getComputedStyle(screen.getByTestId("feedback-fab-container")).display).not.toBe("none");
+
+		rerender(
+			<FeedbackContext.Provider value={contextValue}>
+				<FeedbackFAB hideOnSmallScreens />
+			</FeedbackContext.Provider>
+		);
+		// Desktop (jsdom's default 1024px width): still shown.
+		const container = screen.getByTestId("feedback-fab-container");
+		expect(window.getComputedStyle(container).display).toBe("block");
+
+		// Phone widths: the base (xs) rule hides it; only the md (>=900px) media query shows it.
+		const cls = [...container.classList].find((c) => c.startsWith("css-"));
+		const css = [...document.querySelectorAll("style")].map((s) => s.textContent).join("\n").replace(/\s+/g, "");
+		expect(css).toContain(`.${cls}{display:none;`);
+		expect(css).toMatch(new RegExp(`@media\\(min-width:900px\\)\\{\\.${cls}\\{display:block;`));
+	});
 });

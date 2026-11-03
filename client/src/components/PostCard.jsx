@@ -63,8 +63,23 @@ import { ensureOk, errorMessage } from "./postRequest";
 
 // In-memory cache for fetched comments to ensure instant re-rendering and prevent vanishing on re-renders
 const postCommentsMemoryCache = new Map();
-const hasPopulatedComments = (arr) =>
-	Array.isArray(arr) && arr.length > 0 && arr.some((c) => c && (c._id || c.text || c.content));
+import {
+	hasPopulatedComments,
+	isSamePost,
+	resolveVisibility,
+	autoTitleFrom,
+	mergePostData,
+} from "./postLiveSync";
+
+// Stable fingerprint of the `post` prop. Parents (e.g. Forum) rebuild the prop
+// object on every render, so syncing on identity would reset live state.
+const postSignature = (p) => {
+	try {
+		return JSON.stringify(p);
+	} catch {
+		return null;
+	}
+};
 import {
 	ThumbUpOutline,
 	ThumbUpFilled,
@@ -276,7 +291,19 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 	const [isEditing, setIsEditing] = useState(false);
 	const [editTitle, setEditTitle] = useState(post.title);
 	const [editContent, setEditContent] = useState(post.content);
-	const [editVisibility, setEditVisibility] = useState(post.visibility || "PUBLIC");
+	const [editVisibility, setEditVisibility] = useState(resolveVisibility(post));
+	// The body as it was when the editor opened (used to refresh a stale auto-title).
+	const [editOriginalContent, setEditOriginalContent] = useState(post.content || "");
+
+	// Edit fields are filled only when the editor opens, so live updates to the
+	// post (reactions, comments, RSVPs) never overwrite what the author is typing.
+	const openEditor = () => {
+		setEditTitle(localPost.title || "");
+		setEditContent(localPost.content || "");
+		setEditOriginalContent(localPost.content || "");
+		setEditVisibility(resolveVisibility(localPost));
+		setIsEditing(true);
+	};
 
 	// Toggles the imported dialog component
 	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -293,6 +320,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 	const urlPostId = urlParams.get("postId") || routePostId;
 	const highlightHandledRef = useRef(null);
 
+	// Re-sync from the prop only when its content really changes (not on every
+	// parent render), and merge so a stale or partial prop never wipes newer live data.
+	const incomingSignature = postSignature(post);
 	useEffect(() => {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setLocalPost((prev) => {
@@ -300,68 +330,80 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 			const incomingReal = hasPopulatedComments(post?.comments);
 			const cached = postCommentsMemoryCache.get(post?._id);
 			const cachedReal = hasPopulatedComments(cached);
+			const samePost = Boolean(prev && String(prev._id) === String(post?._id));
 
 			let comments = post.comments;
 			if (incomingReal) {
 				comments = post.comments;
 				postCommentsMemoryCache.set(post._id, post.comments);
-			} else if (prevReal && prev?._id === post?._id) {
+			} else if (prevReal && samePost) {
 				comments = prev.comments;
 			} else if (cachedReal) {
 				comments = cached;
 			}
 
-			return {
-				...post,
-				comments,
-			};
+			if (!samePost) return { ...post, comments };
+			return { ...mergePostData(prev, post), comments: comments ?? prev.comments };
 		});
+		// `post` is read through its signature so a new-but-identical object is ignored.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [incomingSignature ?? post]);
+
+	// When a different post is shown in this card while the editor is closed,
+	// start the edit fields from that post.
+	useEffect(() => {
+		if (isEditing) return;
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setEditTitle(post.title);
 		setEditContent(post.content);
-		setEditVisibility(post.visibility || "PUBLIC");
-	}, [post]);
+		setEditVisibility(resolveVisibility(post));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [post?._id]);
 
 	// INSTANT COMMENT INJECTION & REAL-TIME SYNC
 	useEffect(() => {
+		const local = { _id: localPost._id, referenceId: localPost.referenceId, postId: localPost.postId };
+
 		const handlePostUpdated = (updatedPost) => {
-			if (updatedPost._id === localPost._id) {
-				setLocalPost(prev => ({
-					...prev,
-					comments: updatedPost.comments,
-					likedBy: updatedPost.likedBy,
-					likedByDetails: updatedPost.likedByDetails,
-					recentLikerAvatars: updatedPost.recentLikerAvatars,
-					title: updatedPost.title,
-					content: updatedPost.content,
-					isEdited: updatedPost.isEdited,
-					reactions: updatedPost.reactions || prev.reactions,
-					category: updatedPost.category || prev.category,
-					matchDetails: updatedPost.matchDetails || prev.matchDetails,
-					playerMatchmaking: updatedPost.playerMatchmaking || prev.playerMatchmaking,
-					challengeMatch: updatedPost.challengeMatch || prev.challengeMatch,
-					qaDetails: updatedPost.qaDetails || prev.qaDetails,
-					gearDetails: updatedPost.gearDetails || prev.gearDetails,
-				}));
+			if (!updatedPost || !isSamePost(updatedPost, local)) return;
+			setLocalPost(prev => mergePostData(prev, updatedPost));
+			if (hasPopulatedComments(updatedPost.comments)) {
+				postCommentsMemoryCache.set(localPost._id, updatedPost.comments);
 			}
 		};
 
 		const handleReactionUpdated = (payload) => {
-			const targetId = String(localPost._id || localPost.referenceId || "");
-			if (payload && targetId && String(payload.postId) === targetId) {
-				setLocalPost(prev => ({
+			if (!payload || !isSamePost({ postId: payload.postId }, local)) return;
+			// Only a real list replaces the reactions; a partial payload keeps the current count.
+			if (!Array.isArray(payload.reactions)) return;
+			setLocalPost(prev => ({ ...prev, reactions: payload.reactions }));
+		};
+
+		const handleRallyRsvpUpdated = (payload) => {
+			if (!payload || !isSamePost({ postId: payload.postId }, local)) return;
+			setLocalPost(prev => {
+				const prevMatchmaking = prev.playerMatchmaking || {};
+				const nextMatchmaking = { ...prevMatchmaking };
+				if (Array.isArray(payload.rsvpList)) nextMatchmaking.rsvpList = payload.rsvpList;
+				if (typeof payload.isFilled === "boolean") nextMatchmaking.isFilled = payload.isFilled;
+				if (payload.slotsNeeded != null) nextMatchmaking.slotsNeeded = payload.slotsNeeded;
+				return {
 					...prev,
-					reactions: payload.reactions || prev.reactions,
-				}));
-			}
+					playerMatchmaking: nextMatchmaking,
+					...(payload.rsvp ? { rsvp: payload.rsvp } : {}),
+				};
+			});
 		};
 
 		socket.on("postUpdated", handlePostUpdated);
 		socket.on("reactionUpdated", handleReactionUpdated);
+		socket.on("rallyRsvpUpdated", handleRallyRsvpUpdated);
 		return () => {
 			socket.off("postUpdated", handlePostUpdated);
 			socket.off("reactionUpdated", handleReactionUpdated);
+			socket.off("rallyRsvpUpdated", handleRallyRsvpUpdated);
 		};
-	}, [localPost._id, localPost.referenceId]);
+	}, [localPost._id, localPost.referenceId, localPost.postId]);
 
 	useEffect(() => {
 		const isTargetPost = urlPostId === localPost._id;
@@ -497,7 +539,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 			});
 			await ensureOk(res, "Couldn't like this post. Please try again.");
 			const updated = await res.json();
-			setLocalPost(prev => ({ ...prev, ...updated, _id: prev._id }));
+			setLocalPost(prev => mergePostData(prev, updated));
 		} catch (err) {
 			toast.error(errorMessage(err, "Couldn't like this post. Please try again."));
 		} finally {
@@ -597,8 +639,18 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 
 	const handleSaveEdit = async () => {
 		if (!canSaveEdit || isSavingEdit) return;
-		const titleToSave = trimmedEditTitle
-			|| (trimmedEditContent.split("\n")[0].slice(0, 80) || "Community Post");
+		// A title that was auto-copied from the old body's first line would go stale
+		// once the body changes, so derive it again from the new body.
+		const oldAutoTitle = autoTitleFrom(editOriginalContent);
+		const titleIsStaleAutoTitle = Boolean(
+			trimmedEditTitle &&
+			oldAutoTitle &&
+			trimmedEditTitle === oldAutoTitle &&
+			trimmedEditContent &&
+			trimmedEditContent !== (editOriginalContent || "").trim()
+		);
+		const titleToSave = (titleIsStaleAutoTitle ? "" : trimmedEditTitle)
+			|| (autoTitleFrom(trimmedEditContent) || "Community Post");
 		const contentToSave = trimmedEditContent || titleToSave;
 		setIsSavingEdit(true);
 		try {
@@ -617,7 +669,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 			if (data.message === "Post submitted for review.") {
 				toast("Your edit has been sent for admin review due to our spam filters.", { icon: "ℹ️" });
 			} else {
-				setLocalPost(data);
+				setLocalPost(prev => ({ ...mergePostData(prev, data), visibility: data?.visibility ? resolveVisibility(data) : editVisibility }));
 				toast.success("Post updated");
 			}
 
@@ -1008,7 +1060,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 								*/}
 							</span>{" "}
 							• {formatTime(localPost.timestamp)}
-							{renderPrivacyIcon(localPost.visibility)}
+							{renderPrivacyIcon(resolveVisibility(localPost))}
 							{localPost.isEdited && (
 								<Tooltip
 									title={`Edited on ${formatTime(localPost.editedAt || localPost.updatedAt || localPost.timestamp)}`}
@@ -1058,7 +1110,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 								{String(currentUserId) === String(localPost.authorId) && (
 									<MenuItem
 										onClick={() => {
-											setIsEditing(true);
+											openEditor();
 											setAnchorEl(null);
 										}}
 										sx={{
@@ -1207,7 +1259,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 									setIsEditing(false);
 									setEditTitle(localPost.title);
 									setEditContent(localPost.content);
-									setEditVisibility(localPost.visibility || "PUBLIC");
+									setEditVisibility(resolveVisibility(localPost));
 								}}
 								sx={{
 									fontWeight: "bold",

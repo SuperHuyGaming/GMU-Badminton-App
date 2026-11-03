@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PostCard from './PostCard';
 import { BrowserRouter } from 'react-router-dom';
@@ -1084,6 +1084,168 @@ describe('PostCard Component QA Tests', () => {
         it('renders the post title as an h3 heading', () => {
             renderWithContext(mockPost, mockUser);
             expect(screen.getByRole('heading', { level: 3, name: 'Test Post Title' })).toBeInTheDocument();
+        });
+    });
+
+    // ── Two-user live test fixes: edit reset, live RSVP, reaction wipe, privacy, auto-title ──
+    describe('two-user live update fixes', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        // Calls every PostCard listener registered for a socket event, inside act().
+        const fireSocket = async (event, payload) => {
+            const listeners = socket.listeners(event);
+            expect(listeners.length).toBeGreaterThan(0);
+            await act(async () => {
+                listeners.forEach(fn => fn(payload));
+            });
+        };
+
+        const tree = (post, user) => (
+            <AuthContext.Provider value={{ user, token: 'fake-token' }}>
+                <BrowserRouter>
+                    <PostCard post={post} currentUser={user} />
+                </BrowserRouter>
+            </AuthContext.Provider>
+        );
+
+        const openEditor = () => {
+            fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+            fireEvent.click(screen.getByText(/edit post/i));
+        };
+
+        it('keeps what the author is typing when the post updates live, and saves the typed text', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ ...mockPost, content: 'My new text', isEdited: true }) });
+            const { rerender } = render(tree(mockPost, mockUser));
+            openEditor();
+
+            fireEvent.change(screen.getByLabelText(/edit details/i), { target: { value: 'My new text' } });
+
+            // Another user reacts: socket event plus the parent re-rendering with a fresh post object.
+            await fireSocket('postUpdated', {
+                ...mockPost,
+                reactions: [{ userId: 'bob', emoji: '❤️' }],
+            });
+            rerender(tree({ ...mockPost, reactions: [{ userId: 'bob', emoji: '❤️' }] }, mockUser));
+
+            expect(screen.getByLabelText(/edit details/i)).toHaveValue('My new text');
+            expect(screen.getByLabelText(/edit title/i)).toHaveValue('Test Post Title');
+
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+            await waitFor(() => {
+                const putCall = apiFetch.mock.calls.find(c => c[1]?.method === 'PUT');
+                expect(putCall).toBeTruthy();
+                expect(JSON.parse(putCall[1].body).content).toBe('My new text');
+            });
+        });
+
+        it('refreshes a stale auto-title from the new body when editing', async () => {
+            const untitled = { ...mockPost, title: 'Old first line', content: 'Old first line\nmore details' };
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ ...untitled }) });
+            render(tree(untitled, mockUser));
+            openEditor();
+
+            fireEvent.change(screen.getByLabelText(/edit details/i), { target: { value: 'Brand new opening\nrest' } });
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => {
+                const putCall = apiFetch.mock.calls.find(c => c[1]?.method === 'PUT');
+                expect(putCall).toBeTruthy();
+                expect(JSON.parse(putCall[1].body).title).toBe('Brand new opening');
+            });
+        });
+
+        it('keeps a hand-written title when only the body changes', async () => {
+            apiFetch.mockResolvedValue({ ok: true, json: async () => ({ ...mockPost }) });
+            render(tree(mockPost, mockUser));
+            openEditor();
+
+            fireEvent.change(screen.getByLabelText(/edit details/i), { target: { value: 'Different body' } });
+            fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+            await waitFor(() => {
+                const putCall = apiFetch.mock.calls.find(c => c[1]?.method === 'PUT');
+                expect(putCall).toBeTruthy();
+                expect(JSON.parse(putCall[1].body).title).toBe('Test Post Title');
+            });
+        });
+
+        it("shows another player's RSVP live on the host's card when the feed item id differs from the Post id", async () => {
+            const rally = {
+                _id: 'post-rally-1',
+                referenceId: 'post-rally-1',
+                authorId: mockUser.id,
+                authorName: mockUser.name,
+                title: 'Rally tonight',
+                content: 'Doubles at RAC',
+                category: 'meetup_rally',
+                createdAt: new Date().toISOString(),
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [], isFilled: false },
+                comments: [],
+            };
+            render(tree(rally, mockUser));
+            expect(screen.getByText('Attendees (0/2):')).toBeInTheDocument();
+
+            await fireSocket('rallyRsvpUpdated', {
+                postId: 'post-rally-1',
+                rsvpList: [{ userId: 'bob', userName: 'Bob', status: 'confirmed' }],
+                isFilled: false,
+                slotsNeeded: 2,
+            });
+            expect(screen.getByText('Attendees (1/2):')).toBeInTheDocument();
+        });
+
+        it('matches a postUpdated payload to a card keyed by its ActivityFeed id via referenceId', async () => {
+            const feedCard = {
+                _id: 'feed-item-1',
+                referenceId: 'post-rally-2',
+                authorId: mockUser.id,
+                title: 'Rally',
+                content: 'x',
+                category: 'meetup_rally',
+                createdAt: new Date().toISOString(),
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [] },
+                comments: [],
+            };
+            render(tree(feedCard, mockUser));
+            await fireSocket('postUpdated', {
+                _id: 'post-rally-2',
+                playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [{ userId: 'bob', userName: 'Bob', status: 'confirmed' }] },
+            });
+            expect(screen.getByText('Attendees (1/2):')).toBeInTheDocument();
+        });
+
+        it('never wipes the reaction count with a partial payload or a re-render of the same post', async () => {
+            const withReaction = { ...mockPost, reactions: [{ userId: mockUser.id, emoji: '👍' }] };
+            const { rerender } = render(tree(withReaction, mockUser));
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('1');
+
+            // postUpdated without reactions (e.g. a comment update) keeps the count.
+            await fireSocket('postUpdated', { _id: mockPost._id, title: mockPost.title });
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('1');
+
+            // reactionUpdated without a list keeps the count.
+            await fireSocket('reactionUpdated', { postId: mockPost._id, action: 'added' });
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('1');
+
+            // A real update shows both reactions...
+            const both = [{ userId: mockUser.id, emoji: '👍' }, { userId: 'bob', emoji: '❤️' }];
+            await fireSocket('reactionUpdated', { postId: mockPost._id, reactions: both });
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('2');
+
+            // ...and the parent re-rendering with an unchanged (stale) post object does not undo it.
+            rerender(tree({ ...withReaction }, mockUser));
+            expect(screen.getByTestId('view-reactions-btn')).toHaveTextContent('2');
+        });
+
+        it('reads the audience from the feed item or its nested post', () => {
+            const { unmount } = render(tree({ ...mockPost, visibility: undefined, post: { _id: 'p', visibility: 'FRIENDS_ONLY' } }, mockUser));
+            expect(screen.getByRole('img', { name: 'Privacy: Friends Only' })).toBeInTheDocument();
+            unmount();
+
+            render(tree({ ...mockPost, visibility: undefined, referenceId: { _id: 'p', visibility: 'ONLY_ME' } }, mockUser));
+            expect(screen.getByRole('img', { name: 'Privacy: Only Me' })).toBeInTheDocument();
         });
     });
 });

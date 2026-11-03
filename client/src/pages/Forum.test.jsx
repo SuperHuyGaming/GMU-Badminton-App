@@ -60,6 +60,9 @@ vi.mock('../components/PostCard', () => ({
             <h3>{post.title}</h3>
             <p>{post.content}</p>
             <span data-testid={`post-likers-${post._id}`}>{JSON.stringify(post.likedBy)}</span>
+            <span data-testid={`post-visibility-${post._id}`}>{post.visibility}</span>
+            <span data-testid={`post-reactions-${post._id}`}>{(post.reactions || []).length}</span>
+            <span data-testid={`post-rsvps-${post._id}`}>{(post.playerMatchmaking?.rsvpList || []).length}</span>
             <button type="button" data-testid={`mock-delete-${post._id}`} onClick={() => onDelete && onDelete(post._id)}>
                 mock delete
             </button>
@@ -1477,6 +1480,117 @@ describe('Forum Page Component (Community Hub)', () => {
             expect(await screen.findByText('Second page')).toBeInTheDocument();
             expect(feedCalls().at(-1)).toContain('cursor=cur-1');
             expect(screen.getByText('First page')).toBeInTheDocument();
+        });
+
+        it('passes the feed item audience through to the card (not always Public)', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    feed: [
+                        { _id: 'af-v1', type: 'post', referenceId: 'p-friends', title: 'Friends post', content: 'c', visibility: 'FRIENDS_ONLY', createdAt: new Date().toISOString() },
+                        { _id: 'af-v2', type: 'post', referenceId: 'p-me', title: 'Private post', content: 'c', post: { visibility: 'ONLY_ME' }, createdAt: new Date().toISOString() },
+                        { _id: 'af-v3', type: 'post', referenceId: 'p-pub', title: 'Old post', content: 'c', createdAt: new Date().toISOString() },
+                    ],
+                    hasMore: false
+                })
+            });
+            renderWithProviders();
+            expect(await screen.findByTestId('post-visibility-p-friends')).toHaveTextContent('FRIENDS_ONLY');
+            expect(screen.getByTestId('post-visibility-p-me')).toHaveTextContent('ONLY_ME');
+            expect(screen.getByTestId('post-visibility-p-pub')).toHaveTextContent('PUBLIC');
+        });
+
+        it('applies live RSVP and reaction updates by referenceId, and a partial reaction payload keeps the count', async () => {
+            apiFetch.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    feed: [{
+                        _id: 'af-rally', type: 'post', referenceId: 'p-rally', title: 'Rally', content: 'c', category: 'meetup_rally',
+                        playerMatchmaking: { isEnabled: true, slotsNeeded: 2, rsvpList: [] },
+                        reactions: [{ userId: 'user1', emoji: '👍' }],
+                        createdAt: new Date().toISOString()
+                    }],
+                    hasMore: false
+                })
+            });
+            renderWithProviders();
+            expect(await screen.findByTestId('post-rsvps-p-rally')).toHaveTextContent('0');
+
+            await act(async () => {
+                socketHandlers.rallyRsvpUpdated({ postId: 'p-rally', rsvpList: [{ userId: 'bob', status: 'confirmed' }], isFilled: false, slotsNeeded: 2 });
+            });
+            expect(screen.getByTestId('post-rsvps-p-rally')).toHaveTextContent('1');
+
+            // postUpdated without a reactions list must not wipe the count.
+            await act(async () => {
+                socketHandlers.postUpdated({ _id: 'p-rally', title: 'Rally' });
+            });
+            expect(screen.getByTestId('post-reactions-p-rally')).toHaveTextContent('1');
+            expect(screen.getByTestId('post-rsvps-p-rally')).toHaveTextContent('1');
+
+            await act(async () => {
+                socketHandlers.reactionUpdated({ postId: 'p-rally', action: 'added' });
+            });
+            expect(screen.getByTestId('post-reactions-p-rally')).toHaveTextContent('1');
+
+            await act(async () => {
+                socketHandlers.reactionUpdated({ postId: 'p-rally', reactions: [{ userId: 'user1', emoji: '👍' }, { userId: 'bob', emoji: '❤️' }] });
+            });
+            expect(screen.getByTestId('post-reactions-p-rally')).toHaveTextContent('2');
+        });
+
+        const submitComposer = async (content) => {
+            await waitFor(() => expect(screen.getByTestId('facebook-composer-card')).toBeInTheDocument());
+            fireEvent.click(screen.getByTestId('facebook-composer-card'));
+            const dialog = await screen.findByRole('dialog');
+            fireEvent.change(within(dialog).getByLabelText(/What's on your mind\?/i), { target: { value: content } });
+            fireEvent.click(within(dialog).getByRole('button', { name: /^Post$/i }));
+        };
+
+        it('keeps live updates flowing to a post the author just created (no `type` on the response)', async () => {
+            apiFetch.mockImplementation((url, opts) => {
+                if (opts && opts.method === 'POST' && url === '/api/forum') {
+                    return Promise.resolve({
+                        ok: true,
+                        json: async () => ({ _id: 'p-new', title: 'Fresh', content: 'Fresh', authorId: 'user1', visibility: 'FRIENDS_ONLY', reactions: [], createdAt: new Date().toISOString() })
+                    });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            });
+            renderWithProviders();
+            await submitComposer('Fresh');
+
+            expect(await screen.findByTestId('post-visibility-p-new')).toHaveTextContent('FRIENDS_ONLY');
+            expect(toast.success).toHaveBeenCalledWith('Post created successfully!');
+
+            await act(async () => {
+                socketHandlers.postUpdated({ _id: 'p-new', reactions: [{ userId: 'user1', emoji: '👍' }, { userId: 'bob', emoji: '❤️' }] });
+            });
+            expect(screen.getByTestId('post-reactions-p-new')).toHaveTextContent('2');
+            expect(screen.getByTestId('post-visibility-p-new')).toHaveTextContent('FRIENDS_ONLY');
+        });
+
+        it.each([
+            ['the current server shape', { message: 'Post submitted for review.', post: { _id: 'p-q', status: 'quarantined', isFlagged: true } }],
+            ['a quarantined flag', { _id: 'p-q', quarantined: true }],
+            ['status pending', { _id: 'p-q', status: 'pending' }],
+        ])('tells the author their post is under review for %s', async (_label, response) => {
+            apiFetch.mockImplementation((url, opts) => {
+                if (opts && opts.method === 'POST' && url === '/api/forum') {
+                    return Promise.resolve({ ok: true, status: 201, json: async () => response });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({ feed: [], hasMore: false }) });
+            });
+            renderWithProviders();
+            await submitComposer('Fourth post this minute');
+
+            await waitFor(() => expect(toast).toHaveBeenCalledWith(
+                'Your post is being reviewed and will appear once approved.',
+                expect.any(Object)
+            ));
+            expect(toast.success).not.toHaveBeenCalledWith('Post created successfully!');
+            expect(screen.queryByTestId('post-card-undefined')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('post-card-p-q')).not.toBeInTheDocument();
         });
 
         it('passes real likers only (no placeholder ids) when the feed has just a like count', async () => {
