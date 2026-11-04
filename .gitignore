@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Test and coverage artifacts
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# Build artifacts
+dist/
+dist-ssr/
+build/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Scratch scripts, temporary notes, and one-off debug artifacts
+fix_*.js
+fix_*.cjs
+fix_*.py
+fix*.js
+fix*.cjs
+scratch_*.js
+check-client.js
+check.js
+find_a11y.js
+scan_a11y.js
+forum_backup.jsx
+lint_output.txt
+lint_report.json
+test_output.txt
+merge.txt
+new_code.txt
+pr_*.txt
+pr_body.md
