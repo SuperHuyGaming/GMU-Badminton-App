@@ -32,5 +32,8 @@ test.describe('health & public data', () => {
   test('unknown API routes return 404', async ({ request }) => {
     const res = await request.get('/api/this-route-does-not-exist');
     expect(res.status()).toBe(404);
+    expect(res.headers()['content-type']).toContain('application/json');
+    const body = await res.json();
+    expect(body).toEqual({ message: 'Not found' });
   });
 });
