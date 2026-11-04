@@ -361,6 +361,9 @@ app.get("/api/schedule/weekly", (req, res, next) => {
 });
 
 // Global error handler must be defined after all other routes and middleware
+// JSON 404 for unknown /api/* routes
+app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
+
 app.use(errorHandler);
 
 if (process.env.NODE_ENV !== "test") {
