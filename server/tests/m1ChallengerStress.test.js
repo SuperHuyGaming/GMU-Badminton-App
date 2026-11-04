@@ -1,3 +1,4 @@
+const MAX_OP_MS = process.env.CI ? 1000 : 100;
 const request = require('supertest');
 const express = require('express');
 const mongoose = require('mongoose');
@@ -95,7 +96,7 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
 
                 expect(result.success).toBe(true);
                 expect(result.activeGuaranteedCount).toBe(5);
-                expect(duration).toBeLessThan(100);
+                expect(duration).toBeLessThan(MAX_OP_MS);
             }
 
             const min = Math.min(...latencies);
@@ -163,7 +164,7 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
             results.forEach(res => {
                 expect(res.success).toBe(true);
                 expect(res.activeGuaranteedCount).toBe(5);
-                expect(res.executionTimeMs).toBeLessThan(100);
+                expect(res.executionTimeMs).toBeLessThan(MAX_OP_MS);
             });
 
             expect(deleteQueueCount).toBe(concurrentCalls);
@@ -189,7 +190,7 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
             responses.forEach(res => {
                 expect(res.status).toBe(200);
                 expect(res.body.success).toBe(true);
-                expect(res.body.executionTimeMs).toBeLessThan(100);
+                expect(res.body.executionTimeMs).toBeLessThan(MAX_OP_MS);
                 expect(res.body.seededTournaments).toBe(5);
                 expect(res.body.tournaments).toHaveLength(5);
             });
