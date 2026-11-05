@@ -61,11 +61,15 @@ app.use('/api/forum', forumRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/friends', friendsRoutes);
 
-const leanUser = (id, extra = {}) => ({
-	select: jest.fn().mockReturnValue({
-		lean: jest.fn().mockResolvedValue({ _id: id, name: `User ${id.slice(-2)}`, profilePic: '', friends: [], ...extra })
-	})
-});
+const leanUser = (id, extra = {}) => {
+	const userObj = { _id: id, name: `User ${id.slice(-2)}`, profilePic: '', friends: [], ...extra };
+	return {
+		select: jest.fn().mockReturnValue({
+			lean: jest.fn().mockResolvedValue(userObj)
+		}),
+		lean: jest.fn().mockResolvedValue(userObj)
+	};
+};
 
 const rallyPost = (rsvpList, slotsNeeded = 2, overrides = {}) => ({
 	_id: postId,
@@ -422,5 +426,48 @@ describe('Bug 5: quarantined posts signal the author and stay private to them', 
 		for (const [pipeline] of ActivityFeed.aggregate.mock.calls) {
 			expect(pipeline[0].$match.pendingReview).toEqual({ $ne: true });
 		}
+	});
+
+	it('post-save hook preserves/upserts ActivityFeed entry with pendingReview: true when quarantined', async () => {
+		const RealPost = jest.requireActual('../models/Post');
+		const hook = RealPost.schema.s.hooks._posts.get('save')[0].fn;
+
+		const quarantinedDoc = {
+			_id: postId,
+			authorId: hostId,
+			authorName: 'Host',
+			title: 'Quarantined post',
+			content: 'Some text',
+			status: 'quarantined',
+			isFlagged: true,
+			category: 'general',
+			createdAt: new Date(),
+		};
+
+		await hook(quarantinedDoc);
+
+		expect(ActivityFeed.deleteOne).not.toHaveBeenCalledWith({ type: 'post', referenceId: postId });
+		expect(ActivityFeed.findOneAndUpdate).toHaveBeenCalledWith(
+			{ type: 'post', referenceId: postId },
+			expect.objectContaining({
+				pendingReview: true,
+				title: 'Quarantined post'
+			}),
+			expect.anything()
+		);
+	});
+
+	it('post-save hook deletes ActivityFeed entry when doc is deleted', async () => {
+		const RealPost = jest.requireActual('../models/Post');
+		const hook = RealPost.schema.s.hooks._posts.get('save')[0].fn;
+
+		const deletedDoc = {
+			_id: postId,
+			status: 'deleted'
+		};
+
+		await hook(deletedDoc);
+
+		expect(ActivityFeed.deleteOne).toHaveBeenCalledWith({ type: 'post', referenceId: postId });
 	});
 });

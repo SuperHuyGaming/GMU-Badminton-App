@@ -280,10 +280,11 @@ PostSchema.post('save', async function(doc) {
 	try {
 		const ActivityFeed = require('./ActivityFeed');
         
-        if (doc.isFlagged || doc.status === 'quarantined' || doc.status === 'deleted') {
+        if (doc.status === 'deleted') {
             await ActivityFeed.deleteOne({ type: "post", referenceId: doc._id });
             return;
         }
+		const isQuarantined = Boolean(doc.isFlagged || doc.status === 'quarantined');
 
 		const User = require('./User');
 		const author = (doc.authorId && mongoose.isValidObjectId(doc.authorId))
@@ -334,7 +335,7 @@ PostSchema.post('save', async function(doc) {
 				comments: doc.comments?.length || 0,
 				createdAt: doc.createdAt || doc.timestamp,
 				visibility: doc.visibility || 'PUBLIC',
-				pendingReview: false,
+				pendingReview: isQuarantined,
 				score: (doc.reactions?.length || 0) + (doc.comments?.length || 0) * 2 + (doc.likedBy?.length || 0) * 2 + (doc.isPinned ? 1000 : 0),
 				lastActivityAt: doc.lastActivityAt || doc.createdAt || doc.timestamp,
 				originalPostId: doc.originalPostId || null,
