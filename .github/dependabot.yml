@@ -3,6 +3,7 @@ updates:
   # Maintain dependencies for the React frontend
   - package-ecosystem: "npm"
     directory: "/client"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -10,11 +11,12 @@ updates:
       - "SuperHuyGaming"
     labels:
       - "dependencies"
-      - "automated"
+      - "Automated"
 
   # Maintain dependencies for the Node.js backend
   - package-ecosystem: "npm"
     directory: "/server"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -22,11 +24,12 @@ updates:
       - "SuperHuyGaming"
     labels:
       - "dependencies"
-      - "automated"
+      - "Automated"
 
   # Maintain dependencies for the new Search Service
   - package-ecosystem: "npm"
     directory: "/search-service"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -34,11 +37,12 @@ updates:
       - "SuperHuyGaming"
     labels:
       - "dependencies"
-      - "automated"
+      - "Automated"
 
   # Maintain Docker base images
   - package-ecosystem: "docker"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
