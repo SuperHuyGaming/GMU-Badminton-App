@@ -685,11 +685,8 @@ describe("Milestone 3 Challenger 2: J10 Inline Mentions & J11 Viewport Prefetch 
 
 			// Position: exactly 80% (scrollY = 800; 800 + 800 = 1600 >= 1600)
 			window.scrollY = 800;
-			await act(async () => {
-				fireEvent.scroll(window);
-			});
-
 			await waitFor(() => {
+				fireEvent.scroll(window);
 				expect(callCount).toBe(2);
 			});
 			await waitFor(() => {
