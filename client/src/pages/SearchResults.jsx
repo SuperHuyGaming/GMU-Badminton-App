@@ -24,6 +24,7 @@ import analytics from '../utils/analytics';
 import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
 import { useAuth } from '../context/AuthContext';
+import EmptyState from '../components/EmptyState';
 
 const useQuery = () => {
     return new URLSearchParams(useLocation().search);
@@ -434,27 +435,11 @@ export default function SearchResults() {
                 <Grid size={{ xs: 12, md: 9 }} component="section" aria-label="Search results list">
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} aria-live="polite" aria-atomic="false">
                         {results.length === 0 && !loading && (
-                            <Paper 
-                                role="status"
-                                aria-live="polite"
-                                sx={{ 
-                                    p: { xs: 3, sm: 4 }, 
-                                    textAlign: 'center', 
-                                    borderRadius: 2,
-                                    border: (theme) => `1px solid ${theme.palette.divider}`,
-                                }}
-                            >
-                                <Typography 
-                                    variant="h6" 
-                                    sx={{ 
-                                        color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.85)' : '#404040',
-                                        fontWeight: 600,
-                                        wordBreak: 'break-word',
-                                    }}
-                                >
-                                    No results found for "{searchQuery}".
-                                </Typography>
-                            </Paper>
+                            <EmptyState
+                                type="no-results"
+                                title={`No results found for "${searchQuery}".`}
+                                description="Try adjusting your search keywords, checking for typos, or clearing filters."
+                            />
                         )}
 
                         {results.map((result, index) => {

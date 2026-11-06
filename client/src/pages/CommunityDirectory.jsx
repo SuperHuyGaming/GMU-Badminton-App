@@ -11,6 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import apiFetch from '../utils/api';
 import socket from '../utils/socket';
 import FriendActionButton from '../components/FriendActionButton';
+import EmptyState from '../components/EmptyState';
 
 const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -680,26 +681,17 @@ export default function CommunityDirectory() {
                     {loading ? (
                         renderSkeletons()
                     ) : matches.length === 0 ? (
-                        <Box sx={{ p: 6, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 3, border: '1px dashed', borderColor: 'divider' }}>
-                            <Typography variant="h2" sx={{ mb: 2 }}>🏸</Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                No players found!
-                            </Typography>
-                            <Typography color="text.secondary" sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
-                                Looks like everyone is currently on the court. Try adjusting your skill filter or search term to find more players.
-                            </Typography>
-                            <Button 
-                                variant="contained" 
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setSubmittedQuery('');
-                                    setSkillFilter('All');
-                                }}
-                                sx={{ borderRadius: 50, px: 4, fontWeight: 'bold' }}
-                            >
-                                Clear Filters
-                            </Button>
-                        </Box>
+                        <EmptyState
+                            type="no-players"
+                            title="No players found!"
+                            description="Looks like everyone is currently on the court. Try adjusting your skill filter or search term to find more players."
+                            actionLabel="Clear Filters"
+                            onAction={() => {
+                                setSearchQuery('');
+                                setSubmittedQuery('');
+                                setSkillFilter('All');
+                            }}
+                        />
                     ) : (
                         submittedQuery.trim() ? (
                             <Stack spacing={2} sx={{ width: '100%' }}>
