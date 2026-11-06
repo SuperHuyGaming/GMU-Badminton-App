@@ -59,3 +59,8 @@ merge.txt
 new_code.txt
 pr_*.txt
 pr_body.md
+
+# Agent scratch metadata and worktrees
+.agents/teamwork/
+.claude/
+HANDOFF.md
