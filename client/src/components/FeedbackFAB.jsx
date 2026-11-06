@@ -8,8 +8,8 @@ import { useFeedback } from "../context/FeedbackContext";
 export default function FeedbackFAB({ hideOnSmallScreens = false } = {}) {
 	const { isOpen, isMinimized, draft, openFeedbackModal, maximizeFeedbackModal } = useFeedback();
 
-	// When modal is open and expanded, hide FAB so it doesn't overlap the form
-	if (isOpen && !isMinimized) {
+	// When modal is open (expanded or minimized), hide FAB so it doesn't overlap or double-mount
+	if (isOpen) {
 		return null;
 	}
 
@@ -29,13 +29,12 @@ export default function FeedbackFAB({ hideOnSmallScreens = false } = {}) {
 			sx={{
 				display: hideOnSmallScreens ? { xs: "none", md: "block" } : "block",
 				position: "fixed",
-				bottom: { xs: 20, sm: 28 },
-				// Bottom-left: the Messenger launcher and back-to-top button live bottom-right.
-				left: { xs: 16, sm: 28 },
+				bottom: { xs: 20, sm: 24 },
+				right: { xs: 76, sm: 84 },
 				zIndex: 1050,
 			}}
 		>
-			<Tooltip title={hasDraft ? "Resume Bug Report Draft" : "Feedback & Bug Report"} placement="right" arrow>
+			<Tooltip title={hasDraft ? "Resume Bug Report Draft" : "Feedback & Bug Report"} placement="left" arrow>
 				<Badge
 					color="secondary"
 					variant="dot"

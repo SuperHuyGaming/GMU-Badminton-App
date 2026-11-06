@@ -386,6 +386,8 @@ describe('Public Tournaments Page Component', () => {
         // Dialog should open
         await waitFor(() => {
             expect(screen.getByText('Reset Tournament Schedule?')).toBeInTheDocument();
+            expect(screen.getByText(/reload the verified 2026–2027 tournament schedule/i)).toBeInTheDocument();
+            expect(screen.queryByText(/collegiate tournament schedule/i)).not.toBeInTheDocument();
         });
 
         // Click confirm in dialog
@@ -652,6 +654,8 @@ describe('Public Tournaments Page Component', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Submit Tournament Discovery')).toBeInTheDocument();
+            expect(screen.getByText(/upcoming DMV or regional badminton tournament/i)).toBeInTheDocument();
+            expect(screen.queryByText(/upcoming collegiate or DMV/i)).not.toBeInTheDocument();
         });
 
         // Fill tournament name
@@ -914,6 +918,44 @@ describe('Public Tournaments Page Component', () => {
 
         await waitFor(() => {
             expect(apiFetch.mock.calls.length).toBeGreaterThan(callCountBefore);
+        });
+    });
+
+    it('defaults detail modal host subtitle to "Open Tournament" when host is omitted', async () => {
+        apiFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({
+                tournaments: [{
+                    _id: 't-orphan',
+                    tournamentName: 'Community Open Smash 2027',
+                    eventLocation: 'Fairfax, VA',
+                    startDate: '2027-12-01T00:00:00.000Z',
+                    entryFee: '$20',
+                    skillLevels: ['Open'],
+                    divisions: [],
+                    attendees: []
+                }]
+            })
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/tournaments']}>
+                <Tournaments />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Community Open Smash 2027')).toBeInTheDocument();
+        });
+
+        const viewDetailsBtn = screen.getByRole('button', { name: /view details/i });
+        fireEvent.click(viewDetailsBtn);
+
+        await waitFor(() => {
+            const dialog = screen.getByRole('dialog');
+            expect(within(dialog).getByText('Open Tournament')).toBeInTheDocument();
+            expect(within(dialog).queryByText('DMV Badminton Tournament')).not.toBeInTheDocument();
         });
     });
 });
