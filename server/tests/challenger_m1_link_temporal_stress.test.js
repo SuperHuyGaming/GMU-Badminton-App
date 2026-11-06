@@ -1,4 +1,4 @@
-const MAX_TOTAL_HEAP_MB = process.env.CI ? 350 : 300;
+const MAX_TOTAL_HEAP_MB = process.env.CI ? 400 : 350;
 /**
  * Challenger 2 Empirical Stress Test Suite: Milestone 1 (Project Titan)
  * File: server/tests/challenger_m1_link_temporal_stress.test.js

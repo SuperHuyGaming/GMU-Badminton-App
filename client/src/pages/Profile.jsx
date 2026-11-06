@@ -39,7 +39,9 @@ export default function Profile() {
 	const [cropImageSrc, setCropImageSrc] = useState(null);
 	const [cropType, setCropType] = useState("profilePic"); // "profilePic" or "coverPic"
 
-	const isOwnProfile = user && user.id === id;
+	const currentUserId = (user?.id || user?._id)?.toString();
+	const targetUserId = id || currentUserId;
+	const isOwnProfile = Boolean(user && (!id || id === currentUserId));
 
 	const [formData, setFormData] = useState({
 		name: "",
@@ -55,24 +57,28 @@ export default function Profile() {
 	});
 
 	const { data: profileQueryData, isError: isProfileError } = useQuery({
-		queryKey: ['profile', id],
+		queryKey: ['profile', targetUserId],
 		queryFn: async () => {
-			const profileEndpoint = isOwnProfile ? `/api/profile` : `/api/profile/${id}`;
+			if (!targetUserId) throw new Error("Profile not found");
+			const profileEndpoint = isOwnProfile ? `/api/profile` : `/api/profile/${targetUserId}`;
 			const profileRes = await apiFetch(profileEndpoint);
 			
 			if (!profileRes.ok) throw new Error("Profile not found");
 			return profileRes.json();
 		},
-		retry: false
+		retry: false,
+		enabled: Boolean(targetUserId)
 	});
 
 	const { data: postsQueryData = [], isLoading: isLoadingPosts } = useQuery({
-		queryKey: ['posts', 'user', id],
+		queryKey: ['posts', 'user', targetUserId],
 		queryFn: async () => {
-			const postsRes = await apiFetch(`/api/forum/user/${id}`);
+			if (!targetUserId) return [];
+			const postsRes = await apiFetch(`/api/forum/user/${targetUserId}`);
 			if (!postsRes.ok) return [];
 			return postsRes.json();
-		}
+		},
+		enabled: Boolean(targetUserId)
 	});
 
 	useEffect(() => {
@@ -110,8 +116,9 @@ export default function Profile() {
 	const [isOnline, setIsOnline] = useState(false);
 
 	useEffect(() => {
+		if (!targetUserId) return;
 		socket.on("profileUpdated", (updatedUser) => {
-			if (updatedUser._id === id) setProfileData(updatedUser);
+			if (updatedUser._id === targetUserId) setProfileData(updatedUser);
 		});
 		socket.on("postUpdated", (updatedPost) => {
 			setUserPosts((prev) =>
@@ -119,35 +126,35 @@ export default function Profile() {
 			);
 		});
 		socket.on("postCreated", (newPost) => {
-			if (newPost.authorId === id)
+			if (newPost.authorId === targetUserId)
 				setUserPosts((prev) => [newPost, ...prev]);
 		});
 
 		const handleOnlineUsers = (users) => {
-			setIsOnline(users.includes(id));
+			setIsOnline(users.includes(targetUserId));
 		};
 		socket.on("onlineUsersUpdate", handleOnlineUsers);
 
 		const handleFriendRequestReceived = ({ requesterId }) => {
-			if (requesterId === id) {
+			if (requesterId === targetUserId) {
 				setFriendStatus("request_received");
 			}
 		};
 
 		const handleFriendRequestAccepted = ({ userId }) => {
-			if (userId === id) {
+			if (userId === targetUserId) {
 				setFriendStatus("friends");
 			}
 		};
 
 		const handleFriendRequestDeclined = ({ userId }) => {
-			if (userId === id) {
+			if (userId === targetUserId) {
 				setFriendStatus("none");
 			}
 		};
 
 		const handleFriendRemoved = ({ friendId }) => {
-			if (friendId === id) {
+			if (friendId === targetUserId) {
 				setFriendStatus("none");
 			}
 		};
@@ -167,7 +174,7 @@ export default function Profile() {
 			socket.off("friendRequestDeclined", handleFriendRequestDeclined);
 			socket.off("friendRemoved", handleFriendRemoved);
 		};
-	}, [id]);
+	}, [targetUserId]);
 
 	useEffect(() => {
 		if (profileData && user && !isOwnProfile) {

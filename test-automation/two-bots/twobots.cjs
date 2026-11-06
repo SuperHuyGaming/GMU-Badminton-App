@@ -733,6 +733,122 @@ async function cardMenu(page, text, itemName) {
 			if (!got) fail(`dock showed message (badge=${badge}) but Bob did not receive the dock reply`);
 			return `launcher badge=${badge || "none"}; message shown in dock; dock reply delivered to Bob live`;
 		});
+
+		// ===== Players / Matchmaking =====
+		await step("alice_visits_players_tab", async () => {
+			await A.goto(WEB + "/matchmaking");
+			const input = A.getByRole("textbox", { name: "Search community members" });
+			if (!(await visible(input, 15000))) fail("Players directory search input not rendered");
+			const bobCard = A.getByText("Bot Bob");
+			const seen = await visible(bobCard, 8000);
+			return `search input ready; Bob card visible=${seen}`;
+		});
+		await step("players_tab_keyboard_focus_search", async () => {
+			await A.locator("body").click({ position: { x: 50, y: 150 } });
+			await sleep(300);
+			await A.keyboard.press("/");
+			await sleep(300);
+			const isFocused = await A.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Search community members");
+			if (!isFocused) fail("press '/' did not focus the search input");
+			return "keyboard shortcut '/' focused search input";
+		});
+		await step("alice_searches_players_and_clears", async () => {
+			const input = A.getByRole("textbox", { name: "Search community members" });
+			await input.fill("Bob");
+			const seen = await visible(A.getByText("Bot Bob"), 8000);
+			if (!seen) fail("Search for 'Bob' did not display Bot Bob");
+			const clearBtn = A.getByRole("button", { name: "Clear search input" });
+			if (await clearBtn.isVisible().catch(() => false)) {
+				await clearBtn.click();
+			} else {
+				await input.fill("");
+			}
+			return "search for Bob displayed result and cleared successfully";
+		});
+		await step("alice_filters_by_skill_chips", async () => {
+			const chip = A.getByRole("button", { name: "All" }).or(A.locator(".MuiChip-root").filter({ hasText: "All" })).first();
+			if (await chip.isVisible().catch(() => false)) await chip.click();
+			return "skill chips interactive without error";
+		});
+		await step("bob_phone_players_no_horizontal_overflow", async () => {
+			await B.goto(WEB + "/matchmaking");
+			await visible(B.getByRole("textbox", { name: "Search community members" }), 15000);
+			await sleep(500);
+			const o = await overflow(B);
+			if (o.scrollWidth > 390) fail(`scrollWidth ${o.scrollWidth} > 390 on /matchmaking`);
+			return o;
+		});
+
+		// ===== Tournaments =====
+		await step("alice_visits_tournaments_tab", async () => {
+			await A.goto(WEB + "/tournaments");
+			const listToggle = A.getByRole("button", { name: "List View" });
+			if (!(await visible(listToggle, 15000))) fail("Tournaments view toggle not shown");
+			return "tournaments tab loaded successfully";
+		});
+		await step("tournaments_toggle_calendar_and_card_view", async () => {
+			const calToggle = A.getByRole("button", { name: "Calendar View" });
+			await calToggle.click();
+			await sleep(600);
+			const listToggle = A.getByRole("button", { name: "List View" });
+			await listToggle.click();
+			await sleep(600);
+			return "toggled between Calendar and List views cleanly";
+		});
+		await step("alice_opens_tournament_detail_modal", async () => {
+			const card = A.locator(".MuiCard-root").filter({ hasText: /Open|Registration|Closing Soon|TBD/ }).first();
+			if (await card.isVisible().catch(() => false)) {
+				await card.click();
+				const dlg = A.getByRole("dialog");
+				const seen = await visible(dlg, 6000);
+				if (!seen) fail("clicking tournament card did not open detail modal");
+				const closeBtn = dlg.getByRole("button", { name: "Close dialog" });
+				if (await closeBtn.isVisible().catch(() => false)) await closeBtn.click();
+				else await A.keyboard.press("Escape");
+				await gone(dlg, 5000);
+				return "tournament detail dialog opened and closed cleanly";
+			}
+			return "no tournament card present in test db; skipping click";
+		});
+		await step("bob_phone_tournaments_no_horizontal_overflow", async () => {
+			await B.goto(WEB + "/tournaments");
+			await sleep(800);
+			const o = await overflow(B);
+			if (o.scrollWidth > 390) fail(`scrollWidth ${o.scrollWidth} > 390 on /tournaments`);
+			return o;
+		});
+
+		// ===== Profile =====
+		await step("alice_visits_own_profile", async () => {
+			await A.goto(WEB + "/profile");
+			const nameHeading = A.getByText("Bot Alice", { exact: false });
+			if (!(await visible(nameHeading, 15000))) fail("Alice's name not rendered on /profile");
+			return "Alice's profile rendered cleanly";
+		});
+		await step("alice_edits_profile_bio", async () => {
+			const editBtn = A.getByRole("button", { name: "Edit profile", exact: true });
+			if (!(await visible(editBtn, 8000))) fail("'Edit profile' button not visible on own profile");
+			await editBtn.click();
+			const bioBox = A.getByRole("textbox", { name: "Bio" });
+			if (!(await visible(bioBox, 8000))) fail("Bio textarea not visible in edit form");
+			const newBio = T("Badminton enthusiast playing doubles and singles.");
+			await bioBox.fill(newBio);
+			const saveBtn = A.getByRole("button", { name: "Save Changes" });
+			await saveBtn.click();
+			const toast = await visible(A.getByText(/Profile updated successfully|saved/i), 8000);
+			await A.reload();
+			const persisted = await visible(A.getByText(newBio), 15000);
+			if (!persisted) fail("updated bio did not persist after reload");
+			return `bio updated, toast=${toast}, persisted after reload`;
+		});
+		await step("bob_phone_profile_no_horizontal_overflow", async () => {
+			await B.goto(`${WEB}/profile/${ids.bob}`);
+			await visible(B.getByText("Bot Bob", { exact: false }), 15000);
+			await sleep(500);
+			const o = await overflow(B);
+			if (o.scrollWidth > 390) fail(`scrollWidth ${o.scrollWidth} > 390 on Bob's phone profile`);
+			return o;
+		});
 	}
 
 	// ===== Diagnostics =====
