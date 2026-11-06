@@ -128,24 +128,10 @@ textarea:-webkit-autofill:active {
 /* ==========================================================================
    WCAG 2.1 AA Universal Keyboard Focus Rings (Criterion 2.4.7 & 1.4.11)
    ========================================================================== */
-:focus-visible {
-  outline: 2px solid #004d26 !important;
-  outline-offset: 2px !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  :focus-visible {
-    outline: 2px solid #38bdf8 !important;
-    outline-offset: 2px !important;
-  }
-}
-
-/* Force high-visibility outline on all interactive HTML elements */
+/* Interactive controls that rely on browser outlines for keyboard navigation */
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
 select:focus-visible,
-textarea:focus-visible,
 [role="button"]:focus-visible,
 [role="link"]:focus-visible,
 [role="tab"]:focus-visible,
@@ -157,9 +143,7 @@ textarea:focus-visible,
 @media (prefers-color-scheme: dark) {
   button:focus-visible,
   a:focus-visible,
-  input:focus-visible,
   select:focus-visible,
-  textarea:focus-visible,
   [role="button"]:focus-visible,
   [role="link"]:focus-visible,
   [role="tab"]:focus-visible,
@@ -167,6 +151,17 @@ textarea:focus-visible,
     outline: 2px solid #38bdf8 !important;
     outline-offset: 2px !important;
   }
+}
+
+/* Suppress raw rectangular outlines on inputs and textareas — they manage custom focus borders and glows via MUI / pill containers */
+input,
+textarea,
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 

@@ -128,4 +128,43 @@ describe('FloatingChatPopup Component', () => {
         fireEvent.click(screen.getByRole('button', { name: /chat with taylor lee/i }));
         expect(onSelect).toHaveBeenCalled();
     });
+
+    it('sends quick thumbs-up (👍) when clicking thumbs-up button with empty input', () => {
+        const onSendMessage = vi.fn();
+        render(
+            <FloatingChatPopup
+                chat={mockPartner}
+                messages={[]}
+                currentUserId="user-self-1"
+                onMinimize={vi.fn()}
+                onClose={vi.fn()}
+                onSendMessage={onSendMessage}
+            />
+        );
+        const thumbsUpBtn = screen.getByRole('button', { name: /send a thumbs-up/i });
+        expect(thumbsUpBtn).toBeInTheDocument();
+        fireEvent.click(thumbsUpBtn);
+        expect(onSendMessage).toHaveBeenCalledWith('user-partner-1', '👍');
+    });
+
+    it('renders partner avatar alongside incoming messages and large 👍 for thumbs-up', () => {
+        render(
+            <FloatingChatPopup
+                chat={mockPartner}
+                messages={[
+                    { _id: 'm1', content: 'See you on court!', sender: { _id: 'user-partner-1' } },
+                    { _id: 'm2', content: '👍', sender: { _id: 'user-self-1' } }
+                ]}
+                currentUserId="user-self-1"
+                onMinimize={vi.fn()}
+                onClose={vi.fn()}
+                onSendMessage={vi.fn()}
+            />
+        );
+        expect(screen.getByText('See you on court!')).toBeInTheDocument();
+        expect(screen.getByText('👍')).toBeInTheDocument();
+        // Partner mini avatar should be rendered for incoming message
+        const partnerAvatars = screen.getAllByAltText('Jordan Smith');
+        expect(partnerAvatars.length).toBeGreaterThanOrEqual(2); // Header avatar + message avatar
+    });
 });

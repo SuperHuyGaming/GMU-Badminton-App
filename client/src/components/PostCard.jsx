@@ -2081,7 +2081,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 							display: "flex",
 							justifyContent: "space-between",
 							alignItems: "center",
-							px: 1,
+							px: 0,
 							mb: 1,
 						}}
 					>
@@ -2119,7 +2119,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 									gap: 0.75,
 									cursor: "pointer",
 									py: 0.3,
-									px: 0.5,
+									pl: 0,
+									pr: 0.5,
 									borderRadius: 4,
 									userSelect: "none",
 									"&:hover": {
