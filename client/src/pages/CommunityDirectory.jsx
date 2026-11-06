@@ -331,7 +331,12 @@ export default function CommunityDirectory() {
         <Card 
             sx={{ 
                 height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, p: 2.5, transition: 'transform 0.2s, box-shadow 0.2s',
-                '&:hover': { transform: 'translateY(-4px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 12px 28px rgba(0,0,0,0.6)' : '0 12px 28px rgba(0,0,0,0.12)' }
+                '&:hover': { 
+                    transform: 'translateY(-4px)', 
+                    boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 12px 28px rgba(0,0,0,0.6)' : '0 12px 28px rgba(0,0,0,0.12)',
+                    borderColor: 'primary.light',
+                    '& .player-name-title': { color: 'primary.main' }
+                }
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2, width: '100%' }}>
@@ -353,7 +358,13 @@ export default function CommunityDirectory() {
             </Box>
             <CardContent sx={{ flexGrow: 1, p: 0, width: '100%' }}>
                 <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ lineHeight: 1.2, mb: 1, color: 'text.primary', wordBreak: 'break-word', '&:hover': { textDecoration: 'underline' } }}>
+                    <Typography 
+                        variant="h6" 
+                        fontWeight="bold" 
+                        gutterBottom 
+                        className="player-name-title"
+                        sx={{ lineHeight: 1.2, mb: 1, color: 'text.primary', wordBreak: 'break-word', transition: 'color 0.2s ease', '&:hover': { textDecoration: 'underline' } }}
+                    >
                         {player.name}
                     </Typography>
                 </Link>
@@ -698,7 +709,21 @@ export default function CommunityDirectory() {
                                 <AnimatePresence>
                                     {matches.map((player, i) => (
                                         <motion.div custom={i} variants={cardVariants} initial="hidden" animate="visible" exit="hidden" layout key={`match-${player._id}`}>
-                                            <Card sx={{ borderRadius: 3, p: { xs: 1.5, sm: 2 }, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: { xs: 1, sm: 2 }, transition: 'transform 0.2s, box-shadow 0.2s', '&:hover': { transform: 'translateY(-2px)', boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.1)' } }}>
+                                            <Card sx={{ 
+                                                borderRadius: 3, 
+                                                p: { xs: 1.5, sm: 2 }, 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'space-between', 
+                                                gap: { xs: 1, sm: 2 }, 
+                                                transition: 'transform 0.2s, box-shadow 0.2s', 
+                                                '&:hover': { 
+                                                    transform: 'translateY(-3px)', 
+                                                    boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 20px rgba(0,0,0,0.08)',
+                                                    borderColor: 'primary.light',
+                                                    '& .player-name-title': { color: 'primary.main' }
+                                                } 
+                                            }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 }, flexGrow: 1, overflow: 'hidden' }}>
                                                     <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
                                                         <Avatar src={player.profilePic || `https://api.dicebear.com/7.x/initials/svg?seed=${player.name}`} sx={{ width: { xs: 52, sm: 64 }, height: { xs: 52, sm: 64 } }}  alt="User Avatar" />
@@ -706,7 +731,14 @@ export default function CommunityDirectory() {
                                                     <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                                                             <Link to={`/profile/${player._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                                                                <Typography variant="h6" fontWeight="bold" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' }, lineHeight: 1.2, '&:hover': { textDecoration: 'underline' } }}>{player.name}</Typography>
+                                                                <Typography 
+                                                                    variant="h6" 
+                                                                    fontWeight="bold" 
+                                                                    className="player-name-title"
+                                                                    sx={{ fontSize: { xs: '1rem', sm: '1.25rem' }, lineHeight: 1.2, transition: 'color 0.2s ease', '&:hover': { textDecoration: 'underline' } }}
+                                                                >
+                                                                    {player.name}
+                                                                </Typography>
                                                             </Link>
                                                             {player.skillLevel && <Chip label={player.skillLevel} size="small" variant="outlined" color={getSkillColor(player.skillLevel)} sx={{ height: 20, fontSize: '0.7rem', fontWeight: 'bold', color: 'text.primary' }} />}
                                                         </Box>

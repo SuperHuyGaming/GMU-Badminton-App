@@ -138,4 +138,26 @@ describe('EmptyState Component', () => {
         expect(screen.getByTestId('custom-child-slot')).toBeInTheDocument();
         expect(screen.getByText('Suggested filters')).toBeInTheDocument();
     });
+
+    it('renders no-posts empty state with discussion card graphic', () => {
+        renderWithTheme(<EmptyState type="no-posts" />);
+        expect(screen.getByText('No Discussions Yet')).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: /discussion board card/i })).toBeInTheDocument();
+    });
+
+    it('renders no-messages empty state with chat bubbles graphic', () => {
+        renderWithTheme(<EmptyState type="no-messages" />);
+        expect(screen.getByText('No Messages Yet')).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: /speech bubbles indicating no chat messages/i })).toBeInTheDocument();
+    });
+
+    it('ensures courtAmbientGlow gradient is self-contained in all graphics using it', () => {
+        const typesWithCourtAmbientGlow = ['no-players', 'no-tournaments', 'no-posts', 'no-messages'];
+        for (const type of typesWithCourtAmbientGlow) {
+            const { container, unmount } = renderWithTheme(<EmptyState type={type} />);
+            const gradient = container.querySelector('#courtAmbientGlow');
+            expect(gradient, `Expected #courtAmbientGlow to exist in SVG defs for ${type}`).not.toBeNull();
+            unmount();
+        }
+    });
 });
