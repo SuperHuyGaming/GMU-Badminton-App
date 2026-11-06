@@ -346,3 +346,200 @@ describe('FloatingChatDock unread badge + live message de-duplication', () => {
         await waitFor(() => expect(screen.getAllByText('Ping')).toHaveLength(1));
     });
 });
+
+describe('FloatingChatDock Multi-Chat & Bubble Rail Features', () => {
+    const user1 = { _id: 'u1', name: 'Alex Chen', avatarUrl: '' };
+    const user2 = { _id: 'u2', name: 'Bob Smith', avatarUrl: '' };
+    const user3 = { _id: 'u3', name: 'Charlie Kim', avatarUrl: '' };
+    const user4 = { _id: 'u4', name: 'Dave Wilson', avatarUrl: '' };
+    const user5 = { _id: 'u5', name: 'Eve Davis', avatarUrl: '' };
+    const user6 = { _id: 'u6', name: 'Frank Miller', avatarUrl: '' };
+    const user7 = { _id: 'u7', name: 'Grace Hopper', avatarUrl: '' };
+
+    const setMobileViewport = (isMobile) => {
+        Object.defineProperty(window, 'matchMedia', {
+            writable: true,
+            configurable: true,
+            value: vi.fn().mockImplementation((query) => ({
+                matches: isMobile && (query.includes('max-width') || query.includes('599.95px')),
+                media: query,
+                onchange: null,
+                addListener: vi.fn(),
+                removeListener: vi.fn(),
+                addEventListener: vi.fn(),
+                removeEventListener: vi.fn(),
+                dispatchEvent: vi.fn()
+            }))
+        });
+    };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        Object.keys(mockSocketListeners).forEach(k => delete mockSocketListeners[k]);
+        Element.prototype.scrollIntoView = vi.fn();
+        setMobileViewport(false);
+        apiFetch.mockImplementation(async (url) => {
+            if (url.includes('/api/messages/recent/')) return { ok: true, json: async () => [] };
+            if (url.includes('/api/messages/read/')) return { ok: true, json: async () => ({}) };
+            if (url.includes('/api/messages/')) return { ok: true, json: async () => [] };
+            return { ok: true, json: async () => ({}) };
+        });
+    });
+
+    const renderDock = () => render(
+        <AuthContext.Provider value={{ user: mockUser, token: 'mock-token' }}>
+            <FloatingChatDock />
+        </AuthContext.Provider>
+    );
+
+    const openChat = (u) => {
+        act(() => {
+            window.dispatchEvent(new CustomEvent('openChatWithUser', { detail: u }));
+        });
+    };
+
+    it('opens up to 3 popups side-by-side simultaneously', async () => {
+        renderDock();
+        openChat(user1);
+        await waitFor(() => expect(screen.getByText('Alex Chen')).toBeInTheDocument());
+
+        openChat(user2);
+        await waitFor(() => expect(screen.getByText('Bob Smith')).toBeInTheDocument());
+
+        openChat(user3);
+        await waitFor(() => expect(screen.getByText('Charlie Kim')).toBeInTheDocument());
+
+        // All 3 partner headers must be present simultaneously
+        expect(screen.getByText('Alex Chen')).toBeInTheDocument();
+        expect(screen.getByText('Bob Smith')).toBeInTheDocument();
+        expect(screen.getByText('Charlie Kim')).toBeInTheDocument();
+
+        expect(screen.getByTestId('floating-chat-popup-u1')).toBeInTheDocument();
+        expect(screen.getByTestId('floating-chat-popup-u2')).toBeInTheDocument();
+        expect(screen.getByTestId('floating-chat-popup-u3')).toBeInTheDocument();
+    });
+
+    it('auto-overflows oldest inactive chat to bubble rail when 4th chat is opened', async () => {
+        renderDock();
+        openChat(user1);
+        openChat(user2);
+        openChat(user3);
+        await waitFor(() => expect(screen.getByText('Charlie Kim')).toBeInTheDocument());
+
+        // Open 4th chat
+        openChat(user4);
+        await waitFor(() => expect(screen.getByText('Dave Wilson')).toBeInTheDocument());
+
+        // Exactly 3 popups remain active
+        expect(screen.getByText('Bob Smith')).toBeInTheDocument();
+        expect(screen.getByText('Charlie Kim')).toBeInTheDocument();
+        expect(screen.getByText('Dave Wilson')).toBeInTheDocument();
+
+        // User 1 (Alex Chen) should now be in the bubble rail
+        expect(screen.getByTestId('floating-chat-bubble-u1')).toBeInTheDocument();
+    });
+
+    it('restores popup from chat bubble when bubble is clicked', async () => {
+        renderDock();
+        openChat(user1);
+        openChat(user2);
+        openChat(user3);
+        openChat(user4); // User 1 displaced to bubble
+
+        await waitFor(() => expect(screen.getByTestId('floating-chat-bubble-u1')).toBeInTheDocument());
+
+        // Click bubble for User 1
+        fireEvent.click(screen.getByTestId('floating-chat-bubble-u1'));
+
+        // User 1 is restored to an active popup
+        await waitFor(() => expect(screen.getByTestId('floating-chat-popup-u1')).toBeInTheDocument());
+        expect(screen.getByText('Alex Chen')).toBeInTheDocument();
+    });
+
+    it('enforces max 5 bubbles limit by dropping the oldest inactive bubble', async () => {
+        renderDock();
+        openChat(user1);
+        openChat(user2);
+        openChat(user3);
+        await waitFor(() => expect(screen.getByText('Charlie Kim')).toBeInTheDocument());
+
+        // Displace u1, u2, u3, u4, u5, u6 into bubbles
+        openChat(user4);
+        openChat(user5);
+        openChat(user6);
+        openChat(user7);
+        openChat(user1);
+        openChat(user2);
+
+        await waitFor(() => expect(screen.getByTestId('floating-chat-popup-u2')).toBeInTheDocument());
+
+        // Count bubbles currently rendered
+        const bubbles = screen.queryAllByTestId(/^floating-chat-bubble-/);
+        expect(bubbles.length).toBeLessThanOrEqual(5);
+    });
+
+    it('removes bubble completely when dismiss "x" is clicked', async () => {
+        renderDock();
+        openChat(user1);
+        openChat(user2);
+        openChat(user3);
+        openChat(user4); // User 1 displaced to bubble
+
+        await waitFor(() => expect(screen.getByTestId('floating-chat-bubble-u1')).toBeInTheDocument());
+
+        const dismissBtn = screen.getByTestId('dismiss-chat-bubble-u1');
+        fireEvent.click(dismissBtn);
+
+        expect(screen.queryByTestId('floating-chat-bubble-u1')).not.toBeInTheDocument();
+    });
+
+    it('minimizing a popup collapses its height to title bar and restores on click', async () => {
+        renderDock();
+        openChat(user1);
+        await waitFor(() => expect(screen.getByText('Alex Chen')).toBeInTheDocument());
+
+        // Click minimize
+        const minimizeBtn = screen.getByRole('button', { name: /minimize chat window/i });
+        fireEvent.click(minimizeBtn);
+
+        // Header remains visible but input is hidden
+        expect(screen.getByText('Alex Chen')).toBeInTheDocument();
+        expect(screen.queryByPlaceholderText('Aa')).not.toBeInTheDocument();
+
+        // Clicking the minimized header expands it back
+        fireEvent.click(screen.getByText('Alex Chen'));
+        await waitFor(() => expect(screen.getByPlaceholderText('Aa')).toBeInTheDocument());
+    });
+
+    it('collapses multi-window popups to a single drawer on mobile viewport', async () => {
+        setMobileViewport(true);
+        renderDock();
+        openChat(user1);
+        openChat(user2);
+
+        // On mobile, only the latest active chat (user2) is displayed in the single responsive sheet
+        await waitFor(() => expect(screen.getByText('Bob Smith')).toBeInTheDocument());
+        expect(screen.queryByText('Alex Chen')).not.toBeInTheDocument();
+    });
+
+    it('routes incoming privateMessage to matching active popup and marks it read', async () => {
+        renderDock();
+        openChat(user1);
+        openChat(user2);
+        await waitFor(() => expect(screen.getByText('Bob Smith')).toBeInTheDocument());
+
+        act(() => {
+            mockSocketListeners.privateMessage({
+                _id: 'live-msg-multi-1',
+                sender: { _id: 'u1', name: 'Alex Chen' },
+                receiver: { _id: 'user-self-1' },
+                content: 'Match ready on court 4'
+            });
+        });
+
+        await waitFor(() => expect(screen.getByText('Match ready on court 4')).toBeInTheDocument());
+        const readCalls = apiFetch.mock.calls.filter(([url, o]) => url.startsWith('/api/messages/read/') && o?.method === 'PUT');
+        expect(readCalls.some(([url]) => url.includes('/u1'))).toBe(true);
+    });
+});
+
