@@ -143,4 +143,31 @@ describe("FeedbackManager Component", () => {
 
 		expect(mockPromptDelete).toHaveBeenCalledWith("feedback", "fb_101");
 	});
+
+	it("renders 'Reset Filters' button when filters are active and resets both filters to all", async () => {
+		render(<FeedbackManager promptDelete={vi.fn()} />);
+
+		await waitFor(() => {
+			expect(screen.getByText("Authentication loop on login")).toBeInTheDocument();
+		});
+
+		// Initially both filters are "all", so Reset Filters should not be rendered
+		expect(screen.queryByRole("button", { name: "Reset Filters" })).not.toBeInTheDocument();
+
+		// Click Bug filter chip
+		const bugFilterChip = screen.getByRole("button", { name: "Bug" });
+		fireEvent.click(bugFilterChip);
+
+		// "Reset Filters" button should now be rendered
+		const resetBtn = await screen.findByRole("button", { name: "Reset Filters" });
+		expect(resetBtn).toBeInTheDocument();
+
+		// Click Reset Filters
+		fireEvent.click(resetBtn);
+
+		// "Reset Filters" button should disappear
+		await waitFor(() => {
+			expect(screen.queryByRole("button", { name: "Reset Filters" })).not.toBeInTheDocument();
+		});
+	});
 });

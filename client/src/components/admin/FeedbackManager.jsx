@@ -315,6 +315,20 @@ export default function FeedbackManager({ promptDelete }) {
 						/>
 					))}
 				</Box>
+
+				{(typeFilter !== "all" || statusFilter !== "all") && (
+					<Button
+						size="small"
+						color="secondary"
+						onClick={() => {
+							setTypeFilter("all");
+							setStatusFilter("all");
+						}}
+						sx={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
+					>
+						Reset Filters
+					</Button>
+				)}
 			</Box>
 
 			{/* Submissions Table */}

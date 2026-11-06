@@ -220,6 +220,22 @@ describe('Navbar Component & Global Search UI', () => {
         expect(document.activeElement).toBe(searchInput);
     });
 
+    it('focuses search input when Ctrl+K or Cmd+K is pressed', () => {
+        renderNavbar();
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).toBe(searchInput);
+
+        // blur and test Cmd+K (metaKey)
+        searchInput.blur();
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: 'K', metaKey: true });
+        expect(document.activeElement).toBe(searchInput);
+    });
+
     it('does not render the Leaderboard navigation link', () => {
         renderNavbar();
 

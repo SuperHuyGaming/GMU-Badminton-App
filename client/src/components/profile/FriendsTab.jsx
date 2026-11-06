@@ -228,6 +228,23 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
 
     const filteredFriends = friends; // No client side filter here since it's infinite scroll, but we can if we want.
 
+    const searchInputRef = useRef(null);
+    const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            if (
+                (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
+                ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K'))
+            ) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, []);
+
     const handleUnfriend = async (friendId) => {
         try {
             await apiFetch('/api/friends/remove', {
@@ -258,12 +275,37 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                             placeholder="Search friends..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon color="action" />
-                                    </InputAdornment>
-                                ),
+                            inputRef={searchInputRef}
+                            onFocus={() => setIsFocused(true)}
+                            onBlur={() => setIsFocused(false)}
+                            slotProps={{
+                                input: {
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon color="action" />
+                                        </InputAdornment>
+                                    ),
+                                    endAdornment: !isFocused && !searchQuery ? (
+                                        <InputAdornment position="end">
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    bgcolor: 'action.hover', 
+                                                    px: 0.9, 
+                                                    py: 0.4, 
+                                                    borderRadius: 1, 
+                                                    color: 'text.secondary', 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.75rem',
+                                                    display: { xs: 'none', sm: 'inline-flex' }, 
+                                                    pointerEvents: 'none' 
+                                                }}
+                                            >
+                                                /
+                                            </Typography>
+                                        </InputAdornment>
+                                    ) : null
+                                }
                             }}
                             sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
                         />

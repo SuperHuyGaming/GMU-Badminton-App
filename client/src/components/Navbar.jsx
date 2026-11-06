@@ -54,12 +54,14 @@ const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Global '/' key shortcut to focus search input on desktop
+    // Global '/' or Ctrl+K / Cmd+K key shortcut to focus search input on desktop
     useEffect(() => {
         if (onCloseMobile) return;
         const handleGlobalSlashShortcut = (e) => {
             if (location.pathname === '/matchmaking') return;
-            if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            const isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
+            const isK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+            if (isSlash || isK) {
                 const targetTag = e.target?.tagName;
                 if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag) && !e.target?.isContentEditable) {
                     e.preventDefault();

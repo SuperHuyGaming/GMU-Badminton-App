@@ -16,10 +16,12 @@ import {
     Divider,
     Avatar,
     Button,
+    IconButton,
     TextField,
     InputAdornment
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import analytics from '../utils/analytics';
 import apiFetch from '../utils/api';
 import { getOptimizedAvatar } from '../utils/image';
@@ -190,6 +192,46 @@ export default function SearchResults() {
         setHasMore(true);
     };
 
+    const searchInputRef = useRef(null);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            if (
+                (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
+                ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K'))
+            ) {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, []);
+
+    const hasActiveSkill = Object.values(skillLevel).some(Boolean);
+    const hasActiveUni = Object.values(homeUniversity).some(Boolean);
+    const hasActiveType = searchType !== 'players';
+    const hasActiveFilters = hasActiveSkill || hasActiveUni || hasActiveType;
+
+    const handleResetAllFilters = () => {
+        setSearchType('players');
+        setSkillLevel({
+            Beginner: false,
+            Intermediate: false,
+            Advanced: false,
+        });
+        setHomeUniversity({
+            GMU: false,
+            VT: false,
+            VCU: false,
+            UVA: false,
+        });
+        setResults([]);
+        setPage(1);
+        setHasMore(true);
+    };
+
     return (
         <Box sx={{ flexGrow: 1, pt: { xs: 1, sm: 2 }, pb: 4 }}>
             <Box sx={{ mb: 3 }}>
@@ -222,11 +264,48 @@ export default function SearchResults() {
                         placeholder="Search players, posts, or keywords..."
                         value={localSearchInput}
                         onChange={(e) => setLocalSearchInput(e.target.value)}
+                        inputRef={searchInputRef}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
                         slotProps={{
                             input: {
                                 startAdornment: (
                                     <InputAdornment position="start">
                                         <SearchIcon color="action" />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: (
+                                    <InputAdornment position="end" sx={{ display: 'flex', gap: 0.8, alignItems: 'center' }}>
+                                        {!isSearchFocused && !localSearchInput && (
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    bgcolor: 'action.hover', 
+                                                    px: 0.9, 
+                                                    py: 0.4, 
+                                                    borderRadius: 1, 
+                                                    color: 'text.secondary', 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.75rem',
+                                                    display: { xs: 'none', sm: 'inline-flex' }, 
+                                                    pointerEvents: 'none' 
+                                                }}
+                                            >
+                                                /
+                                            </Typography>
+                                        )}
+                                        {localSearchInput && (
+                                            <IconButton 
+                                                size="small" 
+                                                aria-label="Clear search"
+                                                onClick={() => {
+                                                    setLocalSearchInput('');
+                                                    searchInputRef.current?.focus();
+                                                }}
+                                            >
+                                                <ClearIcon fontSize="small" />
+                                            </IconButton>
+                                        )}
                                     </InputAdornment>
                                 )
                             }
@@ -261,9 +340,21 @@ export default function SearchResults() {
                             border: (theme) => `1px solid ${theme.palette.divider}`,
                         }}
                     >
-                        <Typography variant="h6" component="h2" fontWeight="bold" mb={2} sx={{ color: 'text.primary' }}>
-                            Filters
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                            <Typography variant="h6" component="h2" fontWeight="bold" sx={{ color: 'text.primary' }}>
+                                Filters
+                            </Typography>
+                            {hasActiveFilters && (
+                                <Button
+                                    size="small"
+                                    color="secondary"
+                                    onClick={handleResetAllFilters}
+                                    sx={{ textTransform: 'none', fontWeight: 600, fontSize: '0.8rem', p: 0 }}
+                                >
+                                    Reset All Filters
+                                </Button>
+                            )}
+                        </Box>
 
                         <FormControl component="fieldset" sx={{ mb: { xs: 2, md: 3 }, width: '100%' }}>
                             <FormLabel 
@@ -433,6 +524,18 @@ export default function SearchResults() {
 
                 {/* Main Central Column - Results */}
                 <Grid size={{ xs: 12, md: 9 }} component="section" aria-label="Search results list">
+                    {hasActiveFilters && (
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
+                            <Button
+                                size="small"
+                                color="secondary"
+                                onClick={handleResetAllFilters}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                            >
+                                Reset All Filters
+                            </Button>
+                        </Box>
+                    )}
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} aria-live="polite" aria-atomic="false">
                         {results.length === 0 && !loading && (
                             <EmptyState
