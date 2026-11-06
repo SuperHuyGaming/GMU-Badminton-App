@@ -45,6 +45,8 @@ class ErrorBoundaryInner extends React.Component {
                 type: 'bug',
                 severity: 'critical',
                 pageUrl: currentPath,
+                title: `Render Error: ${errorMessage.slice(0, 80)}`,
+                description: `Error: ${errorMessage}\n\nStack:\n${componentStack.slice(0, 500)}`,
                 initialData: {
                     type: 'bug',
                     severity: 'critical',

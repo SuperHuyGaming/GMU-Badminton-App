@@ -26,6 +26,7 @@ import FeedbackIcon from "@mui/icons-material/Feedback";
 import SendIcon from "@mui/icons-material/Send";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import LinkIcon from "@mui/icons-material/Link";
+import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import { useFeedback } from "../context/FeedbackContext";
@@ -67,6 +68,7 @@ export default function FeedbackModal() {
 	const [guestEmail, setGuestEmail] = useState("");
 	const [images, setImages] = useState([]);
 	const [uploadingImage, setUploadingImage] = useState(false);
+	const [capturingScreen, setCapturingScreen] = useState(false);
 	const [showUrlInput, setShowUrlInput] = useState(false);
 	const [urlInput, setUrlInput] = useState("");
 	const [submitting, setSubmitting] = useState(false);
@@ -77,7 +79,8 @@ export default function FeedbackModal() {
 	/* eslint-disable react-hooks/set-state-in-effect */
 	useEffect(() => {
 		if (isOpen) {
-			if (draft && (draft.title || draft.description || (draft.images && draft.images.length > 0))) {
+			const hasContextualPrefill = Boolean(initialData?.title || initialData?.description);
+			if (!hasContextualPrefill && draft && (draft.title || draft.description || (draft.images && draft.images.length > 0))) {
 				setType(draft.type || "bug");
 				setSeverity(draft.severity || "medium");
 				setTitle(draft.title || "");
@@ -90,8 +93,8 @@ export default function FeedbackModal() {
 			} else {
 				setType(initialData?.type || "bug");
 				setSeverity(initialData?.severity || "medium");
-				setTitle("");
-				setDescription("");
+				setTitle(initialData?.title || "");
+				setDescription(initialData?.description || "");
 				setPageUrl(initialData?.pageUrl || (typeof window !== "undefined" ? window.location.pathname : "/"));
 				setGuestName("");
 				setGuestEmail("");
@@ -200,6 +203,66 @@ export default function FeedbackModal() {
 		}
 		setUploadingImage(false);
 	}, [images.length]);
+
+	const handleCaptureScreen = async () => {
+		if (images.length >= 4) {
+			setErrorMessage("You can attach a maximum of 4 pictures.");
+			return;
+		}
+
+		if (typeof navigator === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+			toast.error("Screen capture is not supported in this browser. Please upload or paste a screenshot instead.");
+			return;
+		}
+
+		setCapturingScreen(true);
+		setErrorMessage("");
+
+		try {
+			const stream = await navigator.mediaDevices.getDisplayMedia({
+				video: { mediaSource: "screen" },
+			});
+			const track = stream.getVideoTracks()?.[0];
+
+			const video = document.createElement("video");
+			video.srcObject = stream;
+			video.muted = true;
+			video.playsInline = true;
+
+			await new Promise((resolve, reject) => {
+				video.onloadedmetadata = () => {
+					video.play().then(resolve).catch(reject);
+				};
+				// Timeout safety in case metadata event does not fire
+				setTimeout(resolve, 500);
+			});
+
+			const canvas = document.createElement("canvas");
+			canvas.width = video.videoWidth || 1280;
+			canvas.height = video.videoHeight || 720;
+			const ctx = canvas.getContext("2d");
+			if (ctx) {
+				ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+			}
+
+			if (track) track.stop();
+			stream.getTracks().forEach((t) => t.stop());
+			video.srcObject = null;
+
+			const dataUrl = canvas.toDataURL("image/png");
+			if (dataUrl && dataUrl !== "data:,") {
+				setImages((prev) => [...prev, dataUrl].slice(0, 4));
+				toast.success("📷 Screen captured successfully!");
+			}
+		} catch (err) {
+			if (err.name !== "NotAllowedError" && err.name !== "AbortError") {
+				console.error("Screen capture error:", err);
+				toast.error("Could not capture screen. You can paste with Ctrl+V or upload a screenshot.");
+			}
+		} finally {
+			setCapturingScreen(false);
+		}
+	};
 
 	// Global clipboard paste listener: active whenever modal is open or minimized
 	useEffect(() => {
@@ -648,7 +711,7 @@ export default function FeedbackModal() {
 						</Typography>
 					</Box>
 
-					<Stack direction="row" spacing={1} alignItems="center">
+					<Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }} useFlexGap>
 						<input
 							type="file"
 							accept="image/*"
@@ -665,13 +728,24 @@ export default function FeedbackModal() {
 								variant="outlined"
 								component="span"
 								size="small"
-								disabled={uploadingImage || images.length >= 4}
+								disabled={uploadingImage || capturingScreen || images.length >= 4}
 								startIcon={uploadingImage ? <CircularProgress size={16} /> : <AddPhotoAlternateIcon />}
 								sx={{ textTransform: "none", fontWeight: "bold" }}
 							>
 								{uploadingImage ? "Uploading..." : "Upload Picture"}
 							</Button>
 						</label>
+
+						<Button
+							variant="outlined"
+							size="small"
+							disabled={capturingScreen || uploadingImage || images.length >= 4}
+							startIcon={capturingScreen ? <CircularProgress size={16} /> : <CameraAltIcon />}
+							onClick={handleCaptureScreen}
+							sx={{ textTransform: "none", fontWeight: "bold" }}
+						>
+							{capturingScreen ? "Capturing..." : "📷 Capture Screen"}
+						</Button>
 
 						<Button
 							variant="text"

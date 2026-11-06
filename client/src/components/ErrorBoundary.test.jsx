@@ -94,10 +94,13 @@ describe('ErrorBoundary Component', () => {
             expect.objectContaining({
                 type: 'bug',
                 severity: 'critical',
+                title: expect.stringContaining('Test crash in component'),
+                description: expect.stringContaining('Test crash in component'),
                 initialData: expect.objectContaining({
                     type: 'bug',
                     severity: 'critical',
-                    title: expect.stringContaining('Test crash in component')
+                    title: expect.stringContaining('Test crash in component'),
+                    description: expect.stringContaining('Test crash in component'),
                 })
             })
         );

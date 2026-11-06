@@ -661,6 +661,86 @@ describe("TournamentApprovals Admin Page Component", () => {
         expect(fallbackBtn).toBeDisabled();
         expect(screen.getByText(/No verified fallback URL registered/i)).toBeInTheDocument();
     });
+
+    it("13. In split-screen reviewer modal, clicking Approve & Publish automatically saves edited flyer and caption before approving", async () => {
+        const calls = [];
+        apiFetch.mockImplementation(async (url, options) => {
+            if (url === "/api/admin/tournaments/proposed") {
+                return {
+                    ok: true,
+                    json: async () => [...mockProposals],
+                };
+            }
+            if (url.includes("/api/admin/tournaments/prop-high-1") && options?.method === "PUT") {
+                const body = JSON.parse(options.body);
+                calls.push({ method: "PUT", url, body });
+                return {
+                    ok: true,
+                    json: async () => ({
+                        message: "Tournament details updated successfully.",
+                        proposedTournament: {
+                            ...mockProposals[0],
+                            ...body,
+                        },
+                    }),
+                };
+            }
+            if (url.includes("/api/admin/tournaments/approve/prop-high-1") && options?.method === "POST") {
+                calls.push({ method: "POST", url });
+                return {
+                    ok: true,
+                    json: async () => ({
+                        message: "Tournament approved and published!",
+                    }),
+                };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("Mason Open 2026")).toBeInTheDocument();
+        });
+
+        // Open review modal
+        const reviewButtons = screen.getAllByRole("button", { name: /Review/i });
+        fireEvent.click(reviewButtons[0]);
+
+        // Edit Flyer Image URL in review modal
+        const flyerInput = screen.getByLabelText(/Flyer Image URL/i);
+        fireEvent.change(flyerInput, {
+            target: { value: "https://example.com/updated-flyer.jpg" },
+        });
+
+        // Edit Raw Caption in review modal
+        const captionInput = screen.getByPlaceholderText(/Edit post caption or extracted flyer OCR context/i);
+        fireEvent.change(captionInput, {
+            target: { value: "Updated OCR caption with verified prize pool" },
+        });
+
+        // Directly click "Approve & Publish" without clicking "Save Edits" first
+        const approveAndPublishBtn = screen.getByRole("button", { name: /Approve & Publish/i });
+        fireEvent.click(approveAndPublishBtn);
+
+        await waitFor(() => {
+            // Verify that PUT (save edits) was called FIRST with the updated flyer and caption
+            expect(calls.length).toBe(2);
+            expect(calls[0].method).toBe("PUT");
+            expect(calls[0].body.flyerImageUrl).toBe("https://example.com/updated-flyer.jpg");
+            expect(calls[0].body.rawCaption).toBe("Updated OCR caption with verified prize pool");
+
+            // Verify that POST approve was called SECOND
+            expect(calls[1].method).toBe("POST");
+            expect(calls[1].url).toBe("/api/admin/tournaments/approve/prop-high-1");
+        });
+
+        // Review modal should be closed and proposal removed from queue
+        await waitFor(() => {
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+            expect(screen.queryByText("Mason Open 2026")).not.toBeInTheDocument();
+        });
+    });
 });
 
 

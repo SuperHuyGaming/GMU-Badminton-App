@@ -67,6 +67,7 @@ describe("FeedbackModal Component", () => {
 		expect(screen.getByText(/Detected Location:/i)).toBeInTheDocument();
 		expect(screen.getByText(/Pictures & Screenshots/i)).toBeInTheDocument();
 		expect(screen.getByText("Upload Picture")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /Capture Screen/i })).toBeInTheDocument();
 	});
 
 	it("shows severity chips when category is bug report", () => {
@@ -257,5 +258,99 @@ describe("FeedbackModal Component", () => {
 		expect(mockClearDraft).toHaveBeenCalledTimes(1);
 		expect(screen.getByLabelText(/Subject \/ Title/i)).toHaveValue("");
 		expect(screen.getByLabelText(/Detailed Description/i)).toHaveValue("");
+	});
+
+	it("pre-populates title and description when provided via initialData", () => {
+		renderModal({
+			initialData: {
+				type: "bug",
+				severity: "critical",
+				pageUrl: "/court-queue",
+				title: "Render Error: Court queue index out of bounds",
+				description: "Error: Court queue index out of bounds\n\nStack:\nat CourtQueue.jsx:45",
+			},
+		});
+
+		expect(screen.getByLabelText(/Subject \/ Title/i)).toHaveValue("Render Error: Court queue index out of bounds");
+		expect(screen.getByLabelText(/Detailed Description/i)).toHaveValue(
+			"Error: Court queue index out of bounds\n\nStack:\nat CourtQueue.jsx:45"
+		);
+	});
+
+	it("prioritizes contextual initialData error diagnostics over stale saved draft", () => {
+		renderModal({
+			initialData: {
+				type: "bug",
+				severity: "critical",
+				pageUrl: "/brackets",
+				title: "Render Error: Cannot read properties of undefined",
+				description: "Stack trace details here",
+			},
+			draft: {
+				type: "feature",
+				title: "Old feature draft idea",
+				description: "Old feature description",
+			},
+		});
+
+		expect(screen.getByLabelText(/Subject \/ Title/i)).toHaveValue("Render Error: Cannot read properties of undefined");
+		expect(screen.getByLabelText(/Detailed Description/i)).toHaveValue("Stack trace details here");
+		expect(screen.queryByDisplayValue("Old feature draft idea")).not.toBeInTheDocument();
+	});
+
+	it("renders 1-click Capture Screen button and handles capture via getDisplayMedia", async () => {
+		const stopTrackMock = vi.fn();
+		const mockStream = {
+			getVideoTracks: () => [{ stop: stopTrackMock }],
+			getTracks: () => [{ stop: stopTrackMock }],
+		};
+
+		const originalMediaDevices = navigator.mediaDevices;
+		const mockGetDisplayMedia = vi.fn().mockResolvedValue(mockStream);
+		Object.defineProperty(navigator, "mediaDevices", {
+			value: { getDisplayMedia: mockGetDisplayMedia },
+			configurable: true,
+		});
+
+		const originalCreateElement = document.createElement.bind(document);
+		const spyCreateElement = vi.spyOn(document, "createElement").mockImplementation((tag) => {
+			const el = originalCreateElement(tag);
+			if (tag === "canvas") {
+				el.getContext = () => ({
+					drawImage: vi.fn(),
+				});
+				el.toDataURL = () => "data:image/png;base64,mockCaptureData";
+			}
+			if (tag === "video") {
+				el.play = vi.fn().mockResolvedValue();
+			}
+			return el;
+		});
+
+		renderModal();
+
+		const captureBtn = screen.getByRole("button", { name: /Capture Screen/i });
+		expect(captureBtn).toBeInTheDocument();
+
+		fireEvent.click(captureBtn);
+
+		await waitFor(() => {
+			expect(mockGetDisplayMedia).toHaveBeenCalledWith({
+				video: { mediaSource: "screen" },
+			});
+			expect(stopTrackMock).toHaveBeenCalled();
+			expect(screen.getByAltText("Attachment 1")).toHaveAttribute(
+				"src",
+				"data:image/png;base64,mockCaptureData"
+			);
+		});
+
+		spyCreateElement.mockRestore();
+		if (originalMediaDevices) {
+			Object.defineProperty(navigator, "mediaDevices", {
+				value: originalMediaDevices,
+				configurable: true,
+			});
+		}
 	});
 });
