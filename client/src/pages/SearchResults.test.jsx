@@ -307,6 +307,7 @@ describe('SearchResults Page Component', () => {
 
         renderSearchResults('Player');
         const searchInput = screen.getByPlaceholderText('Search players, posts, or keywords...');
+        expect(searchInput).toHaveAttribute('data-page-search', 'true');
         expect(document.activeElement).not.toBe(searchInput);
 
         fireEvent.keyDown(window, { key: '/', code: 'Slash' });
@@ -323,6 +324,55 @@ describe('SearchResults Page Component', () => {
 
         fireEvent.keyDown(window, { key: 'K', metaKey: true });
         expect(document.activeElement).toBe(searchInput);
+    });
+
+    it('has data-page-search="true" and stops keyboard event propagation on "/" and "Ctrl+K"', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Player');
+        const searchInput = screen.getByPlaceholderText('Search players, posts, or keywords...');
+        expect(searchInput).toHaveAttribute('data-page-search', 'true');
+
+        let bubbleListenerFired = false;
+        const bubbleListener = () => {
+            bubbleListenerFired = true;
+        };
+        window.addEventListener('keydown', bubbleListener, false);
+
+        try {
+            fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+            expect(document.activeElement).toBe(searchInput);
+            expect(bubbleListenerFired).toBe(false);
+        } finally {
+            window.removeEventListener('keydown', bubbleListener, false);
+        }
+    });
+
+    it('does not hijack typing when focus is already inside an input or textarea', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Player');
+        const otherInput = document.createElement('input');
+        document.body.appendChild(otherInput);
+        otherInput.focus();
+        expect(document.activeElement).toBe(otherInput);
+
+        try {
+            const slashEvent = new window.KeyboardEvent('keydown', { key: '/', bubbles: true });
+            const preventDefaultSpy = vi.spyOn(slashEvent, 'preventDefault');
+            window.dispatchEvent(slashEvent);
+
+            expect(preventDefaultSpy).not.toHaveBeenCalled();
+            expect(document.activeElement).toBe(otherInput);
+        } finally {
+            document.body.removeChild(otherInput);
+        }
     });
 
     it('renders shortcut hint pill "/" when empty and clears input with clear button', async () => {

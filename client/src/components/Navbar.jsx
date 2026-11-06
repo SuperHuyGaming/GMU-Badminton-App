@@ -58,7 +58,7 @@ const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
     useEffect(() => {
         if (onCloseMobile) return;
         const handleGlobalSlashShortcut = (e) => {
-            if (location.pathname === '/matchmaking') return;
+            if (location.pathname === '/matchmaking' || document.querySelector('[data-page-search="true"]') || ['/search', '/leaderboard'].includes(location.pathname)) return;
             const isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
             const isK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
             if (isSlash || isK) {

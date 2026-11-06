@@ -233,16 +233,31 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
 
     useEffect(() => {
         const handleGlobalKeyDown = (e) => {
-            if (
-                (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') ||
-                ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K'))
-            ) {
+            const targetTag = e.target?.tagName;
+            const activeTag = document.activeElement?.tagName;
+            const isEditing = 
+                ['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag) || 
+                ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) || 
+                e.target?.isContentEditable || 
+                document.activeElement?.isContentEditable;
+            
+            if (isEditing) return;
+
+            const isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
+            const isK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+
+            if (isSlash || isK) {
                 e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === 'function') {
+                    e.stopImmediatePropagation();
+                }
                 searchInputRef.current?.focus();
             }
         };
-        window.addEventListener('keydown', handleGlobalKeyDown);
-        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+
+        window.addEventListener('keydown', handleGlobalKeyDown, true);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
     }, []);
 
     const handleUnfriend = async (friendId) => {
@@ -279,7 +294,13 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                             onFocus={() => setIsFocused(true)}
                             onBlur={() => setIsFocused(false)}
                             slotProps={{
+                                htmlInput: {
+                                    'data-page-search': 'true',
+                                },
                                 input: {
+                                    inputProps: {
+                                        'data-page-search': 'true',
+                                    },
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <SearchIcon color="action" />

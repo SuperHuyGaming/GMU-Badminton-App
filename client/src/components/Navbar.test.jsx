@@ -1,7 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Navbar from './Navbar';
+import SearchResults from '../pages/SearchResults';
+import Leaderboard from '../pages/Leaderboard';
+import FriendsTab from './profile/FriendsTab';
 import apiFetch from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
 import { ColorModeContext } from '../App';
@@ -53,6 +57,11 @@ describe('Navbar Component & Global Search UI', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         window.history.pushState({}, 'Test', '/');
+        window.IntersectionObserver = vi.fn().mockReturnValue({
+            observe: () => null,
+            unobserve: () => null,
+            disconnect: () => null,
+        });
         mockNotificationState = {
             notifications: [],
             unreadCount: 0,
@@ -234,6 +243,177 @@ describe('Navbar Component & Global Search UI', () => {
 
         fireEvent.keyDown(window, { key: 'K', metaKey: true });
         expect(document.activeElement).toBe(searchInput);
+    });
+
+    it('yields keyboard search focus on /search and /leaderboard routes', () => {
+        renderNavbar(mockUser, '/search');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).not.toBe(searchInput);
+    });
+
+    it('yields keyboard search focus on /leaderboard route', () => {
+        renderNavbar(mockUser, '/leaderboard');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).not.toBe(searchInput);
+    });
+
+    it('yields keyboard search focus on /matchmaking route', () => {
+        renderNavbar(mockUser, '/matchmaking');
+        const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).not.toBe(searchInput);
+    });
+
+    it('yields keyboard search focus when data-page-search="true" is present in DOM', () => {
+        const dummyInput = document.createElement('input');
+        dummyInput.setAttribute('data-page-search', 'true');
+        document.body.appendChild(dummyInput);
+
+        try {
+            renderNavbar(mockUser, '/');
+            const searchInput = screen.getByPlaceholderText('Search GMU Badminton...');
+            fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+            expect(document.activeElement).not.toBe(searchInput);
+
+            fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+            expect(document.activeElement).not.toBe(searchInput);
+        } finally {
+            document.body.removeChild(dummyInput);
+        }
+    });
+
+    it('focuses SearchResults search input and prevents Navbar focus on "/" and "Ctrl+K"', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        window.history.pushState({}, 'Search', '/search?q=Alice');
+        const queryClient = new QueryClient();
+
+        render(
+            <AuthContext.Provider value={{ user: mockUser, logout: vi.fn() }}>
+                <ColorModeContext.Provider value={{ toggleColorMode: vi.fn() }}>
+                    <QueryClientProvider client={queryClient}>
+                        <BrowserRouter>
+                            <Navbar />
+                            <SearchResults />
+                        </BrowserRouter>
+                    </QueryClientProvider>
+                </ColorModeContext.Provider>
+            </AuthContext.Provider>
+        );
+
+        const navSearch = screen.getByPlaceholderText('Search GMU Badminton...');
+        const pageSearch = screen.getByPlaceholderText('Search players, posts, or keywords...');
+
+        expect(document.activeElement).not.toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+
+        // Press '/'
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+
+        pageSearch.blur();
+
+        // Press 'Ctrl+K'
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+    });
+
+    it('focuses Leaderboard search input and prevents Navbar focus on "/" and "Ctrl+K"', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => [],
+        });
+
+        window.history.pushState({}, 'Leaderboard', '/leaderboard');
+        const queryClient = new QueryClient();
+
+        render(
+            <AuthContext.Provider value={{ user: mockUser, logout: vi.fn() }}>
+                <ColorModeContext.Provider value={{ toggleColorMode: vi.fn() }}>
+                    <QueryClientProvider client={queryClient}>
+                        <BrowserRouter>
+                            <Navbar />
+                            <Leaderboard />
+                        </BrowserRouter>
+                    </QueryClientProvider>
+                </ColorModeContext.Provider>
+            </AuthContext.Provider>
+        );
+
+        const navSearch = screen.getByPlaceholderText('Search GMU Badminton...');
+        const pageSearch = screen.getByLabelText('Search Player');
+
+        expect(document.activeElement).not.toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+
+        // Press '/'
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+
+        pageSearch.blur();
+
+        // Press 'Ctrl+K'
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+    });
+
+    it('focuses FriendsTab search input and prevents Navbar focus on "/" and "Ctrl+K"', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ friends: [], nextCursor: null }),
+        });
+
+        window.history.pushState({}, 'Profile Friends', '/profile/u1');
+        const queryClient = new QueryClient();
+
+        render(
+            <AuthContext.Provider value={{ user: mockUser, logout: vi.fn() }}>
+                <ColorModeContext.Provider value={{ toggleColorMode: vi.fn() }}>
+                    <QueryClientProvider client={queryClient}>
+                        <BrowserRouter>
+                            <Navbar />
+                            <FriendsTab user={mockUser} />
+                        </BrowserRouter>
+                    </QueryClientProvider>
+                </ColorModeContext.Provider>
+            </AuthContext.Provider>
+        );
+
+        const navSearch = screen.getByPlaceholderText('Search GMU Badminton...');
+        const pageSearch = screen.getByPlaceholderText('Search friends...');
+
+        expect(document.activeElement).not.toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+
+        // Press '/'
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
+
+        pageSearch.blur();
+
+        // Press 'Ctrl+K'
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).toBe(pageSearch);
+        expect(document.activeElement).not.toBe(navSearch);
     });
 
     it('does not render the Leaderboard navigation link', () => {
