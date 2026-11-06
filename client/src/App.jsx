@@ -13,7 +13,6 @@ const Messages = React.lazy(() => import("./pages/Messages"));
 const Leaderboard = React.lazy(() => import("./pages/Leaderboard"));
 const Landing = React.lazy(() => import("./pages/Landing"));
 const Tournaments = React.lazy(() => import("./pages/Tournaments"));
-const Marketplace = React.lazy(() => import("./pages/Marketplace"));
 const CommunityDirectory = React.lazy(() => import("./pages/CommunityDirectory"));
 const SearchResults = React.lazy(() => import("./pages/SearchResults"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
@@ -237,14 +236,8 @@ const AnimatedRoutes = () => {
 							</AdminRoute>
 						}
 					/>
-					<Route
-						path="/marketplace"
-						element={
-							<motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.2 }}>
-								<Marketplace />
-							</motion.div>
-						}
-					/>
+					<Route path="/marketplace" element={<Navigate to="/community" replace />} />
+					<Route path="/players" element={<Navigate to="/matchmaking" replace />} />
 					<Route
 						path="/matchmaking"
 						element={

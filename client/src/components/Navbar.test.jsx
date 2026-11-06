@@ -226,6 +226,22 @@ describe('Navbar Component & Global Search UI', () => {
         expect(screen.queryByRole('link', { name: 'Leaderboard' })).not.toBeInTheDocument();
     });
 
+    it('does not render the Marketplace navigation link', () => {
+        renderNavbar();
+
+        expect(screen.queryByRole('link', { name: /marketplace/i })).not.toBeInTheDocument();
+        expect(screen.queryByText(/marketplace/i)).not.toBeInTheDocument();
+    });
+
+    it('renders the 4 primary core navigation destinations (Dashboard, Community, Players, Tournaments)', () => {
+        renderNavbar();
+
+        expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Community' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Players' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Tournaments' })).toBeInTheDocument();
+    });
+
     describe('Milestone M3: Notification Bell, Dropdown UX & Filtering', () => {
         it('renders notification bell with correct initial unread count badge', () => {
             mockNotificationState = {

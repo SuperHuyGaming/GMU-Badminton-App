@@ -14,7 +14,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import BookmarkBorderIcon from "@mui/icons-material/BookmarkBorder";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
-import StorefrontIcon from "@mui/icons-material/Storefront";
 import DynamicFeedIcon from "@mui/icons-material/DynamicFeed";
 import CloseIcon from "@mui/icons-material/Close";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
@@ -1102,7 +1101,7 @@ export default function Forum() {
 						<Button
 							fullWidth
 							startIcon={<PeopleAltIcon color="primary" />}
-							onClick={() => navigate('/players')}
+							onClick={() => navigate('/matchmaking')}
 							sx={{
 								justifyContent: 'flex-start',
 								borderRadius: 2,
@@ -1132,23 +1131,6 @@ export default function Forum() {
 							}}
 						>
 							Tournaments
-						</Button>
-						<Button
-							fullWidth
-							startIcon={<StorefrontIcon color="action" />}
-							onClick={() => navigate('/marketplace')}
-							sx={{
-								justifyContent: 'flex-start',
-								borderRadius: 2,
-								px: 1.5,
-								py: 1,
-								textTransform: 'none',
-								fontWeight: 500,
-								color: 'text.primary',
-								'&:hover': { bgcolor: 'action.hover' }
-							}}
-						>
-							Gear Marketplace
 						</Button>
 					</Paper>
 				</Box>

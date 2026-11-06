@@ -98,7 +98,8 @@ describe('Forum 3-Column Facebook Layout & Ecosystem Tests', () => {
         expect(within(leftRail).getByText('Quick Shortcuts')).toBeInTheDocument();
         expect(within(leftRail).getByRole('button', { name: /saved posts/i })).toBeInTheDocument();
         expect(within(leftRail).getByRole('button', { name: /find players/i })).toBeInTheDocument();
-        expect(within(leftRail).getByRole('button', { name: /gear marketplace/i })).toBeInTheDocument();
+        expect(within(leftRail).getByRole('button', { name: /tournaments/i })).toBeInTheDocument();
+        expect(within(leftRail).queryByRole('button', { name: /gear marketplace/i })).not.toBeInTheDocument();
 
         // Right rail widgets
         expect(screen.getByTestId('facebook-right-rail')).toBeInTheDocument();
