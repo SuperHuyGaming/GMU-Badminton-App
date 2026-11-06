@@ -48,29 +48,26 @@ const Leaderboard = () => {
 				sx={{ 
 					width: '100%', 
 					mb: 6, 
-					py: { xs: 6, md: 10 },
-					background: "linear-gradient(135deg, rgba(0, 102, 51, 0.9) 0%, rgba(255, 204, 51, 0.8) 100%)",
-					position: 'relative',
-					overflow: 'hidden',
+					py: { xs: 5, md: 7 },
+					px: 3,
+					bgcolor: 'background.paper',
+					borderBottom: '1px solid',
+					borderColor: 'divider',
+					boxShadow: '0 12px 28px rgba(0,0,0,0.08)',
 					display: 'flex',
 					flexDirection: 'column',
 					alignItems: 'center',
 					justifyContent: 'center',
-					boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
 				}}
 			>
-				{/* Decorative Background Elements */}
-				<Box sx={{ position: 'absolute', top: -50, left: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', filter: 'blur(30px)' }} />
-				<Box sx={{ position: 'absolute', bottom: -50, right: -50, width: 300, height: 300, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', filter: 'blur(40px)' }} />
-				
 				<Typography
-					variant="h2"
-					fontWeight="900"
-					sx={{ color: 'white', textShadow: '0 2px 10px rgba(0,0,0,0.2)', mb: 2, textAlign: 'center' }}
+					variant="h3"
+					fontWeight={900}
+					sx={{ letterSpacing: '-0.5px', color: 'text.primary', mb: 1.5, textAlign: 'center' }}
 				>
 					Leaderboard
 				</Typography>
-				<Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.9)', textAlign: 'center', maxWidth: 600 }}>
+				<Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 600, lineHeight: 1.6 }}>
 					The most competitive players in the area. Climb the ranks and claim your spot at the top.
 				</Typography>
 			</Box>

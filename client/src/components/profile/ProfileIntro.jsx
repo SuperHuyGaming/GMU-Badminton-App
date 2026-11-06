@@ -38,8 +38,6 @@ export default function ProfileIntro({
 						textAlign: 'center', 
 						border: '1px solid', 
 						borderColor: 'divider', 
-						borderTop: '6px solid', 
-						borderTopColor: 'primary.main', 
 						boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
 						cursor: 'pointer',
 						transition: 'all 0.2s ease',
@@ -49,20 +47,32 @@ export default function ProfileIntro({
 						}
 					}}
 				>
-					<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.friends?.length || 0}</Typography>
-					<Typography variant="caption" color="text.primary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Friends</Typography>
+					{(profileData.friends?.length || 0) > 0 ? (
+						<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.friends.length}</Typography>
+					) : (
+						<Typography variant="body2" color="text.secondary" sx={{ my: 0.5, fontWeight: 500 }}>None yet</Typography>
+					)}
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Friends</Typography>
 				</Box>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid', borderTopColor: 'primary.main', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
 					<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.skillLevel || 'New'}</Typography>
-					<Typography variant="caption" color="text.primary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Level</Typography>
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Level</Typography>
 				</Box>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid', borderTopColor: 'secondary.main', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-					<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.stats?.totalMatches || 0}</Typography>
-					<Typography variant="caption" color="text.primary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Matches</Typography>
+				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+					{(profileData.stats?.totalMatches || 0) > 0 ? (
+						<Typography variant="h5" fontWeight="900" color="text.primary">{profileData.stats.totalMatches}</Typography>
+					) : (
+						<Typography variant="body2" color="text.secondary" sx={{ my: 0.5, fontWeight: 500 }}>0 recorded</Typography>
+					)}
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Matches</Typography>
 				</Box>
-				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', borderTop: '6px solid', borderTopColor: 'secondary.main', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-					<Typography variant="h5" fontWeight="900" color="error">{profileData.stats?.winStreak || 0} 🔥</Typography>
-					<Typography variant="caption" color="text.primary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Win Streak</Typography>
+				<Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: '12px', textAlign: 'center', border: '1px solid', borderColor: 'divider', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+					{(profileData.stats?.winStreak || 0) > 0 ? (
+						<Typography variant="h5" fontWeight="900" color="error">{profileData.stats.winStreak} 🔥</Typography>
+					) : (
+						<Typography variant="body2" color="text.secondary" sx={{ my: 0.5, fontWeight: 500 }}>None</Typography>
+					)}
+					<Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block' }}>Win Streak</Typography>
 				</Box>
 			</Box>
 

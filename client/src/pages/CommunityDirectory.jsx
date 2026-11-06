@@ -330,12 +330,25 @@ export default function CommunityDirectory() {
     const renderPlayerCard = (player) => (
         <Card 
             sx={{ 
-                height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, p: 2.5, transition: 'transform 0.2s, box-shadow 0.2s',
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                borderRadius: 3, 
+                p: 2.5, 
+                border: '1px solid',
+                borderColor: 'divider',
+                transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                '& img': {
+                    transition: 'transform 0.35s ease',
+                },
                 '&:hover': { 
                     transform: 'translateY(-4px)', 
                     boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 12px 28px rgba(0,0,0,0.6)' : '0 12px 28px rgba(0,0,0,0.12)',
                     borderColor: 'primary.light',
-                    '& .player-name-title': { color: 'primary.main' }
+                    '& .player-name-title': { color: 'primary.main' },
+                    '& img': {
+                        transform: 'scale(1.04)',
+                    },
                 }
             }}
         >

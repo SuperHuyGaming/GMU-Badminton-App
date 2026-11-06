@@ -359,7 +359,7 @@ export default function Dashboard() {
 					</Avatar>
 					<Box>
 						<Typography variant="h5" fontWeight="900" sx={{ color: "#ffffff", letterSpacing: "-0.5px" }}>
-							Welcome back, {currentUser?.name || "Player"}! 🏸
+							Welcome back, {currentUser?.name || "Player"}!
 						</Typography>
 						<Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5, flexWrap: "wrap" }}>
 							<Chip
@@ -558,7 +558,7 @@ export default function Dashboard() {
 							}}
 						>
 							<Typography variant="subtitle1" fontWeight="bold" sx={{ color: "#FFCC33", mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-								⚠️ Pending Match Verifications ({pendingMatches.length})
+								Pending Match Verifications ({pendingMatches.length})
 							</Typography>
 							<Typography variant="body2" sx={{ color: "text.primary", mb: 2 }}>
 								Your opponent recorded a match result that requires your confirmation before updating player ratings:
@@ -676,19 +676,27 @@ export default function Dashboard() {
 
 						{/* Win/Loss Record */}
 						<Box sx={{ p: 2, borderRadius: 3, bgcolor: "background.paper", border: "1px solid", borderColor: "divider" }}>
-							<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-								<Typography variant="body2" fontWeight="bold">
-									Career Record: {wins}W - {losses}L ({totalMatches} matches)
+							{totalMatches === 0 ? (
+								<Typography variant="body2" color="text.secondary">
+									No competitive matches recorded yet
 								</Typography>
-								<Typography variant="body2" fontWeight="bold" color="primary.main">
-									{winRate}% Win Rate
-								</Typography>
-							</Box>
-							<LinearProgress
-								variant="determinate"
-								value={winRate}
-								sx={{ height: 8, borderRadius: 4, bgcolor: "rgba(0,0,0,0.08)" }}
-							/>
+							) : (
+								<>
+									<Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+										<Typography variant="body2" fontWeight="bold">
+											Career Record: {wins}W - {losses}L ({totalMatches} matches)
+										</Typography>
+										<Typography variant="body2" fontWeight="bold" color="primary.main">
+											{winRate}% Win Rate
+										</Typography>
+									</Box>
+									<LinearProgress
+										variant="determinate"
+										value={winRate}
+										sx={{ height: 8, borderRadius: 4, bgcolor: "rgba(0,0,0,0.08)" }}
+									/>
+								</>
+							)}
 						</Box>
 					</Paper>
 

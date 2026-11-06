@@ -102,9 +102,33 @@ const PeopleYouMayKnow = ({ user }) => {
                     sx={{ display: 'flex', gap: 2, overflowX: 'auto', scrollSnapType: 'x mandatory', pb: 1, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
                 >
                     {recommended.map(player => (
-                        <Card key={player._id} sx={{ minWidth: 200, p: 2, borderRadius: 3, flexShrink: 0, scrollSnapAlign: 'start', textAlign: 'center' }}>
+                        <Card 
+                            key={player._id} 
+                            sx={{ 
+                                minWidth: 200, 
+                                p: 2, 
+                                borderRadius: 3, 
+                                flexShrink: 0, 
+                                scrollSnapAlign: 'start', 
+                                textAlign: 'center',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                                '& img': { transition: 'transform 0.35s ease' },
+                                '&:hover': {
+                                    transform: 'translateY(-4px)',
+                                    boxShadow: '0 12px 28px rgba(0,0,0,0.08)',
+                                    '& .friend-card-title': {
+                                        color: 'primary.main',
+                                    },
+                                    '& img': {
+                                        transform: 'scale(1.04)',
+                                    },
+                                },
+                            }}
+                        >
                             <Avatar src={getOptimizedAvatar(player.profilePic)} sx={{ width: 64, height: 64, mx: 'auto', mb: 1 }}  alt="User Avatar" />
-                            <Typography variant="subtitle1" fontWeight="bold" noWrap>
+                            <Typography className="friend-card-title" variant="subtitle1" fontWeight="bold" noWrap sx={{ transition: 'color 0.2s ease' }}>
                                 {player.name}
                             </Typography>
                             <Box sx={{ mt: 1.5 }}>
@@ -265,7 +289,28 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                 <Grid container spacing={2} mt={1}>
                     {filteredFriends.map(friend => (
                         <Grid item xs={12} sm={6} key={friend._id}>
-                            <Card sx={{ display: 'flex', alignItems: 'center', p: 2, borderRadius: 3 }}>
+                            <Card 
+                                sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    p: 2, 
+                                    borderRadius: 3,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                                    '& img': { transition: 'transform 0.35s ease' },
+                                    '&:hover': {
+                                        transform: 'translateY(-4px)',
+                                        boxShadow: '0 12px 28px rgba(0,0,0,0.08)',
+                                        '& .friend-card-title': {
+                                            color: 'primary.main',
+                                        },
+                                        '& img': {
+                                            transform: 'scale(1.04)',
+                                        },
+                                    },
+                                }}
+                            >
                                 <Avatar
                                     src={getOptimizedAvatar(friend.profilePic)}
                                     sx={{ width: 64, height: 64, cursor: 'pointer' }}
@@ -274,7 +319,7 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                                     onMouseLeave={handlePeekClose}
                                 />
                                 <Box sx={{ ml: 2, flexGrow: 1, minWidth: 0 }}>
-                                    <Typography variant="subtitle1" fontWeight="bold" noWrap>
+                                    <Typography className="friend-card-title" variant="subtitle1" fontWeight="bold" noWrap sx={{ transition: 'color 0.2s ease' }}>
                                         {friend.name}
                                     </Typography>
                                     {friend.mutualCount > 0 && (

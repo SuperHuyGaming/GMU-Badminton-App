@@ -487,10 +487,13 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
                                         ? `2px solid ${theme.palette.warning.main}`
                                         : `1px solid ${theme.palette.divider}`,
                                 bgcolor: 'background.paper',
-                                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                                transition: 'transform 0.25s ease, box-shadow 0.25s ease',
                                 '&:hover': {
-                                    transform: 'translateY(-2px)',
-                                    boxShadow: theme.shadows[6]
+                                    transform: 'translateY(-4px)',
+                                    boxShadow: '0 12px 28px rgba(0,0,0,0.08)',
+                                    '& .court-title': {
+                                        color: 'primary.main',
+                                    },
                                 }
                             }}
                         >
@@ -498,7 +501,7 @@ export default function CourtQueueViewer({ onSelectMatchForUmpire = null }) {
                             <Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                                     <Box>
-                                        <Typography variant="subtitle1" fontWeight="bold">
+                                        <Typography className="court-title" variant="subtitle1" fontWeight="bold" sx={{ transition: 'color 0.2s ease' }}>
                                             {court.courtName}
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary">

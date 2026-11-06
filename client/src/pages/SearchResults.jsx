@@ -462,13 +462,22 @@ export default function SearchResults() {
                                             alignItems: 'center', 
                                             gap: 2, 
                                             cursor: 'pointer', 
-                                            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)', 
+                                            transition: 'transform 0.25s ease, box-shadow 0.25s ease', 
                                             border: (theme) => `1px solid ${theme.palette.divider}`,
+                                            '& img': {
+                                                transition: 'transform 0.35s ease',
+                                            },
                                             '&:hover': { 
-                                                transform: 'translateY(-2px)', 
+                                                transform: 'translateY(-4px)', 
                                                 boxShadow: (theme) => theme.palette.mode === 'dark' 
-                                                    ? '0 8px 24px rgba(0,0,0,0.5)' 
-                                                    : '0 8px 24px rgba(0, 92, 46, 0.12)',
+                                                    ? '0 12px 28px rgba(0,0,0,0.5)' 
+                                                    : '0 12px 28px rgba(0,0,0,0.08)',
+                                                '& .search-result-title': {
+                                                    color: 'primary.main',
+                                                },
+                                                '& img': {
+                                                    transform: 'scale(1.04)',
+                                                },
                                             },
                                         }}
                                     >
@@ -490,6 +499,7 @@ export default function SearchResults() {
                                         </Avatar>
                                         <Box sx={{ flex: '1 1 180px', minWidth: 0 }}>
                                             <Typography 
+                                                className="search-result-title"
                                                 variant="h6" 
                                                 component={RouterLink} 
                                                 to={`/profile/${result._id}`}
@@ -498,6 +508,7 @@ export default function SearchResults() {
                                                 sx={{ 
                                                     color: 'text.primary', 
                                                     textDecoration: 'none',
+                                                    transition: 'color 0.2s ease',
                                                     '&:hover': { textDecoration: 'underline', color: 'primary.main' },
                                                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: '2px', borderRadius: '2px' },
                                                     lineHeight: 1.25,
@@ -576,14 +587,18 @@ export default function SearchResults() {
                                         aria-label={`Post: ${result.title} by ${result.authorName || (typeof result.author === 'string' ? result.author : result.author?.name) || 'Anonymous'}`}
                                         sx={{ 
                                             p: { xs: 2, sm: 3 }, 
-                                            borderRadius: 2,
+                                            borderRadius: 2, 
                                             border: (theme) => `1px solid ${theme.palette.divider}`,
-                                            transition: 'box-shadow 0.2s ease',
+                                            transition: 'transform 0.25s ease, box-shadow 0.25s ease',
                                             outline: 'none',
                                             '&:hover': {
+                                                transform: 'translateY(-4px)',
                                                 boxShadow: (theme) => theme.palette.mode === 'dark' 
-                                                    ? '0 8px 24px rgba(0,0,0,0.5)' 
-                                                    : '0 8px 24px rgba(0, 102, 51, 0.08)',
+                                                    ? '0 12px 28px rgba(0,0,0,0.5)' 
+                                                    : '0 12px 28px rgba(0, 102, 51, 0.08)',
+                                                '& .search-result-title': {
+                                                    color: 'primary.main',
+                                                },
                                             },
                                             '&:focus-visible': {
                                                 outline: (theme) => theme.palette.mode === 'dark' ? '2px solid #FFCC33' : '2px solid #005c2e',
@@ -592,6 +607,7 @@ export default function SearchResults() {
                                         }}
                                     >
                                         <Typography 
+                                            className="search-result-title"
                                             variant="h6" 
                                             component="h3" 
                                             fontWeight="bold" 
@@ -599,6 +615,7 @@ export default function SearchResults() {
                                             sx={{
                                                 color: (theme) => theme.palette.mode === 'dark' ? '#ffffff' : '#000000',
                                                 wordBreak: 'break-word',
+                                                transition: 'color 0.2s ease',
                                             }}
                                         >
                                             {result.title}
