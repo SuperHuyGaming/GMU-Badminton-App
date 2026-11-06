@@ -316,7 +316,7 @@ function fallbackRegexParser(caption) {
     const isTournament = /tournament|open|invitational|championship/i.test(lower);
     if (!isTournament) return null;
 
-    let tournamentName = "Collegiate Badminton Tournament";
+    let tournamentName = "Open Tournament";
     const nameMatch = cleaned.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s(?:Open|Invitational|Tournament))/);
     if (nameMatch) {
         tournamentName = sanitizeScrapedTitle(nameMatch[1]) || nameMatch[1];

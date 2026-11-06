@@ -29,13 +29,12 @@ export default function FeedbackFAB({ hideOnSmallScreens = false } = {}) {
 			sx={{
 				display: hideOnSmallScreens ? { xs: "none", md: "block" } : "block",
 				position: "fixed",
-				bottom: { xs: 20, sm: 28 },
-				// Bottom-left: the Messenger launcher and back-to-top button live bottom-right.
-				left: { xs: 16, sm: 28 },
+				bottom: { xs: 80, sm: 92 },
+				right: { xs: 16, sm: 24 },
 				zIndex: 1050,
 			}}
 		>
-			<Tooltip title={hasDraft ? "Resume Bug Report Draft" : "Feedback & Bug Report"} placement="right" arrow>
+			<Tooltip title={hasDraft ? "Resume Bug Report Draft" : "Feedback & Bug Report"} placement="left" arrow>
 				<Badge
 					color="secondary"
 					variant="dot"

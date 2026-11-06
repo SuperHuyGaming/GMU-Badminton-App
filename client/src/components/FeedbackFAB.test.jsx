@@ -89,4 +89,21 @@ describe("FeedbackFAB Component", () => {
 		expect(css).toContain(`.${cls}{display:none;`);
 		expect(css).toMatch(new RegExp(`@media\\(min-width:900px\\)\\{\\.${cls}\\{display:block;`));
 	});
+
+	it("anchors the FAB in the bottom-right corner stacked above FloatingChatDock launcher", () => {
+		const contextValue = { isOpen: false, isMinimized: false, draft: null, openFeedbackModal: vi.fn() };
+		render(
+			<FeedbackContext.Provider value={contextValue}>
+				<FeedbackFAB />
+			</FeedbackContext.Provider>
+		);
+		const container = screen.getByTestId("feedback-fab-container");
+		const cls = [...container.classList].find((c) => c.startsWith("css-"));
+		const css = [...document.querySelectorAll("style")].map((s) => s.textContent).join("\n").replace(/\s+/g, "");
+		expect(css).toContain(`position:fixed;`);
+		expect(css).toMatch(new RegExp(`\\.${cls}\\{[^}]*right:16px`));
+		expect(css).toMatch(new RegExp(`\\.${cls}\\{[^}]*bottom:80px`));
+		expect(css).not.toContain(`left:16px`);
+		expect(css).not.toContain(`left:28px`);
+	});
 });

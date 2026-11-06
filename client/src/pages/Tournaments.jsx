@@ -1816,7 +1816,7 @@ END:VCALENDAR`;
                         <DialogTitle sx={{ m: 0, p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <Box>
                                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
-                                    {selectedTournament.hostUniversity || selectedTournament.hostClubHandle || 'DMV Badminton Tournament'}
+                                    {selectedTournament.hostUniversity || selectedTournament.hostClubHandle || 'Open Tournament'}
                                 </Typography>
                                 <Typography variant="h5" fontWeight="bold">
                                     {selectedTournament.tournamentName}
@@ -2185,7 +2185,7 @@ END:VCALENDAR`;
                 </DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        This will purge invalid or stale tournament entries and reload the verified 2026–2027 collegiate tournament schedule.
+                        This will purge invalid or stale tournament entries and reload the verified 2026–2027 tournament schedule.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
@@ -2230,7 +2230,7 @@ END:VCALENDAR`;
                 <form onSubmit={handleSubmitDiscovery}>
                     <DialogContent dividers sx={{ p: 3 }}>
                         <DialogContentText sx={{ mb: 2 }}>
-                            Discovered an upcoming collegiate or DMV badminton tournament? Submit it below! Our team and automated verification engine will review and publish it to the directory.
+                            Discovered an upcoming DMV or regional badminton tournament? Submit it below! Our team and automated verification engine will review and publish it to the directory.
                         </DialogContentText>
                         <Stack spacing={2}>
                             <TextField

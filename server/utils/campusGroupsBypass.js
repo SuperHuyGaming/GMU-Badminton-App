@@ -135,7 +135,7 @@ function parseIcsContent(icsContent, sourceUrl = '') {
                     endDate = new Date(startDate.getTime() + (8 * 60 * 60 * 1000));
                 }
 
-                const rawSummary = currentEvent.SUMMARY || 'Collegiate Badminton Tournament';
+                const rawSummary = currentEvent.SUMMARY || 'Open Tournament';
                 const tournamentName = sanitizeScrapedTitle(rawSummary) || rawSummary;
 
                 events.push({
