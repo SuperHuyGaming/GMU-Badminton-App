@@ -36,4 +36,10 @@ describe('Landing Page Component', () => {
         const button = screen.getByRole('button', { name: /join the club/i });
         expect(button).toBeInTheDocument();
     });
+
+    it('renders the dynamic badminton jump smash vector hero illustration', () => {
+        renderWithProviders();
+        const heroSvg = screen.getByRole('img', { name: /Mason Badminton Connect Dynamic Hero Illustration/i });
+        expect(heroSvg).toBeInTheDocument();
+    });
 });
