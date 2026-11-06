@@ -58,6 +58,7 @@ const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
     useEffect(() => {
         if (onCloseMobile) return;
         const handleGlobalSlashShortcut = (e) => {
+            if (location.pathname === '/matchmaking') return;
             if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 const targetTag = e.target?.tagName;
                 if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag) && !e.target?.isContentEditable) {
@@ -71,7 +72,7 @@ const GlobalSearch = ({ shouldFocus = false, onCloseMobile = null }) => {
         };
         window.addEventListener('keydown', handleGlobalSlashShortcut);
         return () => window.removeEventListener('keydown', handleGlobalSlashShortcut);
-    }, [onCloseMobile]);
+    }, [onCloseMobile, location.pathname]);
     
     // Search history for specific players
     const [recentSearches, setRecentSearches] = useState(() => {

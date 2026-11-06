@@ -11,7 +11,6 @@ import {
 	Alert,
 	List,
 	ListItemButton,
-	ListItemText,
 } from "@mui/material";
 
 export default function ProfileEditForm({
@@ -90,12 +89,7 @@ export default function ProfileEditForm({
 							}
 						}}
 					>
-						<ListItemText
-							primary="👤 General Info"
-							primaryTypographyProps={{
-								fontWeight: activeSection === "general" ? "bold" : "medium",
-							}}
-						/>
+						<Typography sx={{ fontWeight: activeSection === "general" ? "bold" : "medium", fontSize: "0.95rem" }}>👤 General Info</Typography>
 					</ListItemButton>
 					<ListItemButton
 						selected={activeSection === "badminton"}
@@ -113,12 +107,7 @@ export default function ProfileEditForm({
 							}
 						}}
 					>
-						<ListItemText
-							primary="🏸 Player Profile"
-							primaryTypographyProps={{
-								fontWeight: activeSection === "badminton" ? "bold" : "medium",
-							}}
-						/>
+						<Typography sx={{ fontWeight: activeSection === "badminton" ? "bold" : "medium", fontSize: "0.95rem" }}>🏸 Player Profile</Typography>
 					</ListItemButton>
 					<ListItemButton
 						selected={activeSection === "preferences"}
@@ -136,12 +125,7 @@ export default function ProfileEditForm({
 							}
 						}}
 					>
-						<ListItemText
-							primary="⚙️ Preferences"
-							primaryTypographyProps={{
-								fontWeight: activeSection === "preferences" ? "bold" : "medium",
-							}}
-						/>
+						<Typography sx={{ fontWeight: activeSection === "preferences" ? "bold" : "medium", fontSize: "0.95rem" }}>⚙️ Preferences</Typography>
 					</ListItemButton>
 					<ListItemButton
 						selected={activeSection === "privacy"}
@@ -159,12 +143,7 @@ export default function ProfileEditForm({
 							}
 						}}
 					>
-						<ListItemText
-							primary="🔒 Data & Privacy"
-							primaryTypographyProps={{
-								fontWeight: activeSection === "privacy" ? "bold" : "medium",
-							}}
-						/>
+						<Typography sx={{ fontWeight: activeSection === "privacy" ? "bold" : "medium", fontSize: "0.95rem" }}>🔒 Data & Privacy</Typography>
 					</ListItemButton>
 				</List>
 			</Box>
@@ -216,9 +195,7 @@ export default function ProfileEditForm({
 										onChange={handleChange}
 										required
 										variant="outlined"
-										InputProps={{
-											sx: { borderRadius: 2 }
-										}}
+										slotProps={{ input: { sx: { borderRadius: 2 } } }}
 									/>
 									<TextField
 										fullWidth
@@ -228,9 +205,7 @@ export default function ProfileEditForm({
 										onChange={handleChange}
 										required
 										variant="outlined"
-										InputProps={{
-											sx: { borderRadius: 2 }
-										}}
+										slotProps={{ input: { sx: { borderRadius: 2 } } }}
 									/>
 								</Box>
 								<TextField
@@ -243,9 +218,7 @@ export default function ProfileEditForm({
 									value={formData.bio}
 									onChange={handleChange}
 									variant="outlined"
-									InputProps={{
-										sx: { borderRadius: 2 }
-									}}
+									slotProps={{ input: { sx: { borderRadius: 2 } } }}
 								/>
 							</Box>
 						</Box>
@@ -284,7 +257,7 @@ export default function ProfileEditForm({
 										name="skillLevel"
 										value={formData.skillLevel}
 										onChange={handleChange}
-										InputProps={{ sx: { borderRadius: 2 } }}
+										slotProps={{ input: { sx: { borderRadius: 2 } } }}
 									>
 										<MenuItem value="D Level">
 											D Level (Beginner)
@@ -303,7 +276,7 @@ export default function ProfileEditForm({
 										name="preferredPlay"
 										value={formData.preferredPlay}
 										onChange={handleChange}
-										InputProps={{ sx: { borderRadius: 2 } }}
+										slotProps={{ input: { sx: { borderRadius: 2 } } }}
 									>
 										<MenuItem value="Any">Any Format</MenuItem>
 										<MenuItem value="Singles">
@@ -323,7 +296,7 @@ export default function ProfileEditForm({
 									value={formData.racket}
 									onChange={handleChange}
 									variant="outlined"
-									InputProps={{ sx: { borderRadius: 2 } }}
+									slotProps={{ input: { sx: { borderRadius: 2 } } }}
 								/>
 							</Box>
 						</Box>
@@ -353,7 +326,7 @@ export default function ProfileEditForm({
 									value={formData.homeUniversity}
 									onChange={handleChange}
 									variant="outlined"
-									InputProps={{ sx: { borderRadius: 2 } }}
+									slotProps={{ input: { sx: { borderRadius: 2 } } }}
 								>
 									<MenuItem value="George Mason University">George Mason University (GMU)</MenuItem>
 									<MenuItem value="Virginia Tech">Virginia Tech (VT)</MenuItem>
@@ -378,8 +351,7 @@ export default function ProfileEditForm({
 									}}
 									onFocus={(e) => e.target.select()}
 									variant="outlined"
-									inputProps={{ min: 1, max: 500 }}
-									InputProps={{ sx: { borderRadius: 2 } }}
+									slotProps={{ input: { sx: { borderRadius: 2 } }, htmlInput: { min: 1, max: 500 } }}
 								/>
 							</Box>
 						</Box>
