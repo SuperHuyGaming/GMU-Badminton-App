@@ -1190,11 +1190,10 @@ describe('Forum Page Component (Community Hub)', () => {
             window.innerHeight = 800;
             window.scrollY = 850; // 850 + 800 = 1650 >= 2000 * 0.8 (1600)
 
-            await act(async () => {
+            await waitFor(() => {
                 fireEvent.scroll(window);
+                expect(screen.getByText('Page 2 Post')).toBeInTheDocument();
             });
-
-            await waitFor(() => expect(screen.getByText('Page 2 Post')).toBeInTheDocument());
             expect(callCount).toBe(2);
             const feedCalls = apiFetch.mock.calls.map(c => c[0]).filter(u => u.startsWith('/api/feed?'));
             expect(feedCalls[1]).toContain('cursor=cursor-1');
