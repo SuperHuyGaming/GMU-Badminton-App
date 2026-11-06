@@ -5,6 +5,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TimelineIcon from '@mui/icons-material/Timeline';
+import ChatBubbleOutlinedIcon from '@mui/icons-material/ChatBubbleOutlined';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import apiFetch from '../utils/api';
@@ -110,18 +111,19 @@ export default function CommunityDirectory() {
 
     
     useEffect(() => {
-        if (!searchQuery.trim() || !isFocused) return;
+        if (!searchQuery.trim()) return;
         const delay = setTimeout(async () => {
             try {
                 const res = await apiFetch(`/api/matchmaking/discover?search=${encodeURIComponent(searchQuery)}`);
                 const data = await res.json();
                 setSuggestions(data.matches?.slice(0, 5) || []);
+                setSubmittedQuery(searchQuery);
             } catch (e) {
                 console.error("Live search failed", e);
             }
-        }, 300);
+        }, 250);
         return () => clearTimeout(delay);
-    }, [searchQuery, isFocused]);
+    }, [searchQuery]);
 
     const skillLevels = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 
@@ -383,7 +385,7 @@ export default function CommunityDirectory() {
                     </Typography>
                 )}
             </CardContent>
-            <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2 }}>
+            <Box sx={{ display: 'flex', width: '100%', mt: 'auto', pt: 2, gap: 1 }}>
                 <FriendActionButton 
                     targetUserId={player._id}
                     targetUserName={player.name}
@@ -395,6 +397,15 @@ export default function CommunityDirectory() {
                         }
                     }}
                 />
+                <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ChatBubbleOutlinedIcon />}
+                    onClick={() => window.dispatchEvent(new CustomEvent('openChatWithUser', { detail: { _id: player._id, name: player.name, avatarUrl: player.profilePic } }))}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, minWidth: 80, flexShrink: 0 }}
+                >
+                    Chat
+                </Button>
             </Box>
         </Card>
     );
@@ -426,7 +437,7 @@ export default function CommunityDirectory() {
                             variant="outlined"
                             placeholder="Search by name or university..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => { const v = e.target.value; setSearchQuery(v); if (!v.trim()) { setSuggestions([]); setSubmittedQuery(''); } }}
                             onFocus={() => setIsFocused(true)}
                             onKeyDown={handleKeyDown}
                             sx={{ 
@@ -661,10 +672,10 @@ export default function CommunityDirectory() {
                 </Box>
             )}
 
-            {(submittedQuery || skillFilter !== 'All') && (
+            {(
                 <>
                     <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold' }}>
-                        Search Results
+                        {(submittedQuery || skillFilter !== 'All') ? 'Search Results' : 'All Players'}
                     </Typography>
                     {loading ? (
                         renderSkeletons()
@@ -738,6 +749,15 @@ export default function CommunityDirectory() {
                                                             }
                                                         }}
                                                     />
+                                                    <Button
+                                                        variant="outlined"
+                                                        size="small"
+                                                        startIcon={<ChatBubbleOutlinedIcon />}
+                                                        onClick={() => window.dispatchEvent(new CustomEvent('openChatWithUser', { detail: { _id: player._id, name: player.name, avatarUrl: player.profilePic } }))}
+                                                        sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, ml: 1 }}
+                                                    >
+                                                        Chat
+                                                    </Button>
                                                 </Box>
                                             </Card>
                                         </motion.div>
