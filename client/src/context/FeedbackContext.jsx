@@ -11,6 +11,8 @@ export function FeedbackProvider({ children }) {
 		type: "bug",
 		severity: "medium",
 		pageUrl: "",
+		title: "",
+		description: "",
 	});
 
 	// Load persistent draft from sessionStorage
@@ -54,9 +56,11 @@ export function FeedbackProvider({ children }) {
 
 	const openFeedbackModal = useCallback((options = {}) => {
 		setInitialData({
-			type: options.type || options.initialType || "bug",
-			severity: options.severity || options.initialSeverity || "medium",
-			pageUrl: options.pageUrl || (typeof window !== "undefined" ? window.location.pathname : ""),
+			type: options.type || options.initialType || options.initialData?.type || "bug",
+			severity: options.severity || options.initialSeverity || options.initialData?.severity || "medium",
+			pageUrl: options.pageUrl || options.initialData?.pageUrl || (typeof window !== "undefined" ? window.location.pathname : ""),
+			title: options.title || options.initialData?.title || "",
+			description: options.description || options.initialData?.description || "",
 		});
 		setIsMinimized(false);
 		setIsOpen(true);
@@ -104,7 +108,7 @@ export function useFeedback() {
 			isOpen: false,
 			isMinimized: false,
 			draft: null,
-			initialData: { type: "bug", severity: "medium", pageUrl: "" },
+			initialData: { type: "bug", severity: "medium", pageUrl: "", title: "", description: "" },
 			openFeedbackModal: () => {},
 			closeFeedbackModal: () => {},
 			minimizeFeedbackModal: () => {},

@@ -347,10 +347,10 @@ export default function TournamentApprovals() {
     };
 
     const handleSaveEdits = async () => {
-        if (!selectedProposal) return;
+        if (!selectedProposal) return false;
         if (!editForm.tournamentName.trim()) {
             toast.error("Tournament name cannot be empty.");
-            return;
+            return false;
         }
 
         try {
@@ -387,6 +387,9 @@ export default function TournamentApprovals() {
                 body: JSON.stringify(payload),
             });
             const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.message || "Failed to save tournament edits");
+            }
             toast.success(data.message || "Tournament details updated successfully.");
 
             const updated = data.proposedTournament || {
@@ -397,8 +400,10 @@ export default function TournamentApprovals() {
             setProposals((prev) =>
                 prev.map((p) => (p._id === selectedProposal._id ? { ...p, ...updated } : p))
             );
+            return true;
         } catch (err) {
             toast.error(err.message || "Failed to save tournament edits");
+            return false;
         } finally {
             setSubmitting(false);
         }
@@ -408,12 +413,24 @@ export default function TournamentApprovals() {
         const targetId = id || selectedProposal?._id;
         if (!targetId) return;
 
+        // Auto-save uncommitted edits in editForm (flyer image URL, uploaded flyer, or edited captions)
+        // if approving the proposal currently open in the review modal
+        if (selectedProposal && selectedProposal._id === targetId) {
+            const saved = await handleSaveEdits();
+            if (!saved) {
+                return;
+            }
+        }
+
         try {
             setSubmitting(true);
             const res = await apiFetch(`/api/admin/tournaments/approve/${targetId}`, {
                 method: "POST",
             });
             const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.message || "Approval failed");
+            }
             toast.success(data.message || "Tournament approved and published!");
             setProposals((prev) => prev.filter((p) => p._id !== targetId));
             if (selectedProposal && selectedProposal._id === targetId) {
