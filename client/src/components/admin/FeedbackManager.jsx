@@ -225,24 +225,39 @@ export default function FeedbackManager({ promptDelete }) {
 				<Stack direction="row" spacing={1} alignItems="center">
 					<Chip
 						label={`Pending: ${counts.pending}`}
-						color="warning"
+						color={counts.pending > 0 ? "warning" : "default"}
 						variant={statusFilter === "pending" ? "filled" : "outlined"}
 						onClick={() => setStatusFilter(statusFilter === "pending" ? "all" : "pending")}
-						sx={{ fontWeight: "bold" }}
+						sx={{ 
+							fontWeight: counts.pending > 0 ? "bold" : "normal",
+							color: counts.pending > 0 ? undefined : "text.secondary",
+							borderColor: counts.pending > 0 ? undefined : "divider",
+							opacity: counts.pending > 0 ? 1 : 0.65,
+						}}
 					/>
 					<Chip
 						label={`In Progress: ${counts.inProgress}`}
-						color="info"
+						color={counts.inProgress > 0 ? "info" : "default"}
 						variant={statusFilter === "in_progress" ? "filled" : "outlined"}
 						onClick={() => setStatusFilter(statusFilter === "in_progress" ? "all" : "in_progress")}
-						sx={{ fontWeight: "bold" }}
+						sx={{ 
+							fontWeight: counts.inProgress > 0 ? "bold" : "normal",
+							color: counts.inProgress > 0 ? undefined : "text.secondary",
+							borderColor: counts.inProgress > 0 ? undefined : "divider",
+							opacity: counts.inProgress > 0 ? 1 : 0.65,
+						}}
 					/>
 					<Chip
 						label={`Resolved: ${counts.resolved}`}
-						color="success"
+						color={counts.resolved > 0 ? "success" : "default"}
 						variant={statusFilter === "resolved" ? "filled" : "outlined"}
 						onClick={() => setStatusFilter(statusFilter === "resolved" ? "all" : "resolved")}
-						sx={{ fontWeight: "bold" }}
+						sx={{ 
+							fontWeight: counts.resolved > 0 ? "bold" : "normal",
+							color: counts.resolved > 0 ? undefined : "text.secondary",
+							borderColor: counts.resolved > 0 ? undefined : "divider",
+							opacity: counts.resolved > 0 ? 1 : 0.65,
+						}}
 					/>
 					<Tooltip title="Refresh submissions">
 						<IconButton onClick={fetchFeedback} size="small" disabled={loading}>

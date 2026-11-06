@@ -383,7 +383,7 @@ describe('PostCard Component QA Tests', () => {
         expect(writeTextMock).toHaveBeenCalledTimes(1);
     });
 
-    it('renders Club Exec badge and active win streak chip on author header', () => {
+    it('renders Club Exec badge on author header (win streak chip disabled per UI standards)', () => {
         const authorWithStats = {
             ...mockPost,
             authorRole: 'admin',
@@ -392,7 +392,7 @@ describe('PostCard Component QA Tests', () => {
 
         renderWithContext(authorWithStats, mockUser);
         expect(screen.getByText('Club Exec')).toBeInTheDocument();
-        expect(screen.getByText('⚡ 7 Streak')).toBeInTheDocument();
+        expect(screen.queryByText('⚡ 7 Streak')).not.toBeInTheDocument();
     });
 
     it('allows a non-author to open Report Post dialog and submit report', async () => {
@@ -579,21 +579,21 @@ describe('PostCard Component QA Tests', () => {
         expect(screen.getByText('Post Reactions')).toBeInTheDocument();
     });
 
-    it('renders badminton gamification badges (Smash Master, Clutch Performer, Community Guide)', () => {
+    it('keeps synthetic gamification badges disabled per UI content standards', () => {
         const gamifiedPost = {
             ...mockPost,
-            authorBadges: ['smash_master', 'clutch_performer', 'community_guide']
+            authorBadges: ['smash_master', 'clutch_performer', 'community_guide', 'top_contributor']
         };
         renderWithContext(gamifiedPost, mockUser);
 
-        expect(screen.getByTestId('badge-smash-master')).toBeInTheDocument();
-        expect(screen.getByText('Smash Master')).toBeInTheDocument();
+        expect(screen.queryByTestId('badge-smash-master')).not.toBeInTheDocument();
+        expect(screen.queryByText('Smash Master')).not.toBeInTheDocument();
 
-        expect(screen.getByTestId('badge-clutch-performer')).toBeInTheDocument();
-        expect(screen.getByText('Clutch Performer')).toBeInTheDocument();
+        expect(screen.queryByTestId('badge-clutch-performer')).not.toBeInTheDocument();
+        expect(screen.queryByText('Clutch Performer')).not.toBeInTheDocument();
 
-        expect(screen.getByTestId('badge-community-guide')).toBeInTheDocument();
-        expect(screen.getByText('Community Guide')).toBeInTheDocument();
+        expect(screen.queryByTestId('badge-community-guide')).not.toBeInTheDocument();
+        expect(screen.queryByText('Community Guide')).not.toBeInTheDocument();
     });
 
     // ── Milestone 2: J1 Facebook Reactions Dock ─────────────────────────────

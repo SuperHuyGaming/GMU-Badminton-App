@@ -819,6 +819,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 						: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
 					backdropFilter: 'blur(10px)',
 					transition: "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+					"& img": {
+						transition: "transform 0.35s ease",
+					},
 					"&:hover": {
 						borderColor: localPost.isPinned ? "warning.dark" : "primary.light",
 						boxShadow: localPost.isPinned 
@@ -827,6 +830,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 						transform: "translateY(-4px)",
 						"& .post-title": {
 							color: "primary.main",
+						},
+						"& img": {
+							transform: "scale(1.04)",
 						},
 					},
 				}}
@@ -987,7 +993,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 										}}
 									/>
 								)}
-								{localPost.authorStreak > 0 && (
+								{/* Streak Chip - disabled/commented out per UI content standards
+								localPost.authorStreak > 0 && (
 									<Chip
 										label={`⚡ ${localPost.authorStreak} Streak`}
 										size="small"
@@ -1001,7 +1008,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 											ml: 0.5,
 										}}
 									/>
-								)}
+								)
+								*/}
 								{(hasReportedPost || localPost.reports?.some(r => String(r.reportedBy?._id || r.reportedBy) === String(currentUserId))) && (
 									<Chip
 										label="Reported"
@@ -1011,7 +1019,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 										sx={{ height: 20, fontSize: "0.65rem", borderRadius: 1, ml: 0.5 }}
 									/>
 								)}
-								{localPost.authorBadges?.includes("smash_master") && (
+								{/* Synthetic gamification chips - disabled/commented out per UI content standards Section 7
+								localPost.authorBadges?.includes("smash_master") && (
 									<Chip 
 										data-testid="badge-smash-master"
 										label="Smash Master" 
@@ -1023,8 +1032,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 											border: '1px solid rgba(239, 68, 68, 0.3)', ml: 0.5 
 										}} 
 									/>
-								)}
-								{localPost.authorBadges?.includes("clutch_performer") && (
+								)
+								*/}
+								{/*
+								localPost.authorBadges?.includes("clutch_performer") && (
 									<Chip 
 										data-testid="badge-clutch-performer"
 										label="Clutch Performer" 
@@ -1036,8 +1047,10 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 											border: '1px solid rgba(234, 179, 8, 0.3)', ml: 0.5 
 										}} 
 									/>
-								)}
-								{localPost.authorBadges?.includes("community_guide") && (
+								)
+								*/}
+								{/*
+								localPost.authorBadges?.includes("community_guide") && (
 									<Chip 
 										data-testid="badge-community-guide"
 										label="Community Guide" 
@@ -1049,7 +1062,8 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 											border: '1px solid rgba(16, 185, 129, 0.3)', ml: 0.5 
 										}} 
 									/>
-								)}
+								)
+								*/}
 								{/* Top Contributor Badge - disabled/commented out per UI content standards
 								localPost.authorBadges?.includes("top_contributor") && (
 									<Chip 

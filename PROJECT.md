@@ -25,9 +25,9 @@
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Public Scope Copy & Support Navigation Alignment | Inclusive copy updates across client and scraper utilities; bottom-right FAB and minimized pill placement | none | IN_PROGRESS |
-| M2 | Feedback System & Admin Scraped Workflow Alignment | Contextual error diagnostics pre-population; 1-click screen capture in FeedbackModal; admin approve auto-save | M1 | PLANNED |
-| M3 | Visual Styling, Metric Walls, Card Micro-Interactions & Comment Badge Cleanliness | Remove synthetic badges; subtle 0-count metric text; Leaderboard header polish; card hover elevation, title highlight, and image hover zoom | M1 | PLANNED |
+| M1 | Public Scope Copy & Support Navigation Alignment | Inclusive copy updates across client and scraper utilities; bottom-right FAB and minimized pill placement | none | DONE |
+| M2 | Feedback System & Admin Scraped Workflow Alignment | Contextual error diagnostics pre-population; 1-click screen capture in FeedbackModal; admin approve auto-save | M1 | DONE |
+| M3 | Visual Styling, Metric Walls, Card Micro-Interactions & Comment Badge Cleanliness | Remove synthetic badges; subtle 0-count metric text; Leaderboard header polish; card hover elevation, title highlight, and image hover zoom | M1 | IN_PROGRESS |
 | M4 | Universal Keyboard Search Focus & Instant Filter Reset Controls | `/` and `Ctrl+K` keyboard shortcuts with shortcut pills; instant in-memory filtering and "Reset Filters" action buttons | M3 | PLANNED |
 | M5 | Comprehensive Verification & QA Pipeline | Full client and server test suites, linting, build checks, and forensic audit | M1, M2, M3, M4 | PLANNED |
 

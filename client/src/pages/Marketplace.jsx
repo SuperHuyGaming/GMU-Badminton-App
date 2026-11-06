@@ -135,10 +135,10 @@ export default function Marketplace() {
             </Button>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
-                    <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
+                    <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: '-0.5px' }}>
                         Marketplace
                     </Typography>
-                    <Typography color="text.primary">
+                    <Typography color="text.secondary">
                         Buy, sell, and trade badminton gear with the local community.
                     </Typography>
                 </Box>
@@ -173,16 +173,40 @@ export default function Marketplace() {
                 <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
                     {listings.map(listing => (
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 4, 'lg': 3}} key={listing._id}>
-                            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, overflow: 'hidden' }}>
-                                <CardMedia
-                                    component="img"
-                                    height="200"
-                                    image={listing.images[0] || "https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&q=80"}
-                                    alt={listing.title}
-                                />
+                            <Card 
+                                sx={{ 
+                                    height: '100%', 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    borderRadius: 3, 
+                                    overflow: 'hidden',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                                    '&:hover': {
+                                        transform: 'translateY(-4px)',
+                                        boxShadow: '0 12px 28px rgba(0,0,0,0.08)',
+                                        '& .marketplace-title': {
+                                            color: 'primary.main',
+                                        },
+                                        '& img': {
+                                            transform: 'scale(1.04)',
+                                        },
+                                    },
+                                }}
+                            >
+                                <Box sx={{ overflow: 'hidden' }}>
+                                    <CardMedia
+                                        component="img"
+                                        height="200"
+                                        image={listing.images[0] || "https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=400&q=80"}
+                                        alt={listing.title}
+                                        sx={{ transition: 'transform 0.35s ease' }}
+                                    />
+                                </Box>
                                 <CardContent sx={{ flexGrow: 1 }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                                        <Typography variant="h6" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
+                                        <Typography className="marketplace-title" variant="h6" fontWeight="bold" sx={{ lineHeight: 1.2, transition: 'color 0.2s ease' }}>
                                             {listing.title}
                                         </Typography>
                                         <Typography variant="h6" color="primary.main" fontWeight="900">
