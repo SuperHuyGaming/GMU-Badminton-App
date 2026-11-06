@@ -228,6 +228,38 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
 
     const filteredFriends = friends; // No client side filter here since it's infinite scroll, but we can if we want.
 
+    const searchInputRef = useRef(null);
+    const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            const targetTag = e.target?.tagName;
+            const activeTag = document.activeElement?.tagName;
+            const isEditing = 
+                ['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag) || 
+                ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) || 
+                e.target?.isContentEditable || 
+                document.activeElement?.isContentEditable;
+            
+            if (isEditing) return;
+
+            const isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
+            const isK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+
+            if (isSlash || isK) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === 'function') {
+                    e.stopImmediatePropagation();
+                }
+                searchInputRef.current?.focus();
+            }
+        };
+
+        window.addEventListener('keydown', handleGlobalKeyDown, true);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    }, []);
+
     const handleUnfriend = async (friendId) => {
         try {
             await apiFetch('/api/friends/remove', {
@@ -258,12 +290,43 @@ export default function FriendsTab({ profileId, isOwnProfile }) {
                             placeholder="Search friends..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon color="action" />
-                                    </InputAdornment>
-                                ),
+                            inputRef={searchInputRef}
+                            onFocus={() => setIsFocused(true)}
+                            onBlur={() => setIsFocused(false)}
+                            slotProps={{
+                                htmlInput: {
+                                    'data-page-search': 'true',
+                                },
+                                input: {
+                                    inputProps: {
+                                        'data-page-search': 'true',
+                                    },
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon color="action" />
+                                        </InputAdornment>
+                                    ),
+                                    endAdornment: !isFocused && !searchQuery ? (
+                                        <InputAdornment position="end">
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    bgcolor: 'action.hover', 
+                                                    px: 0.9, 
+                                                    py: 0.4, 
+                                                    borderRadius: 1, 
+                                                    color: 'text.secondary', 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.75rem',
+                                                    display: { xs: 'none', sm: 'inline-flex' }, 
+                                                    pointerEvents: 'none' 
+                                                }}
+                                            >
+                                                /
+                                            </Typography>
+                                        </InputAdornment>
+                                    ) : null
+                                }
                             }}
                             sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
                         />

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     Container, Typography, Box, Paper, Tabs, Tab, 
     Avatar, Table, TableBody, TableCell, TableContainer, TableHead, 
-    TableRow, Chip, TextField, Select, MenuItem, InputLabel, FormControl, Grid
+    TableRow, Chip, TextField, Select, MenuItem, InputLabel, FormControl, Grid,
+    InputAdornment
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { LeaderboardRowSkeleton } from '../components/Skeletons';
@@ -19,6 +20,38 @@ const Leaderboard = () => {
     const [university, setUniversity] = useState('');
     const [skillLevel, setSkillLevel] = useState('');
     const [minMatches, setMinMatches] = useState('');
+
+    const searchInputRef = useRef(null);
+    const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            const targetTag = e.target?.tagName;
+            const activeTag = document.activeElement?.tagName;
+            const isEditing = 
+                ['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag) || 
+                ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) || 
+                e.target?.isContentEditable || 
+                document.activeElement?.isContentEditable;
+            
+            if (isEditing) return;
+
+            const isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
+            const isK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+
+            if (isSlash || isK) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === 'function') {
+                    e.stopImmediatePropagation();
+                }
+                searchInputRef.current?.focus();
+            }
+        };
+
+        window.addEventListener('keydown', handleGlobalKeyDown, true);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    }, []);
 
     const { data: users = [], isLoading: loading } = useQuery({
         queryKey: ['leaderboard', tab, search, university, skillLevel, minMatches],
@@ -88,6 +121,39 @@ const Leaderboard = () => {
                                 variant="outlined" 
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
+                                inputRef={searchInputRef}
+                                onFocus={() => setIsFocused(true)}
+                                onBlur={() => setIsFocused(false)}
+                                slotProps={{
+                                    htmlInput: {
+                                        'data-page-search': 'true',
+                                    },
+                                    input: {
+                                        inputProps: {
+                                            'data-page-search': 'true',
+                                        },
+                                        endAdornment: !isFocused && !search ? (
+                                            <InputAdornment position="end">
+                                                <Typography 
+                                                    variant="caption" 
+                                                    sx={{ 
+                                                        bgcolor: 'action.hover', 
+                                                        px: 0.9, 
+                                                        py: 0.4, 
+                                                        borderRadius: 1, 
+                                                        color: 'text.secondary', 
+                                                        fontWeight: 'bold', 
+                                                        fontSize: '0.75rem',
+                                                        display: { xs: 'none', sm: 'inline-flex' }, 
+                                                        pointerEvents: 'none' 
+                                                    }}
+                                                >
+                                                    /
+                                                </Typography>
+                                            </InputAdornment>
+                                        ) : null
+                                    }
+                                }}
                             />
                         </Grid>
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 3}}>

@@ -298,4 +298,129 @@ describe('SearchResults Page Component', () => {
         expect(postArticle).toBeInTheDocument();
         expect(postArticle.getAttribute('aria-label')).not.toContain('undefined');
     });
+
+    it('focuses search input on "/" and "Ctrl+K" or "Cmd+K" key shortcuts', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Player');
+        const searchInput = screen.getByPlaceholderText('Search players, posts, or keywords...');
+        expect(searchInput).toHaveAttribute('data-page-search', 'true');
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+        expect(document.activeElement).toBe(searchInput);
+
+        searchInput.blur();
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+        expect(document.activeElement).toBe(searchInput);
+
+        searchInput.blur();
+        expect(document.activeElement).not.toBe(searchInput);
+
+        fireEvent.keyDown(window, { key: 'K', metaKey: true });
+        expect(document.activeElement).toBe(searchInput);
+    });
+
+    it('has data-page-search="true" and stops keyboard event propagation on "/" and "Ctrl+K"', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Player');
+        const searchInput = screen.getByPlaceholderText('Search players, posts, or keywords...');
+        expect(searchInput).toHaveAttribute('data-page-search', 'true');
+
+        let bubbleListenerFired = false;
+        const bubbleListener = () => {
+            bubbleListenerFired = true;
+        };
+        window.addEventListener('keydown', bubbleListener, false);
+
+        try {
+            fireEvent.keyDown(window, { key: '/', code: 'Slash' });
+            expect(document.activeElement).toBe(searchInput);
+            expect(bubbleListenerFired).toBe(false);
+        } finally {
+            window.removeEventListener('keydown', bubbleListener, false);
+        }
+    });
+
+    it('does not hijack typing when focus is already inside an input or textarea', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Player');
+        const otherInput = document.createElement('input');
+        document.body.appendChild(otherInput);
+        otherInput.focus();
+        expect(document.activeElement).toBe(otherInput);
+
+        try {
+            const slashEvent = new window.KeyboardEvent('keydown', { key: '/', bubbles: true });
+            const preventDefaultSpy = vi.spyOn(slashEvent, 'preventDefault');
+            window.dispatchEvent(slashEvent);
+
+            expect(preventDefaultSpy).not.toHaveBeenCalled();
+            expect(document.activeElement).toBe(otherInput);
+        } finally {
+            document.body.removeChild(otherInput);
+        }
+    });
+
+    it('renders shortcut hint pill "/" when empty and clears input with clear button', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('');
+        const searchInput = screen.getByPlaceholderText('Search players, posts, or keywords...');
+        expect(screen.getByText('/')).toBeInTheDocument();
+
+        // Type in input
+        fireEvent.change(searchInput, { target: { value: 'Badminton' } });
+        expect(screen.queryByText('/')).not.toBeInTheDocument();
+
+        const clearBtn = screen.getByRole('button', { name: 'Clear search' });
+        expect(clearBtn).toBeInTheDocument();
+
+        fireEvent.click(clearBtn);
+        expect(searchInput.value).toBe('');
+    });
+
+    it('renders "Reset All Filters" buttons and clears active filters', async () => {
+        apiFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ results: [] }),
+        });
+
+        renderSearchResults('Player');
+
+        // Initially no reset button
+        expect(screen.queryByText('Reset All Filters')).not.toBeInTheDocument();
+
+        // Check Beginner filter
+        const beginnerCheckbox = screen.getByLabelText('Beginner');
+        fireEvent.click(beginnerCheckbox);
+        expect(beginnerCheckbox).toBeChecked();
+
+        // Both reset buttons (filter panel and above results) should now appear
+        const resetButtons = screen.getAllByRole('button', { name: 'Reset All Filters' });
+        expect(resetButtons.length).toBe(2);
+
+        // Click Reset All Filters
+        fireEvent.click(resetButtons[0]);
+
+        // Beginner checkbox should now be unchecked and buttons disappear
+        expect(beginnerCheckbox).not.toBeChecked();
+        expect(screen.queryByText('Reset All Filters')).not.toBeInTheDocument();
+    });
 });

@@ -39,7 +39,7 @@ export default function Marketplace() {
         const fetchListings = async () => {
             try {
                 setLoading(true);
-                const res = await apiFetch(`/api/marketplace?category=${filterCategory}`);
+                const res = await apiFetch('/api/marketplace');
                 const data = await res.json();
                 if (res.ok) {
                     setListings(data);
@@ -53,9 +53,12 @@ export default function Marketplace() {
             }
         };
 
-         
         fetchListings();
-    }, [filterCategory]);
+    }, []);
+
+    const filteredListings = filterCategory === "All" 
+        ? listings 
+        : listings.filter(item => item.category?.toLowerCase() === filterCategory.toLowerCase());
 
     const handleOpen = () => setOpen(true);
     const handleClose = () => {
@@ -147,7 +150,7 @@ export default function Marketplace() {
                 </Button>
             </Box>
 
-            <Box sx={{ mb: 4, display: 'flex', gap: 1, overflowX: 'auto', pb: 1 }}>
+            <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 1, overflowX: 'auto', pb: 1 }}>
                 {["All", "Racket", "Shoes", "Bag", "Shuttlecocks", "Other"].map(cat => (
                     <Chip 
                         key={cat} 
@@ -159,6 +162,16 @@ export default function Marketplace() {
                         sx={{ fontWeight: 'bold', borderRadius: 2 }}
                     />
                 ))}
+                {filterCategory !== "All" && (
+                    <Button
+                        size="small"
+                        color="secondary"
+                        onClick={() => setFilterCategory("All")}
+                        sx={{ textTransform: 'none', fontWeight: 600, ml: 1, whiteSpace: 'nowrap' }}
+                    >
+                        Reset Filters
+                    </Button>
+                )}
             </Box>
 
             {loading ? (
@@ -167,11 +180,11 @@ export default function Marketplace() {
                 </Box>
             ) : error ? (
                 <Alert severity="error">{error}</Alert>
-            ) : listings.length === 0 ? (
+            ) : filteredListings.length === 0 ? (
                 <Alert severity="info">No gear found in this category right now.</Alert>
             ) : (
                 <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-                    {listings.map(listing => (
+                    {filteredListings.map(listing => (
                         <Grid size={{'xs': 12, 'sm': 6, 'md': 4, 'lg': 3}} key={listing._id}>
                             <Card 
                                 sx={{ 

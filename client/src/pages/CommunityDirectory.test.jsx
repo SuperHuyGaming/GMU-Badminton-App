@@ -185,4 +185,40 @@ describe('CommunityDirectory Page Component', () => {
             expect(screen.getByText('Request Sent')).toBeInTheDocument();
         });
     });
+
+    it('renders "Reset Filters" button when skillFilter is not All and resets to All on click', async () => {
+        apiFetch.mockImplementation(async (url) => {
+            if (url.includes('/discover')) {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        matches: mockUsers,
+                        recommended: mockRecommended
+                    })
+                };
+            }
+            return { ok: true, json: async () => ({ onlineUsers: [] }) };
+        });
+
+        renderCommunityDirectory();
+
+        // Initially skillFilter is 'All', no Reset Filters button
+        expect(screen.queryByRole('button', { name: 'Reset Filters' })).not.toBeInTheDocument();
+
+        // Click Intermediate skill chip
+        const intermediateChip = screen.getByRole('button', { name: 'Intermediate' });
+        fireEvent.click(intermediateChip);
+
+        // Reset Filters button should appear
+        const resetBtn = await screen.findByRole('button', { name: 'Reset Filters' });
+        expect(resetBtn).toBeInTheDocument();
+
+        // Click Reset Filters
+        fireEvent.click(resetBtn);
+
+        // Reset Filters button should disappear
+        await waitFor(() => {
+            expect(screen.queryByRole('button', { name: 'Reset Filters' })).not.toBeInTheDocument();
+        });
+    });
 });

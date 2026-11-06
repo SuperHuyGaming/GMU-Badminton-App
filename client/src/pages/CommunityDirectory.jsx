@@ -607,6 +607,16 @@ export default function CommunityDirectory() {
                             clickable
                         />
                     ))}
+                    {skillFilter !== 'All' && (
+                        <Button
+                            size="small"
+                            color="secondary"
+                            onClick={() => setSkillFilter('All')}
+                            sx={{ textTransform: 'none', fontWeight: 600, ml: 1, whiteSpace: 'nowrap' }}
+                        >
+                            Reset Filters
+                        </Button>
+                    )}
                 </Stack>
             </Box>
 
