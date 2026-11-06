@@ -201,6 +201,44 @@ describe("TournamentApprovals Admin Page Component", () => {
         expect(screen.getByText("DMV Fall Racket Fest")).toBeInTheDocument();
     });
 
+    it("4b. Approve failure handles !res.ok and displays error toast without removing proposal", async () => {
+        apiFetch.mockImplementation(async (url) => {
+            if (url === "/api/admin/tournaments/proposed") {
+                return {
+                    ok: true,
+                    json: async () => [...mockProposals],
+                };
+            }
+            if (url.includes("/api/admin/tournaments/approve/prop-high-1")) {
+                return {
+                    ok: false,
+                    status: 500,
+                    json: async () => ({
+                        message: "Backend database timeout during approval",
+                    }),
+                };
+            }
+            return { ok: true, json: async () => ({}) };
+        });
+
+        renderComponent();
+
+        await waitFor(() => {
+            expect(screen.getByText("Mason Open 2026")).toBeInTheDocument();
+        });
+
+        const approveButtons = screen.getAllByRole("button", { name: /Approve/i });
+        fireEvent.click(approveButtons[0]);
+
+        await waitFor(() => {
+            expect(toast.error).toHaveBeenCalledWith("Backend database timeout during approval");
+        });
+
+        // Proposal should NOT be removed from view
+        expect(screen.getByText("Mason Open 2026")).toBeInTheDocument();
+        expect(toast.success).not.toHaveBeenCalled();
+    });
+
     it("5. Reject button triggers POST /reject/:id, toast success, and queue removal", async () => {
         apiFetch.mockImplementation(async (url) => {
             if (url === "/api/admin/tournaments/proposed") {

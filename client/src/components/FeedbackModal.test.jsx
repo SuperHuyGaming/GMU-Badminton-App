@@ -353,4 +353,184 @@ describe("FeedbackModal Component", () => {
 			});
 		}
 	});
+
+	it("preserves user edits and attachments across draft auto-save and context updates when opened with initialData", async () => {
+		const contextValue = {
+			isOpen: true,
+			isMinimized: false,
+			draft: null,
+			initialData: {
+				type: "bug",
+				severity: "critical",
+				pageUrl: "/brackets",
+				title: "Crash on court select",
+				description: "Stack trace: NullPointer at line 10",
+			},
+			closeFeedbackModal: mockCloseModal,
+			minimizeFeedbackModal: mockMinimizeModal,
+			maximizeFeedbackModal: mockMaximizeModal,
+			saveDraft: mockSaveDraft,
+			clearDraft: mockClearDraft,
+			openFeedbackModal: vi.fn(),
+		};
+
+		const { rerender } = render(
+			<AuthContext.Provider value={{ user: null }}>
+				<FeedbackContext.Provider value={contextValue}>
+					<FeedbackModal />
+				</FeedbackContext.Provider>
+			</AuthContext.Provider>
+		);
+
+		const descInput = screen.getByLabelText(/Detailed Description/i);
+		expect(descInput).toHaveValue("Stack trace: NullPointer at line 10");
+
+		// User edits description
+		fireEvent.change(descInput, {
+			target: { value: "Stack trace: NullPointer at line 10\nUser added note: only happens on Court 3." },
+		});
+		expect(descInput).toHaveValue("Stack trace: NullPointer at line 10\nUser added note: only happens on Court 3.");
+
+		// User attaches an image via URL
+		fireEvent.click(screen.getByText("Add via URL"));
+		const urlInput = screen.getByPlaceholderText("https://example.com/screenshot.png");
+		fireEvent.change(urlInput, { target: { value: "https://example.com/court3-crash.png" } });
+		fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+		expect(screen.getByAltText("Attachment 1")).toHaveAttribute("src", "https://example.com/court3-crash.png");
+
+		// Simulate saveDraft triggering a re-render with updated draft reference from context
+		const updatedContextValue = {
+			...contextValue,
+			draft: {
+				type: "bug",
+				severity: "critical",
+				title: "Crash on court select",
+				description: "Stack trace: NullPointer at line 10\nUser added note: only happens on Court 3.",
+				images: ["https://example.com/court3-crash.png"],
+			},
+		};
+
+		rerender(
+			<AuthContext.Provider value={{ user: null }}>
+				<FeedbackContext.Provider value={updatedContextValue}>
+					<FeedbackModal />
+				</FeedbackContext.Provider>
+			</AuthContext.Provider>
+		);
+
+		// Verified: user's input and attached images are strictly preserved and not wiped out by initialData
+		expect(descInput).toHaveValue("Stack trace: NullPointer at line 10\nUser added note: only happens on Court 3.");
+		expect(screen.getByAltText("Attachment 1")).toHaveAttribute("src", "https://example.com/court3-crash.png");
+	});
+
+	it("compresses screen capture to JPEG (0.7 quality) and scales down wide captures to max width 1280px", async () => {
+		const stopTrackMock = vi.fn();
+		const mockStream = {
+			getVideoTracks: () => [{ stop: stopTrackMock }],
+			getTracks: () => [{ stop: stopTrackMock }],
+		};
+
+		const originalMediaDevices = navigator.mediaDevices;
+		const mockGetDisplayMedia = vi.fn().mockResolvedValue(mockStream);
+		Object.defineProperty(navigator, "mediaDevices", {
+			value: { getDisplayMedia: mockGetDisplayMedia },
+			configurable: true,
+		});
+
+		let capturedCanvas = null;
+		const toDataUrlSpy = vi.fn((type, quality) => `data:${type};base64,mockJpegData_q${quality}`);
+
+		const originalCreateElement = document.createElement.bind(document);
+		const spyCreateElement = vi.spyOn(document, "createElement").mockImplementation((tag) => {
+			const el = originalCreateElement(tag);
+			if (tag === "canvas") {
+				capturedCanvas = el;
+				el.getContext = () => ({
+					drawImage: vi.fn(),
+				});
+				el.toDataURL = toDataUrlSpy;
+			}
+			if (tag === "video") {
+				Object.defineProperty(el, "videoWidth", { value: 2560, configurable: true });
+				Object.defineProperty(el, "videoHeight", { value: 1440, configurable: true });
+				el.play = vi.fn().mockResolvedValue();
+			}
+			return el;
+		});
+
+		renderModal();
+
+		const captureBtn = screen.getByRole("button", { name: /Capture Screen/i });
+		fireEvent.click(captureBtn);
+
+		await waitFor(() => {
+			expect(toDataUrlSpy).toHaveBeenCalledWith("image/jpeg", 0.7);
+			expect(capturedCanvas.width).toBe(1280);
+			expect(capturedCanvas.height).toBe(720); // 1440 * (1280 / 2560) = 720
+			expect(stopTrackMock).toHaveBeenCalled();
+			expect(screen.getByAltText("Attachment 1")).toHaveAttribute(
+				"src",
+				"data:image/jpeg;base64,mockJpegData_q0.7"
+			);
+		});
+
+		spyCreateElement.mockRestore();
+		if (originalMediaDevices) {
+			Object.defineProperty(navigator, "mediaDevices", {
+				value: originalMediaDevices,
+				configurable: true,
+			});
+		}
+	});
+
+	it("guarantees stream tracks are stopped even if screen capture video throws an error", async () => {
+		const stopTrackMock = vi.fn();
+		const mockStream = {
+			getVideoTracks: () => [{ stop: stopTrackMock }],
+			getTracks: () => [{ stop: stopTrackMock }],
+		};
+
+		const originalMediaDevices = navigator.mediaDevices;
+		const mockGetDisplayMedia = vi.fn().mockResolvedValue(mockStream);
+		Object.defineProperty(navigator, "mediaDevices", {
+			value: { getDisplayMedia: mockGetDisplayMedia },
+			configurable: true,
+		});
+
+		const originalCreateElement = document.createElement.bind(document);
+		const spyCreateElement = vi.spyOn(document, "createElement").mockImplementation((tag) => {
+			const el = originalCreateElement(tag);
+			if (tag === "canvas") {
+				el.getContext = () => ({
+					drawImage: vi.fn(),
+				});
+				el.toDataURL = vi.fn().mockReturnValue("data:image/jpeg;base64,mockData");
+			}
+			if (tag === "video") {
+				// Video play throws an exception
+				el.play = vi.fn().mockRejectedValue(new Error("Playback failure"));
+			}
+			return el;
+		});
+
+		renderModal();
+
+		const captureBtn = screen.getByRole("button", { name: /Capture Screen/i });
+		fireEvent.click(captureBtn);
+
+		await waitFor(() => {
+			expect(mockGetDisplayMedia).toHaveBeenCalled();
+			// Stop must be called in finally block
+			expect(stopTrackMock).toHaveBeenCalled();
+		});
+
+		spyCreateElement.mockRestore();
+		if (originalMediaDevices) {
+			Object.defineProperty(navigator, "mediaDevices", {
+				value: originalMediaDevices,
+				configurable: true,
+			});
+		}
+	});
 });

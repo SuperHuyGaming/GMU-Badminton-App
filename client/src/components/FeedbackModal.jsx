@@ -1,5 +1,5 @@
 // client/src/components/FeedbackModal.jsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
 	Dialog,
 	DialogTitle,
@@ -74,11 +74,15 @@ export default function FeedbackModal() {
 	const [submitting, setSubmitting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState("");
 	const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+	const hasInitializedRef = useRef(false);
 
 	// Initialize from draft or initialData when opened
 	/* eslint-disable react-hooks/set-state-in-effect */
 	useEffect(() => {
 		if (isOpen) {
+			if (hasInitializedRef.current) return;
+			hasInitializedRef.current = true;
+
 			const hasContextualPrefill = Boolean(initialData?.title || initialData?.description);
 			if (!hasContextualPrefill && draft && (draft.title || draft.description || (draft.images && draft.images.length > 0))) {
 				setType(draft.type || "bug");
@@ -104,6 +108,8 @@ export default function FeedbackModal() {
 			setShowUrlInput(false);
 			setUrlInput("");
 			setErrorMessage("");
+		} else {
+			hasInitializedRef.current = false;
 		}
 	}, [isOpen, initialData, draft]);
 	/* eslint-enable react-hooks/set-state-in-effect */
@@ -218,13 +224,15 @@ export default function FeedbackModal() {
 		setCapturingScreen(true);
 		setErrorMessage("");
 
+		let stream = null;
+		let video = null;
+
 		try {
-			const stream = await navigator.mediaDevices.getDisplayMedia({
+			stream = await navigator.mediaDevices.getDisplayMedia({
 				video: { mediaSource: "screen" },
 			});
-			const track = stream.getVideoTracks()?.[0];
 
-			const video = document.createElement("video");
+			video = document.createElement("video");
 			video.srcObject = stream;
 			video.muted = true;
 			video.playsInline = true;
@@ -237,19 +245,26 @@ export default function FeedbackModal() {
 				setTimeout(resolve, 500);
 			});
 
-			const canvas = document.createElement("canvas");
-			canvas.width = video.videoWidth || 1280;
-			canvas.height = video.videoHeight || 720;
-			const ctx = canvas.getContext("2d");
-			if (ctx) {
-				ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+			const originalWidth = video.videoWidth || 1280;
+			const originalHeight = video.videoHeight || 720;
+
+			let targetWidth = originalWidth;
+			let targetHeight = originalHeight;
+			if (targetWidth > 1280) {
+				const scale = 1280 / targetWidth;
+				targetWidth = 1280;
+				targetHeight = Math.round(originalHeight * scale);
 			}
 
-			if (track) track.stop();
-			stream.getTracks().forEach((t) => t.stop());
-			video.srcObject = null;
+			const canvas = document.createElement("canvas");
+			canvas.width = targetWidth;
+			canvas.height = targetHeight;
+			const ctx = canvas.getContext("2d");
+			if (ctx) {
+				ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+			}
 
-			const dataUrl = canvas.toDataURL("image/png");
+			const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
 			if (dataUrl && dataUrl !== "data:,") {
 				setImages((prev) => [...prev, dataUrl].slice(0, 4));
 				toast.success("📷 Screen captured successfully!");
@@ -260,6 +275,10 @@ export default function FeedbackModal() {
 				toast.error("Could not capture screen. You can paste with Ctrl+V or upload a screenshot.");
 			}
 		} finally {
+			if (stream) {
+				stream.getTracks().forEach((t) => t.stop());
+			}
+			if (video) video.srcObject = null;
 			setCapturingScreen(false);
 		}
 	};

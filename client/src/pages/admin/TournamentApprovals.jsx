@@ -428,6 +428,9 @@ export default function TournamentApprovals() {
                 method: "POST",
             });
             const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.message || "Approval failed");
+            }
             toast.success(data.message || "Tournament approved and published!");
             setProposals((prev) => prev.filter((p) => p._id !== targetId));
             if (selectedProposal && selectedProposal._id === targetId) {
