@@ -9,6 +9,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import { motion } from 'framer-motion';
 import { markChatVisible, idOf } from '../utils/chatState';
 
 const getPartnerFromConv = (c) => (c && (c.friend || c.partner || c.user)) || c || {};
@@ -83,6 +84,10 @@ export default function FloatingChatPopup({
 
     return (
         <Paper
+            component={motion.div}
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
             elevation={10}
             data-testid={isMinimized ? undefined : 'floating-chat-window'}
             sx={{

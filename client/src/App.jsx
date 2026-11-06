@@ -281,34 +281,8 @@ const AnimatedRoutes = () => {
 		</AnimatePresence>
 	);
 };
-
-function App() {
-	// eslint-disable-next-line no-unused-vars
-	const { user, toastMessage, setToastMessage } = useAuth();
-	const [mode, setMode] = useState(localStorage.getItem("themeMode") || "light");
-
-	const colorMode = useMemo(() => ({
-		toggleColorMode: () => {
-			setMode((prevMode) => {
-				const nextMode = prevMode === "light" ? "dark" : "light";
-				localStorage.setItem("themeMode", nextMode);
-				return nextMode;
-			});
-		},
-	}), []);
-
-	useEffect(() => {
-		if (user) {
-			analytics.identify(user.id || user._id, {
-				name: user.name,
-				skillLevel: user.skillLevel
-			});
-		} else {
-			analytics.reset();
-		}
-	}, [user]);
-
-	const theme = useMemo(() => createTheme({
+// eslint-disable-next-line react-refresh/only-export-components
+export const createAppTheme = (mode) => createTheme({
 		palette: {
 			mode,
 			primary: mode === "light"
@@ -327,13 +301,14 @@ function App() {
 			success: mode === "light"
 				? { main: "#1B5E20", contrastText: "#ffffff" }
 				: { main: "#66bb6a", contrastText: "#000000" },
+			divider: mode === "light" ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.08)",
 			text: {
-				primary: mode === "light" ? "#1a202c" : "#ffffff",
-				secondary: mode === "light" ? "#404040" : "rgba(255, 255, 255, 0.8)",
+				primary: mode === "light" ? "#1a202c" : "#f8fafc",
+				secondary: mode === "light" ? "#404040" : "rgba(248, 250, 252, 0.75)",
 			},
 			background: { 
 				default: mode === "light" ? "#f4f6f8" : "#02120a", // Ultra deep forest green
-				paper: mode === "light" ? "rgba(255, 255, 255, 0.75)" : "rgba(8, 33, 20, 0.75)", // Translucent for glassmorphism
+				paper: mode === "light" ? "rgba(255, 255, 255, 0.75)" : "rgba(13, 38, 25, 0.85)", // Elevated translucent for glassmorphism
 			},
 		},
 		shape: { borderRadius: 4 }, // Reset to standard 4px multiplier to prevent 48px jellybean shapes
@@ -409,7 +384,7 @@ function App() {
 						boxShadow: mode === "light" 
 							? "0 8px 32px 0 rgba(0, 102, 51, 0.05)" 
 							: "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
-						border: `1px solid ${mode === "light" ? "rgba(255, 255, 255, 0.4)" : "rgba(255, 255, 255, 0.05)"}`,
+						border: `1px solid ${mode === "light" ? "rgba(255, 255, 255, 0.4)" : "rgba(255, 255, 255, 0.08)"}`,
 					}
 				}
 			},
@@ -496,7 +471,35 @@ function App() {
 				}
 			},
 		}
-	}), [mode]);
+	});
+
+function App() {
+	// eslint-disable-next-line no-unused-vars
+	const { user, toastMessage, setToastMessage } = useAuth();
+	const [mode, setMode] = useState(localStorage.getItem("themeMode") || "light");
+
+	const colorMode = useMemo(() => ({
+		toggleColorMode: () => {
+			setMode((prevMode) => {
+				const nextMode = prevMode === "light" ? "dark" : "light";
+				localStorage.setItem("themeMode", nextMode);
+				return nextMode;
+			});
+		},
+	}), []);
+
+	useEffect(() => {
+		if (user) {
+			analytics.identify(user.id || user._id, {
+				name: user.name,
+				skillLevel: user.skillLevel
+			});
+		} else {
+			analytics.reset();
+		}
+	}, [user]);
+
+	const theme = useMemo(() => createAppTheme(mode), [mode]);
 
 	useEffect(() => {
 		const handleOffline = () => setToastMessage("You are offline. Check your network.");

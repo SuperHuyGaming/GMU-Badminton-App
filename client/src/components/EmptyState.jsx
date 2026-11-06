@@ -81,6 +81,11 @@ const NoTournamentsGraphic = ({ compact }) => (
         aria-label="Tournament championship trophy with event clipboard and shuttlecock"
     >
         <defs>
+            <radialGradient id="courtAmbientGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#00E676" stopOpacity={0.22} />
+                <stop offset="70%" stopColor="#004d26" stopOpacity={0.05} />
+                <stop offset="100%" stopColor="#000000" stopOpacity={0} />
+            </radialGradient>
             <linearGradient id="goldTrophyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#FFF275" />
                 <stop offset="35%" stopColor="#FFCC33" />
@@ -258,6 +263,11 @@ const NoPostsGraphic = ({ compact }) => (
         aria-label="Discussion board card with feather quill"
     >
         <defs>
+            <radialGradient id="courtAmbientGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#00E676" stopOpacity={0.22} />
+                <stop offset="70%" stopColor="#004d26" stopOpacity={0.05} />
+                <stop offset="100%" stopColor="#000000" stopOpacity={0} />
+            </radialGradient>
             <linearGradient id="postCardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor="#1E293B" stopOpacity={0.85} />
                 <stop offset="100%" stopColor="#0F172A" stopOpacity={0.95} />
@@ -295,6 +305,13 @@ const NoMessagesGraphic = ({ compact }) => (
         role="img" 
         aria-label="Speech bubbles indicating no chat messages"
     >
+        <defs>
+            <radialGradient id="courtAmbientGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#00E676" stopOpacity={0.22} />
+                <stop offset="70%" stopColor="#004d26" stopOpacity={0.05} />
+                <stop offset="100%" stopColor="#000000" stopOpacity={0} />
+            </radialGradient>
+        </defs>
         <ellipse cx="200" cy="140" rx="130" ry="55" fill="url(#courtAmbientGlow)" opacity={0.5} />
         <g transform="translate(130, 60)">
             <path d="M 10,0 H 110 A 20 20 0 0 1 130,20 V 60 A 20 20 0 0 1 110,80 H 40 L 15,100 V 80 H 10 A 20 20 0 0 1 -10,60 V 20 A 20 20 0 0 1 10,0 Z" fill="#004d26" stroke="#00E676" strokeWidth="1.5" />

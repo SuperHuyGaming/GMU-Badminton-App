@@ -818,12 +818,16 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 						? 'linear-gradient(to bottom right, rgba(255, 179, 0, 0.08), rgba(0, 102, 51, 0.04))' 
 						: 'linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(0,0,0,0.01))',
 					backdropFilter: 'blur(10px)',
-					boxShadow: localPost.isPinned ? '0 8px 24px rgba(255, 165, 0, 0.12)' : '0 2px 8px rgba(0,0,0,0.03)',
-					transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+					transition: "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
 					"&:hover": {
 						borderColor: localPost.isPinned ? "warning.dark" : "primary.light",
-						boxShadow: localPost.isPinned ? "0 14px 32px rgba(255, 165, 0, 0.22)" : "0 10px 24px rgba(0, 102, 51, 0.1)",
-						transform: "translateY(-3px)",
+						boxShadow: localPost.isPinned 
+							? "0 16px 36px rgba(255, 165, 0, 0.25)" 
+							: (theme) => theme.palette.mode === 'dark' ? '0 12px 28px rgba(0,0,0,0.45)' : '0 12px 28px rgba(0, 102, 51, 0.12)',
+						transform: "translateY(-4px)",
+						"& .post-title": {
+							color: "primary.main",
+						},
 					},
 				}}
 			>
@@ -938,12 +942,14 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 								component="h3"
 								fontWeight="bold"
 								color="text.primary"
+								className="post-title"
 								sx={{
 									lineHeight: 1.25,
 									minWidth: 0,
 									maxWidth: "100%",
 									overflowWrap: "anywhere",
 									wordBreak: "break-word",
+									transition: "color 0.2s ease",
 									display: (localPost.title && localPost.content && localPost.title.trim().toLowerCase() === localPost.content.trim().toLowerCase()) ? 'none' : 'block'
 								}}
 							>

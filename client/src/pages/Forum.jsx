@@ -1275,10 +1275,11 @@ export default function Forum() {
 							gap: 1.5,
 							cursor: 'pointer',
 							boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-							transition: 'all 0.2s ease-in-out',
+							transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease',
 							'&:hover': {
+								transform: 'translateY(-2px)',
 								borderColor: 'primary.light',
-								boxShadow: '0 4px 14px rgba(0, 102, 51, 0.08)'
+								boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 4px 14px rgba(0, 0, 0, 0.4)' : '0 4px 14px rgba(0, 102, 51, 0.08)'
 							}
 						}}
 					>
@@ -1559,10 +1560,10 @@ export default function Forum() {
 											p: 0, borderRadius: 4, overflow: 'hidden', border: "1px solid", borderColor: "divider",
 											display: 'flex', flexDirection: 'column',
 											background: 'linear-gradient(135deg, rgba(0, 102, 51, 0.05) 0%, rgba(255, 204, 51, 0.05) 100%)',
-											transition: 'box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-											// No scale/translate on hover: growing the card made it overlap its neighbours.
+											transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease',
 											'&:hover': {
-												boxShadow: '0 12px 30px rgba(0,102,51,0.15)',
+												transform: 'translateY(-4px)',
+												boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 12px 28px rgba(0,0,0,0.45)' : '0 12px 30px rgba(0,102,51,0.15)',
 												borderColor: 'primary.main'
 											}
 										}}
@@ -1761,11 +1762,15 @@ export default function Forum() {
 										borderRadius: 2,
 										bgcolor: 'action.hover',
 										cursor: 'pointer',
-										transition: 'all 0.2s',
-										'&:hover': { transform: 'translateY(-1px)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
+										transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+										'&:hover': { 
+											transform: 'translateY(-2px)', 
+											boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 4px 14px rgba(0,0,0,0.4)' : '0 4px 14px rgba(0,0,0,0.08)',
+											'& .sidebar-item-title': { color: 'primary.main' }
+										}
 									}}
 								>
-									<Typography variant="body2" fontWeight="bold" noWrap>
+									<Typography variant="body2" fontWeight="bold" noWrap className="sidebar-item-title" sx={{ transition: 'color 0.2s ease' }}>
 										{t.tournamentName}
 									</Typography>
 									<Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
