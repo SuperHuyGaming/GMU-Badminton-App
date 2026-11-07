@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     Box, Badge, Tooltip, IconButton, useTheme, useMediaQuery
 } from '@mui/material';
@@ -491,9 +491,26 @@ export default function FloatingChatDock() {
         }]);
     }, [activeChats.length, recentConversations, loadingRecents, openChatWithUser]);
 
+    const unreadTotal = useMemo(() => {
+        const unreadMap = new Map();
+        recentConversations.forEach(c => {
+            const pid = idOf(getPartner(c));
+            if (pid) {
+                unreadMap.set(String(pid), Number(c?.unreadCount) || 0);
+            }
+        });
+        chatBubbles.forEach(b => {
+            const bid = String(b._id || b.id || '');
+            if (bid) {
+                const current = unreadMap.get(bid) || 0;
+                unreadMap.set(bid, Math.max(current, Number(b.unreadCount) || 0));
+            }
+        });
+        return Array.from(unreadMap.values()).reduce((sum, n) => sum + n, 0);
+    }, [recentConversations, chatBubbles]);
+
     if (!currentUserId) return null;
 
-    const unreadTotal = recentConversations.reduce((acc, c) => acc + (Number(c?.unreadCount) || 0), 0);
     const topPartner = recentConversations.length > 0 ? getPartner(recentConversations[0]) : null;
     const isLauncherPartnerOnline = topPartner?._id ? onlineUserIds.has(String(topPartner._id)) : false;
 
@@ -530,10 +547,11 @@ export default function FloatingChatDock() {
 
             {/* VERTICAL CHAT HEAD RAIL */}
             <Box
+                data-testid="floating-chat-dock-rail"
                 sx={{
                     position: 'fixed',
-                    right: 16,
-                    bottom: 24,
+                    right: { xs: 16, sm: 20 },
+                    bottom: { xs: 20, sm: 24 },
                     zIndex: 1260,
                     display: 'flex',
                     flexDirection: 'column-reverse',
@@ -550,7 +568,15 @@ export default function FloatingChatDock() {
                         color="error"
                         invisible={unreadTotal === 0}
                         overlap="circular"
-                        sx={{ '& .MuiBadge-badge': { zIndex: 1, pointerEvents: 'none' } }}
+                        sx={{
+                            '& .MuiBadge-badge': {
+                                zIndex: 1,
+                                pointerEvents: 'none',
+                                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                                height: { xs: 18, sm: 20 },
+                                minWidth: { xs: 18, sm: 20 }
+                            }
+                        }}
                     >
                         <Tooltip title="Open Messenger Chat">
                             <IconButton
@@ -558,8 +584,8 @@ export default function FloatingChatDock() {
                                 aria-label={unreadTotal > 0 ? `Open Messenger Chat (${unreadTotal} unread)` : "Open Messenger Chat"}
                                 onClick={handleLauncherClick}
                                 sx={{
-                                    width: 56,
-                                    height: 56,
+                                    width: { xs: 48, sm: 56 },
+                                    height: { xs: 48, sm: 56 },
                                     bgcolor: 'primary.main',
                                     color: '#ffffff',
                                     boxShadow: '0 6px 20px rgba(0, 80, 40, 0.35)',
@@ -578,7 +604,7 @@ export default function FloatingChatDock() {
                                     overlap="circular"
                                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                                 >
-                                    <ChatBubbleOutlinedIcon sx={{ fontSize: 26 }} />
+                                    <ChatBubbleOutlinedIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />
                                 </Badge>
                             </IconButton>
                         </Tooltip>
@@ -586,7 +612,7 @@ export default function FloatingChatDock() {
                 )}
 
                 {/* Circular Chat Head Bubbles (up to 5) */}
-                {chatBubbles
+                {!isMobile && chatBubbles
                     .filter(b => !activeChats.some(a => String(a._id) === String(b._id)))
                     .map((bubble, i) => (
                         <FloatingChatBubble
