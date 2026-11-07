@@ -2,7 +2,8 @@ import PropTypes from 'prop-types';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
     Box, Paper, Typography, Avatar, IconButton, TextField,
-    Badge, Tooltip, CircularProgress, Menu, MenuItem, ListItemAvatar, ListItemText, Button
+    Badge, Tooltip, CircularProgress, Menu, MenuItem, ListItemAvatar, ListItemText, Button,
+    useTheme, useMediaQuery
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -22,7 +23,7 @@ export default function FloatingChatPopup({
     chat,
     partner: partnerProp,
     index = 0,
-    isMobile = false,
+    isMobile: isMobileProp,
     isOnline = false,
     messages = [],
     loadingMessages = false,
@@ -35,6 +36,10 @@ export default function FloatingChatPopup({
     recentConversations = [],
     onSwitchConversation
 }) {
+    const theme = useTheme();
+    const mediaQueryMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isMobile = isMobileProp !== undefined ? Boolean(isMobileProp) : mediaQueryMobile;
+
     const activeTarget = chat || partnerProp || {};
     const partnerId = String(activeTarget._id || activeTarget.id || '');
     const partnerName = activeTarget.name || activeTarget.username || (partnerId ? 'Badminton Player' : 'Badminton Chat');
@@ -45,9 +50,51 @@ export default function FloatingChatPopup({
     const [inputMessage, setInputMessage] = useState('');
     const [conversationsMenuAnchor, setConversationsMenuAnchor] = useState(null);
 
+    // Visual viewport & keyboard offset tracking for mobile ergonomics
+    const [viewportHeight, setViewportHeight] = useState(() =>
+        typeof window !== 'undefined' && window.visualViewport
+            ? window.visualViewport.height
+            : (typeof window !== 'undefined' ? window.innerHeight : 600)
+    );
+    const [keyboardOffset, setKeyboardOffset] = useState(0);
+
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const fileInputRef = useRef(null);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleViewportChange = () => {
+            if (window.visualViewport) {
+                const curHeight = window.visualViewport.height;
+                setViewportHeight(curHeight);
+                const offset = Math.max(0, window.innerHeight - curHeight);
+                setKeyboardOffset(offset);
+            } else {
+                setViewportHeight(window.innerHeight);
+                setKeyboardOffset(0);
+            }
+        };
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleViewportChange);
+            window.visualViewport.addEventListener('scroll', handleViewportChange);
+        } else {
+            window.addEventListener('resize', handleViewportChange);
+        }
+
+        handleViewportChange();
+
+        return () => {
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleViewportChange);
+                window.visualViewport.removeEventListener('scroll', handleViewportChange);
+            } else {
+                window.removeEventListener('resize', handleViewportChange);
+            }
+        };
+    }, []);
 
     // Auto-scroll to bottom on messages update
     const scrollToBottom = useCallback(() => {
@@ -61,6 +108,16 @@ export default function FloatingChatPopup({
             scrollToBottom();
         }
     }, [messages, isMinimized, scrollToBottom]);
+
+    // Auto-scroll when keyboard opens on mobile
+    useEffect(() => {
+        if (keyboardOffset > 0 && !isMinimized) {
+            const timer = setTimeout(() => {
+                scrollToBottom();
+            }, 80);
+            return () => clearTimeout(timer);
+        }
+    }, [keyboardOffset, isMinimized, scrollToBottom]);
 
     // Focus input on expand
     useEffect(() => {
@@ -107,36 +164,90 @@ export default function FloatingChatPopup({
     return (
         <Paper
             component={motion.div}
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+            initial={isMobile ? { y: '100%', opacity: 1 } : { opacity: 0, y: 40 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={isMobile ? { y: '100%', opacity: 0 } : { opacity: 0, y: 40 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
             elevation={10}
             data-testid={isMinimized ? undefined : 'floating-chat-window'}
             sx={{
                 position: 'fixed',
-                bottom: 0,
-                right: isMobile ? 16 : `${index * 340 + 72}px`,
-                width: isMobile ? 'calc(100vw - 32px)' : 328,
-                height: isMinimized ? 40 : (isMobile ? '75vh' : 420),
-                maxHeight: isMobile ? '85vh' : 'calc(100vh - 40px)',
+                bottom: isMobile ? `${keyboardOffset}px` : 0,
+                left: isMobile ? 0 : 'auto',
+                right: isMobile ? 0 : `${index * 340 + 72}px`,
+                width: isMobile ? '100vw' : 328,
+                maxWidth: isMobile ? '100vw' : 328,
+                height: isMinimized
+                    ? 40
+                    : (isMobile
+                        ? (keyboardOffset > 0 ? Math.min(viewportHeight - 12, 460) : '75vh')
+                        : 420),
+                maxHeight: isMobile
+                    ? (keyboardOffset > 0 ? `${viewportHeight}px` : '85vh')
+                    : 'calc(100vh - 40px)',
                 display: 'flex',
                 flexDirection: 'column',
-                borderRadius: '16px 16px 0 0',
+                borderRadius: isMobile ? '20px 20px 0 0' : '16px 16px 0 0',
                 overflow: 'hidden',
                 zIndex: 1250 + index,
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(10, 30, 20, 0.95)' : 'rgba(255, 255, 255, 0.98)',
+                bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(10, 30, 20, 0.95)' : 'rgba(255, 255, 255, 0.98)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid',
-                borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)',
-                boxShadow: '0 12px 36px rgba(0, 0, 0, 0.28)',
-                transition: 'height 0.25s ease, right 0.25s ease'
+                borderTop: '1px solid',
+                borderLeft: isMobile ? 'none' : '1px solid',
+                borderRight: isMobile ? 'none' : '1px solid',
+                borderBottom: isMobile ? 'none' : '1px solid',
+                borderColor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)',
+                boxShadow: isMobile ? '0 -8px 32px rgba(0, 0, 0, 0.28)' : '0 12px 36px rgba(0, 0, 0, 0.28)',
+                transition: 'height 0.25s ease, right 0.25s ease, bottom 0.2s ease'
             }}
         >
             <Box
                 data-testid={`floating-chat-popup-${partnerId || 'new'}`}
                 sx={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minHeight: 0 }}
             >
+                {/* TOP DRAG HANDLE PILL (MOBILE ONLY) */}
+                {isMobile && !isMinimized && (
+                    <Box
+                        data-testid="bottom-sheet-drag-handle"
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Minimize bottom sheet"
+                        onClick={() => onMinimize?.(partnerId)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                onMinimize?.(partnerId);
+                            }
+                        }}
+                        sx={{
+                            width: '100%',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            pt: 1,
+                            pb: 0.5,
+                            bgcolor: 'background.paper',
+                            cursor: 'pointer',
+                            touchAction: 'none',
+                            userSelect: 'none',
+                            '&:hover .drag-handle-pill': {
+                                bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.38)'
+                            }
+                        }}
+                    >
+                        <Box
+                            className="drag-handle-pill"
+                            sx={{
+                                width: 36,
+                                height: 4,
+                                borderRadius: 2,
+                                bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.22)',
+                                transition: 'background-color 0.15s ease'
+                            }}
+                        />
+                    </Box>
+                )}
                 {/* POPUP HEADER */}
                 <Box
                     onClick={() => {
@@ -509,6 +620,7 @@ export default function FloatingChatPopup({
                             onSubmit={handleSend}
                             sx={{
                                 p: 1,
+                                pb: isMobile ? (keyboardOffset > 0 ? 1 : 'calc(8px + env(safe-area-inset-bottom, 0px))') : 1,
                                 bgcolor: 'background.paper',
                                 borderTop: '1px solid',
                                 borderColor: 'divider',
@@ -546,6 +658,10 @@ export default function FloatingChatPopup({
                                 fullWidth
                                 value={inputMessage}
                                 onChange={(e) => setInputMessage(e.target.value)}
+                                onFocus={() => {
+                                    scrollToBottom();
+                                    setTimeout(scrollToBottom, 150);
+                                }}
                                 disabled={!partnerId}
                                 slotProps={{
                                     htmlInput: {
