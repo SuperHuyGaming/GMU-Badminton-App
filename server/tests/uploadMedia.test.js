@@ -27,6 +27,7 @@ describe("Media Upload Routes (Disk-Storage Video & Audio Streaming)", () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		process.env.CLOUDINARY_CLOUD_NAME = "mock_cloud";
 	});
 
 	afterEach(() => {

@@ -39,7 +39,7 @@ jest.mock('../services/scraper', () => ({
 const request = require("supertest");
 const ioClient = require("socket.io-client");
 const jwt = require("jsonwebtoken");
-const SOCKET_TEST_SECRET = process.env.JWT_SECRET || "gmu_badminton_super_secret_key_2026";
+const { JWT_SECRET: SOCKET_TEST_SECRET } = require("../config/jwtSecret");
 const joinAs = (userId) => ({ userId, token: jwt.sign({ id: userId, userId }, SOCKET_TEST_SECRET) });
 const { app, server, isOriginAllowed, onlineUsers } = require("../server");
 
@@ -163,7 +163,13 @@ describe("ADVERSARIAL SUITE 3: Real Socket.io Multi-Tab Lifecycle & State Retent
     });
 
     afterAll((done) => {
-        testServer.close(done);
+        if (testServer) {
+            testServer.closeIdleConnections?.();
+            testServer.closeAllConnections?.();
+            testServer.close(done);
+        } else {
+            done();
+        }
     });
 
     beforeEach(() => {

@@ -9,6 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       workbox: {
+        importScripts: ['/sw-push.js'],
         runtimeCaching: [
           {
             urlPattern: /\/api\/feed/,
@@ -18,6 +19,28 @@ export default defineConfig({
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 24 * 60 * 60 // 24 hours
+              }
+            }
+          },
+          {
+            urlPattern: /\/api\/tournaments/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'tournaments-cache',
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 24 * 60 * 60
+              }
+            }
+          },
+          {
+            urlPattern: /\/api\/courts/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'courts-cache',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 12 * 60 * 60
               }
             }
           },
