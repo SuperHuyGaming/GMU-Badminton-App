@@ -883,7 +883,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
                 isValidDmvTournament: true,
                 tournamentName: '2026 George Mason Open',
                 hostLocation: 'Fairfax, VA',
-                startDate: '2026-11-07T09:00:00.000Z',
+                startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                 registrationLink: 'https://linktr.ee/gmubadminton',
                 confidenceScore: 95
             };
