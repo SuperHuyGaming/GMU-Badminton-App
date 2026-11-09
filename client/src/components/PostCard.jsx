@@ -162,6 +162,27 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 	const leaveTimer = useRef(null);
 
 	const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+	const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+	const [commentsError, setCommentsError] = useState(null);
+	const [commentsRetryCount, setCommentsRetryCount] = useState(0);
+
+	const handleRetryComments = () => {
+		setCommentsError(null);
+		setCommentsRetryCount((prev) => prev + 1);
+	};
+
+	const handleToggleComments = () => {
+		setIsCommentModalOpen((prev) => {
+			const next = !prev;
+			if (next && import.meta.env.MODE !== "test") {
+				const cached = postCommentsMemoryCache.get(localPost?._id);
+				if (!hasPopulatedComments(localPost?.comments) && !hasPopulatedComments(cached)) {
+					setIsCommentsLoading(true);
+				}
+			}
+			return next;
+		});
+	};
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 	const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 	const [localPost, setLocalPost] = useState(post);
@@ -426,25 +447,54 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 	}, [urlPostId, highlightId, localPost._id, localPost.comments]);
 
 	useEffect(() => {
-		if (isCommentModalOpen && import.meta.env.MODE !== 'test') {
-			// Instant 0ms cache seed for rapid rendering without disappearance
-			const cached = postCommentsMemoryCache.get(localPost._id);
-			if (hasPopulatedComments(cached)) {
-				// eslint-disable-next-line react-hooks/set-state-in-effect
-				setLocalPost(prev => (hasPopulatedComments(prev?.comments) ? prev : { ...prev, comments: cached }));
-			}
-
-			apiFetch("/api/forum/" + localPost._id + "/comments")
-			.then(res => res.json())
-			.then(data => {
-				if (data.comments) {
-					postCommentsMemoryCache.set(localPost._id, data.comments);
-					setLocalPost(prev => ({ ...prev, comments: data.comments }));
-				}
-			})
-			.catch(err => console.error("Error fetching comments:", err));
+		if (!isCommentModalOpen || import.meta.env.MODE === 'test') {
+			return;
 		}
-	}, [isCommentModalOpen, localPost._id]);
+
+		let isCancelled = false;
+		const targetPostId = localPost._id;
+		const cached = postCommentsMemoryCache.get(targetPostId);
+		const hasCachedComments = hasPopulatedComments(cached);
+
+		if (hasCachedComments) {
+			// Instant 0ms cache seed for rapid rendering without disappearance
+			// eslint-disable-next-line react-hooks/set-state-in-effect
+			setLocalPost(prev => (hasPopulatedComments(prev?.comments) ? prev : { ...prev, comments: cached }));
+		}
+
+		setIsCommentsLoading(true);
+		setCommentsError(null);
+
+		apiFetch("/api/forum/" + targetPostId + "/comments")
+			.then(async (res) => {
+				if (isCancelled) return;
+				if (!res || !res.ok) {
+					throw new Error("Couldn't load comments. Please try again.");
+				}
+				const data = await res.json();
+				if (isCancelled) return;
+				const commentsList = Array.isArray(data?.comments) ? data.comments : [];
+				postCommentsMemoryCache.set(targetPostId, commentsList);
+				setLocalPost(prev => ({ ...prev, comments: commentsList }));
+				setIsCommentsLoading(false);
+				setCommentsError(null);
+			})
+			.catch((err) => {
+				if (isCancelled) return;
+				setIsCommentsLoading(false);
+				// If comments are already displayed (including from postCommentsMemoryCache) and a refresh fails, keep showing them with no error.
+				const currentCached = postCommentsMemoryCache.get(targetPostId);
+				const hasExisting = hasPopulatedComments(localPost?.comments) || hasPopulatedComments(currentCached);
+				if (!hasExisting) {
+					setCommentsError(err?.message || "Couldn't load comments. Please try again.");
+				}
+			});
+
+		return () => {
+			isCancelled = true;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isCommentModalOpen, localPost._id, commentsRetryCount]);
 	const totalCommentsCount =
 		hasPopulatedComments(localPost.comments)
 			? localPost.comments.reduce(
@@ -2229,11 +2279,11 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 									fontWeight: 500,
 									"&:hover": { textDecoration: "underline" },
 								}}
-								onClick={() => setIsCommentModalOpen((prev) => !prev)}
+								onClick={handleToggleComments}
 								onKeyDown={(e) => {
 									if (e.key === "Enter" || e.key === " ") {
 										e.preventDefault();
-										setIsCommentModalOpen((prev) => !prev);
+										handleToggleComments();
 									}
 								}}
 							>
@@ -2368,7 +2418,7 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 
 					{/* INLINE COMMENT ACCORDION TRIGGER */}
 					<Button
-						onClick={() => setIsCommentModalOpen((prev) => !prev)}
+						onClick={handleToggleComments}
 						color={isCommentModalOpen ? "primary" : "inherit"}
 						sx={actionBtnStyle}
 					>
@@ -2440,6 +2490,9 @@ export default function PostCard({ post, isBookmarked, onBookmarkToggle, onDelet
 					currentUser={currentUser}
 					highlightId={highlightId}
 					openLikes={openLikes}
+					isLoading={isCommentsLoading}
+					error={commentsError}
+					onRetry={handleRetryComments}
 				/>
 			</Collapse>
 
