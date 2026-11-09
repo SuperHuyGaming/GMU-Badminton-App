@@ -462,8 +462,8 @@ describe("Milestone 6 Empirical Challenger Stress Suite: Feed Isolation & Datele
                 _id: liveId,
                 tournamentName: "Verified 2026 GMU Badminton Open",
                 eventLocation: "RAC Gymnasium, Fairfax, VA",
-                startDate: new Date("2026-11-07T09:00:00Z"),
-                endDate: new Date("2026-11-08T18:00:00Z"),
+                startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                endDate: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
                 isOpenTournament: true,
                 status: "active"
             });
