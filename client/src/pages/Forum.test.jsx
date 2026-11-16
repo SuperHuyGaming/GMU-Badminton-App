@@ -1620,5 +1620,54 @@ describe('Forum Page Component (Community Hub)', () => {
                 vi.useRealTimers();
             }
         });
+
+        it('displays online dot badge for online buddy and hides it for offline buddy', async () => {
+            const buddyA = { _id: 'buddy-a-111', name: 'Buddy Alpha', role: 'Advanced' };
+            const buddyB = { _id: 'buddy-b-222', name: 'Buddy Beta', role: 'Intermediate' };
+
+            apiFetch.mockImplementation(async (url) => {
+                if (url.includes('/online-users')) {
+                    return {
+                        ok: true,
+                        json: async () => ({ onlineUserIds: [buddyA._id] })
+                    };
+                }
+                if (url.includes('/api/profile')) {
+                    return {
+                        ok: true,
+                        json: async () => ({ stats: { totalMatches: 10 } })
+                    };
+                }
+                if (url.includes('/matchmaking/discover')) {
+                    return {
+                        ok: true,
+                        json: async () => ({ recommended: [buddyA, buddyB] })
+                    };
+                }
+                return {
+                    ok: true,
+                    json: async () => ({ feed: [], hasMore: false, tags: [], tournaments: [] })
+                };
+            });
+
+            renderWithProviders();
+
+            await waitFor(() => {
+                expect(screen.getByText('Buddy Alpha')).toBeInTheDocument();
+                expect(screen.getByText('Buddy Beta')).toBeInTheDocument();
+            });
+
+            const badgeA = screen
+                .getByText('Buddy Alpha')
+                .closest('[data-testid="member-hover-card-trigger"]')
+                .querySelector('.MuiBadge-badge');
+            const badgeB = screen
+                .getByText('Buddy Beta')
+                .closest('[data-testid="member-hover-card-trigger"]')
+                .querySelector('.MuiBadge-badge');
+
+            expect(badgeA).not.toHaveClass('MuiBadge-invisible');
+            expect(badgeB).toHaveClass('MuiBadge-invisible');
+        });
     });
 });
