@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import PostCard from './PostCard';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -1246,6 +1246,185 @@ describe('PostCard Component QA Tests', () => {
 
             render(tree({ ...mockPost, visibility: undefined, referenceId: { _id: 'p', visibility: 'ONLY_ME' } }, mockUser));
             expect(screen.getByRole('img', { name: 'Privacy: Only Me' })).toBeInTheDocument();
+        });
+    });
+
+    describe('Comment loading, error and empty states', () => {
+        afterEach(() => {
+            vi.unstubAllEnvs();
+        });
+
+        it('shows loading indicator and not empty state while comments are loading', async () => {
+            vi.stubEnv('MODE', 'development');
+            let resolveComments;
+            apiFetch.mockImplementation((url) => {
+                if (typeof url === 'string' && url.includes('/comments')) {
+                    return new Promise((resolve) => {
+                        resolveComments = resolve;
+                    });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({}) });
+            });
+
+            const postWithoutComments = { ...mockPost, _id: 'post-loading-test', comments: [] };
+            renderWithContext(postWithoutComments, mockUser);
+
+            const commentBtn = screen.getByRole('button', { name: /^Comment/i });
+            fireEvent.click(commentBtn);
+
+            // While loading with no comments: show inline loading indicator, not empty state
+            expect(screen.getByTestId('comments-loading-indicator')).toBeInTheDocument();
+            expect(screen.getByText(/Loading comments/i)).toBeInTheDocument();
+            expect(screen.queryByTestId('comments-empty-state')).not.toBeInTheDocument();
+            expect(screen.queryByText(/No comments yet/i)).not.toBeInTheDocument();
+
+            // Cleanup pending promise
+            await act(async () => {
+                resolveComments({ ok: true, json: async () => ({ comments: [] }) });
+            });
+        });
+
+        it('shows error message and retry button when comments load fails with no comments', async () => {
+            vi.stubEnv('MODE', 'development');
+            apiFetch.mockImplementation((url) => {
+                if (typeof url === 'string' && url.includes('/comments')) {
+                    return Promise.reject(new Error('Network error loading comments'));
+                }
+                return Promise.resolve({ ok: true, json: async () => ({}) });
+            });
+
+            const postWithoutComments = { ...mockPost, _id: 'post-failed-load-test', comments: [] };
+            renderWithContext(postWithoutComments, mockUser);
+
+            const commentBtn = screen.getByRole('button', { name: /^Comment/i });
+            fireEvent.click(commentBtn);
+
+            await waitFor(() => {
+                expect(screen.getByTestId('comments-error-state')).toBeInTheDocument();
+            });
+            expect(screen.getByText('Network error loading comments')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+            expect(screen.queryByTestId('comments-empty-state')).not.toBeInTheDocument();
+            expect(screen.queryByText(/No comments yet/i)).not.toBeInTheDocument();
+
+            // Retry fetches again and recovers on success
+            apiFetch.mockImplementation((url) => {
+                if (typeof url === 'string' && url.includes('/comments')) {
+                    return Promise.resolve({ ok: true, json: async () => ({ comments: [] }) });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({}) });
+            });
+
+            fireEvent.click(screen.getByRole('button', { name: /Retry/i }));
+
+            await waitFor(() => {
+                expect(screen.getByTestId('comments-empty-state')).toBeInTheDocument();
+                expect(screen.getByText('No comments yet')).toBeInTheDocument();
+            });
+            expect(screen.queryByTestId('comments-error-state')).not.toBeInTheDocument();
+        });
+
+        it('treats offline response { ok: false, status: 0 } as failure when loading comments', async () => {
+            vi.stubEnv('MODE', 'development');
+            apiFetch.mockImplementation((url) => {
+                if (typeof url === 'string' && url.includes('/comments')) {
+                    return Promise.resolve({ ok: false, status: 0, json: async () => ({ message: 'Network offline' }) });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({}) });
+            });
+
+            const postWithoutComments = { ...mockPost, _id: 'post-offline-test', comments: [] };
+            renderWithContext(postWithoutComments, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /^Comment/i }));
+
+            await waitFor(() => {
+                expect(screen.getByTestId('comments-error-state')).toBeInTheDocument();
+            });
+            expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+            expect(screen.queryByText(/No comments yet/i)).not.toBeInTheDocument();
+        });
+
+        it('keeps showing existing comments with no error if refresh fails', async () => {
+            vi.stubEnv('MODE', 'development');
+            apiFetch.mockImplementation((url) => {
+                if (typeof url === 'string' && url.includes('/comments')) {
+                    return Promise.reject(new Error('Server refresh error'));
+                }
+                return Promise.resolve({ ok: true, json: async () => ({}) });
+            });
+
+            const postWithComments = {
+                ...mockPost,
+                _id: 'post-refresh-fail-test',
+                comments: [
+                    { _id: 'c-1', authorId: 'u-1', authorName: 'Alice', content: 'Already loaded comment', text: 'Already loaded comment' }
+                ]
+            };
+            renderWithContext(postWithComments, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /^Comment/i }));
+
+            // Wait for comments to be rendered
+            await waitFor(() => {
+                expect(screen.getByText('Already loaded comment')).toBeInTheDocument();
+            });
+
+            // Assert comments are still displayed and no error is shown
+            expect(screen.getByText('Already loaded comment')).toBeInTheDocument();
+            expect(screen.queryByTestId('comments-error-state')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('comments-empty-state')).not.toBeInTheDocument();
+        });
+
+        it('shows "No comments yet" only after a successful response with zero comments', async () => {
+            vi.stubEnv('MODE', 'development');
+            apiFetch.mockImplementation((url) => {
+                if (typeof url === 'string' && url.includes('/comments')) {
+                    return Promise.resolve({ ok: true, json: async () => ({ comments: [] }) });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({}) });
+            });
+
+            const postWithoutComments = { ...mockPost, _id: 'post-empty-test', comments: [] };
+            renderWithContext(postWithoutComments, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /^Comment/i }));
+
+            await waitFor(() => {
+                expect(screen.getByTestId('comments-empty-state')).toBeInTheDocument();
+                expect(screen.getByText('No comments yet')).toBeInTheDocument();
+            });
+            expect(screen.queryByTestId('comments-loading-indicator')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('comments-error-state')).not.toBeInTheDocument();
+        });
+
+        it('ignores responses that arrive after the thread closes', async () => {
+            vi.stubEnv('MODE', 'development');
+            let resolveComments;
+            apiFetch.mockImplementation((url) => {
+                if (typeof url === 'string' && url.includes('/comments')) {
+                    return new Promise((resolve) => {
+                        resolveComments = resolve;
+                    });
+                }
+                return Promise.resolve({ ok: true, json: async () => ({}) });
+            });
+
+            const postWithoutComments = { ...mockPost, _id: 'post-late-test', comments: [] };
+            renderWithContext(postWithoutComments, mockUser);
+
+            fireEvent.click(screen.getByRole('button', { name: /^Comment/i }));
+            expect(screen.getByTestId('comments-loading-indicator')).toBeInTheDocument();
+
+            // Close the thread
+            fireEvent.click(screen.getByRole('button', { name: /^Comment/i }));
+
+            // Response arrives after thread is closed
+            await act(async () => {
+                resolveComments({ ok: true, json: async () => ({ comments: [{ _id: 'late', content: 'Late comment' }] }) });
+            });
+
+            expect(screen.queryByText('Late comment')).not.toBeInTheDocument();
         });
     });
 });

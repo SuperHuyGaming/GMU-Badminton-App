@@ -21,6 +21,7 @@ import {
 	List,
 	ListItemButton,
 	Chip,
+	CircularProgress,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
@@ -36,6 +37,9 @@ export default function PostCommentsInline({
 	currentUser,
 	highlightId,
 	openLikes,
+	isLoading = false,
+	error = null,
+	onRetry,
 }) {
 	const navigate = useNavigate();
 	const theme = useTheme();
@@ -416,27 +420,90 @@ export default function PostCommentsInline({
 
 			<Box sx={{ p: { xs: 1, sm: 2 } }}>
 				{!sortedComments.length ? (
-					<Box sx={{ textAlign: "center", py: 3, px: 2 }}>
-						<Box sx={{ 
-							width: 44, 
-							height: 44, 
-							borderRadius: "50%", 
-							bgcolor: "action.hover", 
-							display: "inline-flex", 
-							alignItems: "center", 
-							justifyContent: "center", 
-							mb: 1,
-							color: "text.secondary" 
-						}}>
-							<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+					isLoading ? (
+						<Box
+							data-testid="comments-loading-indicator"
+							sx={{
+								display: "flex",
+								justifyContent: "center",
+								alignItems: "center",
+								py: 3,
+								gap: 1.5,
+							}}
+						>
+							<CircularProgress size={20} color="primary" />
+							<Typography variant="body2" color="text.secondary">
+								Loading comments...
+							</Typography>
 						</Box>
-						<Typography variant="body2" fontWeight="600" color="text.secondary">
-							No comments yet
-						</Typography>
-						<Typography variant="caption" color="text.secondary">
-							Be the first to share your thoughts or rally!
-						</Typography>
-					</Box>
+					) : error ? (
+						<Box
+							data-testid="comments-error-state"
+							role="alert"
+							sx={{
+								textAlign: "center",
+								py: 3,
+								px: 2,
+								display: "flex",
+								flexDirection: "column",
+								alignItems: "center",
+								gap: 1,
+							}}
+						>
+							<Typography variant="body2" color="error" sx={{ fontWeight: 500 }}>
+								{error}
+							</Typography>
+							{onRetry && (
+								<Button
+									variant="outlined"
+									size="small"
+									color="primary"
+									onClick={onRetry}
+									sx={{ textTransform: "none", borderRadius: 2, fontWeight: 600, fontSize: "0.78rem" }}
+								>
+									Retry
+								</Button>
+							)}
+						</Box>
+					) : (
+						<Box
+							data-testid="comments-empty-state"
+							sx={{ textAlign: "center", py: 3, px: 2 }}
+						>
+							<Box
+								sx={{
+									width: 44,
+									height: 44,
+									borderRadius: "50%",
+									bgcolor: "action.hover",
+									display: "inline-flex",
+									alignItems: "center",
+									justifyContent: "center",
+									mb: 1,
+									color: "text.secondary",
+								}}
+							>
+								<svg
+									width="22"
+									height="22"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								>
+									<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+								</svg>
+							</Box>
+							<Typography variant="body2" fontWeight="600" color="text.secondary">
+								No comments yet
+							</Typography>
+							<Typography variant="caption" color="text.secondary">
+								Be the first to share your thoughts or rally!
+							</Typography>
+						</Box>
+					)
 				) : (
 					<Box
 						sx={{

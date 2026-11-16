@@ -245,4 +245,95 @@ describe('PostCommentsInline Phase 8 QA Tests', () => {
 		expect(apiFetch).not.toHaveBeenCalled();
 		alertSpy.mockRestore();
 	});
+
+	describe('loading, error and empty states', () => {
+		const emptyPost = {
+			_id: 'post-empty',
+			authorId: 'author-1',
+			authorName: 'Alex Author',
+			comments: [],
+		};
+
+		it('shows a small inline loading indicator (not empty state) while loading with no comments', () => {
+			render(
+				<BrowserRouter>
+					<PostCommentsInline
+						localPost={emptyPost}
+						setLocalPost={vi.fn()}
+						currentUser={mockUser}
+						openLikes={vi.fn()}
+						isLoading={true}
+					/>
+				</BrowserRouter>
+			);
+
+			expect(screen.getByTestId('comments-loading-indicator')).toBeInTheDocument();
+			expect(screen.getByText('Loading comments...')).toBeInTheDocument();
+			expect(screen.queryByTestId('comments-empty-state')).not.toBeInTheDocument();
+			expect(screen.queryByText('No comments yet')).not.toBeInTheDocument();
+		});
+
+		it('shows an error message and Retry button when loading fails with no comments', () => {
+			const onRetryMock = vi.fn();
+			render(
+				<BrowserRouter>
+					<PostCommentsInline
+						localPost={emptyPost}
+						setLocalPost={vi.fn()}
+						currentUser={mockUser}
+						openLikes={vi.fn()}
+						error="Failed to load comments"
+						onRetry={onRetryMock}
+					/>
+				</BrowserRouter>
+			);
+
+			expect(screen.getByTestId('comments-error-state')).toBeInTheDocument();
+			expect(screen.getByText('Failed to load comments')).toBeInTheDocument();
+			const retryBtn = screen.getByRole('button', { name: /Retry/i });
+			expect(retryBtn).toBeInTheDocument();
+			expect(screen.queryByTestId('comments-empty-state')).not.toBeInTheDocument();
+
+			fireEvent.click(retryBtn);
+			expect(onRetryMock).toHaveBeenCalledTimes(1);
+		});
+
+		it('keeps showing existing comments with no error if a refresh fails', () => {
+			render(
+				<BrowserRouter>
+					<PostCommentsInline
+						localPost={mockPost}
+						setLocalPost={vi.fn()}
+						currentUser={mockUser}
+						openLikes={vi.fn()}
+						error="Refresh failed"
+					/>
+				</BrowserRouter>
+			);
+
+			expect(screen.getByText('First comment here')).toBeInTheDocument();
+			expect(screen.queryByTestId('comments-error-state')).not.toBeInTheDocument();
+			expect(screen.queryByTestId('comments-empty-state')).not.toBeInTheDocument();
+		});
+
+		it('shows "No comments yet" only after a successful response with zero comments', () => {
+			render(
+				<BrowserRouter>
+					<PostCommentsInline
+						localPost={emptyPost}
+						setLocalPost={vi.fn()}
+						currentUser={mockUser}
+						openLikes={vi.fn()}
+						isLoading={false}
+						error={null}
+					/>
+				</BrowserRouter>
+			);
+
+			expect(screen.getByTestId('comments-empty-state')).toBeInTheDocument();
+			expect(screen.getByText('No comments yet')).toBeInTheDocument();
+			expect(screen.queryByTestId('comments-loading-indicator')).not.toBeInTheDocument();
+			expect(screen.queryByTestId('comments-error-state')).not.toBeInTheDocument();
+		});
+	});
 });
