@@ -796,7 +796,7 @@ describe("TournamentApprovals Admin Page Component", () => {
                     }),
                 };
             }
-            if (url === "/api/admin/tournaments/proposals") {
+            if (url === "/api/admin/tournaments/proposed") {
                 return {
                     ok: true,
                     json: async () => [],
@@ -808,6 +808,7 @@ describe("TournamentApprovals Admin Page Component", () => {
         renderComponent();
 
         const wipeBtn = await screen.findByRole("button", { name: /Wipe & Restart Queues/i });
+        await waitFor(() => expect(wipeBtn).toBeEnabled());
         fireEvent.click(wipeBtn);
 
         await waitFor(() => {

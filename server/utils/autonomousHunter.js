@@ -730,8 +730,8 @@ async function wipeAndRestartTournamentSystem() {
                 $or: [
                     { startDate: { $lt: new Date('2026-01-01T00:00:00.000Z') } },
                     { endDate: { $lt: new Date('2026-01-01T00:00:00.000Z') } },
-                    { tournamentName: /2001|2000|199d|198d/i },
-                    { tournamentName: /(201d|202[0-5])/i },
+                    { tournamentName: /2001|2000|199\d|198\d/i },
+                    { tournamentName: /\b(201\d|202[0-5])\b/i },
                     { tournamentName: /capital\s+ne\s+open/i },
                     { tournamentName: /public\s+vcu\s+open/i },
                     { tournamentName: /results pages/i },

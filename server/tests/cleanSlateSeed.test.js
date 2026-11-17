@@ -89,6 +89,29 @@ describe("R1: Tournament Clean Slate Purge Suite", () => {
             expect(res.message).toBe("Database not connected");
             expect(res.executionTimeMs).toBe(0);
         });
+
+        test("wipeAndRestartTournamentSystem correctly purges past years without matching future tournaments", async () => {
+            jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            const deleteSpy = jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+
+            await wipeAndRestartTournamentSystem();
+
+            expect(deleteSpy).toHaveBeenCalled();
+            const filter = deleteSpy.mock.calls[0][0];
+            const nameRegexes = (filter.$or || [])
+                .filter(cond => cond.tournamentName instanceof RegExp)
+                .map(cond => cond.tournamentName);
+
+            // some regex matches "2019 Spring Open" and "1998 Classic"
+            expect(nameRegexes.some(r => r.test("2019 Spring Open"))).toBe(true);
+            expect(nameRegexes.some(r => r.test("1998 Classic"))).toBe(true);
+
+            // NO regex matches "2026 Fall Open", "2027 S"
+            expect(nameRegexes.some(r => r.test("2026 Fall Open"))).toBe(false);
+            expect(nameRegexes.some(r => r.test("2027 Spring Classic"))).toBe(false);
+            expect(nameRegexes.some(r => r.test("2027 S"))).toBe(false);
+        });
     });
 
     describe("2. POST /api/tournaments/reset-seed Endpoint Verification", () => {
