@@ -1828,7 +1828,7 @@ export default function Forum() {
 										<Badge
 											color="success"
 											variant="dot"
-											invisible={!buddy.online}
+											invisible={!onlineUserIds.has(String(buddy._id))}
 											overlap="circular"
 											anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
 										>
