@@ -333,7 +333,9 @@ describe('Challenger 2 Empirical Stress Test: Mobile UX & R4 Feed Pagination Inv
 
             const refreshCall = apiFetch.mock.calls[apiFetch.mock.calls.length - 1][0];
             expect(refreshCall).not.toContain('&cursor=');
-            expect(screen.getByText('Fresh Post')).toBeInTheDocument();
+            // The refresh request has been sent, but its response may not have rendered yet
+            // (slow CI runners); wait for the refreshed feed instead of asserting synchronously.
+            expect(await screen.findByText('Fresh Post')).toBeInTheDocument();
         });
     });
 });

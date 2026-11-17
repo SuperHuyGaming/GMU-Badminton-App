@@ -4,6 +4,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const axios = require("axios");
+const { NON_DATE_FAKEABLES } = require("./helpers/fakeDateOnly");
 
 // Mock Redis client to prevent real connection in unit tests
 jest.mock("../utils/redis", () => ({
@@ -658,13 +659,19 @@ describe("Milestone 1 (Project Titan) — Ingestion Deduplication & Data Quality
         });
 
         test("fallbackRegexParser auto-enriches venue and hostUniversity from caption", () => {
-            const caption = "Join us for the 2026 Mason Open Tournament on Nov 14, 2026 at the RAC Gym! Flight A, B, and C divisions available.";
-            const parsed = fallbackRegexParser(caption);
-            expect(parsed).toBeDefined();
-            expect(parsed.isTournamentPost).toBe(true);
-            expect(parsed.hostUniversity).toBe("George Mason University");
-            expect(parsed.eventLocation).toContain("Recreation Athletic Complex (RAC Gym)");
-            expect(parsed.startDate).toBe("2026-11-14");
+            // The parser drops past events, so pin "now" (Date only) before the caption's date.
+            jest.useFakeTimers({ now: new Date("2026-11-01T12:00:00.000Z"), doNotFake: NON_DATE_FAKEABLES });
+            try {
+                const caption = "Join us for the 2026 Mason Open Tournament on Nov 14, 2026 at the RAC Gym! Flight A, B, and C divisions available.";
+                const parsed = fallbackRegexParser(caption);
+                expect(parsed).toBeDefined();
+                expect(parsed.isTournamentPost).toBe(true);
+                expect(parsed.hostUniversity).toBe("George Mason University");
+                expect(parsed.eventLocation).toContain("Recreation Athletic Complex (RAC Gym)");
+                expect(parsed.startDate).toBe("2026-11-14");
+            } finally {
+                jest.useRealTimers();
+            }
         });
     });
 });
