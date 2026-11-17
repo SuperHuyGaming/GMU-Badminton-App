@@ -2,6 +2,7 @@ import PropTypes from "prop-types";
 import { Box, Typography, Button, Container, Paper } from "@mui/material";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useVisits } from "../hooks/useVisits";
 
 export const HeroBadmintonGraphic = ({ maxWidth = 500, sx = {} }) => {
 	return (
@@ -401,6 +402,7 @@ HeroBadmintonGraphic.propTypes = {
 
 export default function Landing() {
 	const navigate = useNavigate();
+	const visits = useVisits("badminton", "gmubadmintonschedule.bentruong.dev");
 
 	const containerVariants = {
 		hidden: { opacity: 0 },
@@ -468,6 +470,12 @@ export default function Landing() {
 							Join the Club
 						</Button>
 					</motion.div>
+					{visits && (
+						<Typography variant="body2" color="text.secondary" sx={{ mt: 2.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+							<Box component="span" sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "success.main" }} />
+							{visits.live} online now · {visits.total.toLocaleString()} visitors
+						</Typography>
+					)}
 				</Box>
 
 				{/* Features Grid */}
