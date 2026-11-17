@@ -901,6 +901,7 @@ router.get("/", async (req, res) => {
 			status: { $nin: ['quarantined', 'deleted'] }
 		};
 
+		let categoryOr = null;
 		const { start: dateStart, end: dateEnd } = parseDateRange(req.query);
 		if (dateStart || dateEnd) {
 			query.createdAt = {};
@@ -913,7 +914,13 @@ router.get("/", async (req, res) => {
 		if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {
 			const cat = req.query.category.trim().toLowerCase().slice(0, 50);
 			if (cat === "find_partner") {
-				query.category = { $in: ["find_partner", "meetup_rally"] };
+				query.category = { $in: ["find_partner", "meetup_rally", "challenge_match"] };
+			} else if (cat === "general") {
+				// Mirrors matchesCategory in client/src/pages/Forum.jsx; posts have no `type`, so uncategorized = general.
+				categoryOr = [
+					{ category: { $in: ["general", "qa_forum", "training", "match_result"] } },
+					{ category: { $in: [null, ""] } }
+				];
 			} else if (cat === "gear_exchange") {
 				query.category = { $in: ["gear_exchange", "gear_review"] };
 			} else if (ALLOWED_CATEGORIES.includes(cat)) {
@@ -984,11 +991,10 @@ router.get("/", async (req, res) => {
 			});
 		}
 
-		if (searchOr) {
-			query.$and = [
-				{ $or: visibilityOr },
-				{ $or: searchOr }
-			];
+		// Visibility stays its own $or inside $and so category/search clauses never replace it.
+		const extraClauses = [categoryOr, searchOr].filter(Boolean).map(or => ({ $or: or }));
+		if (extraClauses.length > 0) {
+			query.$and = [{ $or: visibilityOr }, ...extraClauses];
 		} else {
 			query.$or = visibilityOr;
 		}
