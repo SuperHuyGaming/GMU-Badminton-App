@@ -115,7 +115,10 @@ describe('FloatingChatDock Component', () => {
         const minimizeBtn = screen.getByRole('button', { name: /minimize chat window/i });
         fireEvent.click(minimizeBtn);
 
-        expect(screen.queryByTestId('floating-chat-window')).not.toBeInTheDocument();
+        // Wait for the minimize re-render; asserting synchronously flaked on slow CI runners.
+        await waitFor(() => {
+            expect(screen.queryByTestId('floating-chat-window')).not.toBeInTheDocument();
+        });
         expect(screen.getByTestId('floating-chat-launcher')).toBeInTheDocument();
     });
 
