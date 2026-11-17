@@ -28,6 +28,7 @@ require('dotenv').config();
 const http = require('http');
 const mongoose = require('mongoose');
 const axios = require('axios');
+const { NON_DATE_FAKEABLES } = require('./helpers/fakeDateOnly');
 
 // In-Memory Redis Mock with tagged invalidation support
 const mockRedisStore = new Map();
@@ -668,7 +669,15 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
                 return Promise.resolve({ ...doc, _id: new mongoose.Types.ObjectId() });
             });
 
-            const result = await processDiscoveryQueue(1);
+            // Past events are rejected, so pin "now" (Date only) before the fixture's start date.
+            // Timers/microtasks stay real so the awaited mocks still resolve.
+            jest.useFakeTimers({ now: new Date('2026-11-01T12:00:00.000Z'), doNotFake: NON_DATE_FAKEABLES });
+            let result;
+            try {
+                result = await processDiscoveryQueue(1);
+            } finally {
+                jest.useRealTimers();
+            }
 
             // Candidate must NOT be dropped or rejected
             expect(result.approved).toBe(1);
