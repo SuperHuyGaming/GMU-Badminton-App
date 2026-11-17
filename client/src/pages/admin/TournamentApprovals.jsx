@@ -297,7 +297,7 @@ export default function TournamentApprovals() {
     };
 
     const handleWipeAndRestart = async () => {
-        if (!window.confirm("Are you sure you want to completely wipe all tournament discovery queues and restart? This will purge pre-2026/invalid tournaments and re-seed verified 2026 tournaments.")) {
+        if (!window.confirm("Are you sure you want to completely wipe all tournament discovery queues and restart? This will purge invalid tournaments and clear queues.")) {
             return;
         }
         try {
@@ -308,8 +308,8 @@ export default function TournamentApprovals() {
             const data = await res.json();
             const result = data?.result;
             const msg = result
-                ? `Wiped & restarted: Cleared ${result.clearedDiscoveryQueue} in queue, ${result.clearedProposedTournaments} proposals, purged ${result.purgedTournaments} invalid. Re-seeded ${result.activeGuaranteedCount} 2026 tournaments.`
-                : data?.message || "Queues wiped and restarted successfully";
+                ? `Wiped: cleared ${result.clearedDiscoveryQueue} in queue, ${result.clearedProposedTournaments} proposals, purged ${result.purgedTournaments} invalid.`
+                : data?.message || "Queues wiped successfully";
             toast.success(msg);
             await fetchProposals();
             if (currentTab === 1) {
