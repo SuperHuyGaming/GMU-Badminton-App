@@ -4,6 +4,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const axios = require("axios");
+const { NON_DATE_FAKEABLES } = require("./helpers/fakeDateOnly");
 
 jest.mock("../utils/redis", () => ({
     keys: jest.fn().mockResolvedValue([]),
@@ -367,12 +368,19 @@ describe("Autonomous Tournament Hunter Suite", () => {
         });
 
         test("getGuaranteedTournamentsList returns 5 active upcoming tournaments", () => {
-            const list = getGuaranteedTournamentsList();
-            expect(list).toHaveLength(5);
-            expect(list[0].tournamentName).toContain("2026 GMU Badminton Open");
-            expect(list[0].isOpenTournament).toBe(true);
-            expect(list[0].status).toBe("active");
-            expect(new Date(list[0].startDate).getTime()).toBeGreaterThan(Date.now());
+            // The list holds real, hardcoded event dates, so pin "now" (Date only) to a
+            // moment before the earliest event instead of letting the test expire.
+            jest.useFakeTimers({ now: new Date("2026-11-01T12:00:00.000Z"), doNotFake: NON_DATE_FAKEABLES });
+            try {
+                const list = getGuaranteedTournamentsList();
+                expect(list).toHaveLength(5);
+                expect(list[0].tournamentName).toContain("2026 GMU Badminton Open");
+                expect(list[0].isOpenTournament).toBe(true);
+                expect(list[0].status).toBe("active");
+                expect(new Date(list[0].startDate).getTime()).toBeGreaterThan(Date.now());
+            } finally {
+                jest.useRealTimers();
+            }
         });
 
         test("ensures guaranteed active tournaments are upserted when database is connected", async () => {
