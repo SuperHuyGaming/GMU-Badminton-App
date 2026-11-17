@@ -28,8 +28,7 @@ const {
     huntGoogleForTournaments,
     huntRegionalClubsAndEnqueue,
     runFullAutonomousHunt,
-    getGuaranteedTournamentsList,
-    ensureGuaranteedTournaments,
+    DISCOVERY_SOURCE_URLS,
     wipeAndRestartTournamentSystem
 } = require("../utils/autonomousHunter");
 
@@ -361,41 +360,88 @@ describe("Autonomous Tournament Hunter Suite", () => {
         });
     });
 
-    describe("6. Guaranteed Active Tournaments Initializer", () => {
-        test("returns 0 if mongoose is not connected", async () => {
-            const count = await ensureGuaranteedTournaments();
-            expect(count).toBe(0);
-        });
+    describe("6. Clean Slate and Non-Seeded Hunter Engine", () => {
+        test("huntGoogleForTournaments enqueues items with NO rawSnippet field when seeding from DISCOVERY_SOURCE_URLS", async () => {
+            jest.spyOn(DiscoveryQueue, "findOne").mockResolvedValue(null);
+            const mockCreate = jest.spyOn(DiscoveryQueue, "create").mockResolvedValue({});
 
-        test("getGuaranteedTournamentsList returns 5 active upcoming tournaments", () => {
-            // The list holds real, hardcoded event dates, so pin "now" (Date only) to a
-            // moment before the earliest event instead of letting the test expire.
-            jest.useFakeTimers({ now: new Date("2026-11-01T12:00:00.000Z"), doNotFake: NON_DATE_FAKEABLES });
+            const origApify = process.env.APIFY_API_TOKEN;
+            delete process.env.APIFY_API_TOKEN;
+
             try {
-                const list = getGuaranteedTournamentsList();
-                expect(list).toHaveLength(5);
-                expect(list[0].tournamentName).toContain("2026 GMU Badminton Open");
-                expect(list[0].isOpenTournament).toBe(true);
-                expect(list[0].status).toBe("active");
-                expect(new Date(list[0].startDate).getTime()).toBeGreaterThan(Date.now());
+                const count = await huntGoogleForTournaments();
+                expect(count.newDiscoveries).toBe(DISCOVERY_SOURCE_URLS.length);
+                expect(mockCreate).toHaveBeenCalledTimes(DISCOVERY_SOURCE_URLS.length);
+                mockCreate.mock.calls.forEach(call => {
+                    const payload = call[0];
+                    expect(payload).not.toHaveProperty("rawSnippet");
+                    expect(DISCOVERY_SOURCE_URLS).toContain(payload.sourceUrl);
+                });
             } finally {
-                jest.useRealTimers();
+                process.env.APIFY_API_TOKEN = origApify;
             }
         });
 
-        test("ensures guaranteed active tournaments are upserted when database is connected", async () => {
+        test("wipeAndRestartTournamentSystem never calls Tournament.bulkWrite in production or development", async () => {
             const originalReadyState = mongoose.connection.readyState;
             Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
 
-            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(2);
-            const mockUpsert = jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
+            jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
+            jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 0 });
             const mockBulkWrite = jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
 
-            const count = await ensureGuaranteedTournaments();
-            expect(count).toBe(5);
-            expect(mockBulkWrite).toHaveBeenCalled();
+            const origEnv = process.env.NODE_ENV;
+            try {
+                process.env.NODE_ENV = 'production';
+                await wipeAndRestartTournamentSystem();
+                expect(mockBulkWrite).not.toHaveBeenCalled();
 
-            Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
+                process.env.NODE_ENV = 'development';
+                await wipeAndRestartTournamentSystem();
+                expect(mockBulkWrite).not.toHaveBeenCalled();
+            } finally {
+                process.env.NODE_ENV = origEnv;
+                Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
+            }
+        });
+
+        test("processDiscoveryQueue: rejects item with < 50 chars when fetch fails and has no snippet without calling parseDiscoveredWebpage", async () => {
+            const memSpy = jest.spyOn(process, "memoryUsage").mockReturnValue({
+                heapUsed: 50 * 1024 * 1024,
+                heapTotal: 100 * 1024 * 1024,
+                rss: 150 * 1024 * 1024,
+                external: 5 * 1024 * 1024
+            });
+
+            const axios = require("axios");
+            jest.spyOn(axios, "get").mockRejectedValue(new Error("Network Error"));
+
+            parseDiscoveredWebpage.mockClear();
+
+            const mockItem = {
+                sourceUrl: "https://example.com/dead-link",
+                rawSnippet: null,
+                sourceType: "GOOGLE_SEARCH",
+                status: "PENDING_AI_REVIEW",
+                save: jest.fn().mockResolvedValue(true)
+            };
+
+            jest.spyOn(DiscoveryQueue, "find").mockReturnValue({
+                limit: jest.fn().mockResolvedValue([mockItem])
+            });
+            jest.spyOn(Tournament, "find").mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
+            jest.spyOn(ProposedTournament, "find").mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
+
+            try {
+                const summary = await processDiscoveryQueue(5);
+                expect(summary.rejected).toBe(1);
+                expect(mockItem.status).toBe("REJECTED_BY_AI");
+                expect(mockItem.errorMessage).toBe("no usable page content");
+                expect(parseDiscoveredWebpage).not.toHaveBeenCalled();
+            } finally {
+                memSpy.mockRestore();
+            }
         });
     });
 
@@ -424,23 +470,21 @@ describe("Autonomous Tournament Hunter Suite", () => {
             Object.defineProperty(mongoose.connection, "readyState", { value: originalReadyState, configurable: true });
         });
 
-        test("wipeAndRestartTournamentSystem purges queues and pre-2026 tournaments, then re-seeds", async () => {
+        test("wipeAndRestartTournamentSystem purges queues and pre-2026 tournaments", async () => {
             const originalReadyState = mongoose.connection.readyState;
             Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
 
             const mockDelQueue = jest.spyOn(DiscoveryQueue, "deleteMany").mockResolvedValue({ deletedCount: 15 });
             const mockDelProposed = jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 3 });
             const mockDelTournaments = jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 2 });
-            jest.spyOn(Tournament, "countDocuments").mockResolvedValue(0);
-            jest.spyOn(Tournament, "findOneAndUpdate").mockResolvedValue({});
-            jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
+            const mockBulkWrite = jest.spyOn(Tournament, "bulkWrite").mockResolvedValue({});
 
             const res = await wipeAndRestartTournamentSystem();
             expect(res.success).toBe(true);
             expect(res.clearedDiscoveryQueue).toBe(15);
             expect(res.clearedProposedTournaments).toBe(3);
             expect(res.purgedTournaments).toBe(2);
-            expect(res.activeGuaranteedCount).toBe(5);
+            expect(mockBulkWrite).not.toHaveBeenCalled();
 
             expect(mockDelQueue).toHaveBeenCalledWith({});
             expect(mockDelProposed).toHaveBeenCalledWith({});

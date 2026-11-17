@@ -957,7 +957,8 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
 
 /**
  * POST /api/tournaments/reset-seed
- * High-performance tournament clean-slate reset and verified seeding endpoint.
+ * High-performance tournament clean-slate reset endpoint.
+ * Purges invalid/stale tournaments, discovery queue, proposals, and invalidates Redis cache.
  * Executes in < 100ms with zero memory leaks and returns execution metrics.
  * Strictly protected by authMiddleware and adminMiddleware.
  */
@@ -965,15 +966,14 @@ router.post('/reset-seed', authMiddleware, adminMiddleware, async (req, res) => 
     try {
         const startTime = Date.now();
         const { wipeAndRestartTournamentSystem } = require('../utils/autonomousHunter');
-        const isProduction = process.env.NODE_ENV === 'production';
-        const result = await wipeAndRestartTournamentSystem({ forceSeed: !isProduction });
+        const result = await wipeAndRestartTournamentSystem();
         const executionTimeMs = result.executionTimeMs ?? (Date.now() - startTime);
 
         if (!result.success) {
             return res.status(500).json({
                 success: false,
                 executionTimeMs,
-                error: result.error || result.message || "Failed to reset and seed tournaments"
+                error: result.error || result.message || "Failed to reset tournament system"
             });
         }
 
@@ -985,9 +985,7 @@ router.post('/reset-seed', authMiddleware, adminMiddleware, async (req, res) => 
                 discoveryQueue: result.clearedDiscoveryQueue,
                 proposedTournaments: result.clearedProposedTournaments,
                 staleTournaments: result.purgedTournaments
-            },
-            seededTournaments: result.activeGuaranteedCount,
-            tournaments: result.tournaments || []
+            }
         });
     } catch (error) {
         console.error("Error in reset-seed endpoint:", error);

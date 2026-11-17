@@ -571,14 +571,11 @@ router.post("/discovery-queue/process", adminActionLimiter, async (req, res) => 
 
 /**
  * POST /api/admin/tournaments/wipe-and-restart
- * Wipes discovery queue, proposed tournaments, purges invalid/past tournaments (e.g. 2001 VCU),
- * and re-seeds verified live tournaments for 2026.
+ * Wipes discovery queue, proposed tournaments, and purges invalid/past tournaments.
  */
 router.post("/wipe-and-restart", adminActionLimiter, async (req, res) => {
     try {
-        const isProduction = process.env.NODE_ENV === 'production';
-        const shouldSeed = req.body?.forceSeed !== undefined ? req.body.forceSeed : !isProduction;
-        const result = await wipeAndRestartTournamentSystem({ forceSeed: shouldSeed });
+        const result = await wipeAndRestartTournamentSystem();
         return res.status(200).json({
             message: "Tournament system wiped and restarted successfully",
             result

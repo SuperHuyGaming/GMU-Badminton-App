@@ -789,7 +789,7 @@ END:VCALENDAR`;
             const res = await apiFetch("/api/tournaments/reset-seed", { method: "POST" });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || data.message || "Failed to reset tournaments");
-            toast.success(data.message || "Published tournaments cleared and reset to verified schedule!");
+            toast.success(data.message || "Published tournaments cleared successfully!");
             setClearDialogOpen(false);
             await fetchTournaments();
         } catch (err) {
@@ -1114,7 +1114,7 @@ END:VCALENDAR`;
 
                     {/* Clear & Reset Button (Admin Only) */}
                     {user?.role === 'admin' && (
-                        <Tooltip title="Clear invalid tournaments and reset verified schedule">
+                        <Tooltip title="Clear invalid and stale tournaments">
                             <Button
                                 variant="outlined"
                                 color="error"
@@ -2181,11 +2181,11 @@ END:VCALENDAR`;
                 disableRestoreFocus
             >
                 <DialogTitle sx={{ fontWeight: 700, color: 'error.main', display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <RestartAltIcon /> Reset Tournament Schedule?
+                    <RestartAltIcon /> Clear Invalid Tournaments?
                 </DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        This will purge invalid or stale tournament entries and reload the verified 2026–2027 tournament schedule.
+                        This will purge invalid or stale tournament entries and clear queues.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>

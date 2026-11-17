@@ -184,7 +184,7 @@ describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
 
             const mockItem = {
                 sourceUrl: serverUrl,
-                rawSnippet: '2026 DMV Badminton Challenge Fall Classic at RAC',
+                rawSnippet: '2026 DMV Badminton Challenge Fall Classic at RAC Gym (Fairfax, VA)',
                 sourceType: 'GOOGLE_SEARCH',
                 status: 'PENDING_AI_REVIEW',
                 save: jest.fn().mockResolvedValue(true)

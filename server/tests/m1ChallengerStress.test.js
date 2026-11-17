@@ -23,7 +23,7 @@ const DiscoveryQueue = require('../models/DiscoveryQueue');
 const ProposedTournament = require('../models/ProposedTournament');
 const Court = require('../models/Court');
 const TournamentMatch = require('../models/TournamentMatch');
-const { getGuaranteedTournamentsList, wipeAndRestartTournamentSystem } = require('../utils/autonomousHunter');
+const { wipeAndRestartTournamentSystem } = require('../utils/autonomousHunter');
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'gmu_badminton_super_secret_key_2026';
@@ -95,7 +95,6 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
                 latencies.push(duration);
 
                 expect(result.success).toBe(true);
-                expect(result.activeGuaranteedCount).toBe(5);
                 expect(duration).toBeLessThan(MAX_OP_MS);
             }
 
@@ -142,7 +141,6 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
 
         test("CONCURRENCY STRESS: 20 simultaneous concurrent calls to wipeAndRestartTournamentSystem resolve cleanly", async () => {
             let deleteQueueCount = 0;
-            let bulkWriteCount = 0;
 
             jest.spyOn(DiscoveryQueue, "deleteMany").mockImplementation(async () => {
                 deleteQueueCount++;
@@ -150,11 +148,6 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
             });
             jest.spyOn(ProposedTournament, "deleteMany").mockResolvedValue({ deletedCount: 5 });
             jest.spyOn(Tournament, "deleteMany").mockResolvedValue({ deletedCount: 3 });
-            jest.spyOn(Tournament, "bulkWrite").mockImplementation(async (ops) => {
-                bulkWriteCount++;
-                expect(ops).toHaveLength(5);
-                return { upsertedCount: 5 };
-            });
 
             const concurrentCalls = 20;
             const promises = Array.from({ length: concurrentCalls }, () => wipeAndRestartTournamentSystem());
@@ -163,12 +156,10 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
             expect(results).toHaveLength(concurrentCalls);
             results.forEach(res => {
                 expect(res.success).toBe(true);
-                expect(res.activeGuaranteedCount).toBe(5);
                 expect(res.executionTimeMs).toBeLessThan(MAX_OP_MS);
             });
 
             expect(deleteQueueCount).toBe(concurrentCalls);
-            expect(bulkWriteCount).toBe(concurrentCalls);
         });
 
         test("HTTP CONCURRENCY: 20 simultaneous POST /api/tournaments/reset-seed requests return 200 OK with < 100ms latency", async () => {
@@ -191,8 +182,7 @@ describe("M1 Empirical Challenger Stress Suite: Clean Slate & BWF RAC Courts Eng
                 expect(res.status).toBe(200);
                 expect(res.body.success).toBe(true);
                 expect(res.body.executionTimeMs).toBeLessThan(MAX_OP_MS);
-                expect(res.body.seededTournaments).toBe(5);
-                expect(res.body.tournaments).toHaveLength(5);
+
             });
         });
     });

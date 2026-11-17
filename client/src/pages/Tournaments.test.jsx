@@ -385,8 +385,8 @@ describe('Public Tournaments Page Component', () => {
 
         // Dialog should open
         await waitFor(() => {
-            expect(screen.getByText('Reset Tournament Schedule?')).toBeInTheDocument();
-            expect(screen.getByText(/reload the verified 2026–2027 tournament schedule/i)).toBeInTheDocument();
+            expect(screen.getByText('Clear Invalid Tournaments?')).toBeInTheDocument();
+            expect(screen.getByText(/purge invalid or stale tournament entries and clear queues/i)).toBeInTheDocument();
             expect(screen.queryByText(/collegiate tournament schedule/i)).not.toBeInTheDocument();
         });
 

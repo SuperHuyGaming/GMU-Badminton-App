@@ -297,6 +297,16 @@ async function processDiscoveryQueue(batchSize = 5) {
                 }
             }
 
+            // Reject if no usable content was scraped or provided (< 50 chars)
+            if (!rawText || rawText.trim().length < 50) {
+                console.log(`[Hunter] AI Rejected (no usable page content): ${item.sourceUrl}`);
+                item.status = 'REJECTED_BY_AI';
+                item.errorMessage = 'no usable page content';
+                await item.save();
+                rejectedCount++;
+                continue;
+            }
+
             // AI Evaluation & Geo-filtering
             const extracted = await parseDiscoveredWebpage(rawText, item.sourceUrl);
             
@@ -504,75 +514,24 @@ const SEARCH_QUERIES = [
 ];
 
 // Verified DMV and Mid-Atlantic badminton collegiate & club discovery seeds
-const VERIFIED_DMV_SEEDS = [
-    {
-        url: 'https://linktr.ee/gmubadminton',
-        snippet: '[2026 GMU Badminton Open] Hosted by George Mason Club Badminton at the RAC Gym, Fairfax VA. Singles, Doubles, Mixed. Competition in November 2026. Register via Linktree / Google Forms.'
-    },
-    {
-        url: 'https://www.tournamentsoftware.com/tournament/29B5BFFA-ED41-49F5-8294-1E1F54A8D8A5',
-        snippet: '[2026 Mid-Atlantic Collegiate Team Badminton Championships] Hosted at Capital Badminton Academy in Columbia, MD. Oct 24 - 25, 2026. Register on TournamentSoftware.'
-    },
-    {
-        url: 'https://novabadmintonacademy.com/',
-        snippet: '[2026 NVBC Open Championship] Northern Virginia Badminton Club, Ashburn, VA. Adult & Junior Open flights. December 2026.'
-    },
-    {
-        url: 'https://linktr.ee/wmbirdie23',
-        snippet: '[2026 William & Mary Fall Open Tournament] Hosted by William & Mary Badminton Club at Student Recreation Center, Williamsburg VA. November 14-15, 2026. Flights A, B, C, D in Singles, Doubles, Mixed. Registration deadline November 1, 2026. Register via Linktree / Google Form.'
-    },
-    {
-        url: 'https://linktr.ee/umd_badminton',
-        snippet: '[2026 UMD Terrapin Open] Hosted by University of Maryland Club Badminton at SPH Building, College Park MD. Singles, Doubles, Mixed flights.'
-    },
-    {
-        url: 'https://linktr.ee/dukeclubbadminton',
-        snippet: '[2026 Duke Badminton Open Tournament] Hosted by Duke University Club Badminton at Card Gymnasium / Wilson Recreation Center, Durham NC. Men\'s & Women\'s Singles, Doubles, Mixed Doubles. Register via Duke Linktree / Google Forms.'
-    },
-    {
-        url: 'https://linktr.ee/uncbadminton',
-        snippet: '[2026 Carolina Open Tournament] Hosted by UNC Chapel Hill Club Badminton at Fetzer Hall / Student Recreation Center, Chapel Hill NC. Singles, Doubles, Mixed flights.'
-    },
-    {
-        url: 'https://linktr.ee/ncsubadminton',
-        snippet: '[2026 Wolfpack Open Tournament] Hosted by NC State Club Badminton at Carmichael Complex, Raleigh NC. Adult & Collegiate flights.'
-    },
-    {
-        url: 'https://trianglebadmintonclub.com/',
-        snippet: '[2026 Triangle Open Badminton Championships] Triangle Badminton Club, Morrisville, NC. Open A/B/C/D and Senior/Junior flights.'
-    },
-    {
-        url: 'https://smashbadmintonva.com/',
-        snippet: '[2026 Smash DMV Open Championships] Smash Badminton Center, Herndon, VA. Adult & Junior Open flights.'
-    },
-    {
-        url: 'https://linktr.ee/uvabadminton',
-        snippet: '[2026 UVA Cavalier Open] Hosted by University of Virginia Club Badminton at Memorial Gymnasium, Charlottesville VA.'
-    },
-    {
-        url: 'https://linktr.ee/vtechbadminton',
-        snippet: '[2026 Virginia Tech Hokie Open] Hosted by Virginia Tech Club Badminton at McComas Hall, Blacksburg VA.'
-    },
-    {
-        url: 'https://linktr.ee/vcubadminton',
-        snippet: '[2026 VCU Ram Open] Hosted by VCU Club Badminton at Cary Street Gymnasium, Richmond VA.'
-    },
-    {
-        url: 'https://linktr.ee/jhubadminton',
-        snippet: '[2026 Johns Hopkins Open] Hosted by Johns Hopkins Badminton at Ralph S. O\'Connor Center, Baltimore MD.'
-    },
-    {
-        url: 'https://linktr.ee/psubadminton',
-        snippet: '[2026 Penn State Open] Hosted by Penn State Club Badminton at White Building, State College PA.'
-    },
-    {
-        url: 'https://linktr.ee/upennbadminton',
-        snippet: '[2026 Penn Classic Invitational] Hosted by UPenn Badminton at David Pottruck Center, Philadelphia PA.'
-    },
-    {
-        url: 'https://linktr.ee/cmubadminton',
-        snippet: '[2026 CMU Tartan Open] Hosted by Carnegie Mellon Badminton at Wiegand Gym, Pittsburgh PA.'
-    }
+const DISCOVERY_SOURCE_URLS = [
+    'https://linktr.ee/gmubadminton',
+    'https://www.tournamentsoftware.com/tournament/29B5BFFA-ED41-49F5-8294-1E1F54A8D8A5',
+    'https://novabadmintonacademy.com/',
+    'https://linktr.ee/wmbirdie23',
+    'https://linktr.ee/umd_badminton',
+    'https://linktr.ee/dukeclubbadminton',
+    'https://linktr.ee/uncbadminton',
+    'https://linktr.ee/ncsubadminton',
+    'https://trianglebadmintonclub.com/',
+    'https://smashbadmintonva.com/',
+    'https://linktr.ee/uvabadminton',
+    'https://linktr.ee/vtechbadminton',
+    'https://linktr.ee/vcubadminton',
+    'https://linktr.ee/jhubadminton',
+    'https://linktr.ee/psubadminton',
+    'https://linktr.ee/upennbadminton',
+    'https://linktr.ee/cmubadminton'
 ];
 
 /**
@@ -583,21 +542,20 @@ async function huntGoogleForTournaments() {
     let newDiscoveries = 0;
 
     // 1. Enqueue verified DMV collegiate & club tournament seeds
-    for (const seed of VERIFIED_DMV_SEEDS) {
+    for (const url of DISCOVERY_SOURCE_URLS) {
         try {
-            const exists = await DiscoveryQueue.findOne({ sourceUrl: seed.url });
+            const exists = await DiscoveryQueue.findOne({ sourceUrl: url });
             if (!exists) {
                 await DiscoveryQueue.create({
-                    sourceUrl: seed.url,
-                    sourceType: seed.url.includes('tournamentsoftware') ? 'TOURNAMENT_SOFTWARE' : 'GOOGLE_SEARCH',
-                    rawSnippet: seed.snippet,
+                    sourceUrl: url,
+                    sourceType: url.includes('tournamentsoftware') ? 'TOURNAMENT_SOFTWARE' : 'GOOGLE_SEARCH',
                     status: 'PENDING_AI_REVIEW',
                     discoveredAt: new Date()
                 });
                 newDiscoveries++;
             }
         } catch (e) {
-            console.error(`[Hunter] Failed to enqueue seed ${seed.url}:`, e.message);
+            console.error(`[Hunter] Failed to enqueue seed ${url}:`, e.message);
         }
     }
     
@@ -661,34 +619,22 @@ async function huntRegionalClubsAndEnqueue() {
         {
             name: "Capital Badminton Academy",
             url: "https://capitalbadminton.com/",
-            tournamentName: "2026 Mid-Atlantic Collegiate Team Badminton Championships",
-            location: "Capital Badminton Academy, Columbia, MD",
-            dates: "October 2026",
-            skillLevels: ["Collegiate", "Open", "Advanced", "Intermediate"]
+            location: "Capital Badminton Academy, Columbia, MD"
         },
         {
             name: "Northern Virginia Badminton Club",
             url: "https://novabadmintonacademy.com/",
-            tournamentName: "2026 NVBC Spring Open Championships",
-            location: "Northern Virginia Badminton Club, Ashburn, VA",
-            dates: "December 2026",
-            skillLevels: ["Open", "B", "C", "Junior"]
+            location: "Northern Virginia Badminton Club, Ashburn, VA"
         },
         {
             name: "Triangle Badminton Club",
             url: "https://trianglebadmintonclub.com/",
-            tournamentName: "2026 Triangle Open Badminton Championships",
-            location: "Triangle Badminton Club, Morrisville, NC",
-            dates: "November 2026",
-            skillLevels: ["Open", "A", "B", "C", "D", "Senior", "Junior"]
+            location: "Triangle Badminton Club, Morrisville, NC"
         },
         {
             name: "Smash Badminton Center",
             url: "https://smashbadmintonva.com/",
-            tournamentName: "2026 Smash DMV Open Championships",
-            location: "Smash Badminton Center, Herndon, VA",
-            dates: "December 2026",
-            skillLevels: ["Open", "A", "B", "C", "Junior"]
+            location: "Smash Badminton Center, Herndon, VA"
         }
     ];
 
@@ -716,7 +662,7 @@ async function huntRegionalClubsAndEnqueue() {
                 await DiscoveryQueue.create({
                     sourceUrl: target.url,
                     sourceType: 'GOOGLE_SEARCH',
-                    rawSnippet: `[${target.tournamentName}] Hosted at ${target.location}. ${text.slice(0, 300)}`,
+                    rawSnippet: `[${target.name}] ${text.slice(0, 300)}`,
                     status: 'PENDING_AI_REVIEW',
                     discoveredAt: new Date()
                 });
@@ -763,248 +709,11 @@ async function runFullAutonomousHunt() {
 }
 
 /**
- * Returns structured in-memory representation of verified upcoming 2026 DMV tournaments.
- * Dates are calculated dynamically to always be active and upcoming relative to current timestamp.
- */
-function getGuaranteedTournamentsList() {
-    return [
-        {
-            _id: "670c00000000000000000001",
-            tournamentName: "2026 GMU Badminton Open",
-            eventLocation: "Recreation Athletic Complex (RAC), George Mason University, Fairfax, VA 22030",
-            hostUniversity: "George Mason University",
-            hostClubHandle: "@gmu_badminton",
-            startDate: new Date("2026-11-14T09:00:00.000Z"),
-            endDate: new Date("2026-11-15T18:00:00.000Z"),
-            registrationDeadline: new Date("2026-11-10T23:59:59.000Z"),
-            rideFormDeadline: new Date("2026-11-11T23:59:59.000Z"),
-            isOpenTournament: true,
-            status: "active",
-            registrationUrl: "https://linktr.ee/gmubadminton",
-            sourceUrl: "https://www.instagram.com/gmu_badminton/",
-            flyerImageUrl: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=1000&auto=format&fit=crop",
-            skillLevels: ["Open", "Flight A", "Flight B", "Flight C", "Collegiate"],
-            entryFee: "$25/event, $40/doubles pair",
-            divisions: [
-                { name: "Men's Singles Open", code: "MS_OPEN", category: "Singles", maxDraw: 32, fee: "$25", feeAmount: 25, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Women's Singles Open", code: "WS_OPEN", category: "Singles", maxDraw: 16, fee: "$25", feeAmount: 25, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Men's Doubles Open", code: "MD_OPEN", category: "Doubles", maxDraw: 16, fee: "$40/team", feeAmount: 40, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Women's Doubles Open", code: "WD_OPEN", category: "Doubles", maxDraw: 16, fee: "$40/team", feeAmount: 40, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Mixed Doubles Open", code: "XD_OPEN", category: "Mixed", maxDraw: 16, fee: "$40/team", feeAmount: 40, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Collegiate Flight A", code: "COL_FLIGHT_A", category: "Singles", maxDraw: 32, fee: "$20", feeAmount: 20, eligibility: "Collegiate A", bracketType: "single_elimination" },
-                { name: "Collegiate Flight B", code: "COL_FLIGHT_B", category: "Singles", maxDraw: 32, fee: "$20", feeAmount: 20, eligibility: "Collegiate B", bracketType: "single_elimination" },
-                { name: "Collegiate Flight C", code: "COL_FLIGHT_C", category: "Singles", maxDraw: 32, fee: "$20", feeAmount: 20, eligibility: "Collegiate C", bracketType: "single_elimination" }
-            ],
-            originalCaption: "Official 2026 GMU Badminton Open hosted by Mason Club Badminton at the Recreation Athletic Complex (RAC). Open to college students and community players across Virginia, DC, and Maryland.",
-            rsvpCount: 28,
-            attendees: []
-        },
-        {
-            _id: "670c00000000000000000002",
-            tournamentName: "2026 Mid-Atlantic Collegiate Championships",
-            eventLocation: "Capital Badminton Academy, 9188 Red Branch Rd, Columbia, MD 21045",
-            hostUniversity: "Mid-Atlantic Circuit / Capital Badminton Academy",
-            hostClubHandle: "@cba_badminton",
-            startDate: new Date("2026-11-21T09:00:00.000Z"),
-            endDate: new Date("2026-11-22T19:00:00.000Z"),
-            registrationDeadline: new Date("2026-11-14T23:59:59.000Z"),
-            rideFormDeadline: new Date("2026-11-16T23:59:59.000Z"),
-            isOpenTournament: true,
-            status: "active",
-            registrationUrl: "https://www.tournamentsoftware.com/tournament/29B5BFFA-ED41-49F5-8294-1E1F54A8D8A5",
-            sourceUrl: "https://www.tournamentsoftware.com/tournament/29B5BFFA-ED41-49F5-8294-1E1F54A8D8A5",
-            flyerImageUrl: "https://images.unsplash.com/photo-1613918108466-292b78a8ef95?q=80&w=1000&auto=format&fit=crop",
-            skillLevels: ["Collegiate", "Open", "Advanced", "Intermediate"],
-            entryFee: "$35/player or $150/team",
-            divisions: [
-                { name: "Collegiate Division I Team", code: "COL_DIV_1_TEAM", category: "Team", maxDraw: 8, fee: "$150/team", feeAmount: 150, eligibility: "Collegiate Varsity (GMU, UVA, VT, UMD, JHU)", bracketType: "round_robin" },
-                { name: "Collegiate Division II Team", code: "COL_DIV_2_TEAM", category: "Team", maxDraw: 8, fee: "$120/team", feeAmount: 120, eligibility: "Collegiate Club", bracketType: "round_robin" },
-                { name: "Men's Singles Open", code: "MS_OPEN", category: "Singles", maxDraw: 32, fee: "$35", feeAmount: 35, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Women's Singles Open", code: "WS_OPEN", category: "Singles", maxDraw: 24, fee: "$35", feeAmount: 35, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Men's Doubles Open", code: "MD_OPEN", category: "Doubles", maxDraw: 24, fee: "$50/team", feeAmount: 50, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Women's Doubles Open", code: "WD_OPEN", category: "Doubles", maxDraw: 16, fee: "$50/team", feeAmount: 50, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Mixed Doubles Open", code: "XD_OPEN", category: "Mixed", maxDraw: 24, fee: "$50/team", feeAmount: 50, eligibility: "Open", bracketType: "single_elimination" }
-            ],
-            originalCaption: "Mid-Atlantic Collegiate Team Badminton Championships hosted at CBA Columbia. Features university teams from GMU, UVA, Virginia Tech, UMD, and Johns Hopkins.",
-            rsvpCount: 35,
-            attendees: []
-        },
-        {
-            _id: "670c00000000000000000003",
-            tournamentName: "2026 Snowpeak DC Open",
-            eventLocation: "University of Maryland SPH, 4200 Valley Dr, College Park, MD 20742",
-            hostUniversity: "University of Maryland Club Badminton",
-            hostClubHandle: "@umd_badminton",
-            startDate: new Date("2026-12-05T09:00:00.000Z"),
-            endDate: new Date("2026-12-06T18:00:00.000Z"),
-            registrationDeadline: new Date("2026-11-28T23:59:59.000Z"),
-            rideFormDeadline: new Date("2026-11-30T23:59:59.000Z"),
-            isOpenTournament: true,
-            status: "active",
-            registrationUrl: "https://umdclubbadminton.com/dc-open",
-            sourceUrl: "https://umdclubbadminton.com/dc-open",
-            flyerImageUrl: "https://images.unsplash.com/photo-1541252260730-0412e8e2108e?q=80&w=1000&auto=format&fit=crop",
-            skillLevels: ["Open", "Flight A", "Flight B", "Flight C"],
-            entryFee: "$30/event",
-            divisions: [
-                { name: "Men's Singles Open", code: "MS_OPEN", category: "Singles", maxDraw: 32, fee: "$30", feeAmount: 30, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Women's Singles Open", code: "WS_OPEN", category: "Singles", maxDraw: 16, fee: "$30", feeAmount: 30, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Men's Doubles Flight A", code: "MD_FLIGHT_A", category: "Doubles", maxDraw: 24, fee: "$50/team", feeAmount: 50, eligibility: "Flight A", bracketType: "single_elimination" },
-                { name: "Men's Doubles Flight B", code: "MD_FLIGHT_B", category: "Doubles", maxDraw: 24, fee: "$40/team", feeAmount: 40, eligibility: "Flight B", bracketType: "single_elimination" },
-                { name: "Women's Doubles Open", code: "WD_OPEN", category: "Doubles", maxDraw: 16, fee: "$40/team", feeAmount: 40, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Mixed Doubles Open", code: "XD_OPEN", category: "Mixed", maxDraw: 24, fee: "$50/team", feeAmount: 50, eligibility: "Open", bracketType: "single_elimination" }
-            ],
-            originalCaption: "Annual Snowpeak DC Open, one of the premier unranked badminton tournaments in the Mid-Atlantic drawing players from VA, MD, DC, and PA.",
-            rsvpCount: 22,
-            attendees: []
-        },
-        {
-            _id: "670c00000000000000000004",
-            tournamentName: "2026 NVBC Spring Open",
-            eventLocation: "Northern Virginia Badminton Club, 21598 Atlantic Blvd, Ashburn, VA 20147",
-            hostUniversity: "Northern Virginia Badminton Club",
-            hostClubHandle: "@novabadminton",
-            startDate: new Date("2026-12-19T09:00:00.000Z"),
-            endDate: new Date("2026-12-20T18:00:00.000Z"),
-            registrationDeadline: new Date("2026-12-12T23:59:59.000Z"),
-            rideFormDeadline: new Date("2026-12-14T23:59:59.000Z"),
-            isOpenTournament: true,
-            status: "active",
-            registrationUrl: "https://novabadmintonacademy.com/",
-            sourceUrl: "https://novabadmintonacademy.com/",
-            flyerImageUrl: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?q=80&w=1000&auto=format&fit=crop",
-            skillLevels: ["Open Flight", "Flight B", "Flight C", "Junior U19"],
-            entryFee: "$30/event",
-            divisions: [
-                { name: "Open Flight (MS/MD/XD)", code: "OPEN_FLIGHT", category: "Open", maxDraw: 32, fee: "$35", feeAmount: 35, eligibility: "Open Flight", bracketType: "single_elimination" },
-                { name: "Flight B (MS/MD)", code: "FLIGHT_B", category: "Advanced", maxDraw: 32, fee: "$30", feeAmount: 30, eligibility: "Flight B", bracketType: "single_elimination" },
-                { name: "Flight C (MS/MD)", code: "FLIGHT_C", category: "Intermediate", maxDraw: 32, fee: "$25", feeAmount: 25, eligibility: "Flight C", bracketType: "single_elimination" },
-                { name: "Junior U19 Singles", code: "JR_U19", category: "Junior", maxDraw: 16, fee: "$25", feeAmount: 25, eligibility: "Junior U19", bracketType: "single_elimination" }
-            ],
-            originalCaption: "Northern Virginia Badminton Club Spring Open featuring singles, doubles, and mixed divisions for adult and junior competitors.",
-            rsvpCount: 19,
-            attendees: []
-        },
-        {
-            _id: "670c00000000000000000005",
-            tournamentName: "2027 GMU Winter Collegiate Invitational",
-            eventLocation: "Recreation Athletic Complex (RAC) Gym, 4350 Banister Creek Dr, Fairfax, VA 22030",
-            hostUniversity: "George Mason University",
-            hostClubHandle: "@gmu_badminton",
-            startDate: new Date("2027-02-13T09:00:00.000Z"),
-            endDate: new Date("2027-02-14T18:00:00.000Z"),
-            registrationDeadline: new Date("2027-02-06T23:59:59.000Z"),
-            rideFormDeadline: new Date("2027-02-08T23:59:59.000Z"),
-            isOpenTournament: true,
-            status: "active",
-            registrationUrl: "https://linktr.ee/gmubadminton",
-            sourceUrl: "https://www.instagram.com/gmu_badminton/",
-            flyerImageUrl: "https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?q=80&w=1000&auto=format&fit=crop",
-            skillLevels: ["Collegiate Flight A", "Collegiate Flight B", "Collegiate Flight C", "Open Flights"],
-            entryFee: "$25/event, $100/team",
-            divisions: [
-                { name: "Collegiate Team Flight A", code: "COL_TEAM_A", category: "Team", maxDraw: 8, fee: "$100/team", feeAmount: 100, eligibility: "Collegiate Team (GMU, VCU, VT, UVA, UMD)", bracketType: "round_robin" },
-                { name: "Men's Singles Open", code: "MS_OPEN", category: "Singles", maxDraw: 32, fee: "$25", feeAmount: 25, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Women's Singles Open", code: "WS_OPEN", category: "Singles", maxDraw: 16, fee: "$25", feeAmount: 25, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Men's Doubles Open", code: "MD_OPEN", category: "Doubles", maxDraw: 24, fee: "$40/team", feeAmount: 40, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Women's Doubles Open", code: "WD_OPEN", category: "Doubles", maxDraw: 16, fee: "$40/team", feeAmount: 40, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Mixed Doubles Open", code: "XD_OPEN", category: "Mixed", maxDraw: 24, fee: "$40/team", feeAmount: 40, eligibility: "Open", bracketType: "single_elimination" },
-                { name: "Collegiate Flight B", code: "COL_FLIGHT_B", category: "Singles", maxDraw: 32, fee: "$20", feeAmount: 20, eligibility: "Collegiate B", bracketType: "single_elimination" },
-                { name: "Collegiate Flight C", code: "COL_FLIGHT_C", category: "Singles", maxDraw: 32, fee: "$20", feeAmount: 20, eligibility: "Collegiate C", bracketType: "single_elimination" }
-            ],
-            originalCaption: "GMU Winter Collegiate Invitational at the RAC Gym. Top Mid-Atlantic collegiate teams and open flight competitors competing in a 2-day dual format tournament.",
-            rsvpCount: 31,
-            attendees: []
-        }
-    ];
-}
-
-/**
- * Ensures that the system always has active, accurate 2026/2027 tournaments available on the public feed.
- * Upserts verified active DMV tournaments with rolling future dates using atomic bulkWrite.
- */
-async function ensureGuaranteedTournaments() {
-    try {
-        if (mongoose.connection?.readyState !== 1) {
-            return 0;
-        }
-        const now = new Date();
-        const activeCount = await Tournament.countDocuments({
-            status: { $ne: "archived" },
-            $or: [
-                { endDate: { $gte: now } },
-                { startDate: { $gte: now } }
-            ]
-        });
-
-        const verifiedTournaments = getGuaranteedTournamentsList();
-
-        const bulkOps = verifiedTournaments.map(t => ({
-            updateOne: {
-                filter: { tournamentName: t.tournamentName },
-                update: {
-                    $set: {
-                        eventLocation: t.eventLocation,
-                        hostUniversity: t.hostUniversity,
-                        hostClubHandle: t.hostClubHandle,
-                        startDate: t.startDate,
-                        endDate: t.endDate,
-                        registrationDeadline: t.registrationDeadline,
-                        rideFormDeadline: t.rideFormDeadline,
-                        isOpenTournament: true,
-                        status: "active",
-                        registrationUrl: t.registrationUrl,
-                        sourceUrl: t.sourceUrl,
-                        flyerImageUrl: t.flyerImageUrl,
-                        skillLevels: t.skillLevels,
-                        divisions: t.divisions,
-                        entryFee: t.entryFee,
-                        originalCaption: t.originalCaption,
-                        scraperLastRun: new Date()
-                    },
-                    $setOnInsert: {
-                        rsvpCount: t.rsvpCount,
-                        attendees: t.attendees || [],
-                        createdAt: new Date()
-                    }
-                },
-                upsert: true
-            }
-        }));
-
-        if (typeof Tournament.bulkWrite === 'function') {
-            await Tournament.bulkWrite(bulkOps, { ordered: false });
-        }
-
-        // Support test environments spying on findOneAndUpdate
-        if (Tournament.findOneAndUpdate && Tournament.findOneAndUpdate._isMockFunction) {
-            for (const t of verifiedTournaments) {
-                await Tournament.findOneAndUpdate({ tournamentName: t.tournamentName }, {}, { upsert: true });
-            }
-        }
-
-        try {
-            const redis = require('./redis');
-            const keys = await redis.keys('tournaments:*');
-            if (keys && keys.length > 0) await redis.del(keys);
-        } catch (redisErr) {
-            console.warn("[Tournament Engine] Redis cache clear skipped:", redisErr.message);
-        }
-
-        console.log(`🏸 [Tournament Engine] Successfully ensured ${verifiedTournaments.length} guaranteed tournaments are live.`);
-        return Math.max(activeCount, verifiedTournaments.length);
-    } catch (err) {
-        console.error("🏸 [Tournament Engine] Error ensuring guaranteed tournaments:", err.message);
-        return 0;
-    }
-}
-
-/**
  * Completely wipes discovery queues, proposed tournament approval queue,
  * purges invalid/past tournaments (including legacy 2001/pre-2026 entries),
- * and atomically re-seeds verified live 2026/2027 tournaments using bulkWrite.
+ * and clears Redis cache.
  */
-async function wipeAndRestartTournamentSystem(options = {}) {
+async function wipeAndRestartTournamentSystem() {
     const startTime = Date.now();
     try {
         if (mongoose.connection?.readyState !== 1) {
@@ -1056,80 +765,25 @@ async function wipeAndRestartTournamentSystem(options = {}) {
             console.warn("[Hunter Wipe] Redis cache clear skipped:", redisErr.message);
         }
 
-        // 5. Atomic bulkWrite for verified tournaments (skipped in production unless forceSeed is true)
-        const isProduction = process.env.NODE_ENV === 'production';
-        const shouldSeed = options.forceSeed !== undefined ? options.forceSeed : !isProduction;
-
-        let verifiedTournaments = [];
-        if (shouldSeed) {
-            verifiedTournaments = getGuaranteedTournamentsList();
-            const bulkOps = verifiedTournaments.map(t => ({
-                updateOne: {
-                    filter: { tournamentName: t.tournamentName },
-                    update: {
-                        $set: {
-                            eventLocation: t.eventLocation,
-                            hostUniversity: t.hostUniversity,
-                            hostClubHandle: t.hostClubHandle,
-                            startDate: t.startDate,
-                            endDate: t.endDate,
-                            registrationDeadline: t.registrationDeadline,
-                            rideFormDeadline: t.rideFormDeadline,
-                            isOpenTournament: true,
-                            status: "active",
-                            registrationUrl: t.registrationUrl,
-                            sourceUrl: t.sourceUrl,
-                            flyerImageUrl: t.flyerImageUrl,
-                            skillLevels: t.skillLevels,
-                            divisions: t.divisions,
-                            entryFee: t.entryFee,
-                            originalCaption: t.originalCaption,
-                            scraperLastRun: new Date()
-                        },
-                        $setOnInsert: {
-                            rsvpCount: t.rsvpCount || 0,
-                            attendees: t.attendees || [],
-                            createdAt: new Date()
-                        }
-                    },
-                    upsert: true
-                }
-            }));
-
-            if (typeof Tournament.bulkWrite === 'function') {
-                await Tournament.bulkWrite(bulkOps, { ordered: false });
-            }
-
-            // Support test environments spying on findOneAndUpdate
-            if (Tournament.findOneAndUpdate && Tournament.findOneAndUpdate._isMockFunction) {
-                for (const t of verifiedTournaments) {
-                    await Tournament.findOneAndUpdate({ tournamentName: t.tournamentName }, {}, { upsert: true });
-                }
-            }
-        } else {
-            console.log("🧹 [Hunter Wipe] Production mode active: purged invalid/stale entries without force-injecting mock/seed tournaments.");
-        }
-
         const executionTimeMs = Date.now() - startTime;
-        console.log(`🧹 [Hunter Wipe] Complete in ${executionTimeMs}ms: Cleared ${deletedQueue.deletedCount || 0} DiscoveryQueue items, ${deletedProposed.deletedCount || 0} ProposedTournaments, purged ${deletedTournaments.deletedCount || 0} invalid/past tournaments. Seeded ${verifiedTournaments.length} verified 2026/2027 tournaments.`);
+        console.log(`🧹 [Hunter Wipe] Complete in ${executionTimeMs}ms: Cleared ${deletedQueue.deletedCount || 0} DiscoveryQueue items, ${deletedProposed.deletedCount || 0} ProposedTournaments, purged ${deletedTournaments.deletedCount || 0} invalid/past tournaments.`);
 
         return {
             success: true,
             executionTimeMs,
             clearedDiscoveryQueue: deletedQueue.deletedCount || 0,
             clearedProposedTournaments: deletedProposed.deletedCount || 0,
-            purgedTournaments: deletedTournaments.deletedCount || 0,
-            activeGuaranteedCount: verifiedTournaments.length,
-            tournaments: verifiedTournaments
+            purgedTournaments: deletedTournaments.deletedCount || 0
         };
     } catch (err) {
         const executionTimeMs = Date.now() - startTime;
-        console.error("❌ [Hunter Wipe] Error wiping and restarting tournament system:", err.message);
+        console.error("❌ [Hunter Wipe] Error wiping tournament system:", err.message);
         return { success: false, error: err.message, executionTimeMs };
     }
 }
 
 module.exports = {
+    DISCOVERY_SOURCE_URLS,
     levenshteinDistance,
     stringSimilarity,
     computeTitleSimilarity,
@@ -1143,8 +797,6 @@ module.exports = {
     huntGoogleForTournaments,
     huntRegionalClubsAndEnqueue,
     runFullAutonomousHunt,
-    getGuaranteedTournamentsList,
-    ensureGuaranteedTournaments,
     wipeAndRestartTournamentSystem,
     checkHeapPressure,
     getHeapPressureLimitBytes,

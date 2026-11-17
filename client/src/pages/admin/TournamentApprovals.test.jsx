@@ -779,6 +779,46 @@ describe("TournamentApprovals Admin Page Component", () => {
             expect(screen.queryByText("Mason Open 2026")).not.toBeInTheDocument();
         });
     });
+    it("14. Wipe & restart button triggers POST /wipe-and-restart and displays sanitized toast", async () => {
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+
+        apiFetch.mockImplementation(async (url, opts) => {
+            if (url === "/api/admin/tournaments/wipe-and-restart" && opts?.method === "POST") {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        message: "wiped and restarted successfully",
+                        result: {
+                            clearedDiscoveryQueue: 5,
+                            clearedProposedTournaments: 2,
+                            purgedTournaments: 1,
+                        },
+                    }),
+                };
+            }
+            if (url === "/api/admin/tournaments/proposed") {
+                return {
+                    ok: true,
+                    json: async () => [],
+                };
+            }
+            return { ok: true, json: async () => [] };
+        });
+
+        renderComponent();
+
+        const wipeBtn = await screen.findByRole("button", { name: /Wipe & Restart Queues/i });
+        await waitFor(() => expect(wipeBtn).toBeEnabled());
+        fireEvent.click(wipeBtn);
+
+        await waitFor(() => {
+            expect(apiFetch).toHaveBeenCalledWith(
+                "/api/admin/tournaments/wipe-and-restart",
+                expect.objectContaining({ method: "POST" })
+            );
+            expect(toast.success).toHaveBeenCalledWith(
+                "Wiped: cleared 5 in queue, 2 proposals, purged 1 invalid."
+            );
+        });
+    });
 });
-
-
