@@ -107,10 +107,10 @@ describe("R1: Tournament Clean Slate Purge Suite", () => {
             expect(nameRegexes.some(r => r.test("2019 Spring Open"))).toBe(true);
             expect(nameRegexes.some(r => r.test("1998 Classic"))).toBe(true);
 
-            // NO regex matches "2026 Fall Open", "2027 S"
+            // NO regex matches "2026 Fall Open", "2027 Spring Open" or "Open 20260"
             expect(nameRegexes.some(r => r.test("2026 Fall Open"))).toBe(false);
-            expect(nameRegexes.some(r => r.test("2027 Spring Classic"))).toBe(false);
-            expect(nameRegexes.some(r => r.test("2027 S"))).toBe(false);
+            expect(nameRegexes.some(r => r.test("2027 Spring Open"))).toBe(false);
+            expect(nameRegexes.some(r => r.test("Open 20260"))).toBe(false);
         });
     });
 
