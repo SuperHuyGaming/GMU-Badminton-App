@@ -11,6 +11,7 @@
  */
 
 const axios = require('axios');
+const dns = require('dns');
 const cheerio = require('cheerio');
 const v8 = require('v8');
 const vm = require('vm');
@@ -86,6 +87,14 @@ const { inspectStartupMemory } = require('../server');
 describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.spyOn(dns.promises, 'lookup').mockResolvedValue([
+            { address: '93.184.216.34', family: 4 }
+        ]);
+        jest.spyOn(axios, 'head').mockResolvedValue({
+            status: 200,
+            headers: {},
+            data: ''
+        });
     });
 
     describe('1. Startup Memory Inspection & Environment Detection', () => {

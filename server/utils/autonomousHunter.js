@@ -1,5 +1,5 @@
+const net = require('net');
 const { ApifyClient } = require('apify-client');
-const axios = require('axios');
 const cheerio = require('cheerio');
 const mongoose = require('mongoose');
 const DiscoveryQueue = require('../models/DiscoveryQueue');
@@ -8,6 +8,8 @@ const Tournament = require('../models/Tournament');
 const { parseDiscoveredWebpage } = require('./aiParser');
 const { huntTournamentSoftwareAndEnqueue } = require('./tournamentSoftwareCrawler');
 const { sanitizeScrapedTitle } = require('./sanitizeScrapedTitle');
+const { safeRequest } = require('./safeHttp');
+const { isPrivateOrBlockedIp } = require('./linkPreviewScraper');
 
 // Memory Threshold Constants
 const DEFAULT_SOFT_HEAP_MB = 200;
@@ -124,11 +126,16 @@ const {
 function isSafeExternalUrl(urlString) {
     if (!urlString || typeof urlString !== 'string') return false;
     try {
-        const u = new URL(urlString);
+        const u = new URL(urlString.trim());
         if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-        const host = u.hostname.toLowerCase();
-        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '169.254.169.254') return false;
-        if (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return false;
+        let host = u.hostname.toLowerCase();
+        if (host === 'localhost' || host.endsWith('.localhost')) return false;
+        if (host.startsWith('[') && host.endsWith(']')) {
+            host = host.slice(1, -1);
+        }
+        if (net.isIP(host)) {
+            return !isPrivateOrBlockedIp(host);
+        }
         return true;
     } catch {
         return false;
@@ -261,7 +268,8 @@ async function processDiscoveryQueue(batchSize = 5) {
                         reqHeaders['Cookie'] = 'st=l=1033&c=1&cp=23; sport=2;';
                     }
 
-                    let response = await axios.get(item.sourceUrl, {
+                    let response = await safeRequest(item.sourceUrl, {
+                        method: 'GET',
                         headers: reqHeaders,
                         timeout: 7000,
                         maxContentLength: AXIOS_BODY_CAP_BYTES,
@@ -643,7 +651,8 @@ async function huntRegionalClubsAndEnqueue() {
         let data = null;
         let $ = null;
         try {
-            const response = await axios.get(target.url, {
+            const response = await safeRequest(target.url, {
+                method: 'GET',
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 },

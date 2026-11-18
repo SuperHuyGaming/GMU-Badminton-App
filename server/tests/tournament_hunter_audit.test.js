@@ -17,6 +17,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const axios = require("axios");
+const dns = require("dns");
 
 // In-Memory Redis Mock with tagged key invalidation support
 const mockRedisStore = new Map();
@@ -156,6 +157,9 @@ describe("Milestone 6: Tournament Hunter & Ingestion Audit Suite", () => {
         });
         jest.spyOn(Tournament, "updateMany").mockResolvedValue({ modifiedCount: 0 });
         jest.spyOn(User, "find").mockReturnValue({ limit: jest.fn().mockResolvedValue([]) });
+        jest.spyOn(dns.promises, "lookup").mockResolvedValue([
+            { address: "93.184.216.34", family: 4 }
+        ]);
     });
 
     // =========================================================================

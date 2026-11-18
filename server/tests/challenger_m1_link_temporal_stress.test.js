@@ -33,6 +33,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const axios = require("axios");
+const dns = require("dns");
 
 // In-Memory Stateful Redis Mock for deterministic cache eviction testing
 const mockRedisStore = new Map();
@@ -110,6 +111,9 @@ describe("Challenger 2 Empirical Stress Test: Link Crawler & Temporal Horizon", 
             configurable: true
         });
         jest.spyOn(Tournament, "updateMany").mockResolvedValue({ modifiedCount: 0 });
+        jest.spyOn(dns.promises, "lookup").mockResolvedValue([
+            { address: "93.184.216.34", family: 4 }
+        ]);
     });
 
     // =========================================================================
@@ -158,7 +162,7 @@ describe("Challenger 2 Empirical Stress Test: Link Crawler & Temporal Horizon", 
             connErr.code = "ECONNREFUSED";
             jest.spyOn(axios, "head").mockRejectedValueOnce(connErr);
 
-            const res = await verifyLinkHealth("http://localhost:8080/tournament-form");
+            const res = await verifyLinkHealth("https://example-club.org/tournament-form");
             expect(res.linkStatus).toBe("expired");
             expect(res.isAlive).toBe(false);
             expect(res.statusCode).toBe(0);
