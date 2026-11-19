@@ -560,6 +560,7 @@ describe("Milestone 1 (Project Titan) — Ingestion Deduplication & Data Quality
             `;
 
             jest.spyOn(axios, "get").mockResolvedValueOnce({
+                status: 200,
                 data: mockHtml
             });
 

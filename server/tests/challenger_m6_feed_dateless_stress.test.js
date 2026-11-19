@@ -807,6 +807,7 @@ describe("Milestone 6 Empirical Challenger Stress Suite: Feed Isolation & Datele
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             const axios = require("axios");
             jest.spyOn(axios, "get").mockResolvedValue({
+                status: 200,
                 data: "<html><body><h1>2026 George Washington Open</h1><p>Date coming soon!</p></body></html>"
             });
             jest.spyOn(axios, "head").mockResolvedValue({ status: 200 });

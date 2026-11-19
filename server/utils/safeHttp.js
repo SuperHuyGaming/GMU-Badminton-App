@@ -135,6 +135,19 @@ async function safeRequest(url, options = {}) {
             continue;
         }
 
+        // Redirects are followed by hand above, so axios runs with validateStatus: () => true.
+        // Apply the caller's validateStatus (axios default: 2xx only) to the final response,
+        // so callers that relied on axios throwing for 4xx/5xx keep that behavior.
+        const callerValidate = typeof options.validateStatus === 'function'
+            ? options.validateStatus
+            : (status) => status >= 200 && status < 300;
+        if (!callerValidate(response.status)) {
+            const err = new Error(`Request failed with status code ${response.status}`);
+            err.code = response.status >= 500 ? 'ERR_BAD_RESPONSE' : 'ERR_BAD_REQUEST';
+            err.response = response;
+            throw err;
+        }
+
         return response;
     }
 

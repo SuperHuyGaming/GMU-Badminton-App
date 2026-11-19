@@ -354,4 +354,44 @@ describe('SSRF Protection Suite: safeHttp, linkHealthChecker & autonomousHunter'
             expect(warnSpy).not.toHaveBeenCalled();
         });
     });
+
+    describe("7. Final Status Handling (validateStatus parity with axios)", () => {
+        beforeEach(() => {
+            jest.spyOn(dns.promises, "lookup").mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+        });
+
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        test("throws on a final 404 by default, with err.response attached", async () => {
+            jest.spyOn(axios, "get").mockResolvedValueOnce({ status: 404, headers: {}, data: "Not Found" });
+            await expect(safeRequest("https://example-club.org/missing")).rejects.toMatchObject({
+                code: "ERR_BAD_REQUEST",
+                response: { status: 404 }
+            });
+        });
+
+        test("throws on a 500 reached through a redirect", async () => {
+            jest.spyOn(axios, "get")
+                .mockResolvedValueOnce({ status: 302, headers: { location: "/down" }, data: "" })
+                .mockResolvedValueOnce({ status: 500, headers: {}, data: "error" });
+            await expect(safeRequest("https://example-club.org/start")).rejects.toMatchObject({
+                code: "ERR_BAD_RESPONSE",
+                response: { status: 500 }
+            });
+        });
+
+        test("returns non-2xx responses when the caller passes validateStatus", async () => {
+            jest.spyOn(axios, "get").mockResolvedValueOnce({ status: 404, headers: {}, data: "" });
+            const res = await safeRequest("https://example-club.org/missing", { validateStatus: () => true });
+            expect(res.status).toBe(404);
+        });
+
+        test("verifyLinkHealth still reports the real status code for 404", async () => {
+            jest.spyOn(axios, "head").mockResolvedValueOnce({ status: 404, headers: {}, data: "" });
+            const res = await verifyLinkHealth("https://example-club.org/gone");
+            expect(res).toMatchObject({ linkStatus: "expired", isAlive: false, statusCode: 404 });
+        });
+    });
 });

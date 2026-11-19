@@ -432,6 +432,7 @@ describe("Milestone 6: Tournament Hunter & Ingestion Audit Suite", () => {
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, "get").mockResolvedValue({
+                status: 200,
                 data: "<html><body><h1>2026 Mason Fall Badminton Open</h1><p>Badminton open championship</p></body></html>"
             });
             jest.spyOn(axios, "head").mockResolvedValue({ status: 200 });
@@ -555,6 +556,7 @@ describe("Milestone 6: Tournament Hunter & Ingestion Audit Suite", () => {
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, "get").mockResolvedValue({
+                status: 200,
                 data: "<html><body><h1>2026 CBA Fall Classic</h1><p>badminton tournament</p></body></html>"
             });
             // Simulate 404 response on registration link pre-flight

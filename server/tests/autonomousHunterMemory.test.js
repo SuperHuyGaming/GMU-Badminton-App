@@ -124,6 +124,7 @@ describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
         test('processDiscoveryQueue executes 10 items without exceeding 200MB heapUsed and passes Axios caps', async () => {
             const sampleHtml = '<html><body><h1>2026 DMV Tournament</h1><p>Welcome to Open</p></body></html>';
             const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: sampleHtml
             });
 
@@ -235,6 +236,7 @@ describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
         test('runFullAutonomousHunt completes end-to-end cycle strictly below 200MB heapUsed', async () => {
             const sampleHtml = '<html><body><div class="media"><a href="/tournament/123">2026 Mid-Atlantic Open</a><span class="location">Virginia</span></div></body></html>';
             const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: sampleHtml
             });
 

@@ -106,7 +106,8 @@ async function verifyLinkHealth(url, timeoutMs = 5000) {
         const headRes = await safeRequest(url, {
             method: 'HEAD',
             headers: HEALTHCHECK_HEADERS,
-            timeout: timeoutMs
+            timeout: timeoutMs,
+            validateStatus: () => true
         });
 
         if (headRes.status >= 200 && headRes.status < 400) {
@@ -120,7 +121,8 @@ async function verifyLinkHealth(url, timeoutMs = 5000) {
                 headers: HEALTHCHECK_HEADERS,
                 timeout: timeoutMs,
                 maxContentLength: 50 * 1024,
-                maxBodyLength: 50 * 1024
+                maxBodyLength: 50 * 1024,
+                validateStatus: () => true
             });
 
             if (getRes.status >= 200 && getRes.status < 400) {

@@ -225,6 +225,7 @@ describe("Autonomous Tournament Hunter Suite", () => {
                 external: 5 * 1024 * 1024
             });
             axiosGetSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body>DMV Badminton 2027</body></html>'
             });
             axiosHeadSpy = jest.spyOn(axios, 'head').mockResolvedValue({

@@ -597,6 +597,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 UMD Terrapin Open</h1><p>badminton tournament</p></body></html>'
             });
             // Simulate 404 response on registration link pre-flight
@@ -660,6 +661,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 NVBC Winter Smash</h1><p>badminton tournament</p></body></html>'
             });
             // Simulate timeout on HEAD request
@@ -710,6 +712,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 Capital Badminton Summer Cup</h1><p>badminton tournament</p></body></html>'
             });
 
@@ -758,6 +761,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 GMU Intramural Open</h1><p>badminton tournament</p></body></html>'
             });
 
@@ -803,6 +807,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 Mid-Atlantic Collegiate Championships</h1><p>badminton tournament</p></body></html>'
             });
 
@@ -853,6 +858,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
 
             parseDiscoveredWebpage.mockResolvedValue(mockExtracted);
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 George Mason Open</h1><p>badminton tournament</p></body></html>'
             });
             // Simulate 200 OK on HEAD
@@ -933,6 +939,7 @@ describe('Empirical Adversarial Stress Test: Link Health & Fallback Routing', ()
             });
 
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><p>badminton tournament</p></body></html>'
             });
 

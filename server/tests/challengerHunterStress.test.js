@@ -495,6 +495,7 @@ describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
             jest.spyOn(ProposedTournament, 'find').mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
             jest.spyOn(ProposedTournament, 'create').mockResolvedValue({ _id: 'mock_created' });
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>Tournament</h1></body></html>'
             });
 
@@ -536,6 +537,7 @@ describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
             jest.spyOn(ProposedTournament, 'find').mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
             jest.spyOn(ProposedTournament, 'create').mockResolvedValue({ _id: 'mock_created' });
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 Mid-Atlantic</h1></body></html>'
             });
 
