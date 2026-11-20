@@ -11,6 +11,7 @@
  */
 
 const axios = require('axios');
+const dns = require('dns');
 const cheerio = require('cheerio');
 const v8 = require('v8');
 const vm = require('vm');
@@ -86,6 +87,14 @@ const { inspectStartupMemory } = require('../server');
 describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.spyOn(dns.promises, 'lookup').mockResolvedValue([
+            { address: '93.184.216.34', family: 4 }
+        ]);
+        jest.spyOn(axios, 'head').mockResolvedValue({
+            status: 200,
+            headers: {},
+            data: ''
+        });
     });
 
     describe('1. Startup Memory Inspection & Environment Detection', () => {
@@ -115,6 +124,7 @@ describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
         test('processDiscoveryQueue executes 10 items without exceeding 200MB heapUsed and passes Axios caps', async () => {
             const sampleHtml = '<html><body><h1>2026 DMV Tournament</h1><p>Welcome to Open</p></body></html>';
             const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: sampleHtml
             });
 
@@ -226,6 +236,7 @@ describe('Autonomous Hunter Memory & Heap Pressure Test Suite', () => {
         test('runFullAutonomousHunt completes end-to-end cycle strictly below 200MB heapUsed', async () => {
             const sampleHtml = '<html><body><div class="media"><a href="/tournament/123">2026 Mid-Atlantic Open</a><span class="location">Virginia</span></div></body></html>';
             const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: sampleHtml
             });
 

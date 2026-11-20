@@ -10,6 +10,7 @@
  */
 
 const axios = require('axios');
+const dns = require('dns');
 const cheerio = require('cheerio');
 const v8 = require('v8');
 const vm = require('vm');
@@ -87,6 +88,14 @@ const { inspectStartupMemory } = require('../server');
 describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.spyOn(dns.promises, 'lookup').mockResolvedValue([
+            { address: '93.184.216.34', family: 4 }
+        ]);
+        jest.spyOn(axios, 'head').mockResolvedValue({
+            status: 200,
+            headers: {},
+            data: ''
+        });
     });
 
     // =========================================================================
@@ -157,6 +166,7 @@ describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
             jest.spyOn(ProposedTournament, 'create').mockResolvedValue({ _id: 'mock_created_id' });
 
             const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>Tournament 2026</h1></body></html>'
             });
 
@@ -215,6 +225,7 @@ describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
                 '</div></body></html>';
 
             const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: heavyHtml
             });
 
@@ -270,7 +281,7 @@ describe('Challenger 2 Empirical Adversarial Stress Test Suite', () => {
             process.env.HUNTER_HEAP_LIMIT_MB = '1024';
 
             const html = '<html><body><h1>Tournament 2026</h1><div class="media"><a href="/t/1">Open</a></div></body></html>';
-            const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({ data: html });
+            const axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({ status: 200, data: html });
 
             jest.spyOn(DiscoveryQueue, 'find').mockReturnValue({ limit: jest.fn().mockResolvedValue([]) });
             jest.spyOn(DiscoveryQueue, 'findOne').mockResolvedValue(null);

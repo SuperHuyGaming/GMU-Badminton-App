@@ -6,9 +6,9 @@
  * Flags broken or 404 links with linkStatus: 'expired' and falls back to verified host club homepages.
  */
 
-const axios = require('axios');
 const Tournament = require('../models/Tournament');
 const redis = require('./redis');
+const { safeRequest } = require('./safeHttp');
 
 const HEALTHCHECK_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -103,10 +103,10 @@ async function verifyLinkHealth(url, timeoutMs = 5000) {
 
     try {
         // Attempt fast HEAD request first
-        const headRes = await axios.head(url, {
+        const headRes = await safeRequest(url, {
+            method: 'HEAD',
             headers: HEALTHCHECK_HEADERS,
             timeout: timeoutMs,
-            maxRedirects: 5,
             validateStatus: () => true
         });
 
@@ -116,10 +116,10 @@ async function verifyLinkHealth(url, timeoutMs = 5000) {
 
         // 405 Method Not Allowed is common for sites blocking HEAD; retry with lightweight GET
         if (headRes.status === 405) {
-            const getRes = await axios.get(url, {
+            const getRes = await safeRequest(url, {
+                method: 'GET',
                 headers: HEALTHCHECK_HEADERS,
                 timeout: timeoutMs,
-                maxRedirects: 5,
                 maxContentLength: 50 * 1024,
                 maxBodyLength: 50 * 1024,
                 validateStatus: () => true
@@ -134,6 +134,13 @@ async function verifyLinkHealth(url, timeoutMs = 5000) {
         // Status 400+ considered expired/broken
         return { linkStatus: 'expired', isAlive: false, statusCode: headRes.status };
     } catch (err) {
+        if (
+            err.code === 'ESSRFBLOCKED' ||
+            (err.message && (err.message.includes('SSRF Protection') || err.message.includes('Forbidden hostname') || err.message.includes('Forbidden destination port') || err.message.includes('Forbidden protocol')))
+        ) {
+            console.warn(`[LinkHealth] SSRF blocked: ${url}`);
+            return { linkStatus: 'expired', isAlive: false, statusCode: 0, error: err.message };
+        }
         const statusCode = err.response?.status || 0;
         return { linkStatus: 'expired', isAlive: false, statusCode, error: err.message };
     }

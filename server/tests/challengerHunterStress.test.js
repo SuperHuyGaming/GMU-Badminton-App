@@ -10,6 +10,7 @@
  */
 
 const http = require('http');
+const dns = require('dns');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const v8 = require('v8');
@@ -90,6 +91,14 @@ const Tournament = require('../models/Tournament');
 describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.spyOn(dns.promises, 'lookup').mockResolvedValue([
+            { address: '93.184.216.34', family: 4 }
+        ]);
+        jest.spyOn(axios, 'head').mockResolvedValue({
+            status: 200,
+            headers: {},
+            data: ''
+        });
     });
 
     // =========================================================================
@@ -486,6 +495,7 @@ describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
             jest.spyOn(ProposedTournament, 'find').mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
             jest.spyOn(ProposedTournament, 'create').mockResolvedValue({ _id: 'mock_created' });
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>Tournament</h1></body></html>'
             });
 
@@ -527,6 +537,7 @@ describe('Challenger 1: Adversarial Memory & Heap Stress Test Suite', () => {
             jest.spyOn(ProposedTournament, 'find').mockReturnValue({ lean: jest.fn().mockResolvedValue([]) });
             jest.spyOn(ProposedTournament, 'create').mockResolvedValue({ _id: 'mock_created' });
             jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body><h1>2026 Mid-Atlantic</h1></body></html>'
             });
 

@@ -4,6 +4,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const axios = require("axios");
+const dns = require("dns");
 const { NON_DATE_FAKEABLES } = require("./helpers/fakeDateOnly");
 
 jest.mock("../utils/redis", () => ({
@@ -211,7 +212,9 @@ describe("Autonomous Tournament Hunter Suite", () => {
 
     describe("4. Discovery Queue Processing & AI Evaluation", () => {
         let memSpy = null;
-        let axiosSpy = null;
+        let axiosGetSpy = null;
+        let axiosHeadSpy = null;
+        let dnsSpy = null;
 
         beforeEach(() => {
             // Isolate test runner memory so CI or cumulative multi-suite memory (>200MB) does not trigger heap guards
@@ -221,19 +224,36 @@ describe("Autonomous Tournament Hunter Suite", () => {
                 rss: 160 * 1024 * 1024,
                 external: 5 * 1024 * 1024
             });
-            axiosSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+            axiosGetSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+                status: 200,
                 data: '<html><body>DMV Badminton 2027</body></html>'
             });
+            axiosHeadSpy = jest.spyOn(axios, 'head').mockResolvedValue({
+                status: 200,
+                headers: {},
+                data: ''
+            });
+            dnsSpy = jest.spyOn(dns.promises, 'lookup').mockResolvedValue([
+                { address: '93.184.216.34', family: 4 }
+            ]);
         });
 
         afterEach(() => {
+            if (dnsSpy) {
+                dnsSpy.mockRestore();
+                dnsSpy = null;
+            }
             if (memSpy) {
                 memSpy.mockRestore();
                 memSpy = null;
             }
-            if (axiosSpy) {
-                axiosSpy.mockRestore();
-                axiosSpy = null;
+            if (axiosGetSpy) {
+                axiosGetSpy.mockRestore();
+                axiosGetSpy = null;
+            }
+            if (axiosHeadSpy) {
+                axiosHeadSpy.mockRestore();
+                axiosHeadSpy = null;
             }
         });
 
@@ -414,6 +434,10 @@ describe("Autonomous Tournament Hunter Suite", () => {
                 external: 5 * 1024 * 1024
             });
 
+            const dnsSpy = jest.spyOn(dns.promises, "lookup").mockResolvedValue([
+                { address: "93.184.216.34", family: 4 }
+            ]);
+
             const axios = require("axios");
             jest.spyOn(axios, "get").mockRejectedValue(new Error("Network Error"));
 
@@ -441,6 +465,7 @@ describe("Autonomous Tournament Hunter Suite", () => {
                 expect(parseDiscoveredWebpage).not.toHaveBeenCalled();
             } finally {
                 memSpy.mockRestore();
+                dnsSpy.mockRestore();
             }
         });
     });

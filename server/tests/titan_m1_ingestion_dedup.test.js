@@ -4,6 +4,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const axios = require("axios");
+const dns = require("dns");
 const { NON_DATE_FAKEABLES } = require("./helpers/fakeDateOnly");
 
 // Mock Redis client to prevent real connection in unit tests
@@ -92,6 +93,9 @@ app.use("/api/admin/tournaments", adminTournamentRoutes);
 describe("Milestone 1 (Project Titan) — Ingestion Deduplication & Data Quality", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.spyOn(dns.promises, "lookup").mockResolvedValue([
+            { address: "93.184.216.34", family: 4 }
+        ]);
     });
 
     // =========================================================================
@@ -556,6 +560,7 @@ describe("Milestone 1 (Project Titan) — Ingestion Deduplication & Data Quality
             `;
 
             jest.spyOn(axios, "get").mockResolvedValueOnce({
+                status: 200,
                 data: mockHtml
             });
 
