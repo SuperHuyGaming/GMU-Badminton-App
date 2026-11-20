@@ -192,7 +192,7 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 
 			expect(Post.find).toHaveBeenCalledWith(
 				expect.objectContaining({
-					category: { $in: ['find_partner', 'meetup_rally'] }
+					category: { $in: ['find_partner', 'meetup_rally', 'challenge_match'] }
 				})
 			);
 		});
@@ -280,7 +280,7 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 
 			await request(app).get('/api/forum?search=doubles&category=find_partner&dateRange=today');
 			const callArg = Post.find.mock.calls[0][0];
-			expect(callArg.category).toEqual({ $in: ['find_partner', 'meetup_rally'] });
+			expect(callArg.category).toEqual({ $in: ['find_partner', 'meetup_rally', 'challenge_match'] });
 			const searchOr = callArg.$or || callArg.$and?.find(c => c.$or?.some(o => o.title))?.$or;
 			expect(searchOr).toBeDefined();
 			expect(callArg.createdAt.$gte).toBeInstanceOf(Date);
@@ -313,7 +313,7 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			expect(res.body.feed).toHaveLength(1);
 			expect(ActivityFeed.find).toHaveBeenCalledWith(
 				expect.objectContaining({
-					category: { $in: ['find_partner', 'meetup_rally'] }
+					category: { $in: ['find_partner', 'meetup_rally', 'challenge_match'] }
 				})
 			);
 		});
@@ -425,12 +425,12 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 			expect(matchResultClause.$or).toEqual(
 				expect.arrayContaining([
 					{ category: 'match_result' },
-					{ type: 'match' }
+					{ category: { $in: [null, ''] }, type: 'match' }
 				])
 			);
 		});
 
-		it('excludes type match from general category filter', async () => {
+		it('applies general category filter combining aliases and uncategorized posts', async () => {
 			ActivityFeed.find.mockReturnValue({
 				sort: jest.fn().mockReturnThis(),
 				limit: jest.fn().mockReturnThis(),
@@ -443,8 +443,15 @@ describe('Community Hub Phase 3: Search Engine, Category Groups, and Date Range 
 
 			expect(res.status).toBe(200);
 			const matchStage = ActivityFeed.find.mock.calls[0][0];
-			expect(matchStage.category).toBe('general');
-			expect(matchStage.type).toEqual({ $ne: 'match' });
+			expect(matchStage.$and).toBeDefined();
+			const generalClause = matchStage.$and.find(c => c.$or && c.$or.some(o => o.category?.$in && o.category.$in.includes('general')));
+			expect(generalClause).toBeDefined();
+			expect(generalClause.$or).toEqual(
+				expect.arrayContaining([
+					{ category: { $in: ['general', 'qa_forum', 'training', 'match_result'] } },
+					{ category: { $in: [null, ''] } }
+				])
+			);
 		});
 
 		it('includes team1, team2, partner, and opponents in feed search regex', async () => {

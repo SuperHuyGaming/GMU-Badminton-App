@@ -24,6 +24,23 @@ const friendsFingerprint = (friendIds) => {
 	return crypto.createHash("md5").update([...friendIds].sort().join(",")).digest("hex").slice(0, 12);
 };
 
+// Safely moves any existing top-level visibility $or into an $and array and appends the new condition
+const addAndCondition = (matchStage, condition) => {
+	if (!condition) return;
+	if (matchStage.$and) {
+		matchStage.$and.push(condition);
+	} else if (matchStage.$or) {
+		const visibilityOr = matchStage.$or;
+		delete matchStage.$or;
+		matchStage.$and = [
+			{ $or: visibilityOr },
+			condition
+		];
+	} else {
+		matchStage.$and = [condition];
+	}
+};
+
 // Trending tags aggregation endpoint (Cached with 2-minute TTL)
 router.get("/trending-tags", async (req, res, next) => {
 	try {
@@ -197,24 +214,21 @@ router.get("/", authMiddleware, async (req, res, next) => {
 		if (req.query.category && typeof req.query.category === "string" && req.query.category.toLowerCase() !== "all") {
 			const cat = req.query.category.trim().toLowerCase().slice(0, 50);
 			if (cat === "find_partner") {
-				matchStage.category = { $in: ["find_partner", "meetup_rally"] };
+				matchStage.category = { $in: ["find_partner", "meetup_rally", "challenge_match"] };
 			} else if (cat === "gear_exchange") {
 				matchStage.category = { $in: ["gear_exchange", "gear_review"] };
 			} else if (cat === "match_result") {
-				const matchResultOr = [{ category: "match_result" }, { type: "match" }];
-				if (matchStage.$and) {
-					matchStage.$and.push({ $or: matchResultOr });
-				} else {
-					const visibilityOr = matchStage.$or;
-					delete matchStage.$or;
-					matchStage.$and = [
-						{ $or: visibilityOr },
-						{ $or: matchResultOr }
-					];
-				}
+				const matchResultOr = [
+					{ category: "match_result" },
+					{ category: { $in: [null, ""] }, type: "match" }
+				];
+				addAndCondition(matchStage, { $or: matchResultOr });
 			} else if (cat === "general") {
-				matchStage.category = "general";
-				matchStage.type = { $ne: "match" };
+				const generalOr = [
+					{ category: { $in: ["general", "qa_forum", "training", "match_result"] } },
+					{ category: { $in: [null, ""] } }
+				];
+				addAndCondition(matchStage, { $or: generalOr });
 			} else {
 				matchStage.category = cat;
 			}
@@ -244,16 +258,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
 				{ team2: searchRegex }
 			];
 
-			if (matchStage.$and) {
-				matchStage.$and.push({ $or: searchOr });
-			} else {
-				const visibilityOr = matchStage.$or;
-				delete matchStage.$or;
-				matchStage.$and = [
-					{ $or: visibilityOr },
-					{ $or: searchOr }
-				];
-			}
+			addAndCondition(matchStage, { $or: searchOr });
 		}
 
 		let lastDoc = null;
@@ -459,5 +464,7 @@ router.get("/", authMiddleware, async (req, res, next) => {
 		next(error);
 	}
 });
+
+router.addAndCondition = addAndCondition;
 
 module.exports = router;
