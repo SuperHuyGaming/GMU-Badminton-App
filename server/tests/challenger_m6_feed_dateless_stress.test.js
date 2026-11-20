@@ -583,7 +583,7 @@ describe("Milestone 6 Empirical Challenger Stress Suite: Feed Isolation & Datele
                 _id: proposalId,
                 tournamentName: "2026 NOVA Open Championships",
                 location: "Northern Virginia Badminton Club",
-                date: new Date("2026-12-12T09:00:00Z"),
+                date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 registrationLink: "https://novabadmintonacademy.com",
                 sourceUrl: "https://novabadmintonacademy.com",
                 status: "pending",

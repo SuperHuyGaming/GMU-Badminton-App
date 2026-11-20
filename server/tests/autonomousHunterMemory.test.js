@@ -64,7 +64,7 @@ jest.mock('../utils/aiParser', () => ({
         return Promise.resolve({
             isValidDmvTournament: true,
             tournamentName: name,
-            startDate: "2026-11-20",
+            startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
             confidenceScore: 92
         });
     })
